@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DLL=JotunnModStub/bin/Release/JotunnModStub.dll
-PLUGINS=JotunnModStub/Package/plugins
+DLL=StarLevelSystem/bin/Release/StarLevelSystem.dll
+PLUGINS=StarLevelSystem/Package/plugins
 README=README.md
 #TRANSLATIONS=Translations
 
@@ -34,7 +34,7 @@ cp -f "$DLL" "$PLUGINS" || { echo "Error: Failed to copy $DLL"; exit 1; }
 cp -f "$README" "$PLUGINS/../README.md" || { echo "Error: Failed to copy $README"; exit 1; }
 #cp -rf "$TRANSLATIONS" "$PLUGINS/"  || { echo "Error: Failed to copy Translations"; exit 1; }
 
-ZIPDESTINATION="../bin/Release/JotunnModStub.$VERSION.zip"
+ZIPDESTINATION="../bin/Release/StarLevelSystem.$VERSION.zip"
 
 cd "$PLUGINS/.."
 if [ ! -z "$VERSION" ]; then

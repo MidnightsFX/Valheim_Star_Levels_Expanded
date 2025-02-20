@@ -19,20 +19,20 @@ The compiled dll and a dll.mdb debug file are copied to `<ValheimDir>\BepInEx\pl
 
 ### Building Release
 
-A compressed file with the binaries is created in `<JotunnModStub>\Packages`ready for upload to ThunderStore.
+A compressed file with the binaries is created in `<StarLevelSystem>\Packages`ready for upload to ThunderStore.
 Dont forget to include your information in the manifest.json and to change the project's readme file.
 
 ## Developing Assets with Unity
 
 New Assets can be created with Unity and imported into Valheim using the mod.
-A Unity project is included in this repository under `<JotunnModStub>\JotunnModUnity`.
+A Unity project is included in this repository under `<StarLevelSystem>\JotunnModUnity`.
 
 ### Unity Editor Setup
 
 1. [Download](https://public-cdn.cloud.unity3d.com/hub/prod/UnityHubSetup.exe) UnityHub directly from Unity or install it with the Visual Studio Installer via `Individual Components` -> `Visual Studio Tools for Unity`
 2. You will need an Unity account to register your PC and get a free licence. Create the account, login with it in Unity Hub and get your licence via `Settings` -> `Licence Management`
 3. Install Unity Editor version 2022.3.17f
-4. Compile the project. This copies all assemblies into `<JotunnModStub>\JotunnModUnity\Assets\Assemblies`. Don't open Unity yet before this step, it will remove assembly references.
+4. Compile the project. This copies all assemblies into `<StarLevelSystem>\JotunnModUnity\Assets\Assemblies`. Don't open Unity yet before this step, it will remove assembly references.
 5. **Warning:** These assembly files are copyrighted material and you can theoretically get into trouble when you distribute them in your github repository. To avoid that there is a .gitignore file in the Unity project folder. Keep that when you clone or copy this repository
 6. Open Unity Hub and add the JotunnModUnity project
 7. Open the project in Unity
@@ -53,6 +53,6 @@ If this is the case, the references to the assembly files must be renewed in Vis
 
 ### Unity actions
 
-1. Copy all `assembly_*.dll` from `<ValheimDir>\valheim_Data\Managed` into `<JotunnModStub>\JotunnModUnity\Assets\Assemblies`. <br />
+1. Copy all `assembly_*.dll` from `<ValheimDir>\valheim_Data\Managed` into `<StarLevelSystem>\JotunnModUnity\Assets\Assemblies`. <br />
   **Do this directly in the filesystem - don't import the dlls in Unity**.
 2. Go to Unity Editor and press `Ctrl+R`. This reloads all files from the filesystem and "re-imports" the copied dlls into the project.

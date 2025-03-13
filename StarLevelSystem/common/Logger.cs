@@ -10,6 +10,16 @@ namespace StarLevelSystem
 
         public static void enableDebugLogging(object sender, EventArgs e)
         {
+            if (ValConfig.EnableDebugMode.Value) {
+                Level = LogLevel.Debug;
+            } else {
+                Level = LogLevel.Info;
+            }
+            // set log level
+        }
+
+        public static void CheckEnableDebugLogging()
+        {
             if (ValConfig.EnableDebugMode.Value)
             {
                 Level = LogLevel.Debug;
@@ -18,7 +28,6 @@ namespace StarLevelSystem
             {
                 Level = LogLevel.Info;
             }
-            // set log level
         }
 
         public static void LogDebug(string message)

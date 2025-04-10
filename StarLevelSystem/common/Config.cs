@@ -1,18 +1,32 @@
 ﻿using BepInEx.Configuration;
+using System.IO;
+using System;
+using BepInEx;
+using StarLevelSystem.modules;
+using StarLevelSystem.common;
+using Jotunn.Managers;
+using Jotunn.Entities;
+using System.Collections;
 
 namespace StarLevelSystem
 {
     internal class ValConfig
     {
         public static ConfigFile cfg;
+        private static String levelsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LevelSettings.yaml");
+
+        private static CustomRPC LevelSettingsRPC;
+
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
-        public static ConfigEntry<float> LevelUpChance;
-        public static ConfigEntry<float> LevelUpHealthBonus;
-        public static ConfigEntry<float> LevelUpDamageBonus;
+        public static ConfigEntry<float> EnemyHealthMultiplier;
+        public static ConfigEntry<float> BossEnemyHealthMultiplier;
+        public static ConfigEntry<float> EnemyHealthPerWorldLevel;
+        public static ConfigEntry<float> EnemyDamageLevelMultiplier;
+        public static ConfigEntry<float> BossEnemyDamageMultiplier;
         
         public static ConfigEntry<bool> EnableMultiplayerEnemyHealthScaling;
         public static ConfigEntry<bool> EnableMultiplayerEnemyDamageScaling;
@@ -28,6 +42,12 @@ namespace StarLevelSystem
             CreateConfigValues(cf);
         }
 
+        public void SetupConfigRPCs() {
+            LevelSettingsRPC = NetworkManager.Instance.AddRPC("LSE_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
+
+            SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
+        }
+
         private void CreateConfigValues(ConfigFile Config) {
             // Debugmode
             EnableDebugMode = Config.Bind("Client config", "EnableDebugMode", false,
@@ -36,19 +56,129 @@ namespace StarLevelSystem
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             EnableDebugMode.SettingChanged += Logger.enableDebugLogging;
             Logger.CheckEnableDebugLogging();
-            
+
+
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 5, "The Maximum number of stars that a creature can have", false, 1, 100);
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
-            PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.025f, "The additional size that a creature grows each star level.", true, 0f, 1f);
+            PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 1f);
             PerLevelLootScale = BindServerConfig("LevelSystem", "PerLevelLootScale", 0.5f, "The amount of additional loot that a creature provides per each star level", true, 0f, 2f);
-            LevelUpChance = BindServerConfig("LevelSystem", "LevelUpChance", 0.10f, "The chance that a creature will go from one level to the next. ");
-            LevelUpHealthBonus = BindServerConfig("LevelSystem", "LevelUpHealthBonus", 0.2f, "The amount of health that each level gives a creature, vanilla is 1x (eg 100% more health each level).", false, 0.00f, 2f);
-            LevelUpDamageBonus = BindServerConfig("LevelSystem", "LevelUpDamageBonus", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
+            EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x. At 2x each creature has double the base health and gains twice as much per level.", false, 0.01f, 5f);
+            EnemyHealthPerWorldLevel = BindServerConfig("LevelSystem", "EnemyHealthPerWorldLevel", 0.2f, "The percent amount of health that each world level gives a creature, vanilla is 2x (eg 200% more health each world level).", false, 0.00f, 2f);
+            EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
+            BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
+            BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "The additional amount of health enemies gain when players are grouped together, per player. .3 = 30%", true, 0, 2f);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 0, 10);
             EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Wether or not creatures gain more health when players are grouped up.");
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Wether or not creatures gain more damage when players are grouped up.");
+        }
+
+        internal void LoadYamlConfigs()
+        {
+            string externalConfigFolder = ValConfig.GetSecondaryConfigDirectoryPath();
+            string[] presentFiles = Directory.GetFiles(externalConfigFolder);
+            bool foundLevelsFile = false;
+
+            foreach (string configFile in presentFiles)
+            {
+                if (configFile.Contains("LevelSettings.yaml"))
+                {
+                    Logger.LogDebug($"Found level configuration: {configFile}");
+                    levelsFilePath = configFile;
+                    foundLevelsFile = true;
+                }
+            }
+
+            if (foundLevelsFile == false)
+            {
+                Logger.LogDebug("Level config file missing, recreating.");
+                using (StreamWriter writetext = new StreamWriter(levelsFilePath))
+                {
+                    // writetext.WriteLine(ValheimFortress.ReadEmbeddedResourceFile("Rewards.yaml"));
+                    String header = @"#################################################
+# Star Level System Expanded - Level Settings
+#################################################
+";
+                    writetext.WriteLine(header);
+                    writetext.WriteLine(LevelSystemConfiguration.YamlDefaultConfig());
+                }
+            }
+
+            string spawnableCreatureConfigs = File.ReadAllText(levelsFilePath);
+
+            try {
+                DataObjects.CreatureLevelSettings creatureConfigs = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(spawnableCreatureConfigs);
+                LevelSystemConfiguration.UpdateYamlConfig(creatureConfigs);
+            } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the waveStyle values, defaults will be used. Exception: {e}"); }
+
+            // File watcher for the Levels
+            FileSystemWatcher levelFSWatcher = new FileSystemWatcher();
+            levelFSWatcher.Path = externalConfigFolder;
+            levelFSWatcher.NotifyFilter = NotifyFilters.LastWrite;
+            levelFSWatcher.Filter = "LevelSettings.yaml";
+            levelFSWatcher.Changed += new FileSystemEventHandler(UpdateLevelsConfigFileOnChange);
+            levelFSWatcher.Created += new FileSystemEventHandler(UpdateLevelsConfigFileOnChange);
+            levelFSWatcher.Renamed += new RenamedEventHandler(UpdateLevelsConfigFileOnChange);
+            levelFSWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
+            levelFSWatcher.EnableRaisingEvents = true;
+        }
+
+        private static void UpdateLevelsConfigFileOnChange(object sender, FileSystemEventArgs e)
+        {
+            if (!File.Exists(levelsFilePath)) { return; }
+            Logger.LogDebug($"{e} filewatcher called, updating values.");
+            string levelsDefinitions = File.ReadAllText(levelsFilePath);
+            LevelSystemConfiguration.UpdateYamlConfig(levelsDefinitions);
+            Logger.LogDebug("Updated levels in-memory values.");
+            if (GUIManager.IsHeadless())
+            {
+                try {
+                    LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendLevelsConfigs());
+                    Logger.LogDebug("Sent levels configs to clients.");
+                } catch {
+                    Logger.LogError("Error while server syncing level configs");
+                }
+            }
+            else {
+                Logger.LogDebug("Instance is not a server, and will not send level config updates.");
+            }
+        }
+
+        private static ZPackage SendLevelsConfigs()
+        {
+            string levelsConfigs = File.ReadAllText(levelsFilePath);
+            ZPackage package = new ZPackage();
+            package.Write(levelsConfigs);
+            return package;
+        }
+
+        public static IEnumerator OnServerRecieveConfigs(long sender, ZPackage package)
+        {
+            Logger.LogDebug("Server recieved config from client, rejecting due to being the server.");
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package)
+        {
+            var levelsyaml = package.ReadString();
+            bool level_update_valid = LevelSystemConfiguration.UpdateYamlConfig(levelsyaml);
+
+            // Add in a check if we want to write the server config to disk or use it virtually
+            if (level_update_valid) {
+                using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
+                    writetext.WriteLine(levelsyaml);
+                }
+            }
+            yield return null;
+        }
+
+        public static string GetSecondaryConfigDirectoryPath()
+        {
+            var patchesFolderPath = Path.Combine(Paths.ConfigPath, "StarLevelSystem");
+            var dirInfo = Directory.CreateDirectory(patchesFolderPath);
+
+            return dirInfo.FullName;
         }
 
         /// <summary>

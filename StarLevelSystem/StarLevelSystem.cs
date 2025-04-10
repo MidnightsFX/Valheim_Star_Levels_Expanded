@@ -28,9 +28,13 @@ namespace StarLevelSystem
         {
             Log = this.Logger;
             cfg = new ValConfig(Config);
+            cfg.SetupConfigRPCs();
+            cfg.LoadYamlConfigs();
+
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
-            LevelSystem.SetupLevelEffects();
-            CommandManager.Instance.AddConsoleCommand(new SpawnerLevelExtension.ExtendedSpawnCommand());
+            Colorization.SetupLevelEffects();
+            LevelSystemConfiguration.Init();
+            //CommandManager.Instance.AddConsoleCommand(new SpawnerLevelExtension.ExtendedSpawnCommand());
 
             Jotunn.Logger.LogInfo("Star Levels have been expanded.");
         }

@@ -23,9 +23,7 @@ namespace StarLevelSystem
             if (ValConfig.EnableDebugMode.Value)
             {
                 Level = LogLevel.Debug;
-            }
-            else
-            {
+            } else {
                 Level = LogLevel.Info;
             }
         }

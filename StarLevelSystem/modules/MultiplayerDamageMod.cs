@@ -7,7 +7,10 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Game), nameof(Game.GetDifficultyDamageScalePlayer))]
         public static class PatchPerPlayerDamageScaling {
             public static bool Prefix(Game __instance, Vector3 pos, ref float __result) {
-                if (ValConfig.EnableMultiplayerEnemyDamageScaling.Value) { return false; }
+                if (ValConfig.EnableMultiplayerEnemyDamageScaling.Value) {
+                    __result = 1f;
+                    return false;
+                }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
                 __result = 1f + (float)(playerDifficulty - 1) * ValConfig.MultiplayerEnemyDamageModifier.Value;
                 return false;
@@ -19,7 +22,10 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Game), nameof(Game.GetDifficultyDamageScaleEnemy))]
         public static class PatchPerPlayerDamageScaling {
             public static bool Prefix(Game __instance, Vector3 pos, ref float __result) {
-                if (ValConfig.EnableMultiplayerEnemyHealthScaling.Value) {  return false; }
+                if (ValConfig.EnableMultiplayerEnemyHealthScaling.Value) {
+                    __result = 1f;
+                    return false;
+                }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
                 __result = 1f / (1f + (float)(playerDifficulty - 1) * ValConfig.MultiplayerEnemyHealthModifier.Value);
                 return false;

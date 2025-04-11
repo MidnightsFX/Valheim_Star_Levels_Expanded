@@ -23,8 +23,18 @@ namespace StarLevelSystem.modules
 
         // List of color combinations
         internal static void AddGoodColorCombos() {
+            // vanilla color 1
+            // vanilla color 2
             //LevelColors.Add(new ColorDef() { hue = 0.7890267f, saturation = 0.6484352f, value = 0.4952819f }); // Bright red
             LevelColors.Add(new ColorDef() { hue = 0.07130837f, saturation = 0.2f, value = 0.130073f }); // golden
+            LevelColors.Add(new ColorDef() { hue = -0.07488244f, saturation = 0.4406867f, value = 0.01721987f }); // light gold
+            LevelColors.Add(new ColorDef() { hue = -0.04446793f, saturation = 0.05205864f, value = -0.191282f }); // dark
+            LevelColors.Add(new ColorDef() { hue = 0.08774569f, saturation = -0.3959962f, value = 0.224104f }); // pastel pink
+            LevelColors.Add(new ColorDef() { hue = -0.05712423f, saturation = 0.09905273f, value = -0.1369882f }); // very light red
+            LevelColors.Add(new ColorDef() { hue = 0.08566696f, saturation = -0.3398137f, value = -0.2270744f }); // light bronze
+            LevelColors.Add(new ColorDef() { hue = 0.03924248f, saturation = -0.04047304f, value = -0.1966226f }); // light red?
+            LevelColors.Add(new ColorDef() { hue = -0.3575756f, saturation = 0.09342755f, value = 0.3008582f }); // light red?
+            LevelColors.Add(new ColorDef() { hue = 0.08566696f, saturation = -0.3398137f, value = -0.2270744f }); // green eyes, black wolf
         }
 
         // Consider if we want to use emissive colors?
@@ -33,7 +43,7 @@ namespace StarLevelSystem.modules
             // Ensure known good color combos are available
             Colorization.AddGoodColorCombos();
             bool added_color_combos = false;
-            for (int level = LevelColors.Count; 101 > level; level++)
+            for (int level = LevelColors.Count; ValConfig.MaxLevel.Value + 2 > level; level++)
             {
                 // Add all of the known good color combinations first, then generate fillers for the rest
                 if (added_color_combos == false)
@@ -55,9 +65,9 @@ namespace StarLevelSystem.modules
                     scale += (ValConfig.PerLevelScaleBonus.Value * level);
                 }
                 //float sat = UnityEngine.Random.Range(0f, 1f);
-                float sat = UnityEngine.Random.Range(-0.5f, 0.5f);
-                float hue = UnityEngine.Random.Range(-0.1f, 0.1f);
-                float value = UnityEngine.Random.Range(-0.25f, 0.25f);
+                float sat = UnityEngine.Random.Range(-0.2f, 0.2f);
+                float hue = UnityEngine.Random.Range(-0.4f, 0.4f);
+                float value = UnityEngine.Random.Range(-0.75f, 0.75f);
                 Logger.LogDebug($"LevelEffects: {level} - scale:{scale}, hue:{hue}, sat:{sat}, val:{value}");
                 characterLevelEffects.Add(new LevelEffects.LevelSetup() { m_setEmissiveColor = false, m_scale = scale, m_hue = hue, m_saturation = sat, m_value = value });
             }

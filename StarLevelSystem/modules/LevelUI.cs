@@ -170,10 +170,29 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.RemoveCharacterHud))]
+        [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.UpdateHuds))]
         public static class DestroyEnemyHud {
-            public static void Postfix(Character character) {
-                characterExtendedHuds.Remove(character.GetZDOID());
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(EnemyHud.UpdateHuds))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchForward(true,
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(EnemyHud), nameof(EnemyHud.m_huds))),
+                    new CodeMatch(OpCodes.Ldloc_3),
+                    new CodeMatch(OpCodes.Callvirt),
+                    new CodeMatch(OpCodes.Pop)
+                    ).InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc_3), // Load the hud instance that is being manipulated
+                    Transpilers.EmitDelegate(RemoveExtenedHudFromCache)
+                    ).ThrowIfNotMatch("Unable to patch Enemy Hud removal update, levels will not be displayed properly.");
+
+                return codeMatcher.Instructions();
+            }
+
+            public static void RemoveExtenedHudFromCache(Character char3) {
+                characterExtendedHuds.Remove(char3.GetZDOID());
             }
         }
 
@@ -206,15 +225,15 @@ namespace StarLevelSystem.modules
         public static void UpdateHudforAllLevels(EnemyHud.HudData ehud) {
             if (ehud == null || ehud.m_character == null) return;
             int level = ehud.m_character.GetLevel();
-            Logger.LogInfo($"Creature Level {level}");
+            // Logger.LogInfo($"Creature Level {level}");
             ZDOID czoid = ehud.m_character.GetZDOID();
             StarLevelHud extended_hud = new StarLevelHud();
             if (characterExtendedHuds.ContainsKey(czoid)) {
-                Logger.LogInfo($"Hud already exists for {czoid}, loading");
+                // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
                 extended_hud = characterExtendedHuds[czoid];
             } else {
-                Logger.LogInfo($"Hooking up Extended Hud Data. Children: {ehud.m_gui.transform.childCount}");
+                // Logger.LogInfo($"Hooking up Extended Hud Data. Children: {ehud.m_gui.transform.childCount}");
                 //foreach (Transform child in ehud.m_gui.transform)
                 //{
                 //    Logger.LogInfo($"child path: {child.GetPath()}");
@@ -235,7 +254,7 @@ namespace StarLevelSystem.modules
             }
             // Star level display starts at 2
             // Enable static star levels
-            Logger.LogInfo("Setting star levels active");
+            // Logger.LogInfo("Setting star levels active");
             switch (level) {
                 case 2:
                     extended_hud.starlevel2.SetActive(true);
@@ -264,7 +283,7 @@ namespace StarLevelSystem.modules
                     break;
             }
 
-            Logger.LogInfo("Setting Nstar levels active");
+            // Logger.LogInfo("Setting Nstar levels active");
             // Enable dynamic levels
             if (level > 6) {
                 extended_hud.starlevel_N.SetActive(true);

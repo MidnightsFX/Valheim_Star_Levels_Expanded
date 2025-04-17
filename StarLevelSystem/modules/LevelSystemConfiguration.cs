@@ -37,6 +37,7 @@ namespace StarLevelSystem.modules
             {
                 { Heightmap.Biome.None, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 1,
                         CreatureSpawnDamagePerLevelBonus = 1,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -67,6 +68,7 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.Meadows, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 1,
                         CreatureSpawnDamagePerLevelBonus = 1,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -97,6 +99,7 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.BlackForest, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 1,
                         CreatureSpawnDamagePerLevelBonus = 1,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -127,6 +130,7 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.Mountain, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 0.85f,
                         CreatureSpawnDamagePerLevelBonus = 0.85f,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -157,6 +161,7 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.Plains, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 0.85f,
                         CreatureSpawnDamagePerLevelBonus = 0.85f,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -187,6 +192,7 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.Mistlands, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 0.80f,
                         CreatureSpawnDamagePerLevelBonus = 0.80f,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -217,9 +223,11 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.AshLands, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 0.80f,
                         CreatureSpawnDamagePerLevelBonus = 0.80f,
                         CreatureLootMultiplierPerLevel = 1f,
+                        DistanceScaleModifier = 0.5f,
                         BiomeMaxLevelOverride = 7,
                         CustomCreatureLevelUpChance = new SortedDictionary<int, float>() {
                             { 1, 20f },
@@ -247,10 +255,12 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.DeepNorth, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 0.85f,
                         CreatureSpawnDamagePerLevelBonus = 0.85f,
                         CreatureLootMultiplierPerLevel = 1f,
                         BiomeMaxLevelOverride = 8,
+                        DistanceScaleModifier = 0.5f,
                         CustomCreatureLevelUpChance = new SortedDictionary<int, float>() {
                             { 1, 20f },
                             { 2, 15f },
@@ -277,6 +287,7 @@ namespace StarLevelSystem.modules
                 },
                 { Heightmap.Biome.Ocean, new DataObjects.BiomeSpecificSetting()
                     {
+                        EnableBiomeLevelOverride = true,
                         CreatureSpawnHealthPerLevelBonus = 0.85f,
                         CreatureSpawnDamagePerLevelBonus = 0.85f,
                         CreatureLootMultiplierPerLevel = 1f,
@@ -307,8 +318,65 @@ namespace StarLevelSystem.modules
                 }
             },
 
-            CreatureConfiguration = new Dictionary<string, DataObjects.CreatureSpecificSetting>() { }
-        };
+            CreatureConfiguration = new Dictionary<string, DataObjects.CreatureSpecificSetting>() { },
+
+            EnableDistanceLevelBonus = true,
+            DistanceLevelBonus = new SortedDictionary<int, SortedDictionary<int, float>>()
+            {
+                { 1250, new SortedDictionary<int, float>() {
+                        { 1, 0.15f },
+                    }
+                },
+                { 2500, new SortedDictionary<int, float>() {
+                        { 1, 0.15f },
+                        { 2, 0.10f },
+                    }
+                },
+                { 3750, new SortedDictionary<int, float>() {
+                        { 1, 0.15f },
+                        { 2, 0.10f },
+                        { 3, 0.05f },
+                    }
+                },
+                { 5000, new SortedDictionary<int, float>() {
+                        { 1, 0.20f },
+                        { 2, 0.15f },
+                        { 3, 0.10f },
+                        { 4, 0.05f },
+                    }
+                },
+                { 6250, new SortedDictionary<int, float>() {
+                        { 1, 0.25f },
+                        { 2, 0.20f },
+                        { 3, 0.15f },
+                        { 4, 0.10f },
+                        { 5, 0.05f },
+                    }
+                },
+                { 7500, new SortedDictionary<int, float>() {
+                        { 1, 0.35f },
+                        { 2, 0.30f },
+                        { 3, 0.25f },
+                        { 4, 0.20f },
+                        { 5, 0.15f },
+                        { 6, 0.10f },
+                        { 7, 0.05f },
+                    }
+                },
+                { 8750, new SortedDictionary<int, float>() {
+                        { 1, 0.45f },
+                        { 2, 0.40f },
+                        { 3, 0.35f },
+                        { 4, 0.30f },
+                        { 5, 0.25f },
+                        { 6, 0.20f },
+                        { 7, 0.15f },
+                        { 8, 0.10f },
+                        { 9, 0.05f },
+                    }
+                }
+            }
+        };  
 
 
         internal static void Init() {
@@ -327,7 +395,7 @@ namespace StarLevelSystem.modules
             try {
                 SLE_Global_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
             } catch (System.Exception ex) {
-                StarLevelSystem.Log.LogError($"Failed to parse YAML config: {ex.Message}");
+                StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");
                 return false;
             }
             return true;

@@ -1,7 +1,10 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.common;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using static LevelEffects;
+using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
@@ -10,91 +13,311 @@ namespace StarLevelSystem.modules
         public float hue {  get; set; }
         public float saturation { get; set; }
         public float value { get; set; }
+        public bool is_emissive { get; set; } = false;
+
+        public LevelEffects.LevelSetup toLevelEffect() {
+            return new LevelEffects.LevelSetup() {
+                m_scale = 1f,
+                m_hue = hue,
+                m_saturation = saturation,
+                m_value = value,
+                m_setEmissiveColor = is_emissive,
+                m_emissiveColor = new Color(hue, saturation, value)
+            };
+        }
     }
     public static class Colorization
     {
-        public static List<ColorDef> LevelColors = new List<ColorDef>();
-        public static List<LevelEffects.LevelSetup> characterLevelEffects = new List<LevelEffects.LevelSetup>();
-
-        public static void AddColorCombo(ColorDef colordef)
+        public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;
+        private static CreatureColorizationSettings defaultColorizationSettings = new CreatureColorizationSettings()
         {
-            LevelColors.Add(colordef);
+            characterSpecificColorization = new Dictionary<string, Dictionary<int,ColorDef>>() {
+                {"Gjall", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.201f, saturation = 0.29f, value = -0.42f }},
+                    { 3, new ColorDef() { hue = -0.103f, saturation = -0.08f, value = -0.42f }}
+                }},
+                {"Leech", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.23f, saturation = 0.26f, value = 0.04f }},
+                    { 3, new ColorDef() { hue = -0.139f, saturation = 0.47f, value = 0.06f }}
+                }},
+                {"Asksvin_hatchling", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.477f, saturation = -1f, value = 0.02f }},
+                    { 3, new ColorDef() { hue = 0.5f, saturation = -0.08f, value = 0.08f }}
+                }},
+                {"GoblinBrute", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.1f, saturation = -0.1f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.18f, saturation = 0f, value = 0f }}
+                }},
+                {"Charred_Twitcher", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }} 
+                }},
+                {"Skeleton_NoArcher", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.03f, saturation = 0.3f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.1f, saturation = 0.3f, value = -0.1f }}
+                }},
+                {"GoblinArcher", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.05f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.15f, saturation = 0f, value = 0f }}
+                }},
+                {"Charred_Archer", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }}
+                }},
+                {"Seeker", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.28f, saturation = -0.3f, value = -0.1f }},
+                    { 3, new ColorDef() { hue = -0.1f, saturation = 0.1f, value = -0.2f }} 
+                }},
+                {"DvergerMageIce", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.1f, saturation = 0.2f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = -1f, value = 0f }} 
+                }},
+                {"Charred_Melee", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }}
+                }},
+                {"Skeleton_Hildir", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.16f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.2f, saturation = 0f, value = 0f }}
+                }},
+                {"Goblin", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.05f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.15f, saturation = 0f, value = 0f }}
+                }},
+                {"DvergerMageSupport", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.1f, saturation = 0.2f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = -1f, value = 0f }}
+                }},
+                {"Boar", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.05f, saturation = -0.1f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0.09f, saturation = -0.5f, value = -0.05f }}
+                }},
+                {"Troll", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.14f, saturation = 0.1f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0.44f, saturation = 0.2f, value = 0f }}
+                }},
+                {"Draugr_Ranged", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.27f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.25f, saturation = 0.04f, value = 0f }}
+                }},
+                {"Skeleton_Poison", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.16f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.2f, saturation = 0f, value = 0f }}
+                }},
+                {"DvergerMageFire", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.1f, saturation = 0.2f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = -1f, value = 0f }}
+                }},
+                {"Asksvin", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.477f, saturation = -1f, value = 0.02f }},
+                    { 3, new ColorDef() { hue = 0.5f, saturation = -0.08f, value = 0.08f }}
+                }},
+                {"Greydwarf_Shaman", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.174f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0.415f, saturation = 0f, value = 0f }}
+                }},
+                {"Tick", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.337f, saturation = -0.09f, value = -0.41f }},
+                    { 3, new ColorDef() { hue = -0.027f, saturation = 0.29f, value = -0.41f }}
+                }},
+                {"SeekerBrute", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.5f, saturation = 0.05f, value = -0.08f }},
+                    { 3, new ColorDef() { hue = -0.351f, saturation = -0.04f, value = -0.1f }}
+                }},
+                {"Ulv", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0.1f, value = -0.03f }},
+                    { 3, new ColorDef() { hue = -0.1f, saturation = 0.2f, value = -0.05f }}
+                }},
+                {"Skeleton_Hildir_nochest", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.16f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.2f, saturation = 0f, value = 0f }}
+                }},
+                {"Draugr_Elite", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.1f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.2f, saturation = 0f, value = 0f }}
+                }},
+                {"Wolf", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0.1f, value = -0.03f }},
+                    { 3, new ColorDef() { hue = -0.1f, saturation = 0.2f, value = -0.05f }}
+                }},
+                {"Skeleton", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.03f, saturation = 0.3f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.1f, saturation = 0.3f, value = -0.1f }}
+                }},
+                {"Greydwarf", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.06f, saturation = 0.1f, value = 0.05f }},
+                    { 3, new ColorDef() { hue = -0.5f, saturation = 0.1f, value = 0f }}
+                }},
+                {"Draugr", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.27f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.25f, saturation = 0.04f, value = 0f }}
+                }},
+                {"Dverger", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.1f, saturation = 0.2f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = -1f, value = 0f }}
+                }},
+                {"Neck", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.24f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0.42f, saturation = 0f, value = 0f }}
+                }},
+                {"Surtling", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }}
+                }},
+                {"Greydwarf_Elite", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.046f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = -0.108f, saturation = 0f, value = 0f }}
+                }},
+                {"Charred_Mage", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }}
+                }},
+                {"DvergerAshlands", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0.1f, saturation = 0.2f, value = 0f }},
+                    { 3,new ColorDef() { hue = 0f, saturation = -1f, value = 0f }}
+                }},
+                {"Charred_Melee_Dyrnwyn", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = 0f, saturation = 0f, value = 0f }},
+                    { 3,new ColorDef() { hue = 0f, saturation = 0f, value = 0f }}
+                }},
+                {"Troll_Summoned", new Dictionary<int, ColorDef>() {
+                    { 2, new ColorDef() { hue = -0.14f, saturation = 0.1f, value = 0f }},
+                    { 3, new ColorDef() { hue = 0.44f, saturation = 0.2f, value = 0f }}
+                }},
+                {"Skeleton_Friendly", new List<ColorDef>() { new ColorDef() { hue = -0.03f, saturation = 0.3f, value = 0f }, new ColorDef() { hue = -0.1f, saturation = 0.3f, value = -0.1f }, new ColorDef() { hue = -0.15f, saturation = 0.3f, value = -0.151f }, new ColorDef() { hue = -0.1f, saturation = 0.3f, value = -0.18f } } },
+                {"Greyling", new List<ColorDef>() { new ColorDef() { hue = -0.06f, saturation = 0.1f, value = 0.05f }, new ColorDef() { hue = -0.5f, saturation = 0.1f, value = 0f } } },
+                {"DvergerMage", new List<ColorDef>() { new ColorDef() { hue = 0.1f, saturation = 0.2f, value = 0f }, new ColorDef() { hue = 0f, saturation = -1f, value = 0f } } },
+                {"Charred_Twitcher_Summoned", new List<ColorDef>() { new ColorDef() { hue = 0f, saturation = 0f, value = 0f }, new ColorDef() { hue = 0f, saturation = 0f, value = 0f } } },
+                {"Hen", new List<ColorDef>() { new ColorDef() { hue = 0.05f, saturation = -0.1f, value = 0f }, new ColorDef() { hue = 0.09f, saturation = -0.5f, value = -0.05f } } },
+                {"Charred_Melee_Fader", new List<ColorDef>() { new ColorDef() { hue = 0f, saturation = 0f, value = 0f }, new ColorDef() { hue = 0f, saturation = 0f, value = 0f } } },
+                {"Charred_Archer_Fader", new List<ColorDef>() { new ColorDef() { hue = 0f, saturation = 0f, value = 0f }, new ColorDef() { hue = 0f, saturation = 0f, value = 0f } } },
+                {"GoblinBrute_Hildir", new List<ColorDef>() { new ColorDef() { hue = -0.1f, saturation = -0.1f, value = 0f }, new ColorDef() { hue = -0.18f, saturation = 0f, value = 0f } } },
+            },
+            defaultLevelColorization = new List<ColorDef>() {
+                new ColorDef() { hue = 0.07130837f, saturation = 0.2f, value = 0.130073f },
+                new ColorDef() { hue = -0.07488244f, saturation = 0.4406867f, value = 0.01721987f },
+                new ColorDef() { hue = -0.04446793f, saturation = 0.05205864f, value = -0.191282f },
+                new ColorDef() { hue = 0.08774569f, saturation = -0.3959962f, value = 0.224104f },
+                new ColorDef() { hue = -0.05712423f, saturation = 0.09905273f, value = -0.1369882f },
+                new ColorDef() { hue = 0.08566696f, saturation = -0.3398137f, value = -0.2270744f },
+                new ColorDef() { hue = 0.03924248f, saturation = -0.04047304f, value = -0.1966226f },
+                new ColorDef() { hue = -0.3575756f, saturation = 0.09342755f, value = 0.3008582f }
+            }
+        };
+
+        public static void Init() {
+            creatureColorizationSettings = defaultColorizationSettings;
         }
 
-        // List of color combinations
-        internal static void AddGoodColorCombos() {
-            // vanilla color 1
-            // vanilla color 2
-            //LevelColors.Add(new ColorDef() { hue = 0.7890267f, saturation = 0.6484352f, value = 0.4952819f }); // Bright red
-            LevelColors.Add(new ColorDef() { hue = 0.07130837f, saturation = 0.2f, value = 0.130073f }); // golden
-            LevelColors.Add(new ColorDef() { hue = -0.07488244f, saturation = 0.4406867f, value = 0.01721987f }); // light gold
-            LevelColors.Add(new ColorDef() { hue = -0.04446793f, saturation = 0.05205864f, value = -0.191282f }); // dark
-            LevelColors.Add(new ColorDef() { hue = 0.08774569f, saturation = -0.3959962f, value = 0.224104f }); // pastel pink
-            LevelColors.Add(new ColorDef() { hue = -0.05712423f, saturation = 0.09905273f, value = -0.1369882f }); // very light red
-            LevelColors.Add(new ColorDef() { hue = 0.08566696f, saturation = -0.3398137f, value = -0.2270744f }); // light bronze
-            LevelColors.Add(new ColorDef() { hue = 0.03924248f, saturation = -0.04047304f, value = -0.1966226f }); // light red?
-            LevelColors.Add(new ColorDef() { hue = -0.3575756f, saturation = 0.09342755f, value = 0.3008582f }); // light red?
-            LevelColors.Add(new ColorDef() { hue = 0.08566696f, saturation = -0.3398137f, value = -0.2270744f }); // green eyes, black wolf
+        public static string YamlDefaultConfig() {
+            var yaml = DataObjects.yamlserializer.Serialize(defaultColorizationSettings);
+            return yaml;
+        }
+        public static void UpdateYamlConfig(DataObjects.CreatureColorizationSettings newcfg) {
+            creatureColorizationSettings = newcfg;
+        }
+        public static bool UpdateYamlConfig(string yaml) {
+            try {
+                creatureColorizationSettings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
+            } catch (System.Exception ex) {
+                StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
+                return false;
+            }
+            return true;
         }
 
         // Consider if we want to use emissive colors?
-        public static void SetupLevelEffects()
-        {
-            // Ensure known good color combos are available
-            Colorization.AddGoodColorCombos();
-            bool added_color_combos = false;
-            for (int level = LevelColors.Count; ValConfig.MaxLevel.Value + 2 > level; level++)
+        public static void SetupLevelEffects() {
+            for (int level = defaultColorizationSettings.defaultLevelColorization.Count; 103 > level; level++)
             {
-                // Add all of the known good color combinations first, then generate fillers for the rest
-                if (added_color_combos == false)
-                {
-                    foreach (ColorDef col in Colorization.LevelColors)
-                    {
-                        float colscale = 1f;
-                        if (ValConfig.EnableCreatureScalingPerLevel.Value) { colscale += (ValConfig.PerLevelScaleBonus.Value * level); }
-                        characterLevelEffects.Add(new LevelEffects.LevelSetup() { m_setEmissiveColor = false, m_scale = colscale, m_hue = col.hue, m_saturation = col.saturation, m_value = col.value });
-                        Logger.LogDebug($"LevelEffects: {level} - scale:{colscale}, hue:{col.hue}, sat:{col.saturation}, val:{col.value}");
-                        level++;
-                    }
-                    added_color_combos = true;
-                }
-                float scale = 1f;
-                if (ValConfig.EnableCreatureScalingPerLevel.Value)
-                {
-                    // This flattens out at the end of the level cap, everything past that up to the max of 100 will have the same size
-                    scale += (ValConfig.PerLevelScaleBonus.Value * level);
-                }
-                //float sat = UnityEngine.Random.Range(0f, 1f);
-                float sat = UnityEngine.Random.Range(-0.2f, 0.2f);
-                float hue = UnityEngine.Random.Range(-0.4f, 0.4f);
-                float value = UnityEngine.Random.Range(-0.75f, 0.75f);
-                Logger.LogDebug($"LevelEffects: {level} - scale:{scale}, hue:{hue}, sat:{sat}, val:{value}");
-                characterLevelEffects.Add(new LevelEffects.LevelSetup() { m_setEmissiveColor = false, m_scale = scale, m_hue = hue, m_saturation = sat, m_value = value });
-            }
-        }
-
-        [HarmonyPatch(typeof(LevelEffects), nameof(LevelEffects.Start))]
-        public static class DefineLevelupModifiers
-        {
-            public static void Prefix(LevelEffects __instance)
-            {
-                // Remove the vanilla level setups so we can add level setups for every level needed.
-                //__instance.m_levelSetups.Clear();
-                __instance.m_levelSetups.AddRange(characterLevelEffects);
+                float sat = UnityEngine.Random.Range(-0.1f, 0.1f);
+                float hue = UnityEngine.Random.Range(-0.5f, 0.5f);
+                float value = UnityEngine.Random.Range(-0.5f, 0.5f);
+                Logger.LogDebug($"LevelEffects: {level} - hue:{hue}, sat:{sat}, val:{value}");
+                defaultColorizationSettings.defaultLevelColorization.Add(new ColorDef() { hue = hue, saturation = sat, value = value });
             }
         }
 
         [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
-        public static class AddLevelEffectsToEverythingElse {
-
+        public static class AddLevelEffectsWhenSpawned {
             public static void Postfix(Character __instance) {
-                LevelEffects default_level_effects =  __instance.gameObject.GetComponentInChildren<LevelEffects>();
-                if (default_level_effects == null && __instance.m_level > 1 && __instance.m_onLevelSet == null) {
-                    Logger.LogInfo($"Setting level effects for character that does not have them set {__instance.m_level}");
-                    LevelSetup levelSetup = characterLevelEffects[__instance.m_level];
-                    __instance.transform.localScale = new Vector3(levelSetup.m_scale, levelSetup.m_scale, levelSetup.m_scale);
+                if (__instance.m_level <= 1) { return; }
+                //LevelEffects le = __instance.GetComponentInChildren<LevelEffects>();
+                //if (le == null) { ApplyColorizationWithoutLevelEffects(__instance); }
+                ApplyColorizationWithoutLevelEffects(__instance);
+                float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * __instance.m_level);
+                Logger.LogInfo($"Setting character size {scale} and color.");
+                __instance.transform.localScale *= scale;
+                Physics.SyncTransforms();
+            }
+        }
+
+        [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
+        public static class AddLevelEffectsWhenLoaded
+        {
+            // Characters that are spawned are spawned at level 1- so this won't trigger
+            // This will only trigger for characters that already have their level set
+            public static void Postfix(Character __instance) {
+                if (__instance.m_level <= 1) { return; }
+                //LevelEffects le = __instance.GetComponentInChildren<LevelEffects>();
+                //if (le == null) { ApplyColorizationWithoutLevelEffects(__instance); }
+                ApplyColorizationWithoutLevelEffects(__instance);
+                float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * __instance.m_level);
+                Logger.LogInfo($"Setting character size {scale} and color.");
+                __instance.transform.localScale *= scale;
+                Physics.SyncTransforms();
+            }
+        }
+
+
+        private static void ApplyColorizationWithoutLevelEffects(Character cgo) {
+            LevelSetup genlvlup = creatureColorizationSettings.defaultLevelColorization[cgo.m_level + 1].toLevelEffect();
+            string cname = Utils.GetPrefabName(cgo.gameObject);
+            Logger.LogDebug($"Checking for character specific colorization {cname}");
+            if (creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname) && creatureColorizationSettings.characterSpecificColorization[cname].Count >= cgo.m_level + 1) {
+                Logger.LogDebug($"Found character specific colorization for {cname}");
+                genlvlup = creatureColorizationSettings.characterSpecificColorization[cname][cgo.m_level + 1].toLevelEffect();
+            } else { Logger.LogDebug($"No character specific colorization for {cname} - {cgo.m_level + 1}"); }
+
+            foreach (var smr in cgo.gameObject.GetComponentsInChildren<SkinnedMeshRenderer>()) {
+                Material[] sharedMaterials2 = smr.sharedMaterials;
+                sharedMaterials2[0] = new Material(sharedMaterials2[0]);
+                sharedMaterials2[0].SetFloat("_Hue", genlvlup.m_hue);
+                sharedMaterials2[0].SetFloat("_Saturation", genlvlup.m_saturation);
+                sharedMaterials2[0].SetFloat("_Value", genlvlup.m_value);
+                if (genlvlup.m_setEmissiveColor)
+                {
+                    sharedMaterials2[0].SetColor("_EmissionColor", genlvlup.m_emissiveColor);
+                }
+                smr.sharedMaterials = sharedMaterials2;
+            }
+        }
+
+        public static void DumpDefaultColorizations()
+        {
+            foreach(var noid in  Resources.FindObjectsOfTypeAll<Humanoid>()) {
+                if (noid == null) { continue; }
+                LevelEffects le = noid.GetComponentInChildren<LevelEffects>();
+                if (le != null) {
+                    string name = noid.name.Replace("(Clone)", "");
+                    if (!defaultColorizationSettings.characterSpecificColorization.ContainsKey(name)) {
+                        defaultColorizationSettings.characterSpecificColorization.Add(name, new List<ColorDef>());
+                    }
+
+                    foreach(var colset in le.m_levelSetups) {
+                        defaultColorizationSettings.characterSpecificColorization[noid.name].Add(new ColorDef() { value = colset.m_value, hue = colset.m_hue, saturation = colset.m_saturation, is_emissive = colset.m_setEmissiveColor });
+                    }
                 }
             }
+            // Copy over the updated defaults
+            Init();
+            Logger.LogInfo(YamlDefaultConfig());
+        }
+
+
+        private static void StarLevelScaleChanged(object s, EventArgs e)
+        {
+            IEnumerable<Character> objects = Resources.FindObjectsOfTypeAll<Character>();
         }
     }
 }

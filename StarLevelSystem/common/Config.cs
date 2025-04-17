@@ -14,8 +14,10 @@ namespace StarLevelSystem
     {
         public static ConfigFile cfg;
         private static String levelsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LevelSettings.yaml");
+        private static String colorsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "ColorSettings.yaml");
 
         private static CustomRPC LevelSettingsRPC;
+        private static CustomRPC ColorSettingsRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -28,6 +30,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> EnemyDamageLevelMultiplier;
         public static ConfigEntry<float> BossEnemyDamageMultiplier;
         
+        public static ConfigEntry<bool> EnableDistanceLevelScalingBonus;
         public static ConfigEntry<bool> EnableMultiplayerEnemyHealthScaling;
         public static ConfigEntry<bool> EnableMultiplayerEnemyDamageScaling;
         public static ConfigEntry<int> MultiplayerScalingRequiredPlayersNearby;
@@ -44,8 +47,10 @@ namespace StarLevelSystem
 
         public void SetupConfigRPCs() {
             LevelSettingsRPC = NetworkManager.Instance.AddRPC("LSE_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
+            ColorSettingsRPC = NetworkManager.Instance.AddRPC("LSE_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
 
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
+            SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -60,6 +65,7 @@ namespace StarLevelSystem
 
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 5, "The Maximum number of stars that a creature can have", false, 1, 100);
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
+            EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 1f);
             PerLevelLootScale = BindServerConfig("LevelSystem", "PerLevelLootScale", 0.5f, "The amount of additional loot that a creature provides per each star level", true, 0f, 2f);
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x. At 2x each creature has double the base health and gains twice as much per level.", false, 0.01f, 5f);
@@ -79,23 +85,27 @@ namespace StarLevelSystem
             string externalConfigFolder = ValConfig.GetSecondaryConfigDirectoryPath();
             string[] presentFiles = Directory.GetFiles(externalConfigFolder);
             bool foundLevelsFile = false;
+            bool foundColorFile = false;
 
-            foreach (string configFile in presentFiles)
-            {
+            foreach (string configFile in presentFiles) {
                 if (configFile.Contains("LevelSettings.yaml"))
                 {
                     Logger.LogDebug($"Found level configuration: {configFile}");
                     levelsFilePath = configFile;
                     foundLevelsFile = true;
                 }
+
+                if (configFile.Contains("ColorSettings.yaml"))
+                {
+                    Logger.LogDebug($"Found color configuration: {configFile}");
+                    colorsFilePath = configFile;
+                    foundColorFile = true;
+                }
             }
 
-            if (foundLevelsFile == false)
-            {
+            if (foundLevelsFile == false) {
                 Logger.LogDebug("Level config file missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(levelsFilePath))
-                {
-                    // writetext.WriteLine(ValheimFortress.ReadEmbeddedResourceFile("Rewards.yaml"));
+                using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
                     String header = @"#################################################
 # Star Level System Expanded - Level Settings
 #################################################
@@ -105,12 +115,25 @@ namespace StarLevelSystem
                 }
             }
 
+            if (foundColorFile == false)
+            {
+                Logger.LogDebug("Color config file missing, recreating.");
+                using (StreamWriter writetext = new StreamWriter(colorsFilePath)) {
+                    String header = @"#################################################
+# Star Level System Expanded - Creature Level Color Settings
+#################################################
+";
+                    writetext.WriteLine(header);
+                    writetext.WriteLine(Colorization.YamlDefaultConfig());
+                }
+            }
+
             string spawnableCreatureConfigs = File.ReadAllText(levelsFilePath);
 
             try {
                 DataObjects.CreatureLevelSettings creatureConfigs = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(spawnableCreatureConfigs);
                 LevelSystemConfiguration.UpdateYamlConfig(creatureConfigs);
-            } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the waveStyle values, defaults will be used. Exception: {e}"); }
+            } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Star Level values, defaults will be used. Exception: {e}"); }
 
             // File watcher for the Levels
             FileSystemWatcher levelFSWatcher = new FileSystemWatcher();
@@ -122,17 +145,26 @@ namespace StarLevelSystem
             levelFSWatcher.Renamed += new RenamedEventHandler(UpdateLevelsConfigFileOnChange);
             levelFSWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
             levelFSWatcher.EnableRaisingEvents = true;
+
+            // File watcher for the Levels
+            FileSystemWatcher colorFSWatcher = new FileSystemWatcher();
+            colorFSWatcher.Path = externalConfigFolder;
+            colorFSWatcher.NotifyFilter = NotifyFilters.LastWrite;
+            colorFSWatcher.Filter = "ColorSettings.yaml";
+            colorFSWatcher.Changed += new FileSystemEventHandler(UpdateColorsConfigFileOnChange);
+            colorFSWatcher.Created += new FileSystemEventHandler(UpdateColorsConfigFileOnChange);
+            colorFSWatcher.Renamed += new RenamedEventHandler(UpdateColorsConfigFileOnChange);
+            colorFSWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
+            colorFSWatcher.EnableRaisingEvents = true;
         }
 
         private static void UpdateLevelsConfigFileOnChange(object sender, FileSystemEventArgs e)
         {
             if (!File.Exists(levelsFilePath)) { return; }
-            Logger.LogDebug($"{e} filewatcher called, updating values.");
             string levelsDefinitions = File.ReadAllText(levelsFilePath);
             LevelSystemConfiguration.UpdateYamlConfig(levelsDefinitions);
             Logger.LogDebug("Updated levels in-memory values.");
-            if (GUIManager.IsHeadless())
-            {
+            if (GUIManager.IsHeadless()) {
                 try {
                     LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendLevelsConfigs());
                     Logger.LogDebug("Sent levels configs to clients.");
@@ -145,11 +177,37 @@ namespace StarLevelSystem
             }
         }
 
+        private static void UpdateColorsConfigFileOnChange(object sender, FileSystemEventArgs e)
+        {
+            if (!File.Exists(colorsFilePath)) { return; }
+            string levelsDefinitions = File.ReadAllText(colorsFilePath);
+            Colorization.UpdateYamlConfig(levelsDefinitions);
+            Logger.LogDebug("Updated levels in-memory values.");
+            if (GUIManager.IsHeadless()) {
+                try {
+                    ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendColorsConfigs());
+                    Logger.LogDebug("Sent levels configs to clients.");
+                } catch {
+                    Logger.LogError("Error while server syncing level configs");
+                }
+            } else {
+                Logger.LogDebug("Instance is not a server, and will not send level config updates.");
+            }
+        }
+
         private static ZPackage SendLevelsConfigs()
         {
             string levelsConfigs = File.ReadAllText(levelsFilePath);
             ZPackage package = new ZPackage();
             package.Write(levelsConfigs);
+            return package;
+        }
+
+        private static ZPackage SendColorsConfigs()
+        {
+            string colorsConfig = File.ReadAllText(colorsFilePath);
+            ZPackage package = new ZPackage();
+            package.Write(colorsConfig);
             return package;
         }
 
@@ -159,8 +217,7 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package)
-        {
+        private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
             var levelsyaml = package.ReadString();
             bool level_update_valid = LevelSystemConfiguration.UpdateYamlConfig(levelsyaml);
 
@@ -168,6 +225,19 @@ namespace StarLevelSystem
             if (level_update_valid) {
                 using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
                     writetext.WriteLine(levelsyaml);
+                }
+            }
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveColorConfigs(long sender, ZPackage package) {
+            var colorsyaml = package.ReadString();
+            bool level_update_valid = Colorization.UpdateYamlConfig(colorsyaml);
+
+            // Add in a check if we want to write the server config to disk or use it virtually
+            if (level_update_valid) {
+                using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
+                    writetext.WriteLine(colorsyaml);
                 }
             }
             yield return null;

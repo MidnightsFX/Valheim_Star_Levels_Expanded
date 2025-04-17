@@ -33,7 +33,10 @@ namespace StarLevelSystem
 
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
             Colorization.SetupLevelEffects();
+            Colorization.Init();
             LevelSystemConfiguration.Init();
+            PrefabManager.OnVanillaPrefabsAvailable += Colorization.DumpDefaultColorizations;
+
             //CommandManager.Instance.AddConsoleCommand(new SpawnerLevelExtension.ExtendedSpawnCommand());
 
             Jotunn.Logger.LogInfo("Star Levels have been expanded.");

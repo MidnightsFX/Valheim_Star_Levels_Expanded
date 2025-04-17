@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization;
+using StarLevelSystem.modules;
 
 namespace StarLevelSystem.common
 {
@@ -13,25 +14,34 @@ namespace StarLevelSystem.common
             public Dictionary<Heightmap.Biome, BiomeSpecificSetting> BiomeConfiguration { get; set; }
             public Dictionary<string, CreatureSpecificSetting> CreatureConfiguration { get; set; }
             public SortedDictionary<int, float> DefaultCreatureLevelUpChance { get; set; }
+            public bool EnableDistanceLevelBonus { get; set; } = false;
+            public SortedDictionary<int, SortedDictionary<int, float>> DistanceLevelBonus { get; set; }
         }
 
         public class BiomeSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
-
             public bool EnableBiomeLevelOverride { get; set; } = false;
             public int BiomeMaxLevelOverride { get; set; }
+            public int BiomeMinLevelOverride { get; set; }
             public float CreatureSpawnHealthPerLevelBonus { get; set; }
             public float CreatureSpawnDamagePerLevelBonus { get; set; }
             public float CreatureLootMultiplierPerLevel { get; set; }
+            public float DistanceScaleModifier { get; set; } = 1f;
         }
 
         public class CreatureSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             public bool EnableCreatureLevelOverride { get; set; } = false;
             public int CreatureMaxLevelOverride { get; set; }
+            public int CreatureMinLevelOverride { get; set; }
             public float CreatureSpawnHealthPerLevelBonus { get; set; }
             public float CreatureSpawnDamagePerLevelBonus { get; set; }
             public float CreatureLootMultiplierPerLevel { get; set; }
+        }
+
+        public class CreatureColorizationSettings {
+            public Dictionary<string, List<ColorDef>> characterSpecificColorization { get; set; }
+            public List<ColorDef> defaultLevelColorization { get; set; }
         }
     }
 }

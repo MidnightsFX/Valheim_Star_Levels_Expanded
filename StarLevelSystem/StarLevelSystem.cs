@@ -35,7 +35,7 @@ namespace StarLevelSystem
             Colorization.SetupLevelEffects();
             Colorization.Init();
             LevelSystemConfiguration.Init();
-            PrefabManager.OnVanillaPrefabsAvailable += Colorization.DumpDefaultColorizations;
+            //PrefabManager.OnVanillaPrefabsAvailable += Colorization.DumpDefaultColorizations;
 
             //CommandManager.Instance.AddConsoleCommand(new SpawnerLevelExtension.ExtendedSpawnCommand());
 

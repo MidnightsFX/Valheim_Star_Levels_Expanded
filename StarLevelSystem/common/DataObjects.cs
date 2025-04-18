@@ -40,8 +40,8 @@ namespace StarLevelSystem.common
         }
 
         public class CreatureColorizationSettings {
-            public Dictionary<string, List<ColorDef>> characterSpecificColorization { get; set; }
-            public List<ColorDef> defaultLevelColorization { get; set; }
+            public Dictionary<string, Dictionary<int, ColorDef>> characterSpecificColorization { get; set; }
+            public Dictionary<int, ColorDef> defaultLevelColorization { get; set; }
         }
     }
 }

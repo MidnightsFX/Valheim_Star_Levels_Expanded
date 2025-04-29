@@ -22,6 +22,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
+        public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<float> EnemyHealthMultiplier;
@@ -67,6 +68,8 @@ namespace StarLevelSystem
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 1f);
+            PerLevelScaleBonus.SettingChanged += Colorization.StarLevelScaleChanged;
+            EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             PerLevelLootScale = BindServerConfig("LevelSystem", "PerLevelLootScale", 0.5f, "The amount of additional loot that a creature provides per each star level", true, 0f, 2f);
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x. At 2x each creature has double the base health and gains twice as much per level.", false, 0.01f, 5f);
             EnemyHealthPerWorldLevel = BindServerConfig("LevelSystem", "EnemyHealthPerWorldLevel", 0.2f, "The percent amount of health that each world level gives a creature, vanilla is 2x (eg 200% more health each world level).", false, 0.00f, 2f);
@@ -146,7 +149,7 @@ namespace StarLevelSystem
             levelFSWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
             levelFSWatcher.EnableRaisingEvents = true;
 
-            // File watcher for the Levels
+            // File watcher for the Colors
             FileSystemWatcher colorFSWatcher = new FileSystemWatcher();
             colorFSWatcher.Path = externalConfigFolder;
             colorFSWatcher.NotifyFilter = NotifyFilters.LastWrite;
@@ -180,8 +183,8 @@ namespace StarLevelSystem
         private static void UpdateColorsConfigFileOnChange(object sender, FileSystemEventArgs e)
         {
             if (!File.Exists(colorsFilePath)) { return; }
-            string levelsDefinitions = File.ReadAllText(colorsFilePath);
-            Colorization.UpdateYamlConfig(levelsDefinitions);
+            string colordef = File.ReadAllText(colorsFilePath);
+            Colorization.UpdateYamlConfig(colordef);
             Logger.LogDebug("Updated levels in-memory values.");
             if (GUIManager.IsHeadless()) {
                 try {

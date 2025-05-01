@@ -472,7 +472,7 @@ namespace StarLevelSystem.modules
             // This might need to be async
             foreach(var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                 chara.transform.localScale = Vector3.one;
-                float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * chara.m_level);
+                float scale = 1+ (ValConfig.PerLevelScaleBonus.Value * (chara.m_level -1 ));
                 Logger.LogInfo($"Setting {chara.name} size {scale}.");
                 chara.transform.localScale *= scale;
             }

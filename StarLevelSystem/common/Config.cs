@@ -25,6 +25,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
+        public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<float> EnemyHealthMultiplier;
         public static ConfigEntry<float> BossEnemyHealthMultiplier;
         public static ConfigEntry<float> EnemyHealthPerWorldLevel;
@@ -67,10 +68,11 @@ namespace StarLevelSystem
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 5, "The Maximum number of stars that a creature can have", false, 1, 100);
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
-            PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 1f);
+            PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 2f);
             PerLevelScaleBonus.SettingChanged += Colorization.StarLevelScaleChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             PerLevelLootScale = BindServerConfig("LevelSystem", "PerLevelLootScale", 0.5f, "The amount of additional loot that a creature provides per each star level", true, 0f, 2f);
+            LootDropsPerTick = BindServerConfig("LevelSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x. At 2x each creature has double the base health and gains twice as much per level.", false, 0.01f, 5f);
             EnemyHealthPerWorldLevel = BindServerConfig("LevelSystem", "EnemyHealthPerWorldLevel", 0.2f, "The percent amount of health that each world level gives a creature, vanilla is 2x (eg 200% more health each world level).", false, 0.00f, 2f);
             EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);

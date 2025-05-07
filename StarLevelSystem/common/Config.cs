@@ -13,8 +13,8 @@ namespace StarLevelSystem
     internal class ValConfig
     {
         public static ConfigFile cfg;
-        private static String levelsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LevelSettings.yaml");
-        private static String colorsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "ColorSettings.yaml");
+        internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LevelSettings.yaml");
+        internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "ColorSettings.yaml");
 
         private static CustomRPC LevelSettingsRPC;
         private static CustomRPC ColorSettingsRPC;
@@ -133,87 +133,64 @@ namespace StarLevelSystem
                 }
             }
 
-            string spawnableCreatureConfigs = File.ReadAllText(levelsFilePath);
-
             try {
-                DataObjects.CreatureLevelSettings creatureConfigs = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(spawnableCreatureConfigs);
+                DataObjects.CreatureLevelSettings creatureConfigs = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(File.ReadAllText(levelsFilePath));
                 LevelSystemConfiguration.UpdateYamlConfig(creatureConfigs);
             } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Star Level values, defaults will be used. Exception: {e}"); }
 
-            // File watcher for the Levels
-            FileSystemWatcher levelFSWatcher = new FileSystemWatcher();
-            levelFSWatcher.Path = externalConfigFolder;
-            levelFSWatcher.NotifyFilter = NotifyFilters.LastWrite;
-            levelFSWatcher.Filter = "LevelSettings.yaml";
-            levelFSWatcher.Changed += new FileSystemEventHandler(UpdateLevelsConfigFileOnChange);
-            levelFSWatcher.Created += new FileSystemEventHandler(UpdateLevelsConfigFileOnChange);
-            levelFSWatcher.Renamed += new RenamedEventHandler(UpdateLevelsConfigFileOnChange);
-            levelFSWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
-            levelFSWatcher.EnableRaisingEvents = true;
-
-            // File watcher for the Colors
-            FileSystemWatcher colorFSWatcher = new FileSystemWatcher();
-            colorFSWatcher.Path = externalConfigFolder;
-            colorFSWatcher.NotifyFilter = NotifyFilters.LastWrite;
-            colorFSWatcher.Filter = "ColorSettings.yaml";
-            colorFSWatcher.Changed += new FileSystemEventHandler(UpdateColorsConfigFileOnChange);
-            colorFSWatcher.Created += new FileSystemEventHandler(UpdateColorsConfigFileOnChange);
-            colorFSWatcher.Renamed += new RenamedEventHandler(UpdateColorsConfigFileOnChange);
-            colorFSWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
-            colorFSWatcher.EnableRaisingEvents = true;
+            SetupFileWatcher("ColorSettings.yaml");
+            SetupFileWatcher("LevelSettings.yaml");
         }
 
-        private static void UpdateLevelsConfigFileOnChange(object sender, FileSystemEventArgs e)
+        private static void SetupFileWatcher(string filtername)
         {
-            if (!File.Exists(levelsFilePath)) { return; }
-            string levelsDefinitions = File.ReadAllText(levelsFilePath);
-            LevelSystemConfiguration.UpdateYamlConfig(levelsDefinitions);
-            Logger.LogDebug("Updated levels in-memory values.");
-            if (GUIManager.IsHeadless()) {
-                try {
-                    LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendLevelsConfigs());
-                    Logger.LogDebug("Sent levels configs to clients.");
-                } catch {
-                    Logger.LogError("Error while server syncing level configs");
-                }
+            FileSystemWatcher fw = new FileSystemWatcher();
+            fw.Path = ValConfig.GetSecondaryConfigDirectoryPath();
+            fw.NotifyFilter = NotifyFilters.LastWrite;
+            fw.Filter = filtername;
+            fw.Changed += new FileSystemEventHandler(UpdateConfigFileOnChange);
+            fw.Created += new FileSystemEventHandler(UpdateConfigFileOnChange);
+            fw.Renamed += new RenamedEventHandler(UpdateConfigFileOnChange);
+            fw.SynchronizingObject = ThreadingHelper.SynchronizingObject;
+            fw.EnableRaisingEvents = true;
+        }
+
+        private static void UpdateConfigFileOnChange(object sender, FileSystemEventArgs e) {
+            if (SynchronizationManager.Instance.PlayerIsAdmin == false) {
+                Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
+                return;
             }
-            else {
-                Logger.LogDebug("Instance is not a server, and will not send level config updates.");
+            if (!File.Exists(e.FullPath)) { return; }
+
+            string filetext = File.ReadAllText(e.FullPath);
+            var fileInfo = new FileInfo(e.FullPath);
+            Logger.LogDebug($"Filewatch changes from: ({fileInfo.Name}) {fileInfo.FullName}");
+            switch (fileInfo.Name) {
+                case "ColorSettings.yaml":
+                    Colorization.UpdateYamlConfig(filetext);
+                    ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
+                    break;
+                case "LevelSettings.yaml":
+                    LevelSystemConfiguration.UpdateYamlConfig(filetext);
+                    LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
+                    break;
             }
         }
 
-        private static void UpdateColorsConfigFileOnChange(object sender, FileSystemEventArgs e)
+        private static ZPackage SendFileAsZPackage(string filepath)
         {
-            if (!File.Exists(colorsFilePath)) { return; }
-            string colordef = File.ReadAllText(colorsFilePath);
-            Colorization.UpdateYamlConfig(colordef);
-            Logger.LogDebug("Updated levels in-memory values.");
-            if (GUIManager.IsHeadless()) {
-                try {
-                    ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendColorsConfigs());
-                    Logger.LogDebug("Sent levels configs to clients.");
-                } catch {
-                    Logger.LogError("Error while server syncing level configs");
-                }
-            } else {
-                Logger.LogDebug("Instance is not a server, and will not send level config updates.");
-            }
-        }
-
-        private static ZPackage SendLevelsConfigs()
-        {
-            string levelsConfigs = File.ReadAllText(levelsFilePath);
+            string filecontents = File.ReadAllText(filepath);
             ZPackage package = new ZPackage();
-            package.Write(levelsConfigs);
+            package.Write(filecontents);
             return package;
         }
 
-        private static ZPackage SendColorsConfigs()
-        {
-            string colorsConfig = File.ReadAllText(colorsFilePath);
-            ZPackage package = new ZPackage();
-            package.Write(colorsConfig);
-            return package;
+        private static ZPackage SendLevelsConfigs() {
+            return SendFileAsZPackage(levelsFilePath);
+        }
+
+        private static ZPackage SendColorsConfigs() {
+            return SendFileAsZPackage(colorsFilePath);
         }
 
         public static IEnumerator OnServerRecieveConfigs(long sender, ZPackage package)

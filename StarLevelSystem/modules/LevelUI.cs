@@ -82,8 +82,11 @@ namespace StarLevelSystem.modules
                 GameObject star_7_boss = new GameObject(name: "level_n");
                 star_7_boss.transform.SetParent(bosshud);
                 GameObject star7_boss = Object.Instantiate(star, star_7_boss.transform);
+                // Size increase boss stars
+                star7_boss.GetComponent<RectTransform>().sizeDelta = new Vector2(20, 20);
+                star7_boss.transform.Find("star (1)").gameObject.GetComponent<RectTransform>().sizeDelta = new Vector2(16, 16);
                 // star7.transform.SetParent(star_7.transform);
-                star_7_boss.transform.localPosition = new Vector3(x: -42, y: 19, z: 0);
+                star_7_boss.transform.localPosition = new Vector3(x: -17, y: -6, z: 0);
                 star7_boss.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GameObject s7Name_boss = new GameObject(name: "level_n_name");
                 GameObject star7Name_boss = Object.Instantiate(s7Name_boss, star_7_boss.transform);
@@ -94,9 +97,9 @@ namespace StarLevelSystem.modules
                     parent: star7Name_boss.transform,
                     anchorMin: new Vector2(0.5f, 0.5f),
                     anchorMax: new Vector2(0.5f, 0.5f),
-                    position: new Vector2(185f, -13f),
+                    position: new Vector2(185f, -7f),
                     font: GUIManager.Instance.AveriaSerifBold,
-                    fontSize: 14,
+                    fontSize: 23,
                     color: GUIManager.Instance.ValheimYellow,
                     outline: true,
                     outlineColor: Color.black,
@@ -111,6 +114,16 @@ namespace StarLevelSystem.modules
                 GameObject new_star_holder = new GameObject(name: $"level_{level}");
                 new_star_holder.transform.SetParent(parent_t);
                 GameObject new_star = Object.Instantiate(star, new_star_holder.transform);
+
+                // Make boss stars a little bigger
+                if (boss) {
+                    RectTransform light_star_rect = new_star.transform.Find("star (1)").gameObject.GetComponent<RectTransform>();
+                    RectTransform dark_star_rect = new_star.GetComponent<RectTransform>();
+
+                    light_star_rect.sizeDelta = new Vector2(16, 16);
+                    dark_star_rect.sizeDelta = new Vector2(20, 20);
+                }
+
                 new_star_holder.SetActive(false);
 
                 switch(level) {
@@ -118,17 +131,17 @@ namespace StarLevelSystem.modules
                     // Level 2-3 don't have a non-boss entry because they use the vanilla entries
                     case 2:
                         if (boss) {
-                            new_star_holder.transform.localPosition = new Vector3(x: -41, y: 19, z: 0);
+                            new_star_holder.transform.localPosition = new Vector3(x: 0, y: -6, z: 0);
                         }
                         break;
                     case 3:
                         if (boss) {
-                            new_star_holder.transform.localPosition = new Vector3(x: -26, y: 19, z: 0);
+                            new_star_holder.transform.localPosition = new Vector3(x: -20, y: -6, z: 0);
                         }
                         break;
                     case 4:
                         if (boss) {
-                            new_star_holder.transform.localPosition = new Vector3(x: -9, y: 19, z: 0);
+                            new_star_holder.transform.localPosition = new Vector3(x: 20, y: -6, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         } else {
                             new_star_holder.transform.localPosition = new Vector3(x: -9, y: 19, z: 0);
@@ -137,7 +150,7 @@ namespace StarLevelSystem.modules
                         break;
                     case 5:
                         if (boss) {
-                            new_star_holder.transform.localPosition = new Vector3(x: 7, y: 19, z: 0);
+                            new_star_holder.transform.localPosition = new Vector3(x: -40, y: -6, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         } else {
                             new_star_holder.transform.localPosition = new Vector3(x: 7, y: 19, z: 0);
@@ -146,7 +159,7 @@ namespace StarLevelSystem.modules
                         break;
                     case 6:
                         if (boss) {
-                            new_star_holder.transform.localPosition = new Vector3(x: 23, y: 19, z: 0);
+                            new_star_holder.transform.localPosition = new Vector3(x: 40, y: -6, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         } else {
                             new_star_holder.transform.localPosition = new Vector3(x: 23, y: 19, z: 0);

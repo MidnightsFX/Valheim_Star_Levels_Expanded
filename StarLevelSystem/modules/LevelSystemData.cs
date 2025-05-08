@@ -1,10 +1,12 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.common;
+using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace StarLevelSystem.modules
 {
-    public static class LevelSystemConfiguration
+    public static class LevelSystemData
     {
 
         public static DataObjects.CreatureLevelSettings SLE_Global_Settings = DefaultConfiguration;
@@ -104,6 +106,37 @@ namespace StarLevelSystem.modules
                         CreatureSpawnDamagePerLevelBonus = 1,
                         CreatureLootMultiplierPerLevel = 1f,
                         BiomeMaxLevelOverride = 3,
+                        CustomCreatureLevelUpChance = new SortedDictionary<int, float>() {
+                            { 1, 20f },
+                            { 2, 15f },
+                            { 3, 12f },
+                            { 4, 10f },
+                            { 5, 8.0f },
+                            { 6, 6.5f },
+                            { 7, 5.0f },
+                            { 8, 3.5f },
+                            { 9, 1.5f },
+                            { 10, 1.0f },
+                            { 11, 0.5f },
+                            { 12, 0.25f },
+                            { 13, 0.125f },
+                            { 14, 0.0625f },
+                            { 15, 0.03125f },
+                            { 16, 0.015625f },
+                            { 17, 0.0078125f },
+                            { 18, 0.00390625f },
+                            { 19, 0.001953125f },
+                            { 20, 0.0009765625f }
+                        },
+                    }
+                },
+                { Heightmap.Biome.Swamp, new DataObjects.BiomeSpecificSetting()
+                    {
+                        EnableBiomeLevelOverride = true,
+                        CreatureSpawnHealthPerLevelBonus = 0.85f,
+                        CreatureSpawnDamagePerLevelBonus = 0.85f,
+                        CreatureLootMultiplierPerLevel = 1f,
+                        BiomeMaxLevelOverride = 4,
                         CustomCreatureLevelUpChance = new SortedDictionary<int, float>() {
                             { 1, 20f },
                             { 2, 15f },
@@ -382,19 +415,23 @@ namespace StarLevelSystem.modules
         internal static void Init() {
             // Load the default configuration
             SLE_Global_Settings = DefaultConfiguration;
+            try {
+                UpdateYamlConfig(File.ReadAllText(ValConfig.levelsFilePath));
+            }
+            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Color Level values, defaults will be used. Exception: {e}"); }
         }
         public static string YamlDefaultConfig() {
             var yaml = DataObjects.yamlserializer.Serialize(DefaultConfiguration);
             return yaml;
         }
-        public static void UpdateYamlConfig(DataObjects.CreatureLevelSettings newcfg) {
-            SLE_Global_Settings = newcfg;
-        }
         public static bool UpdateYamlConfig(string yaml)
         {
-            try {
+            try
+            {
                 SLE_Global_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
-            } catch (System.Exception ex) {
+                Logger.LogDebug("Loaded new Star Level Creature settings.");
+            }
+            catch (System.Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");
                 return false;
             }

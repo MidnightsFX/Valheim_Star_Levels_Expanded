@@ -34,7 +34,7 @@ namespace StarLevelSystem
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
             Colorization.SetupLevelEffects();
             Colorization.Init();
-            LevelSystemConfiguration.Init();
+            LevelSystemData.Init();
             //PrefabManager.OnVanillaPrefabsAvailable += Colorization.DumpDefaultColorizations;
 
             //CommandManager.Instance.AddConsoleCommand(new SpawnerLevelExtension.ExtendedSpawnCommand());

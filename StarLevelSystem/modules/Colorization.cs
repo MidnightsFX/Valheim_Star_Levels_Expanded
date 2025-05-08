@@ -68,6 +68,8 @@ namespace StarLevelSystem.modules
         }
 
         // Consider if we want to use emissive colors?
+        // TODO make these static?
+        // Make these allow levels past level 100?
         public static void SetupLevelEffects() {
             for (int level = defaultColorizationSettings.defaultLevelColorization.Count + 1; 103 > level; level++)
             {
@@ -104,7 +106,7 @@ namespace StarLevelSystem.modules
                 if (__instance.transform.position.y < 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
                     // Don't scale in dungeons
                     float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * __instance.m_level);
-                    Logger.LogInfo($"Setting character size {scale} and color.");
+                    Logger.LogDebug($"Setting character size {scale} and color.");
                     __instance.transform.localScale *= scale;
                     Physics.SyncTransforms();
                 }

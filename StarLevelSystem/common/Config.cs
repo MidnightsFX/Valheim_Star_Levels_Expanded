@@ -116,7 +116,7 @@ namespace StarLevelSystem
 #################################################
 ";
                     writetext.WriteLine(header);
-                    writetext.WriteLine(LevelSystemConfiguration.YamlDefaultConfig());
+                    writetext.WriteLine(LevelSystemData.YamlDefaultConfig());
                 }
             }
 
@@ -133,16 +133,11 @@ namespace StarLevelSystem
                 }
             }
 
-            try {
-                DataObjects.CreatureLevelSettings creatureConfigs = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(File.ReadAllText(levelsFilePath));
-                LevelSystemConfiguration.UpdateYamlConfig(creatureConfigs);
-            } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Star Level values, defaults will be used. Exception: {e}"); }
-
             SetupFileWatcher("ColorSettings.yaml");
             SetupFileWatcher("LevelSettings.yaml");
         }
 
-        private static void SetupFileWatcher(string filtername)
+        private void SetupFileWatcher(string filtername)
         {
             FileSystemWatcher fw = new FileSystemWatcher();
             fw.Path = ValConfig.GetSecondaryConfigDirectoryPath();
@@ -171,7 +166,8 @@ namespace StarLevelSystem
                     ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
                 case "LevelSettings.yaml":
-                    LevelSystemConfiguration.UpdateYamlConfig(filetext);
+                    Logger.LogDebug("Triggering Level Settings update.");
+                    LevelSystemData.UpdateYamlConfig(filetext);
                     LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
             }
@@ -201,7 +197,7 @@ namespace StarLevelSystem
 
         private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
             var levelsyaml = package.ReadString();
-            bool level_update_valid = LevelSystemConfiguration.UpdateYamlConfig(levelsyaml);
+            bool level_update_valid = LevelSystemData.UpdateYamlConfig(levelsyaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             if (level_update_valid) {

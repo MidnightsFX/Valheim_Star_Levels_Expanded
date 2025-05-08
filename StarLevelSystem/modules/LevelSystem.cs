@@ -10,6 +10,7 @@ namespace StarLevelSystem.modules
     public static class LevelSystem
     {
         private static Vector2 center = new Vector2(0, 0);
+
         public static int DetermineLevel(GameObject creature) {
             if (creature == null) {
                 Logger.LogWarning($"Creature is null, cannot determine level, set 1.");
@@ -25,14 +26,15 @@ namespace StarLevelSystem.modules
             // Determine creature location to check its biome
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
+            string creature_name = creature.name.Replace("(Clone)", "");
             float distance_from_center = Vector2.Distance(p, center);
             ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
-            Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
+            Logger.LogDebug($"{creature_name} {biome} {p}");
             SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() {};
 
-            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemConfiguration.SLE_Global_Settings.DistanceLevelBonus != null) {
+            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Global_Settings.DistanceLevelBonus != null) {
                 // Check if we are in a distance level bonus area
-                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in LevelSystemConfiguration.SLE_Global_Settings.DistanceLevelBonus)
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in LevelSystemData.SLE_Global_Settings.DistanceLevelBonus)
                 {
                     if (distance_from_center <= kvp.Key)
                     {
@@ -42,14 +44,14 @@ namespace StarLevelSystem.modules
                     }
                 }
             }
-            bool biome_based_config = LevelSystemConfiguration.SLE_Global_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
+            bool biome_based_config = LevelSystemData.SLE_Global_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
             float distance_level_modifier = 1;
             if (biome_based_config) { biomeConfig.DistanceScaleModifier = distance_level_modifier; }
             // creature specific override
-            if (LevelSystemConfiguration.SLE_Global_Settings.CreatureConfiguration.ContainsKey(creature.gameObject.name))
+            if (LevelSystemData.SLE_Global_Settings.CreatureConfiguration.ContainsKey(creature_name))
             {
-                Logger.LogDebug($"Creature specific config found for {creature.gameObject.name}");
-                DataObjects.CreatureSpecificSetting creature_specific_config = LevelSystemConfiguration.SLE_Global_Settings.CreatureConfiguration[creature.gameObject.name];
+                Logger.LogDebug($"Creature specific config found for {creature_name}");
+                DataObjects.CreatureSpecificSetting creature_specific_config = LevelSystemData.SLE_Global_Settings.CreatureConfiguration[creature_name];
                 if (creature_specific_config.CustomCreatureLevelUpChance != null)
                 {
                     if (creature_specific_config.EnableCreatureLevelOverride) { maxLevel = creature_specific_config.CreatureMaxLevelOverride; }
@@ -66,7 +68,7 @@ namespace StarLevelSystem.modules
                     return DetermineLevelRollResult(levelup_roll, maxLevel, biomeConfig.CustomCreatureLevelUpChance, distance_levelup_bonuses, distance_level_modifier);
                 }
             }
-            return DetermineLevelRollResult(levelup_roll, maxLevel, LevelSystemConfiguration.SLE_Global_Settings.DefaultCreatureLevelUpChance, distance_levelup_bonuses, distance_level_modifier);
+            return DetermineLevelRollResult(levelup_roll, maxLevel, LevelSystemData.SLE_Global_Settings.DefaultCreatureLevelUpChance, distance_levelup_bonuses, distance_level_modifier);
         }
 
         // Consider decision tree for levelups to reduce iterations
@@ -115,6 +117,18 @@ namespace StarLevelSystem.modules
             } 
         }
 
+        public static void DetermineApplyBossLevel(GameObject creature)
+        {
+            int level = DetermineLevel(creature);
+            if (level > 1)
+            {
+                Humanoid component2 = creature.GetComponent<Humanoid>();
+                if (component2 != null) {
+                    component2.SetLevel(level);
+                }
+            }
+        }
+
         // Do we need to modify the spawner max level if we don't use it?
         public static class ExpandSpawnerTriggerLevel
         {
@@ -123,13 +137,32 @@ namespace StarLevelSystem.modules
             {
                 Vector3 p = __instance.transform.position;
                 ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
-                LevelSystemConfiguration.SLE_Global_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
+                LevelSystemData.SLE_Global_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
 
                 if (biomeConfig != null) {
                     if (biomeConfig.EnableBiomeLevelOverride == true) { __instance.m_maxLevel = biomeConfig.BiomeMaxLevelOverride; }
                 } else {
                     __instance.m_maxLevel = ValConfig.MaxLevel.Value + 1;
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(OfferingBowl))]
+        public static class ExpandBossSpawnedLevels
+        {
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(OfferingBowl.DelayedSpawnBoss))]
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchStartForward(
+                        new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(OfferingBowl), nameof(OfferingBowl.m_bossSpawnPoint)))
+                        ).Advance(4).InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldloc_0), // Load the spawned creature
+                        Transpilers.EmitDelegate(DetermineApplyBossLevel)
+                        ).ThrowIfNotMatch("Unable to patch Boss spawn set level.");
+                return codeMatcher.Instructions();
             }
         }
 
@@ -226,9 +259,9 @@ namespace StarLevelSystem.modules
                     Vector3 p = __instance.transform.position;
                     ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
                     try {
-                        if (LevelSystemConfiguration.SLE_Global_Settings.BiomeConfiguration.ContainsKey(biome))
+                        if (LevelSystemData.SLE_Global_Settings.BiomeConfiguration.ContainsKey(biome))
                         {
-                            DataObjects.BiomeSpecificSetting biomeConfig = LevelSystemConfiguration.SLE_Global_Settings.BiomeConfiguration[biome];
+                            DataObjects.BiomeSpecificSetting biomeConfig = LevelSystemData.SLE_Global_Settings.BiomeConfiguration[biome];
                             if (biomeConfig.BiomeMaxLevelOverride != 0)
                             {
                                 __instance.m_maxLevel = biomeConfig.BiomeMaxLevelOverride;

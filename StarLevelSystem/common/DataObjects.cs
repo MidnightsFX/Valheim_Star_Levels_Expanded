@@ -22,7 +22,6 @@ namespace StarLevelSystem.common
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             public bool EnableBiomeLevelOverride { get; set; } = false;
             public int BiomeMaxLevelOverride { get; set; }
-            public int BiomeMinLevelOverride { get; set; }
             public float CreatureSpawnHealthPerLevelBonus { get; set; }
             public float CreatureSpawnDamagePerLevelBonus { get; set; }
             public float CreatureLootMultiplierPerLevel { get; set; }
@@ -33,7 +32,6 @@ namespace StarLevelSystem.common
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             public bool EnableCreatureLevelOverride { get; set; } = false;
             public int CreatureMaxLevelOverride { get; set; }
-            public int CreatureMinLevelOverride { get; set; }
             public float CreatureSpawnHealthPerLevelBonus { get; set; }
             public float CreatureSpawnDamagePerLevelBonus { get; set; }
             public float CreatureLootMultiplierPerLevel { get; set; }

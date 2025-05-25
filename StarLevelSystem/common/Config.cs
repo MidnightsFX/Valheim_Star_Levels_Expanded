@@ -3,7 +3,6 @@ using System.IO;
 using System;
 using BepInEx;
 using StarLevelSystem.modules;
-using StarLevelSystem.common;
 using Jotunn.Managers;
 using Jotunn.Entities;
 using System.Collections;
@@ -143,11 +142,58 @@ namespace StarLevelSystem
             fw.Path = ValConfig.GetSecondaryConfigDirectoryPath();
             fw.NotifyFilter = NotifyFilters.LastWrite;
             fw.Filter = filtername;
-            fw.Changed += new FileSystemEventHandler(UpdateConfigFileOnChange);
-            fw.Created += new FileSystemEventHandler(UpdateConfigFileOnChange);
-            fw.Renamed += new RenamedEventHandler(UpdateConfigFileOnChange);
+            if (filtername == "ColorSettings.yaml")
+            {
+                fw.Changed += new FileSystemEventHandler(UpdateColorsOnChange);
+                fw.Created += new FileSystemEventHandler(UpdateColorsOnChange);
+                fw.Renamed += new RenamedEventHandler(UpdateColorsOnChange);
+            }
+            if (filtername == "LevelSettings.yaml")
+            {
+                fw.Changed += new FileSystemEventHandler(UpdateLevelsOnChange);
+                fw.Created += new FileSystemEventHandler(UpdateLevelsOnChange);
+                fw.Renamed += new RenamedEventHandler(UpdateLevelsOnChange);
+            }
             fw.SynchronizingObject = ThreadingHelper.SynchronizingObject;
             fw.EnableRaisingEvents = true;
+        }
+
+        private static void UpdateLevelsOnChange(object sender, FileSystemEventArgs e)
+        {
+            if (SynchronizationManager.Instance.PlayerIsAdmin == false)
+            {
+                Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
+                return;
+            }
+            if (!File.Exists(e.FullPath)) { return; }
+
+            try {
+                string filetext = File.ReadAllText(e.FullPath);
+                LevelSystemData.UpdateYamlConfig(filetext);
+                LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
+            } catch {
+                Logger.LogWarning("Failed to update levels configuration");
+            }
+        }
+
+        private static void UpdateColorsOnChange(object sender, FileSystemEventArgs e) {
+            if (SynchronizationManager.Instance.PlayerIsAdmin == false)
+            {
+                Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
+                return;
+            }
+            if (!File.Exists(e.FullPath)) { return; }
+
+            try
+            {
+                string filetext = File.ReadAllText(e.FullPath);
+                LevelSystemData.UpdateYamlConfig(filetext);
+                LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
+            }
+            catch
+            {
+                Logger.LogWarning("Failed to update levels configuration");
+            }
         }
 
         private static void UpdateConfigFileOnChange(object sender, FileSystemEventArgs e) {
@@ -199,12 +245,6 @@ namespace StarLevelSystem
             var levelsyaml = package.ReadString();
             bool level_update_valid = LevelSystemData.UpdateYamlConfig(levelsyaml);
 
-            // Add in a check if we want to write the server config to disk or use it virtually
-            if (level_update_valid) {
-                using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
-                    writetext.WriteLine(levelsyaml);
-                }
-            }
             yield return null;
         }
 
@@ -213,11 +253,6 @@ namespace StarLevelSystem
             bool level_update_valid = Colorization.UpdateYamlConfig(colorsyaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
-            if (level_update_valid) {
-                using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
-                    writetext.WriteLine(colorsyaml);
-                }
-            }
             yield return null;
         }
 

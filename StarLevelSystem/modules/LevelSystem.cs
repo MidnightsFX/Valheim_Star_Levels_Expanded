@@ -57,6 +57,15 @@ namespace StarLevelSystem.modules
                     if (creature_specific_config.EnableCreatureLevelOverride) { maxLevel = creature_specific_config.CreatureMaxLevelOverride; }
                     return DetermineLevelRollResult(levelup_roll, maxLevel, creature_specific_config.CustomCreatureLevelUpChance, distance_levelup_bonuses, distance_level_modifier);
                 }
+            } else {
+                if (ValConfig.EnableDebugMode.Value)
+                {
+                    Logger.LogDebug($"Creature specific setting not found for {creature_name}. Specific settings availabe for:");
+                    foreach (var kvp in LevelSystemData.SLE_Global_Settings.CreatureConfiguration)
+                    {
+                        Logger.LogDebug($"Creature: {kvp.Key}");
+                    }
+                }
             }
 
             // biome override 
@@ -114,17 +123,33 @@ namespace StarLevelSystem.modules
                         component3.SetQuality(level);
                     }
                 }
-            } 
+           }
         }
 
-        public static void DetermineApplyBossLevel(GameObject creature)
+        public static void DetermineApplyLevelGeneric(GameObject creature)
         {
             int level = DetermineLevel(creature);
             if (level > 1)
             {
-                Humanoid component2 = creature.GetComponent<Humanoid>();
-                if (component2 != null) {
+                // Creature apply level
+                Character component2 = creature.GetComponent<Character>();
+                if (component2 != null)
+                {
                     component2.SetLevel(level);
+                }
+                // Boss apply level
+                Humanoid component3 = creature.GetComponent<Humanoid>();
+                if (component3 != null)
+                {
+                    component3.SetLevel(level);
+                }
+                if (creature.GetComponent<Fish>() != null)
+                {
+                    ItemDrop component4 = creature.GetComponent<ItemDrop>();
+                    if (component4 != null)
+                    {
+                        component4.SetQuality(level);
+                    }
                 }
             }
         }
@@ -144,25 +169,6 @@ namespace StarLevelSystem.modules
                 } else {
                     __instance.m_maxLevel = ValConfig.MaxLevel.Value + 1;
                 }
-            }
-        }
-
-        [HarmonyPatch(typeof(OfferingBowl))]
-        public static class ExpandBossSpawnedLevels
-        {
-            //[HarmonyDebug]
-            [HarmonyTranspiler]
-            [HarmonyPatch(nameof(OfferingBowl.DelayedSpawnBoss))]
-            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-            {
-                var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchStartForward(
-                        new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(OfferingBowl), nameof(OfferingBowl.m_bossSpawnPoint)))
-                        ).Advance(4).InsertAndAdvance(
-                        new CodeInstruction(OpCodes.Ldloc_0), // Load the spawned creature
-                        Transpilers.EmitDelegate(DetermineApplyBossLevel)
-                        ).ThrowIfNotMatch("Unable to patch Boss spawn set level.");
-                return codeMatcher.Instructions();
             }
         }
 

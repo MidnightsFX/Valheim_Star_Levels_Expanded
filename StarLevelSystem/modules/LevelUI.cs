@@ -174,11 +174,17 @@ namespace StarLevelSystem.modules
         public static class DisableVanillaStarsByDefault
         {
             public static void Postfix(EnemyHud __instance, Character c) {
-                // characters are only non-bosses
+                if (__instance == null || c == null) { return; }
+                // non-bosses and players
                 if (!c.IsBoss()) {
                     __instance.m_huds.TryGetValue(c, out var value);
-                    value.m_level2.gameObject.SetActive(false);
-                    value.m_level3.gameObject.SetActive(false);
+                    if (value != null) {
+                        if (value.m_level2 == null || value.m_level3 == null) {
+                            return;
+                        }
+                        value.m_level2.gameObject.SetActive(false);
+                        value.m_level3.gameObject.SetActive(false);
+                    }
                 }
             }
         }
@@ -237,9 +243,11 @@ namespace StarLevelSystem.modules
 
         public static void UpdateHudforAllLevels(EnemyHud.HudData ehud) {
             if (ehud == null || ehud.m_character == null) return;
+            if (ehud.m_character.IsPlayer()) return;
             int level = ehud.m_character.GetLevel();
             // Logger.LogInfo($"Creature Level {level}");
             ZDOID czoid = ehud.m_character.GetZDOID();
+            if (czoid == ZDOID.None) { return; }
             StarLevelHud extended_hud = new StarLevelHud();
             if (characterExtendedHuds.ContainsKey(czoid)) {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
@@ -262,6 +270,12 @@ namespace StarLevelSystem.modules
                 extended_hud.starlevel6 = ehud.m_gui.transform.Find("level_6").gameObject;
                 extended_hud.starlevel_N = ehud.m_gui.transform.Find("level_n").gameObject;
                 extended_hud.starlevel_N_Text = ehud.m_gui.transform.Find("level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
+                if (extended_hud.starlevel2 == null || extended_hud.starlevel3 == null || extended_hud.starlevel4 == null || extended_hud.starlevel5 == null || extended_hud.starlevel6 == null || extended_hud.starlevel_N == null)
+                {
+                    Logger.LogDebug($"Unable to find all hud information for {ehud.m_character.name}");
+                    return;
+                }
+
                 // Need to find and add the N level text for updating here
                 characterExtendedHuds.Add(czoid, extended_hud);
             }

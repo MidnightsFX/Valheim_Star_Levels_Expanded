@@ -90,60 +90,19 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
-        public static class AddLevelEffectsWhenSpawned {
-            public static void Postfix(Character __instance) {
-                // Apply Character specific modifiers
-
-                if (__instance.m_level <= 1) { return; }
-
-                // Color
-                ApplyColorizationWithoutLevelEffects(__instance);
-                // Visual modifiers
-                ApplyHighLevelVisual(__instance);
-
-                // Scaling
-                if (__instance.transform.position.y < 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
-                    // Don't scale in dungeons
-                    float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * __instance.m_level);
-                    Logger.LogDebug($"Setting character size {scale} and color.");
-                    __instance.transform.localScale *= scale;
-                    Physics.SyncTransforms();
-                }
-            }
-        }
-
-        [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
-        public static class AddLevelEffectsWhenLoaded
-        {
-            // Characters that are spawned are spawned at level 1- so this won't trigger
-            // This will only trigger for characters that already have their level set
-            public static void Postfix(Character __instance) {
-                if (__instance.m_level <= 1) { return; }
-                //LevelEffects le = __instance.GetComponentInChildren<LevelEffects>();
-                //if (le == null) { ApplyColorizationWithoutLevelEffects(__instance); }
-                ApplyColorizationWithoutLevelEffects(__instance);
-                ApplyHighLevelVisual(__instance);
-                float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * __instance.m_level);
-                Logger.LogInfo($"Setting character size {scale} and color.");
-                __instance.transform.localScale *= scale;
-                Physics.SyncTransforms();
-            }
-        }
-
         public static void ApplyHighLevelVisual(Character charc) {
             LevelEffects charLevelEf = charc.gameObject.GetComponentInChildren<LevelEffects>();
             if (charLevelEf == null) { return; }
             // Enables the highest level visual effect for this high level creature (maybe we want to randomize this based on level?)
             int selected_setup = charc.m_level;
-            if (selected_setup > charLevelEf.m_levelSetups.Count) { selected_setup = charLevelEf.m_levelSetups.Count; }
+            if (selected_setup > charLevelEf.m_levelSetups.Count) { selected_setup = (charLevelEf.m_levelSetups.Count - 1); }
 
             LevelSetup clevelset = charLevelEf.m_levelSetups[(charLevelEf.m_levelSetups.Count - 1)];
             if (clevelset.m_enableObject != null) { clevelset.m_enableObject.SetActive(true); }
         }
 
 
-        private static void ApplyColorizationWithoutLevelEffects(Character cgo) {
+        internal static void ApplyColorizationWithoutLevelEffects(Character cgo) {
             int level = cgo.m_level - 1;
 
             LevelSetup genlvlup = creatureColorizationSettings.defaultLevelColorization[level].toLevelEffect();
@@ -203,7 +162,7 @@ namespace StarLevelSystem.modules
             foreach(var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                 chara.transform.localScale = Vector3.one;
                 float scale = 1+ (ValConfig.PerLevelScaleBonus.Value * (chara.m_level -1 ));
-                Logger.LogInfo($"Setting {chara.name} size {scale}.");
+                Logger.LogDebug($"Setting {chara.name} size {scale}.");
                 chara.transform.localScale *= scale;
             }
             Physics.SyncTransforms();

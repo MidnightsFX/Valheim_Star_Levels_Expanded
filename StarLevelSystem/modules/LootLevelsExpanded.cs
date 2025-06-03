@@ -32,11 +32,6 @@ namespace StarLevelSystem.modules
                 return codeMatcher.Instructions();
             }
 
-            [HarmonyPatch(nameof(CharacterDrop.GenerateDropList))]
-            public static void Postfix() {
-
-            }
-
         }
 
         [HarmonyPatch(typeof(CharacterDrop))]
@@ -180,8 +175,6 @@ namespace StarLevelSystem.modules
 
             yield break;
         }
-
-
 
         public static int ModifyDropsForExtendedStars(int base_drop_amount, int level) {
             return (int)(ValConfig.PerLevelLootScale.Value * level * base_drop_amount);

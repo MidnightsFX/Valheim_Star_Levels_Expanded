@@ -10,6 +10,32 @@ namespace StarLevelSystem.common
 
         public static IDeserializer yamldeserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).DisableAliases().ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
+
+        public enum CreatureBaseAttribute {
+            BaseHealth,
+            BaseDamage,
+            Speed,
+        }
+
+        public static List<CreatureBaseAttribute> CreatureBaseAttributes = new List<CreatureBaseAttribute> {
+            CreatureBaseAttribute.BaseHealth,
+            CreatureBaseAttribute.BaseDamage,
+            CreatureBaseAttribute.Speed,
+        };
+
+        public enum CreaturePerLevelAttribute
+        {
+            HealthPerLevel,
+            DamagePerLevel,
+            SpeedPerLevel,
+        }
+
+        public static List<CreaturePerLevelAttribute> CreaturePerLevelAttributes = new List<CreaturePerLevelAttribute> {
+            CreaturePerLevelAttribute.HealthPerLevel,
+            CreaturePerLevelAttribute.DamagePerLevel,
+            CreaturePerLevelAttribute.SpeedPerLevel,
+        };
+
         public class CreatureLevelSettings {
             public Dictionary<Heightmap.Biome, BiomeSpecificSetting> BiomeConfiguration { get; set; }
             public Dictionary<string, CreatureSpecificSetting> CreatureConfiguration { get; set; }
@@ -22,19 +48,18 @@ namespace StarLevelSystem.common
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             public bool EnableBiomeLevelOverride { get; set; } = false;
             public int BiomeMaxLevelOverride { get; set; }
-            public float CreatureSpawnHealthPerLevelBonus { get; set; }
-            public float CreatureSpawnDamagePerLevelBonus { get; set; }
-            public float CreatureLootMultiplierPerLevel { get; set; }
             public float DistanceScaleModifier { get; set; } = 1f;
+            public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
+            public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+            public List<Heightmap.Biome> creatureSpawnsDisabled { get; set; }
         }
 
         public class CreatureSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             public bool EnableCreatureLevelOverride { get; set; } = false;
             public int CreatureMaxLevelOverride { get; set; }
-            public float CreatureSpawnHealthPerLevelBonus { get; set; }
-            public float CreatureSpawnDamagePerLevelBonus { get; set; }
-            public float CreatureLootMultiplierPerLevel { get; set; }
+            public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
+            public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
         }
 
         public class CreatureColorizationSettings {

@@ -15,7 +15,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.0.3";
+        public const string PluginVersion = "0.0.4";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -35,11 +35,7 @@ namespace StarLevelSystem
             Colorization.SetupLevelEffects();
             Colorization.Init();
             LevelSystemData.Init();
-            //PrefabManager.OnVanillaPrefabsAvailable += Colorization.DumpDefaultColorizations;
-
-            //CommandManager.Instance.AddConsoleCommand(new SpawnerLevelExtension.ExtendedSpawnCommand());
-
-            Jotunn.Logger.LogInfo("Star Levels have been expanded.");
+            //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
         }
     }
 }

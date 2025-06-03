@@ -12,7 +12,7 @@ namespace StarLevelSystem.modules
                     return false;
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
-                __result = 1f + (float)(playerDifficulty - 1) * ValConfig.MultiplayerEnemyDamageModifier.Value;
+                __result = 1f + (playerDifficulty - 1) * ValConfig.MultiplayerEnemyDamageModifier.Value;
                 return false;
             }
         }
@@ -27,7 +27,8 @@ namespace StarLevelSystem.modules
                     return false;
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
-                __result = 1f / (1f + (float)(playerDifficulty - 1) * ValConfig.MultiplayerEnemyHealthModifier.Value);
+                float healthscaler = 1f + ((playerDifficulty - 1) * ValConfig.MultiplayerEnemyHealthModifier.Value);
+                __result = 1f / healthscaler;
                 return false;
             }
         }

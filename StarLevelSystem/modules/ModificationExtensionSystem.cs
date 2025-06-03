@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -61,6 +62,13 @@ namespace StarLevelSystem.modules
             }
         }
 
+        // Delayed destruction of an object so that it can finish being setup- otherwise there are lots of vanilla scripts that explode
+        // Since apparently instanciating and destroying something in the same frame breaks vanilla assumptions :sigh:
+        static IEnumerator DestroyCoroutine(GameObject go, float delay = 0.2f) {
+            yield return new WaitForSeconds(delay);
+            ZNetScene.instance.Destroy(go);
+        }
+
         private static void SetupLevelColorSizeAndStats(Character __instance)
         {
             if (__instance.IsPlayer()) { return; }
@@ -68,15 +76,17 @@ namespace StarLevelSystem.modules
 
             // Select the creature data
             LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+            bool setupdone = zview.GetZDO().GetBool("SLE_SDone", false);
 
             // Determine if this creature should get deleted due to disableSpawn
-            if (biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(biome)) {
-                Logger.LogDebug($"Creature {__instance.name} in biome {biome} is a  disabled spawn, deleting.");
-                ZNetScene.instance.Destroy(__instance.gameObject);
+            // We do not delete tamed creatures, to allow supporting taming of creatures, bringing them to a banned biome and breeding
+            if (setupdone != true && __instance.m_tamed == false && biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
+                Logger.LogDebug($"Creature {__instance.name} in biome {biome} is a disabled spawn, deleting.");
+                ZNetScene.instance.StartCoroutine(DestroyCoroutine(__instance.gameObject));
                 return;
             }
 
-            bool setupdone = zview.GetZDO().GetBool("SLE_SDone", false);
+            
             if (setupdone != true) {
                 // Setup the level and colorization if it wasn't already
                 if (__instance.m_level <= 1) {

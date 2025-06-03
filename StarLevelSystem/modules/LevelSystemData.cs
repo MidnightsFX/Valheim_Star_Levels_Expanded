@@ -66,7 +66,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 1f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 2,
+                        BiomeMaxLevelOverride = 3,
                     }
                 },
                 { Heightmap.Biome.BlackForest, new DataObjects.BiomeSpecificSetting()
@@ -82,7 +82,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 1f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 3,
+                        BiomeMaxLevelOverride = 4,
                     }
                 },
                 { Heightmap.Biome.Swamp, new DataObjects.BiomeSpecificSetting()
@@ -98,7 +98,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 4,
+                        BiomeMaxLevelOverride = 5,
                     }
                 },
                 { Heightmap.Biome.Mountain, new DataObjects.BiomeSpecificSetting()
@@ -114,7 +114,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 4,
+                        BiomeMaxLevelOverride = 6,
                     }
                 },
                 { Heightmap.Biome.Plains, new DataObjects.BiomeSpecificSetting()
@@ -130,7 +130,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 5,
+                        BiomeMaxLevelOverride = 7,
                     }
                 },
                 { Heightmap.Biome.Mistlands, new DataObjects.BiomeSpecificSetting()
@@ -146,7 +146,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 6,
+                        BiomeMaxLevelOverride = 8,
                     }
                 },
                 { Heightmap.Biome.AshLands, new DataObjects.BiomeSpecificSetting()
@@ -163,7 +163,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
                         DistanceScaleModifier = 0.5f,
-                        BiomeMaxLevelOverride = 7,
+                        BiomeMaxLevelOverride = 9,
                     }
                 },
                 { Heightmap.Biome.DeepNorth, new DataObjects.BiomeSpecificSetting()
@@ -179,7 +179,7 @@ namespace StarLevelSystem.modules
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
                         },
-                        BiomeMaxLevelOverride = 8,
+                        BiomeMaxLevelOverride = 10,
                         DistanceScaleModifier = 0.5f,
                     }
                 },

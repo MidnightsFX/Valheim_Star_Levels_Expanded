@@ -51,7 +51,7 @@ namespace StarLevelSystem.common
             public float DistanceScaleModifier { get; set; } = 1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
-            public List<Heightmap.Biome> creatureSpawnsDisabled { get; set; }
+            public List<string> creatureSpawnsDisabled { get; set; }
         }
 
         public class CreatureSpecificSetting {

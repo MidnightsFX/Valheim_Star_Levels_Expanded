@@ -55,17 +55,19 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(CharacterDrop), nameof(CharacterDrop.GenerateDropList))]
         public static class ModifyLootPerLevelEffect
         {
-            public static bool Prefix(List<KeyValuePair<GameObject, int>> __result, CharacterDrop __instance) {
+            public static bool Prefix(ref List<KeyValuePair<GameObject, int>> __result, CharacterDrop __instance) {
                 List<KeyValuePair<GameObject, int>> drop_results = new List<KeyValuePair<GameObject, int>>();
                 int level = 1;
                 if (__instance.m_character != null) { level = __instance.m_character.GetLevel(); }
                 SelectLootSettings(__instance.gameObject, out string name, out DistanceLootModifier distance_bonus, out Heightmap.Biome biome);
 
                 if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot.ContainsKey(name)) {
+                    Logger.LogDebug($"SLS Custom drop set for {name}");
                     // Use modified loot drop settings
                     foreach(ExtendedDrop loot in LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name]) {
                         // Skip this loop drop if it doesn't drop for tamed creatures or only drops for tamed creatures
                         if (__instance.m_character != null) {
+                            Logger.LogDebug($"Checking if drop is tame only or non-tame only.");
                             if (loot.untamedOnlyDrop && __instance.m_character.IsTamed()) { continue; }
                             if (loot.tamedOnlyDrop && __instance.m_character.IsTamed() != true) { continue; }
                         }
@@ -74,27 +76,30 @@ namespace StarLevelSystem.modules
                         
                         // If chance is enabled, calculate all of the chance characteristics
                         if (loot.Drop.chance < 1) {
-                            float chance = UnityEngine.Random.value;
+                            float luck_roll = UnityEngine.Random.value;
+                            float chance = loot.Drop.chance;
                             if (loot.chanceScaleFactor > 0f) { chance *= (scale_multiplier * level); }
                             // check the chance for this to be rolled
-                            if (chance < loot.Drop.chance) { continue; }
+                            if (luck_roll > chance) {
+                                Logger.LogDebug($"Drop {loot.Drop.prefab} failed random drop chance ({luck_roll} < {chance}).");
+                                continue;
+                            }
                         }
+
                         // Set scale modifier for the loot drop, based on chance, if enabled
                         if (loot.useChanceAsMultiplier) {
-                            scale_multiplier = (loot.chanceScaleFactor * level);
+                            scale_multiplier = (loot.Drop.chance * level);
+                            Logger.LogDebug($"Drop {loot.Drop.prefab} modified by chance and creature level.");
                         }
 
                         // Modify the multiplier for how many this drops based on local players
                         if (loot.scalePerNearbyPlayer) {
                             scale_multiplier += Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
+                            Logger.LogDebug($"Drop {loot.Drop.prefab} modified players in local area.");
                         }
 
                         int drop_min = loot.Drop.min;
                         int drop_max = loot.Drop.max;
-                        // Scale the min/max drops based on their per level scale factors
-                        if (loot.minAmountScaleFactor > 0f) { drop_min = (int)(drop_min * loot.minAmountScaleFactor * level); }
-                        if (loot.maxAmountScaleFactor > 0f) { drop_max = (int)(drop_max * loot.maxAmountScaleFactor * level); }
-
                         int drop_base_amount = drop_min;
                         if (drop_min != drop_max) {
                             if (loot.scalebyMaxLevel) {
@@ -104,27 +109,52 @@ namespace StarLevelSystem.modules
                             }
                         }
 
-                        // Determine the actual amount of the drop
-                        int drop = (int)(drop_base_amount * scale_multiplier);
-                        if (SelectedLootFactor == LootFactorType.PerLevel) {
-                            drop = multiplyLootPerLevel(level, drop, distance_bonus);
-                        } else {
-                            drop = ExponentLootPerLevel(level, drop, distance_bonus);
+                        if (loot.doesNotScale == true) {
+                            // Apply Random change, and the range of the loot drop
+                            Logger.LogDebug($"Drop {loot.Drop.prefab} does not scale and will drop {drop_base_amount}");
+                            drop_results.Add(new KeyValuePair<GameObject, int>(loot.gameDrop.m_prefab, drop_base_amount));
+                            continue;
                         }
 
+                        // Determine the actual amount of the drop
+                        int drop = (int)(drop_base_amount * scale_multiplier);
+                        float scale_factor = loot.amountScaleFactor;
+                        if (scale_factor <= 0f) { scale_factor = 1f; }
+                        if (SelectedLootFactor == LootFactorType.PerLevel) {
+                            drop = multiplyLootPerLevel(level, drop, distance_bonus, scale_factor);
+                        } else {
+                            drop = ExponentLootPerLevel(level, drop, distance_bonus, scale_factor);
+                        }
+                        Logger.LogDebug($"Drop {loot.Drop.prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCaluationType.Value} = {drop}");
+
                         // Enforce max drop cap
-                        if (loot.maxScaledAmount > 0 && drop > loot.maxScaledAmount) { drop = loot.maxScaledAmount; }
-                        
+                        if (loot.maxScaledAmount > 0 && drop > loot.maxScaledAmount) { 
+                            drop = loot.maxScaledAmount;
+                            Logger.LogDebug($"Drop {loot.Drop.prefab} capped to {drop}");
+                        }
+
+                        Logger.LogDebug($"Drop {loot.Drop.prefab} capped to {drop}");
                         // Add the drop to the results
+                        if (loot.gameDrop == null || loot.gameDrop.m_prefab == null) {
+                            Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
+                            loot.SetupDrop();
+                        }
+
                         drop_results.Add(new KeyValuePair<GameObject, int>(loot.gameDrop.m_prefab, drop));
                     }
+                    __result = drop_results;
+                    return false;
                 }
-
+                Logger.LogDebug($"SLS vanilla drop set for {name}");
                 // Vanilla loot setup with configuration
                 foreach (var drop in __instance.m_drops) {
                     // Roll the chance for this drop, if its enabled
-                    if (drop.m_chance < 1 && drop.m_chance < UnityEngine.Random.value) {
-                        continue;
+                    if (drop.m_chance < 1) {
+                        float randv = UnityEngine.Random.value;
+                        if (randv < drop.m_chance) {
+                            Logger.LogDebug($"Drop {drop.m_prefab.name} failed random drop chance ({randv} < {drop.m_chance}).");
+                            continue;
+                        }
                     }
 
                     // Determine scaling 
@@ -134,47 +164,59 @@ namespace StarLevelSystem.modules
                     }
 
                     if (drop.m_dontScale) {
+                        if (drop_base_amount <= 0) { continue; }
+                        Logger.LogDebug($"Drop {drop.m_prefab.name} {drop_base_amount}");
                         drop_results.Add(new KeyValuePair<GameObject, int>(drop.m_prefab, drop_base_amount));
                         continue;
                     }
 
                     if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop_results.Add(new KeyValuePair<GameObject, int>(drop.m_prefab, multiplyLootPerLevel(level, drop_base_amount, distance_bonus)));
+                        int loot_amount = multiplyLootPerLevel(level, drop_base_amount, distance_bonus);
+                        if (loot_amount <= 0) { continue; }
+                        Logger.LogDebug($"Drop {drop.m_prefab.name} {loot_amount}");
+                        drop_results.Add(new KeyValuePair<GameObject, int>(drop.m_prefab, loot_amount));
                         continue;
                     }
 
                     // Expoential scaling is the vanilla default, but chances are we dont want to use that, hence why this is the fallthrough
-                    drop_results.Add(new KeyValuePair<GameObject, int>(drop.m_prefab, ExponentLootPerLevel(level, drop_base_amount, distance_bonus)));
+                    int lootexp = ExponentLootPerLevel(level, drop_base_amount, distance_bonus);
+                    if (lootexp <= 0) { continue; }
+                    Logger.LogDebug($"Drop {drop.m_prefab.name} {lootexp}");
+                    drop_results.Add(new KeyValuePair<GameObject, int>(drop.m_prefab, lootexp));
                 }
-
+                __result = drop_results;
                 return false;
             }
         }
 
-        private static int multiplyLootPerLevel(int level, int loot, DistanceLootModifier dmod)
+        private static int multiplyLootPerLevel(int level, int loot, DistanceLootModifier dmod, float scale_factor = 1f)
         {
+            if (level == 1) { return loot; } // no scaling for level 1, just return the base loot amount
             float dmod_max = dmod.maxAmountScaleFactorBonus;
             if (dmod_max <= 0) { dmod_max = 1; }
             float dmod_min = dmod.minAmountScaleFactorBonus;
             if (dmod_min <= 0) { dmod_min = 1; }
             float loot_scale_factor = ValConfig.PerLevelLootScale.Value * level;
-            int min_drop = (int)(loot_scale_factor * dmod_min * loot);
-            int max_drop = (int)(loot_scale_factor * dmod_max * loot);
+            int min_drop = (int)(loot_scale_factor * dmod_min * loot * scale_factor);
+            int max_drop = (int)(loot_scale_factor * dmod_max * loot * scale_factor);
+            Logger.LogDebug($"MLPL range: {min_drop}-{max_drop} using: loot_factor {loot_scale_factor} x {dmod_min} or {dmod_max} x {loot} x {scale_factor}");
             if (min_drop == max_drop) {
                 return min_drop;
             }
             return UnityEngine.Random.Range(min_drop, max_drop);
         }
 
-        private static int ExponentLootPerLevel(int level, int loot, DistanceLootModifier dmod)
+        private static int ExponentLootPerLevel(int level, int loot, DistanceLootModifier dmod, float scale_factor = 1)
         {
+            if (level == 1) { return loot; } // no scaling for level 1, just return the base loot amount
             float dmod_max = dmod.maxAmountScaleFactorBonus;
             if (dmod_max <= 0) { dmod_max = 1; }
             float dmod_min = dmod.minAmountScaleFactorBonus;
             if (dmod_min <= 0) { dmod_min = 1; }
             float loot_scale_factor = Mathf.Pow(ValConfig.PerLevelLootScale.Value, level);
-            int min_drop = (int)(loot_scale_factor * dmod_min * loot);
-            int max_drop = (int)(loot_scale_factor * dmod_max * loot);
+            int min_drop = (int)(loot_scale_factor * dmod_min * loot * scale_factor);
+            int max_drop = (int)(loot_scale_factor * dmod_max * loot * scale_factor);
+            Logger.LogDebug($"ELPL range: {min_drop}-{max_drop} using: loot_factor {loot_scale_factor} x {dmod_min} or {dmod_max} x {loot} x {scale_factor}");
             if (min_drop == max_drop) {
                 return min_drop;
             }
@@ -188,18 +230,6 @@ namespace StarLevelSystem.modules
             [HarmonyPatch(nameof(CharacterDrop.DropItems))]
             public static bool Prefix(CharacterDrop __instance, List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea)
             {
-                //float loot_multiplier = 1;
-                //if (__instance.m_character != null)
-                //{
-                //    loot_multiplier = __instance.m_character.GetLevel() * ValConfig.PerLevelLootScale.Value;
-                //} else {
-                //    Humanoid hu = __instance.gameObject.GetComponent<Humanoid>();
-                //    if (hu != null) {
-                //        loot_multiplier = hu.GetLevel() * ValConfig.PerLevelLootScale.Value;
-                //    }
-
-                //}
-
                 if (Player.m_localPlayer != null)
                 {
                     Player.m_localPlayer.StartCoroutine(DropItemsAsync(drops, centerPos, dropArea));

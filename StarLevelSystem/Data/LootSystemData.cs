@@ -21,8 +21,7 @@ namespace StarLevelSystem.Data
                                 max = 1,
                                 chance = 1f
                             },
-                            minAmountScaleFactor = 0.5f,
-                            maxAmountScaleFactor = 0.8f,
+                            amountScaleFactor = 0.5f,
                         },
                     new ExtendedDrop{
                             Drop = new Drop
@@ -33,6 +32,7 @@ namespace StarLevelSystem.Data
                                 chance = 0.05f
                             },
                             chanceScaleFactor = 1.01f,
+                            maxScaledAmount = 1,
                         }
                     }
                 }
@@ -93,12 +93,19 @@ namespace StarLevelSystem.Data
             {
                 UpdateYamlConfig(File.ReadAllText(ValConfig.creatureLootFilePath));
             }
-            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Loot Level values, defaults will be used. Exception: {e}"); }
+            catch (Exception e) {
+                SLS_Drop_Settings = DefaultDropConfiguration;
+                Jotunn.Logger.LogWarning($"There was an error updating the Loot Level values, defaults will be used. Exception: {e}"); 
+            }
         }
         public static string YamlDefaultConfig()
         {
             var yaml = DataObjects.yamlserializer.Serialize(DefaultDropConfiguration);
             return yaml;
+        }
+
+        internal static void AttachPrefabsWhenReady() {
+            AttachLootPrefabs(SLS_Drop_Settings);
         }
 
         public static void AttachLootPrefabs(LootSettings lootconfig) {

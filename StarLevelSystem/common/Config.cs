@@ -130,14 +130,14 @@ namespace StarLevelSystem
             if (foundLootFile == false)
             {
                 Logger.LogDebug("Loot config missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(levelsFilePath))
+                using (StreamWriter writetext = new StreamWriter(creatureLootFilePath))
                 {
                     String header = @"#################################################
 # Star Level System Expanded - Creature loot configuration
 #################################################
 ";
                     writetext.WriteLine(header);
-                    writetext.WriteLine(LevelSystemData.YamlDefaultConfig());
+                    writetext.WriteLine(LootSystemData.YamlDefaultConfig());
                 }
             }
 

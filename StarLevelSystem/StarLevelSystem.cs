@@ -39,6 +39,7 @@ namespace StarLevelSystem
             Colorization.Init();
             LevelSystemData.Init();
             LootSystemData.Init();
+            PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
 
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");

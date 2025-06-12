@@ -88,12 +88,12 @@ namespace StarLevelSystem.common
             // Use fractional scaling for decaying drop increases
             public Drop Drop { get; set; }
             public CharacterDrop.Drop gameDrop { get; private set; }
-            public float minAmountScaleFactor { get; set; } = 0f;
-            public float maxAmountScaleFactor { get; set; } = 0f;
+            public float amountScaleFactor { get; set; } = 0f;
             public float chanceScaleFactor { get; set; } = 0f;
             public bool useChanceAsMultiplier { get; set; } = false;
             // Scale amount dropped from the base amount to max, based on level
             public bool scalebyMaxLevel { get; set; } = false;
+            public bool doesNotScale { get; set; } = false;
             public int maxScaledAmount { get; set; } = 0;
             // Modify drop amount based on creature stars
             public bool scalePerNearbyPlayer { get; set; } = false;

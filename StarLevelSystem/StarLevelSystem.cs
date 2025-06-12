@@ -3,22 +3,22 @@ using BepInEx.Logging;
 using HarmonyLib;
 using Jotunn.Entities;
 using Jotunn.Managers;
+using Jotunn.Utils;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using System.Reflection;
-using UnityEngine;
 using static StarLevelSystem.modules.Commands;
 
 namespace StarLevelSystem
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency(Jotunn.Main.ModGuid)]
-    //[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
+    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     internal class StarLevelSystem : BaseUnityPlugin
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.0.6";
+        public const string PluginVersion = "0.0.7";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game

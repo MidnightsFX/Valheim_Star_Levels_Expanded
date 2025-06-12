@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
+using StarLevelSystem.Data;
 using System;
 using System.IO;
 using UnityEngine;
@@ -90,14 +91,12 @@ namespace StarLevelSystem.modules
             }
         }
 
-        public static void ApplyHighLevelVisual(Character charc) {
+        public static void ApplyLevelVisual(Character charc) {
             LevelEffects charLevelEf = charc.gameObject.GetComponentInChildren<LevelEffects>();
-            if (charLevelEf == null) { return; }
-            // Enables the highest level visual effect for this high level creature (maybe we want to randomize this based on level?)
-            int selected_setup = charc.m_level;
-            if (selected_setup > charLevelEf.m_levelSetups.Count) { selected_setup = (charLevelEf.m_levelSetups.Count - 1); }
+            if (charLevelEf == null || charLevelEf.m_levelSetups == null || charLevelEf.m_levelSetups.Count <= 0) { return; }
 
-            LevelSetup clevelset = charLevelEf.m_levelSetups[(charLevelEf.m_levelSetups.Count - 1)];
+            // Randomly select level visualization
+            LevelSetup clevelset = charLevelEf.m_levelSetups[UnityEngine.Random.Range(0, charLevelEf.m_levelSetups.Count - 1)];
             if (clevelset.m_enableObject != null) { clevelset.m_enableObject.SetActive(true); }
         }
 

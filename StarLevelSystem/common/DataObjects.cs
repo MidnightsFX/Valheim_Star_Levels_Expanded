@@ -2,6 +2,9 @@
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization;
 using StarLevelSystem.modules;
+using static StarLevelSystem.modules.LootLevelsExpanded;
+using Jotunn.Managers;
+using System.Runtime.Serialization;
 
 namespace StarLevelSystem.common
 {
@@ -66,5 +69,67 @@ namespace StarLevelSystem.common
             public Dictionary<string, Dictionary<int, ColorDef>> characterSpecificColorization { get; set; }
             public Dictionary<int, ColorDef> defaultLevelColorization { get; set; }
         }
+
+        public class LootSettings {
+            public Dictionary<string, List<ExtendedDrop>> characterSpecificLoot { get; set; }
+            public bool EnableDistanceLootModifier { get; set; } = false;
+            public SortedDictionary<int, DistanceLootModifier> DistanceLootModifier { get; set; }
+        }
+
+        public class DistanceLootModifier {
+            public float minAmountScaleFactorBonus { get; set; } = 0f;
+            public float maxAmountScaleFactorBonus { get; set; } = 0f;
+            public float chanceScaleFactorBonus { get; set; } = 0f;
+        }
+
+        [DataContract]
+        public class ExtendedDrop
+        {
+            // Use fractional scaling for decaying drop increases
+            public Drop Drop { get; set; }
+            public CharacterDrop.Drop gameDrop { get; private set; }
+            public float minAmountScaleFactor { get; set; } = 0f;
+            public float maxAmountScaleFactor { get; set; } = 0f;
+            public float chanceScaleFactor { get; set; } = 0f;
+            public bool useChanceAsMultiplier { get; set; } = false;
+            // Scale amount dropped from the base amount to max, based on level
+            public bool scalebyMaxLevel { get; set; } = false;
+            public int maxScaledAmount { get; set; } = 0;
+            // Modify drop amount based on creature stars
+            public bool scalePerNearbyPlayer { get; set; } = false;
+            public bool untamedOnlyDrop { get; set; } = false;
+            public bool tamedOnlyDrop { get; set; } = false;
+            public void SetupDrop() {
+                gameDrop = Drop.ToCharDrop();
+            }
+        }
+
+        [DataContract]
+        public class Drop
+        {
+            public string prefab { get; set; }
+            public int min { get; set; } = 1;
+            public int max { get; set; } = 1;
+            public float chance { get; set; } = 1f;
+            public bool onePerPlayer { get; set; } = false;
+            public bool levelMultiplier { get; set; } = true;
+            public bool dontScale { get; set; } = false;
+
+            public CharacterDrop.Drop ToCharDrop()
+            {
+                return new CharacterDrop.Drop
+                {
+                    m_prefab = PrefabManager.Instance.GetPrefab(prefab),
+                    m_amountMin = min,
+                    m_amountMax = max,
+                    m_chance = chance,
+                    m_onePerPlayer = onePerPlayer,
+                    m_levelMultiplier = levelMultiplier,
+                    m_dontScale = dontScale
+                };
+            }
+        }
+
+
     }
 }

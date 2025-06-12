@@ -6,6 +6,7 @@ using StarLevelSystem.modules;
 using Jotunn.Managers;
 using Jotunn.Entities;
 using System.Collections;
+using StarLevelSystem.Data;
 
 namespace StarLevelSystem
 {
@@ -14,9 +15,11 @@ namespace StarLevelSystem
         public static ConfigFile cfg;
         internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LevelSettings.yaml");
         internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "ColorSettings.yaml");
+        internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "CreatureLootSettings.yaml");
 
         private static CustomRPC LevelSettingsRPC;
         private static CustomRPC ColorSettingsRPC;
+        private static CustomRPC CreatureLootSettingsRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -25,6 +28,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<int> LootDropsPerTick;
+        public static ConfigEntry<string> LootDropCaluationType;
         public static ConfigEntry<float> EnemyHealthMultiplier;
         public static ConfigEntry<float> BossEnemyHealthMultiplier;
         public static ConfigEntry<float> EnemyHealthPerWorldLevel;
@@ -51,9 +55,11 @@ namespace StarLevelSystem
         public void SetupConfigRPCs() {
             LevelSettingsRPC = NetworkManager.Instance.AddRPC("LSE_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
             ColorSettingsRPC = NetworkManager.Instance.AddRPC("LSE_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
+            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("LSE_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
 
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
+            SynchronizationManager.Instance.AddInitialSynchronization(CreatureLootSettingsRPC, SendCreatureLootConfigs);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -73,6 +79,8 @@ namespace StarLevelSystem
             PerLevelScaleBonus.SettingChanged += Colorization.StarLevelScaleChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             PerLevelLootScale = BindServerConfig("LevelSystem", "PerLevelLootScale", 0.5f, "The amount of additional loot that a creature provides per each star level", true, 0f, 2f);
+            LootDropCaluationType = BindServerConfig("LevelSystem", "LootDropCaluationType", "PerLevel", "The type of loot calcuation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, true);
+            LootDropCaluationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LevelSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x. At 2x each creature has double the base health and gains twice as much per level.", false, 0.01f, 5f);
             EnemyHealthPerWorldLevel = BindServerConfig("LevelSystem", "EnemyHealthPerWorldLevel", 0.2f, "The percent amount of health that each world level gives a creature, vanilla is 2x (eg 200% more health each world level).", false, 0.00f, 2f);
@@ -94,6 +102,7 @@ namespace StarLevelSystem
             string[] presentFiles = Directory.GetFiles(externalConfigFolder);
             bool foundLevelsFile = false;
             bool foundColorFile = false;
+            bool foundLootFile = false;
 
             foreach (string configFile in presentFiles) {
                 if (configFile.Contains("LevelSettings.yaml"))
@@ -108,6 +117,27 @@ namespace StarLevelSystem
                     Logger.LogDebug($"Found color configuration: {configFile}");
                     colorsFilePath = configFile;
                     foundColorFile = true;
+                }
+
+                if (configFile.Contains("LootSettings.yaml"))
+                {
+                    Logger.LogDebug($"Found loot configuration: {configFile}");
+                    creatureLootFilePath = configFile;
+                    foundLootFile = true;
+                }
+            }
+
+            if (foundLootFile == false)
+            {
+                Logger.LogDebug("Loot config missing, recreating.");
+                using (StreamWriter writetext = new StreamWriter(levelsFilePath))
+                {
+                    String header = @"#################################################
+# Star Level System Expanded - Creature loot configuration
+#################################################
+";
+                    writetext.WriteLine(header);
+                    writetext.WriteLine(LevelSystemData.YamlDefaultConfig());
                 }
             }
 
@@ -146,18 +176,9 @@ namespace StarLevelSystem
             fw.Path = ValConfig.GetSecondaryConfigDirectoryPath();
             fw.NotifyFilter = NotifyFilters.LastWrite;
             fw.Filter = filtername;
-            if (filtername == "ColorSettings.yaml")
-            {
-                fw.Changed += new FileSystemEventHandler(UpdateColorsOnChange);
-                fw.Created += new FileSystemEventHandler(UpdateColorsOnChange);
-                fw.Renamed += new RenamedEventHandler(UpdateColorsOnChange);
-            }
-            if (filtername == "LevelSettings.yaml")
-            {
-                fw.Changed += new FileSystemEventHandler(UpdateLevelsOnChange);
-                fw.Created += new FileSystemEventHandler(UpdateLevelsOnChange);
-                fw.Renamed += new RenamedEventHandler(UpdateLevelsOnChange);
-            }
+            fw.Changed += new FileSystemEventHandler(UpdateConfigFileOnChange);
+            fw.Created += new FileSystemEventHandler(UpdateConfigFileOnChange);
+            fw.Renamed += new RenamedEventHandler(UpdateConfigFileOnChange);
             fw.SynchronizingObject = ThreadingHelper.SynchronizingObject;
             fw.EnableRaisingEvents = true;
         }
@@ -212,6 +233,7 @@ namespace StarLevelSystem
             Logger.LogDebug($"Filewatch changes from: ({fileInfo.Name}) {fileInfo.FullName}");
             switch (fileInfo.Name) {
                 case "ColorSettings.yaml":
+                    Logger.LogDebug("Triggering Color Settings update.");
                     Colorization.UpdateYamlConfig(filetext);
                     ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
@@ -219,6 +241,11 @@ namespace StarLevelSystem
                     Logger.LogDebug("Triggering Level Settings update.");
                     LevelSystemData.UpdateYamlConfig(filetext);
                     LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
+                    break;
+                case "CreatureLootSettings.yaml":
+                    Logger.LogDebug("Triggering Loot Settings update.");
+                    LootSystemData.UpdateYamlConfig(filetext);
+                    CreatureLootSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
             }
         }
@@ -233,6 +260,11 @@ namespace StarLevelSystem
 
         private static ZPackage SendLevelsConfigs() {
             return SendFileAsZPackage(levelsFilePath);
+        }
+
+        private static ZPackage SendCreatureLootConfigs()
+        {
+            return SendFileAsZPackage(creatureLootFilePath);
         }
 
         private static ZPackage SendColorsConfigs() {
@@ -255,6 +287,15 @@ namespace StarLevelSystem
         private static IEnumerator OnClientReceiveColorConfigs(long sender, ZPackage package) {
             var colorsyaml = package.ReadString();
             bool level_update_valid = Colorization.UpdateYamlConfig(colorsyaml);
+
+            // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveCreatureLootConfigs(long sender, ZPackage package)
+        {
+            var colorsyaml = package.ReadString();
+            bool level_update_valid = LootSystemData.UpdateYamlConfig(colorsyaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;

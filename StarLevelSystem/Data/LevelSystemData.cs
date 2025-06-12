@@ -1,15 +1,14 @@
-﻿using Jotunn.Managers;
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace StarLevelSystem.modules
+namespace StarLevelSystem.Data
 {
     public static class LevelSystemData
     {
 
-        public static DataObjects.CreatureLevelSettings SLE_Global_Settings = DefaultConfiguration;
+        public static DataObjects.CreatureLevelSettings SLE_Level_Settings = DefaultConfiguration;
 
         public static DataObjects.CreatureLevelSettings DefaultConfiguration = new DataObjects.CreatureLevelSettings()
         {
@@ -272,11 +271,11 @@ namespace StarLevelSystem.modules
 
         internal static void Init() {
             // Load the default configuration
-            SLE_Global_Settings = DefaultConfiguration;
+            SLE_Level_Settings = DefaultConfiguration;
             try {
                 UpdateYamlConfig(File.ReadAllText(ValConfig.levelsFilePath));
             }
-            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Color Level values, defaults will be used. Exception: {e}"); }
+            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Creature Level values, defaults will be used. Exception: {e}"); }
         }
         public static string YamlDefaultConfig() {
             var yaml = DataObjects.yamlserializer.Serialize(DefaultConfiguration);
@@ -286,10 +285,10 @@ namespace StarLevelSystem.modules
         {
             try
             {
-                SLE_Global_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
+                SLE_Level_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
                 Logger.LogDebug("Loaded new Star Level Creature settings.");
             }
-            catch (System.Exception ex) {
+            catch (Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");
                 return false;
             }

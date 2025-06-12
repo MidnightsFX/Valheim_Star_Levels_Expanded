@@ -2,7 +2,9 @@
 using StarLevelSystem.common;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -13,7 +15,16 @@ namespace StarLevelSystem.modules
         public static class CreatureCharacterExtension
         {
             public static void Postfix(Character __instance) {
-                Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
+                // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
+                SetupLevelColorSizeAndStats(__instance);
+                // StarLevelSystem.monitor.StartCoroutine(SetupCreatureDelayed(__instance));
+            }
+        }
+
+        [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
+        public static class ModifyCharacterVisualsToLevel
+        {
+            public static void Postfix(Character __instance) {
                 SetupLevelColorSizeAndStats(__instance);
             }
         }
@@ -72,38 +83,37 @@ namespace StarLevelSystem.modules
         private static void SetupLevelColorSizeAndStats(Character __instance)
         {
             if (__instance.IsPlayer()) { return; }
-            ZNetView zview = __instance.gameObject.GetComponent<ZNetView>();
+            // ZNetView zview = __instance.gameObject.GetComponent<ZNetView>();
 
             // Select the creature data
             LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-            bool setupdone = zview.GetZDO().GetBool("SLE_SDone", false);
+            //bool setupdone = zview.GetZDO().GetBool("SLE_SDone", false);
 
             // Determine if this creature should get deleted due to disableSpawn
             // We do not delete tamed creatures, to allow supporting taming of creatures, bringing them to a banned biome and breeding
-            if (setupdone != true && __instance.m_tamed == false && biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
+            if (__instance.m_tamed == false && biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
                 Logger.LogDebug($"Creature {__instance.name} in biome {biome} is a disabled spawn, deleting.");
                 ZNetScene.instance.StartCoroutine(DestroyCoroutine(__instance.gameObject));
                 return;
             }
 
-            
-            if (setupdone != true) {
-                // Setup the level and colorization if it wasn't already
-                if (__instance.m_level <= 1) {
-                    LevelSystem.DetermineApplyLevelGeneric(__instance.gameObject, creature_name, creature_settings, biome_settings);
-                }
-                zview.GetZDO().Set("SLE_SDone", true);
-            }
+            // We don't have a catch all to catch setting the level of all creatures. This avoids running this on a delay, or loop, but we either need to modify everything correctly after the creature sets up
+            // or we should have a fallback like this
+            //if (setupdone != true && zview.GetZDO().GetInt(ZDOVars.s_level, 0) == 0) {
+            //    // Setup the level
+            //    LevelSystem.DetermineApplyLevelGeneric(__instance.gameObject, creature_name, creature_settings, biome_settings);
+            //}
 
             // Modify the creatures stats by custom character/biome modifications
             ApplySpeedModifications(__instance, creature_settings, biome_settings);
             ApplyDamageModification(__instance, creature_name, creature_settings, biome_settings);
 
+            //zview.GetZDO().Set("SLE_SDone", true);
             // No need to do colorization or size scaling if the creature is level 1 or lower
             if (__instance.m_level <= 1) { return; }
             // Colorization and visual adjustments
             Colorization.ApplyColorizationWithoutLevelEffects(__instance);
-            Colorization.ApplyHighLevelVisual(__instance);
+            Colorization.ApplyLevelVisual(__instance);
 
             // Scaling
             if (__instance.transform.position.y < 3000f && ValConfig.EnableScalingInDungeons.Value == false) {

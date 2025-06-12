@@ -3,8 +3,11 @@ using BepInEx.Logging;
 using HarmonyLib;
 using Jotunn.Entities;
 using Jotunn.Managers;
+using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using System.Reflection;
+using UnityEngine;
+using static StarLevelSystem.modules.Commands;
 
 namespace StarLevelSystem
 {
@@ -15,7 +18,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.0.4";
+        public const string PluginVersion = "0.0.6";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -35,6 +38,9 @@ namespace StarLevelSystem
             Colorization.SetupLevelEffects();
             Colorization.Init();
             LevelSystemData.Init();
+            LootSystemData.Init();
+
+            CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
         }
     }

@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using StarLevelSystem.modules;
+using System.Collections.Generic;
 
-namespace StarLevelSystem.modules
+namespace StarLevelSystem.Data
 {
     public static class ColorizationData
     {

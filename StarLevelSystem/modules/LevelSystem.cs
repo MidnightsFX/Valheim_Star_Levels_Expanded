@@ -245,7 +245,7 @@ namespace StarLevelSystem.modules
 
         public static class ExpandLevelupRollBosses
         {
-            private static readonly string QueenName = "SeekerQueen(Clone)";
+            // private static readonly string QueenName = "SeekerQueen(Clone)";
 
             //[HarmonyPatch(typeof(OfferingBowl))]
             //public static class SetupCreatureSpawnerLevelExtendedRoll

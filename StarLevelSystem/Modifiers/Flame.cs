@@ -11,7 +11,7 @@ namespace StarLevelSystem.Modifiers
     internal static class Flame
     {
         [UsedImplicitly]
-        public static void SetupFireCreature(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
             if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Fire)) {
                 ccache.CreatureDamageBonus[DamageType.Fire] += config.basepower + (config.perlevelpower * ccache.Level);
             } else {

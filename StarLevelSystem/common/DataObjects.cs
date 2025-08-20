@@ -1,8 +1,10 @@
-﻿using Jotunn.Managers;
+﻿using Jotunn.Configs;
+using Jotunn.Managers;
 using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
@@ -140,22 +142,29 @@ namespace StarLevelSystem.common
             public float selectionWeight { get; set; } = 1f;
             public CreatureModConfig config { get; set; } = new CreatureModConfig();
             public string starVisual {  get; set; }
-            public GameObject starVisualPrefab { get; set; }
+            public Sprite starVisualPrefab { get; set; }
             public string visualEffect { get; set; }
             public GameObject visualEffectPrefab { get; set; }
             public VisualEffectStyle visualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
             public List<string> allowedCreatures { get; set; } = new List<string>() { };
             public List<string> unallowedCreatures { get; set; } = new List<string>() { };
-            public Action<Character, CreatureModConfig, CreatureDetailCache> setupMethod { get; set; }
+            public string setupMethodClass { get; set; }
 
             // Add fallbacks to load prefabs that are not in the embedded resource bundle
             public void LoadAndSetGameObjects() {
                 if (starVisual != null) {
-                    starVisualPrefab = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(starVisual);
+                    starVisualPrefab = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>(starVisual);
                 }
                 if (visualEffect != null) {
                     visualEffectPrefab = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(visualEffect);
                 }
+            }
+
+            public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
+                Type methodClass = Type.GetType(setupMethodClass);
+                Logger.LogInfo($"Setting up modifier {setupMethodClass} with signature {methodClass}");
+                MethodInfo theMethod = methodClass.GetMethod("Setup");
+                theMethod.Invoke(this, new object[] { chara, cfg, cdc });
             }
         }
 

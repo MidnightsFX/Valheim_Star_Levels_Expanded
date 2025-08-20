@@ -29,10 +29,12 @@
 
   <ItemGroup>
     <None Remove="assets\starlevelsystems" />
+    <None Remove="Localization\English.json" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="assets\starlevelsystems" />
+    <EmbeddedResource Include="Localization\English.json" />
   </ItemGroup>
 
   <ItemGroup>

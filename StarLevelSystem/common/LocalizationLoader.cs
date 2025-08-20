@@ -34,7 +34,7 @@ namespace StarLevelSystem.common
             // load all localization files within the localizations directory
             foreach (string embeddedResouce in typeof(StarLevelSystem).Assembly.GetManifestResourceNames())
             {
-                if (!embeddedResouce.Contains("localizations")) { continue; }
+                if (!embeddedResouce.Contains("Localization")) { continue; }
                 // Read the localization file
 
                 string localization = ReadEmbeddedResourceFile(embeddedResouce);

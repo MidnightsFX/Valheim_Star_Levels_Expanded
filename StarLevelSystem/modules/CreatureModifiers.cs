@@ -30,7 +30,7 @@ namespace StarLevelSystem.modules
                     }
                     mods.Add(mod, ModifierType.Major);
                     var selectedMod = CreatureModifiersData.CreatureModifiers.MajorModifiers[mod];
-                    selectedMod.setupMethod(character, selectedMod.config, cacheEntry);
+                    selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
                     SetupCreatureVFX(character, selectedMod);
                     if (selectedMod.name_prefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
                         cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.name_prefixes);
@@ -51,7 +51,7 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Checking {CreatureModifiersData.CreatureModifiers.MinorModifiers.Count} for {mod}");
                     var selectedMod = CreatureModifiersData.CreatureModifiers.MinorModifiers[mod];
                     //Logger.LogDebug($"Setting up mod");
-                    selectedMod.setupMethod(character, selectedMod.config, cacheEntry);
+                    selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
                     //Logger.LogDebug($"Setting up mod vfx");
                     SetupCreatureVFX(character, selectedMod);
                     //Logger.LogDebug($"Setting updating name prefixes");
@@ -69,11 +69,11 @@ namespace StarLevelSystem.modules
 
         internal static void SetupCreatureVFX(Character character, CreatureModifier cmodifier) {
             if (cmodifier.visualEffect != null) {
-                bool hasVFXAlready = character.transform.Find(cmodifier.visualEffect.gameObject.name);
+                bool hasVFXAlready = character.transform.Find(cmodifier.visualEffectPrefab.name);
                 Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {
                     Logger.LogDebug($"Adding visual effects for {character.name}");
-                    GameObject vfxadd = GameObject.Instantiate(cmodifier.visualEffect, character.transform);
+                    GameObject vfxadd = GameObject.Instantiate(cmodifier.visualEffectPrefab, character.transform);
                     float height = character.GetHeight();
                     float scale = height / 5f;
                     float rscale = character.GetRadius() / 2f;
@@ -130,7 +130,7 @@ namespace StarLevelSystem.modules
                 return Localization.instance.Localize(setName.Trim());
             }
             //Logger.LogDebug($"Loaded creature name for {chara.name} to {setName}");
-            return setName;
+            return Localization.instance.Localize(setName);
         }
 
         public static List<string> SelectOrLoadModifiers(Character character, int num_mods, float chanceForMod, ModifierType modType = ModifierType.Major) {

@@ -37,7 +37,7 @@ namespace StarLevelSystem.Data
                         perlevelpower = 1f,
                         basepower = 20f
                         },
-                    setupMethod = Modifiers.Flame.SetupFireCreature
+                    setupMethodClass = "StarLevelSystem.Modifiers.Flame"
                     }
                 },
                 {"Frost", new CreatureModifier() {
@@ -51,7 +51,7 @@ namespace StarLevelSystem.Data
                         perlevelpower = 1f,
                         basepower = 20f
                         },
-                    setupMethod = Modifiers.Frost.SetupFrostCreature
+                    setupMethodClass = "StarLevelSystem.Modifiers.Frost"
                     }
                 }
             },
@@ -66,7 +66,7 @@ namespace StarLevelSystem.Data
                         perlevelpower = 0.05f,
                         basepower = 2f
                         },
-                    setupMethod = Modifiers.Alert.SetupAlertCreature
+                    setupMethodClass = "StarLevelSystem.Modifiers.Alert"
                     }
                 },
                 {"Big", new CreatureModifier() {
@@ -79,7 +79,7 @@ namespace StarLevelSystem.Data
                         perlevelpower = 0.00f,
                         basepower = 0.3f
                         },
-                    setupMethod = Modifiers.Big.SetupBigCreature
+                    setupMethodClass = "StarLevelSystem.Modifiers.Big"
                     }
                 }
             }

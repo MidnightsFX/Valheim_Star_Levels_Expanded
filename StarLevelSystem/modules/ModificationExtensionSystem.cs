@@ -1,31 +1,31 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
+using StarLevelSystem.Data;
 using System.Collections;
 using System.Collections.Generic;
-using System.Threading;
 using UnityEngine;
-using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
     internal class ModificationExtensionSystem
     {
+
         [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
         public static class CreatureCharacterExtension
         {
             public static void Postfix(Character __instance) {
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-                SetupLevelColorSizeAndStats(__instance);
-                // StarLevelSystem.monitor.StartCoroutine(SetupCreatureDelayed(__instance));
+                CreatureSetup(__instance);
             }
         }
 
         [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
         public static class ModifyCharacterVisualsToLevel
         {
-            public static void Postfix(Character __instance) {
-                SetupLevelColorSizeAndStats(__instance);
+            public static bool Prefix(Character __instance) {
+                CreatureSetup(__instance);
+                return false;
             }
         }
 
@@ -37,9 +37,51 @@ namespace StarLevelSystem.modules
                 ZDO atkr = ZDOMan.instance.GetZDO(hit.m_attacker);
                 if (atkr == null) { return; }
                 float damage_mod = atkr.GetFloat("SLE_DMod", 1);
+                DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty("SLE_DBon", __instance.m_nview, new Dictionary<DamageType, float>());
+                AddDamagesToHit(hit, DamageBonuses.Get());
                 //Logger.LogDebug($"Damages D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
                 hit.m_damage.Modify(damage_mod);
-                //Logger.LogDebug($"Applying dmg mod {damage_mod} new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+                Logger.LogDebug($"Applied dmg mod {damage_mod} new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+            }
+        }
+
+        internal static void AddDamagesToHit(HitData hit, Dictionary<DamageType, float> damageBonuses) {
+            foreach (var dmg in damageBonuses) {
+                switch(dmg.Key) {
+                    // Physical
+                    case DamageType.Blunt:
+                        hit.m_damage.m_blunt += dmg.Value;
+                        break;
+                    case DamageType.Slash:
+                        hit.m_damage.m_slash += dmg.Value;
+                        break;
+                    case DamageType.Pierce:
+                        hit.m_damage.m_pierce += dmg.Value;
+                        break;
+                    // Elemental
+                    case DamageType.Fire:
+                        hit.m_damage.m_fire += dmg.Value;
+                        break;
+                    case DamageType.Frost:
+                        hit.m_damage.m_frost += dmg.Value;
+                        break;
+                    case DamageType.Lightning:
+                        hit.m_damage.m_lightning += dmg.Value;
+                        break;
+                    case DamageType.Poison:
+                        hit.m_damage.m_poison += dmg.Value;
+                        break;
+                    case DamageType.Spirit:
+                        hit.m_damage.m_spirit += dmg.Value;
+                        break;
+                    // Utility
+                    case DamageType.Chop:
+                        hit.m_damage.m_chop += dmg.Value;
+                        break;
+                    case DamageType.Pickaxe:
+                        hit.m_damage.m_pickaxe += dmg.Value;
+                        break;
+                }
             }
         }
 
@@ -80,108 +122,80 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        private static void SetupLevelColorSizeAndStats(Character __instance)
-        {
+        internal static void CreatureSetup(Character __instance) {
             if (__instance.IsPlayer()) { return; }
-            // ZNetView zview = __instance.gameObject.GetComponent<ZNetView>();
 
             // Select the creature data
-            LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-            //bool setupdone = zview.GetZDO().GetBool("SLE_SDone", false);
+            CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
 
             // Determine if this creature should get deleted due to disableSpawn
             // We do not delete tamed creatures, to allow supporting taming of creatures, bringing them to a banned biome and breeding
-            if (__instance.m_tamed == false && biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
-                Logger.LogDebug($"Creature {__instance.name} in biome {biome} is a disabled spawn, deleting.");
+            if (__instance.m_tamed == false && cDetails.creatureDisabledInBiome) {
+                Logger.LogDebug($"Creature {__instance.name} in biome {cDetails.Biome} is a disabled spawn, deleting.");
                 ZNetScene.instance.StartCoroutine(DestroyCoroutine(__instance.gameObject));
                 return;
             }
 
-            // We don't have a catch all to catch setting the level of all creatures. This avoids running this on a delay, or loop, but we either need to modify everything correctly after the creature sets up
-            // or we should have a fallback like this
-            //if (setupdone != true && zview.GetZDO().GetInt(ZDOVars.s_level, 0) == 0) {
-            //    // Setup the level
-            //    LevelSystem.DetermineApplyLevelGeneric(__instance.gameObject, creature_name, creature_settings, biome_settings);
-            //}
-
             // Modify the creatures stats by custom character/biome modifications
-            ApplySpeedModifications(__instance, creature_settings, biome_settings);
-            ApplyDamageModification(__instance, creature_name, creature_settings, biome_settings);
+            ApplySpeedModifications(__instance, cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel], cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed]);
+            ApplyDamageModification(__instance, cDetails);
+            ApplySizeModifications(__instance, cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel], cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size]);
 
-            //zview.GetZDO().Set("SLE_SDone", true);
-            // No need to do colorization or size scaling if the creature is level 1 or lower
             if (__instance.m_level <= 1) { return; }
             // Colorization and visual adjustments
-            Colorization.ApplyColorizationWithoutLevelEffects(__instance);
+            Colorization.ApplyColorizationWithoutLevelEffects(__instance, cDetails.Colorization);
             Colorization.ApplyLevelVisual(__instance);
-
-            // Scaling
-            if (__instance.transform.position.y < 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
-                // Don't scale in dungeons
-                float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * __instance.m_level);
-                Logger.LogDebug($"Setting character size {scale} and color.");
-                __instance.transform.localScale *= scale;
-                Physics.SyncTransforms();
-            }
         }
 
-        private static void ApplySpeedModifications(Character creature, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings)
-        {
-            float base_speed = 1f;
-            float per_level_mod = 1f;
-            if (creature_settings != null && creature_settings.CreatureBaseValueModifiers != null && creature_settings.CreatureBaseValueModifiers.TryGetValue(CreatureBaseAttribute.Speed, out float basespeedModifier)) {
-                base_speed = basespeedModifier;
-            } else if (biome_settings != null &&  biome_settings.CreatureBaseValueModifiers != null && biome_settings.CreatureBaseValueModifiers.TryGetValue(CreatureBaseAttribute.Speed, out float biomespeedModifier)){
-                base_speed = biomespeedModifier;
+        private static void ApplySizeModifications(Character creature, float per_level_mod, float base_size_mod) {
+            // Don't scale in dungeons
+            if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
+                return;
             }
+            
+            float creature_level_size = (per_level_mod * creature.m_level);
+            float scale = base_size_mod + creature_level_size;
 
-            if (creature_settings != null && creature_settings.CreaturePerLevelValueModifiers != null && creature_settings.CreaturePerLevelValueModifiers.TryGetValue(CreaturePerLevelAttribute.SpeedPerLevel, out float perlevelspeed_creature)){
-                per_level_mod = perlevelspeed_creature;
-            } else if (biome_settings != null && biome_settings.CreaturePerLevelValueModifiers != null && biome_settings.CreaturePerLevelValueModifiers.TryGetValue(CreaturePerLevelAttribute.SpeedPerLevel, out float perlevelspeed_biome)){
-                per_level_mod = perlevelspeed_biome;
-            }
+            Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+            creature.transform.localScale *= scale;
+            Physics.SyncTransforms();
+        }
 
-            float perlevelmod = Mathf.Pow(per_level_mod, (creature.m_level - 1));
+        private static void ApplySpeedModifications(Character creature, float per_level_mod, float base_speed) {
+            float perlevelmod = per_level_mod * (creature.m_level - 1);
             // Modify the creature's speed attributes based on the base speed and per level modifier
-            creature.m_speed = (creature.m_speed * base_speed) * perlevelmod;
-            creature.m_walkSpeed = (creature.m_walkSpeed * base_speed) * perlevelmod;
-            creature.m_runSpeed = (creature.m_runSpeed * base_speed) * perlevelmod;
-            creature.m_turnSpeed = (creature.m_turnSpeed * base_speed) * perlevelmod;
-            creature.m_flyFastSpeed = (creature.m_flyFastSpeed * base_speed) * perlevelmod;
-            creature.m_flySlowSpeed = (creature.m_flySlowSpeed * base_speed) * perlevelmod;
-            creature.m_flyTurnSpeed = (creature.m_flyTurnSpeed * base_speed) * perlevelmod;
-            creature.m_swimSpeed = (creature.m_swimSpeed * base_speed) * perlevelmod;
-            creature.m_crouchSpeed = (creature.m_crouchSpeed * base_speed) * perlevelmod;
+            float speedmod = (base_speed + perlevelmod);
+            creature.m_speed *= speedmod;
+            creature.m_walkSpeed *= speedmod;
+            creature.m_runSpeed *= speedmod;
+            creature.m_turnSpeed *= speedmod;
+            creature.m_flyFastSpeed *= speedmod;
+            creature.m_flySlowSpeed *= speedmod;
+            creature.m_flyTurnSpeed *= speedmod;
+            creature.m_swimSpeed *= speedmod;
+            creature.m_crouchSpeed *= speedmod;
 
-            Logger.LogDebug($"Applying speed modifications for {creature.name} base speed mod: {base_speed}, per level mod: {per_level_mod} x {(creature.m_level - 1)} ({perlevelmod})");
+            Logger.LogDebug($"Applying speed modifications for {creature.name} speed modified by: {speedmod}, per level mod: {base_speed} + {perlevelmod}");
         }
 
-        private static void ApplyDamageModification(Character creature, string creature_name, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings) {
+        private static void ApplyDamageModification(Character creature, CreatureDetailCache cDetails) {
             Humanoid chumanoid = creature.GetComponent<Humanoid>();
             if (chumanoid == null) { return; }
 
-            float basedmgmod = 1f;
-            float perlvldmgmod = 1f;
-
-            // Determine what the modifier value will be
-            if (creature_settings != null && creature_settings.CreatureBaseValueModifiers != null && creature_settings.CreatureBaseValueModifiers.TryGetValue(CreatureBaseAttribute.BaseDamage, out float charbasedmg)) {
-                basedmgmod = charbasedmg;
-            }
-            else if (biome_settings != null && biome_settings.CreatureBaseValueModifiers != null && biome_settings.CreatureBaseValueModifiers.TryGetValue(CreatureBaseAttribute.BaseDamage, out float biomebasedmg)) {
-                basedmgmod = biomebasedmg;
-            }
-            if (creature_settings != null && creature_settings.CreaturePerLevelValueModifiers != null && creature_settings.CreaturePerLevelValueModifiers.TryGetValue(CreaturePerLevelAttribute.DamagePerLevel, out float charperlvldmg)) {
-                perlvldmgmod = charperlvldmg;
-            }
-            else if (biome_settings != null && biome_settings.CreaturePerLevelValueModifiers != null && biome_settings.CreaturePerLevelValueModifiers.TryGetValue(CreaturePerLevelAttribute.DamagePerLevel, out float biomeperlvldmg)) {
-                perlvldmgmod = biomeperlvldmg;
-            }
+            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+            float base_dmg_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];
 
             // No changes, do nothing
-            if (basedmgmod == 1 && perlvldmgmod == 1) { return; }
-            float dmgmod = basedmgmod * Mathf.Pow(perlvldmgmod, (creature.m_level - 1));
-            Logger.LogDebug($"Applying damage modifications for {creature_name} to {dmgmod}");
+            if (base_dmg_mod == 1 && per_level_mod == 1) { return; }
+            float dmgmod = base_dmg_mod + (per_level_mod * (creature.m_level - 1));
+            
+            DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty("SLE_DBon", creature.m_nview, new Dictionary<DamageType, float>());
+            Dictionary<DamageType, float> dmgBonuses = DamageBonuses.Get();
+            if (dmgBonuses.Count == 0 && cDetails.CreatureDamageBonus.Count > 0) {
+                DamageBonuses.Set(cDetails.CreatureDamageBonus);
+            }
             creature.m_nview.GetZDO().Set("SLE_DMod", dmgmod);
+            Logger.LogDebug($"Applying damage buffs {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)}  *{dmgmod}");
         }
 
     }

@@ -1,9 +1,11 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
+using StarLevelSystem.Data;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.UI;
+using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
@@ -241,10 +243,20 @@ namespace StarLevelSystem.modules
             }
         }
 
+        [HarmonyPatch(typeof(Character), nameof(Character.GetHoverName))]
+        public static class DisplayCreatureNameChanges {
+            public static bool Prefix(Character __instance, ref string __result) {
+                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
+                __result = CreatureModifiers.CheckOrBuildCreatureName(__instance, cDetails);
+                return false;
+            }
+        }
+
         public static void UpdateHudforAllLevels(EnemyHud.HudData ehud) {
             if (ehud == null || ehud.m_character == null) return;
             if (ehud.m_character.IsPlayer()) return;
             int level = ehud.m_character.GetLevel();
+            if (level <= 1) return;
             // Logger.LogInfo($"Creature Level {level}");
             ZDOID czoid = ehud.m_character.GetZDOID();
             if (czoid == ZDOID.None) { return; }

@@ -35,6 +35,13 @@ namespace StarLevelSystem.modules
             characterSpecificColorization = ColorizationData.characterColorizationData,
             defaultLevelColorization = ColorizationData.defaultColorizationData
         };
+        public static ColorDef defaultColorization = new ColorDef()
+        {
+            hue = 0f,
+            saturation = 0f,
+            value = 0f,
+            is_emissive = false
+        };
 
         public static void Init() {
             creatureColorizationSettings = defaultColorizationSettings;
@@ -52,34 +59,19 @@ namespace StarLevelSystem.modules
             try {
                 creatureColorizationSettings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
-                if (creatureColorizationSettings.defaultLevelColorization.Count +1 < 103) {
-                    creatureColorizationSettings.defaultLevelColorization = defaultColorizationSettings.defaultLevelColorization;
-                }
+                creatureColorizationSettings.defaultLevelColorization = defaultColorizationSettings.defaultLevelColorization;
                 Logger.LogInfo($"Updated ColorizationSettings.");
                 // This might need to be async
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
-                    ApplyColorizationWithoutLevelEffects(chara);
+                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    ApplyColorizationWithoutLevelEffects(chara, ccd.Colorization);
                 }
             } catch (System.Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
                 return false;
             }
             return true;
-        }
-
-        // Consider if we want to use emissive colors?
-        // TODO make these static?
-        // Make these allow levels past level 100?
-        public static void SetupLevelEffects() {
-            for (int level = defaultColorizationSettings.defaultLevelColorization.Count + 1; 103 > level; level++)
-            {
-                float sat = UnityEngine.Random.Range(-0.1f, 0.1f);
-                float hue = UnityEngine.Random.Range(-0.1f, 0.1f);
-                float value = UnityEngine.Random.Range(-0.3f, 0.3f);
-                Logger.LogDebug($"LevelEffects: {level} - hue:{hue}, sat:{sat}, val:{value}");
-                defaultColorizationSettings.defaultLevelColorization.Add(level, new ColorDef() { hue = hue, saturation = sat, value = value });
-            }
         }
 
         // Don't run the vanilla level effects since we are managing all of that ourselves
@@ -91,6 +83,7 @@ namespace StarLevelSystem.modules
             }
         }
 
+        // Make level visuals deterministic?
         public static void ApplyLevelVisual(Character charc) {
             LevelEffects charLevelEf = charc.gameObject.GetComponentInChildren<LevelEffects>();
             if (charLevelEf == null || charLevelEf.m_levelSetups == null || charLevelEf.m_levelSetups.Count <= 0) { return; }
@@ -100,30 +93,32 @@ namespace StarLevelSystem.modules
             if (clevelset.m_enableObject != null) { clevelset.m_enableObject.SetActive(true); }
         }
 
-
-        internal static void ApplyColorizationWithoutLevelEffects(Character cgo) {
-            int level = cgo.m_level - 1;
-
-            LevelSetup genlvlup = creatureColorizationSettings.defaultLevelColorization[level].toLevelEffect();
+        internal static ColorDef DetermineCharacterColorization(Character cgo, int level) {
             string cname = Utils.GetPrefabName(cgo.gameObject);
-            Logger.LogDebug($"Checking for character specific colorization {cname}");
+            //Logger.LogDebug($"Checking for character specific colorization {cname}");
             if (creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname)) {
-                if (creatureColorizationSettings.characterSpecificColorization[cname].TryGetValue(level, out ColorDef charspecific_color_def)) {
-                    Logger.LogDebug($"Found character specific colorization for {cname} - {level}");
-                    genlvlup = charspecific_color_def.toLevelEffect();
+                if (creatureColorizationSettings.characterSpecificColorization[cname].TryGetValue((level-1), out ColorDef charspecific_color_def)) {
+                    //Logger.LogDebug($"Found character specific colorization for {cname} - {level}");
+                    return charspecific_color_def;
                 }
-            } else { Logger.LogDebug($"No character specific colorization for {cname} - {level}"); }
+            }
+            return GetDefaultColorization(level);
+        }
+
+
+        internal static void ApplyColorizationWithoutLevelEffects(Character cgo, ColorDef colorization) {
+            LevelSetup genlvlup = colorization.toLevelEffect();
             // Material assignment changes must occur in a try block- they can quietly crash the game otherwise
             try {
                 foreach (var smr in cgo.gameObject.GetComponentsInChildren<SkinnedMeshRenderer>())
                 {
                     Material[] sharedMaterials2 = smr.sharedMaterials;
+                    if (sharedMaterials2.Length == 0) { continue; }
                     sharedMaterials2[0] = new Material(sharedMaterials2[0]);
                     sharedMaterials2[0].SetFloat("_Hue", genlvlup.m_hue);
                     sharedMaterials2[0].SetFloat("_Saturation", genlvlup.m_saturation);
                     sharedMaterials2[0].SetFloat("_Value", genlvlup.m_value);
-                    if (genlvlup.m_setEmissiveColor)
-                    {
+                    if (genlvlup.m_setEmissiveColor) {
                         sharedMaterials2[0].SetColor("_EmissionColor", genlvlup.m_emissiveColor);
                     }
                     smr.sharedMaterials = sharedMaterials2;
@@ -165,6 +160,14 @@ namespace StarLevelSystem.modules
                 chara.transform.localScale *= scale;
             }
             Physics.SyncTransforms();
+        }
+
+        internal static ColorDef GetDefaultColorization(int level) {
+            if (creatureColorizationSettings.defaultLevelColorization.ContainsKey(level)) {
+                return creatureColorizationSettings.defaultLevelColorization[level];
+            }  else {
+                return defaultColorization;
+            }
         }
     }
 }

@@ -1,0 +1,15 @@
+{
+  "alert_prefix1": "Alert",
+  "alert_suffix1": "Scout",
+  "big_prefix1": "Collosal",
+  "big_prefix2": "Giant",
+  "big_suffix1": "of Jotun Blood",
+  "frost_prefix1": "Freezing",
+  "frost_prefix2": "Icy",
+  "frost_prefix3": "Ice",
+  "frost_suffix1": "of Frost",
+  "fire_prefix1": "Burning",
+  "fire_prefix2": "Flaming",
+  "fire_prefix3": "Fiery",
+  "fire_suffix1": "of Fire",
+}

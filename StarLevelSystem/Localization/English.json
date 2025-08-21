@@ -11,5 +11,12 @@
   "fire_prefix1": "Burning",
   "fire_prefix2": "Flaming",
   "fire_prefix3": "Fiery",
-  "fire_suffix1": "of Fire"
+  "fire_suffix1": "of Fire",
+  "fast_prefix1": "Fast",
+  "fast_prefix2": "Quick",
+  "fast_prefix3": "Swift",
+  "poison_prefix1": "Poisonous",
+  "poison_prefix2": "Toxic",
+  "poison_prefix3": "Venomous",
+  "poison_suffix1": "of Poison",
 }

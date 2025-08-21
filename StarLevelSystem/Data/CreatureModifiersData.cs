@@ -29,13 +29,13 @@ namespace StarLevelSystem.Data
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$fire_prefix1", "$fire_prefix2", "$fire_prefix3" },
                     name_suffixes = new List<string>() { "$fire_suffix1" },
-                    namingConvention = NameSelectionStyle.RandomFirst,
+                    namingConvention = NameSelectionStyle.RandomBoth,
                     visualEffectStyle = VisualEffectStyle.bottom,
                     visualEffect = "creatureFire",
                     starVisual = "flame",
                     config = new CreatureModConfig() {
-                        perlevelpower = 1f,
-                        basepower = 20f
+                        perlevelpower = 0.01f,
+                        basepower = 1.3f
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Flame"
                     }
@@ -44,14 +44,28 @@ namespace StarLevelSystem.Data
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$frost_prefix1", "$frost_prefix2", "$frost_prefix3" },
                     name_suffixes = new List<string>() { "$frost_suffix1" },
-                    namingConvention = NameSelectionStyle.RandomFirst,
+                    namingConvention = NameSelectionStyle.RandomBoth,
                     visualEffect = "creatureFrost",
                     starVisual = "snowflake",
                     config = new CreatureModConfig() {
-                        perlevelpower = 1f,
-                        basepower = 20f
+                        perlevelpower = 0.01f,
+                        basepower = 1.3f
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Frost"
+                    }
+                },
+                {"Poison", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$poison_prefix1", "$poison_prefix2", "$poison_prefix3" },
+                    name_suffixes = new List<string>() { "$poison_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureFrost",
+                    starVisual = "poison",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.05f,
+                        basepower = 2f
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Poison"
                     }
                 }
             },
@@ -80,6 +94,18 @@ namespace StarLevelSystem.Data
                         basepower = 0.3f
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Big"
+                    }
+                },
+                {"Fast", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$fast_prefix1", "$fast_prefix2", "$fast_prefix3" },
+                    namingConvention = NameSelectionStyle.RandomFirst,
+                    //visualEffect
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.00f,
+                        basepower = 0.3f
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Fast"
                     }
                 }
             }

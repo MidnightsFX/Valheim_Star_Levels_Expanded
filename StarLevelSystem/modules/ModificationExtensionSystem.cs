@@ -46,40 +46,41 @@ namespace StarLevelSystem.modules
         }
 
         internal static void AddDamagesToHit(HitData hit, Dictionary<DamageType, float> damageBonuses) {
+            float hitdamage = hit.GetTotalDamage();
             foreach (var dmg in damageBonuses) {
                 switch(dmg.Key) {
                     // Physical
                     case DamageType.Blunt:
-                        hit.m_damage.m_blunt += dmg.Value;
+                        hit.m_damage.m_blunt += hitdamage * dmg.Value;
                         break;
                     case DamageType.Slash:
-                        hit.m_damage.m_slash += dmg.Value;
+                        hit.m_damage.m_slash += hitdamage * dmg.Value;
                         break;
                     case DamageType.Pierce:
-                        hit.m_damage.m_pierce += dmg.Value;
+                        hit.m_damage.m_pierce += hitdamage * dmg.Value;
                         break;
                     // Elemental
                     case DamageType.Fire:
-                        hit.m_damage.m_fire += dmg.Value;
+                        hit.m_damage.m_fire += hitdamage * dmg.Value;
                         break;
                     case DamageType.Frost:
-                        hit.m_damage.m_frost += dmg.Value;
+                        hit.m_damage.m_frost += hitdamage * dmg.Value;
                         break;
                     case DamageType.Lightning:
-                        hit.m_damage.m_lightning += dmg.Value;
+                        hit.m_damage.m_lightning +=  hitdamage * dmg.Value;
                         break;
                     case DamageType.Poison:
-                        hit.m_damage.m_poison += dmg.Value;
+                        hit.m_damage.m_poison += hitdamage * dmg.Value;
                         break;
                     case DamageType.Spirit:
-                        hit.m_damage.m_spirit += dmg.Value;
+                        hit.m_damage.m_spirit += hitdamage * dmg.Value;
                         break;
                     // Utility
                     case DamageType.Chop:
-                        hit.m_damage.m_chop += dmg.Value;
+                        hit.m_damage.m_chop += hitdamage * dmg.Value;
                         break;
                     case DamageType.Pickaxe:
-                        hit.m_damage.m_pickaxe += dmg.Value;
+                        hit.m_damage.m_pickaxe += hitdamage * dmg.Value;
                         break;
                 }
             }

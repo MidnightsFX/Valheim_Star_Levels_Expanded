@@ -73,7 +73,10 @@
     <Copy SourceFiles="$(TargetDir)Jotunn.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    
+
+    <Copy SourceFiles="$(VALHEIM_MANAGED)/Splatform.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="$(VALHEIM_MANAGED)/Splatform.Steam.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+
     <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_valheim.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_utils.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_postprocessing.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
@@ -107,7 +110,7 @@
   </Target>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="xcopy &quot;C:\Users\carls\Documents\projects\Valheim_Stuff\Unity_Valheim_mod_data\JotunnModUnity\AssetBundles\StandaloneWindows\starlevelsystems&quot; &quot;$(ProjectDir)assets\starlevelsystems&quot; /q /y /i&#xA;&#xA;" />
+    <Exec Command="xcopy &quot;$(ProjectDir)\..\StarLevelUnity\AssetBundles\StandaloneWindows\starlevelsystems&quot; &quot;$(ProjectDir)assets\starlevelsystems&quot; /q /y /i&#xA;&#xA;" />
   </Target>
 
   <PropertyGroup>

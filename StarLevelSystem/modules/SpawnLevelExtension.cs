@@ -46,6 +46,7 @@ namespace StarLevelSystem.modules
                   .FirstOrDefault();
             }
 
+            //[HarmonyDebug]
             [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> SpawnCommandDelegateTranspiler(
                 IEnumerable<CodeInstruction> instructions, ILGenerator generator)
@@ -68,6 +69,14 @@ namespace StarLevelSystem.modules
                         new CodeInstruction(
                             OpCodes.Call, AccessTools.Method(typeof(SpawnCommandDelegate), nameof(MathfMinDelegate))))
                     .MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel))
+                    ))
+                    .RemoveInstructions(1)
+                    .InsertAndAdvance(
+                        new CodeInstruction(
+                            OpCodes.Call, AccessTools.Method(typeof(SpawnCommandDelegate), nameof(SetCreatureSpawnLevel)))
+                    ).ThrowIfInvalid($"Could not patch terminal.SpawnCommandDelegate()! (SetCreatureSpawnLevel)")
+                    .MatchStartForward(
                         new CodeMatch(OpCodes.Ldarg_1),
                         new CodeMatch(OpCodes.Ldc_I4_4),
                         new CodeMatch(OpCodes.Stfld))
@@ -81,6 +90,12 @@ namespace StarLevelSystem.modules
             static int MathfMinDelegate(int level, int value)
             {
                 return level;
+            }
+
+            static void SetCreatureSpawnLevel(Character chara, int level) {
+                Logger.LogWarning($"Setting creature level");
+                ModificationExtensionSystem.CreatureSetup(chara, true, level);
+                chara.SetupMaxHealth();
             }
         }
     }

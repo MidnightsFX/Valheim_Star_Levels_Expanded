@@ -188,6 +188,7 @@ namespace StarLevelSystem.common
             public Dictionary<string, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<string, List<string>>();
             public ColorDef Colorization { get; set; }
             public Heightmap.Biome Biome { get; set; }
+            public GameObject CreaturePrefab { get; set; }
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; } = new Dictionary<CreatureBaseAttribute, float>() {
                 { CreatureBaseAttribute.BaseDamage, 1f },
                 { CreatureBaseAttribute.BaseHealth, 1f },

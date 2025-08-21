@@ -19,4 +19,8 @@
   "poison_prefix2": "Toxic",
   "poison_prefix3": "Venomous",
   "poison_suffix1": "of Poison",
+  "lightning_prefix1": "Lightning",
+  "lightning_prefix2": "Thunderous",
+  "lightning_prefix3": "Stormy",
+  "lightning_suffix1": "of Lightning",
 }

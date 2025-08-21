@@ -1,4 +1,5 @@
-﻿using StarLevelSystem.common;
+﻿using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.modules;
 using System.Collections.Generic;
 using UnityEngine;
@@ -14,10 +15,10 @@ namespace StarLevelSystem.Data
         // Add entry on creature awake
         // Add check to delete creature from Znet that removes the creature from the cache
 
-        public static CreatureDetailCache GetAndSetDetailCache(Character character) {
+        public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0) {
             //Logger.LogDebug("Checking CreatureDetailCache");
             uint czoid = character.GetZDOID().ID;
-            if (sessionCache.ContainsKey(czoid)) {
+            if (sessionCache.ContainsKey(czoid) && update == false) {
                 return sessionCache[czoid];
             }
 
@@ -38,9 +39,12 @@ namespace StarLevelSystem.Data
                 return characterCacheEntry;
             }
 
+            // Set the creature
+            characterCacheEntry.CreaturePrefab = PrefabManager.Instance.GetPrefab(creature_name);
+
             // Check for level or set it
             Logger.LogDebug("Setting creature level");
-            characterCacheEntry.Level = LevelSystem.DetermineLevelSetAndRetrieve(character, creature_settings, biome_settings);
+            characterCacheEntry.Level = LevelSystem.DetermineLevelSetAndRetrieve(character, creature_settings, biome_settings, leveloverride);
 
             // Set creature Colorization pallete
             Logger.LogDebug("Selecting creature colorization");
@@ -103,9 +107,13 @@ namespace StarLevelSystem.Data
             }
 
             // Add it to the cache, and return it
-            Logger.LogDebug("Adding creature to cache");
+            
             if (!sessionCache.ContainsKey(character.GetZDOID().ID)) {
+                Logger.LogDebug("Adding creature to cache");
                 sessionCache.Add(character.GetZDOID().ID, characterCacheEntry);
+            } else if (update == true) {
+                Logger.LogDebug($"Adding Updating creature in cache {creature_name}-{characterCacheEntry.Level}");
+                sessionCache[character.GetZDOID().ID] = characterCacheEntry;
             }
             return characterCacheEntry;
         }

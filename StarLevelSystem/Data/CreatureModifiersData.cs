@@ -59,13 +59,27 @@ namespace StarLevelSystem.Data
                     name_prefixes = new List<string>() { "$poison_prefix1", "$poison_prefix2", "$poison_prefix3" },
                     name_suffixes = new List<string>() { "$poison_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
-                    //visualEffect = "creatureFrost",
+                    visualEffect = "creaturePoison",
                     starVisual = "poison",
                     config = new CreatureModConfig() {
                         perlevelpower = 0.05f,
                         basepower = 2f
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Poison"
+                    }
+                },
+                {"Lightning", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$lightning_prefix1", "$lightning_prefix2", "$lightning_prefix3" },
+                    name_suffixes = new List<string>() { "$lightning_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureFrost",
+                    starVisual = "lightning",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.05f,
+                        basepower = 2f
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Lightning"
                     }
                 }
             },
@@ -103,7 +117,7 @@ namespace StarLevelSystem.Data
                     //visualEffect
                     config = new CreatureModConfig() {
                         perlevelpower = 0.00f,
-                        basepower = 0.3f
+                        basepower = 0.2f
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Fast"
                     }

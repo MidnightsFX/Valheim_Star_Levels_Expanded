@@ -11,6 +11,30 @@ namespace StarLevelSystem.modules
     internal class ModificationExtensionSystem
     {
 
+        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.EquipItem))]
+        public static class CreatureSizeSyncEquipItems
+        {
+            public static void Postfix(Character __instance)
+            {
+                if (__instance.IsPlayer()) { return; }
+                // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
+                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
+                ApplySizeModifications(__instance, cDetails);
+            }
+        }
+
+        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.GiveDefaultItems))]
+        public static class CreatureSizeSyncItems
+        {
+            public static void Postfix(Character __instance)
+            {
+                if (__instance.IsPlayer()) { return; }
+                // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
+                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
+                ApplySizeModifications(__instance, cDetails);
+            }
+        }
+
         [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
         public static class CreatureCharacterExtension
         {
@@ -24,7 +48,9 @@ namespace StarLevelSystem.modules
         public static class ModifyCharacterVisualsToLevel
         {
             public static bool Prefix(Character __instance) {
+                Logger.LogDebug("Setting Charcter level");
                 CreatureSetup(__instance);
+                __instance.SetupMaxHealth();
                 return false;
             }
         }
@@ -123,11 +149,11 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        internal static void CreatureSetup(Character __instance) {
+        internal static void CreatureSetup(Character __instance, bool refresh_cache = false, int leveloverride = 0) {
             if (__instance.IsPlayer()) { return; }
 
             // Select the creature data
-            CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
+            CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, refresh_cache, leveloverride);
 
             // Determine if this creature should get deleted due to disableSpawn
             // We do not delete tamed creatures, to allow supporting taming of creatures, bringing them to a banned biome and breeding
@@ -138,9 +164,9 @@ namespace StarLevelSystem.modules
             }
 
             // Modify the creatures stats by custom character/biome modifications
-            ApplySpeedModifications(__instance, cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel], cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed]);
+            ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
-            ApplySizeModifications(__instance, cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel], cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size]);
+            ApplySizeModifications(__instance, cDetails);
 
             if (__instance.m_level <= 1) { return; }
             // Colorization and visual adjustments
@@ -148,35 +174,55 @@ namespace StarLevelSystem.modules
             Colorization.ApplyLevelVisual(__instance);
         }
 
-        private static void ApplySizeModifications(Character creature, float per_level_mod, float base_size_mod) {
+        private static void ApplySizeModifications(Character creature, CreatureDetailCache cDetails) {
             // Don't scale in dungeons
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
                 return;
             }
-            
+
+            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
+            float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
+
             float creature_level_size = (per_level_mod * creature.m_level);
             float scale = base_size_mod + creature_level_size;
-
-            Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
-            creature.transform.localScale *= scale;
+            if (cDetails.CreaturePrefab) {
+                Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * scale;
+                creature.transform.localScale = sizeEstimate;
+                Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+            } else {
+                //creature.transform.localScale *= scale;
+                Logger.LogDebug($"No reference for creature size, size not set.");
+            }
             Physics.SyncTransforms();
         }
 
-        private static void ApplySpeedModifications(Character creature, float per_level_mod, float base_speed) {
+        private static void ApplySpeedModifications(Character creature, CreatureDetailCache cDetails) {
+            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel];
+            float base_speed = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed];
             float perlevelmod = per_level_mod * (creature.m_level - 1);
             // Modify the creature's speed attributes based on the base speed and per level modifier
             float speedmod = (base_speed + perlevelmod);
-            creature.m_speed *= speedmod;
-            creature.m_walkSpeed *= speedmod;
-            creature.m_runSpeed *= speedmod;
-            creature.m_turnSpeed *= speedmod;
-            creature.m_flyFastSpeed *= speedmod;
-            creature.m_flySlowSpeed *= speedmod;
-            creature.m_flyTurnSpeed *= speedmod;
-            creature.m_swimSpeed *= speedmod;
-            creature.m_crouchSpeed *= speedmod;
 
-            Logger.LogDebug($"Applying speed modifications for {creature.name} speed modified by: {speedmod}, per level mod: {base_speed} + {perlevelmod}");
+            if (cDetails.CreaturePrefab)
+            {
+                Character refChar = cDetails.CreaturePrefab.GetComponent<Character>();
+                if (refChar == null) {
+                    Logger.LogWarning($"Creature reference {cDetails.CreaturePrefab.name} does not have a Character component, cannot apply speed modifications.");
+                    return;
+                }
+                creature.m_speed = refChar.m_speed * speedmod;
+                creature.m_walkSpeed = refChar.m_walkSpeed * speedmod;
+                creature.m_runSpeed = refChar.m_runSpeed * speedmod;
+                creature.m_turnSpeed = refChar.m_turnSpeed * speedmod;
+                creature.m_flyFastSpeed = refChar.m_flyFastSpeed * speedmod;
+                creature.m_flySlowSpeed = refChar.m_flySlowSpeed * speedmod;
+                creature.m_flyTurnSpeed = refChar.m_flyTurnSpeed * speedmod;
+                creature.m_swimSpeed = refChar.m_swimSpeed * speedmod;
+                creature.m_crouchSpeed = refChar.m_crouchSpeed * speedmod;
+                Logger.LogDebug($"Applying speed modifications for {creature.name}-{creature.m_level} speed modified by: {speedmod}, per level mod: {base_speed} + {perlevelmod}");
+            } else {
+                Logger.LogWarning("Creature reference not set, can't apply speed modifiers.");
+            }
         }
 
         private static void ApplyDamageModification(Character creature, CreatureDetailCache cDetails) {

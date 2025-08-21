@@ -283,7 +283,7 @@ namespace StarLevelSystem.modules
                 Logger.LogDebug($"Creating new hud for {czoid} with level {level}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
-                Logger.LogDebug($"Building sprite list");
+                // Logger.LogDebug($"Building sprite list");
                 foreach (var entry in ccd.Modifiers) {
                     if (entry.Value != ModifierType.Major) { continue; }
                     if (!CreatureModifiersData.CreatureModifiers.MajorModifiers.ContainsKey(entry.Key)) { continue; }
@@ -294,7 +294,7 @@ namespace StarLevelSystem.modules
 
                 extended_hud.isBoss = ehud.m_character.IsBoss();
 
-                Logger.LogDebug($"Assigning star level 2");
+                // Logger.LogDebug($"Assigning star level 2");
                 // Add the entry to the cache, and provide references
                 extended_hud.starlevel2 = ehud.m_gui.transform.Find("level_2").gameObject;
                 extended_hud.starlevel2_back_image = ehud.m_gui.transform.Find("level_2/star").gameObject.GetComponent<Image>();
@@ -306,7 +306,7 @@ namespace StarLevelSystem.modules
                     extended_hud.starlevel2_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
                 }
 
-                Logger.LogDebug($"Assigning star level 3");
+                // Logger.LogDebug($"Assigning star level 3");
                 extended_hud.starlevel3 = ehud.m_gui.transform.Find("level_3").gameObject;
                 extended_hud.starlevel3_back_image = ehud.m_gui.transform.Find("level_3/star (1)").gameObject.GetComponent<Image>();
                 extended_hud.starlevel3_front_image = ehud.m_gui.transform.Find("level_3/star (1)/star (1)").gameObject.GetComponent<Image>();
@@ -317,7 +317,7 @@ namespace StarLevelSystem.modules
                     extended_hud.starlevel3_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
                 }
 
-                Logger.LogDebug($"Assigning star level 4");
+                // Logger.LogDebug($"Assigning star level 4");
                 extended_hud.starlevel4 = ehud.m_gui.transform.Find("level_4").gameObject;
                 extended_hud.starlevel4_back_image = ehud.m_gui.transform.Find("level_4/star(Clone)").gameObject.GetComponent<Image>();
                 extended_hud.starlevel4_front_image = ehud.m_gui.transform.Find("level_4/star(Clone)/star (1)").gameObject.GetComponent<Image>();
@@ -328,7 +328,7 @@ namespace StarLevelSystem.modules
                     extended_hud.starlevel4_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
                 }
 
-                Logger.LogDebug($"Assigning star level 5");
+                // Logger.LogDebug($"Assigning star level 5");
                 extended_hud.starlevel5 = ehud.m_gui.transform.Find("level_5").gameObject;
                 extended_hud.starlevel5_back_image = ehud.m_gui.transform.Find("level_5/star(Clone)").gameObject.GetComponent<Image>();
                 extended_hud.starlevel5_front_image = ehud.m_gui.transform.Find("level_5/star(Clone)/star (1)").gameObject.GetComponent<Image>();
@@ -339,7 +339,7 @@ namespace StarLevelSystem.modules
                     extended_hud.starlevel5_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
                 }
 
-                Logger.LogDebug($"Assigning star level 6");
+                // Logger.LogDebug($"Assigning star level 6");
                 extended_hud.starlevel6 = ehud.m_gui.transform.Find("level_6").gameObject;
                 extended_hud.starlevel6_back_image = ehud.m_gui.transform.Find("level_6/star(Clone)").gameObject.GetComponent<Image>();
                 extended_hud.starlevel6_front_image = ehud.m_gui.transform.Find("level_6/star(Clone)/star (1)").gameObject.GetComponent<Image>();
@@ -350,7 +350,7 @@ namespace StarLevelSystem.modules
                     extended_hud.starlevel6_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
                 }
 
-                Logger.LogDebug($"Assigning star level N");
+                // Logger.LogDebug($"Assigning star level N");
                 extended_hud.starlevel_N = ehud.m_gui.transform.Find("level_n").gameObject;
                 extended_hud.starlevelN_back_image = ehud.m_gui.transform.Find("level_n/star(Clone)").gameObject.GetComponent<Image>();
                 extended_hud.starlevelN_front_image = ehud.m_gui.transform.Find("level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();

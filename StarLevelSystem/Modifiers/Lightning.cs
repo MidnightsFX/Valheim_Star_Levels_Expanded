@@ -1,0 +1,22 @@
+﻿using JetBrains.Annotations;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using static StarLevelSystem.common.DataObjects;
+
+namespace StarLevelSystem.Modifiers
+{
+    internal static class Lightning
+    {
+        [UsedImplicitly]
+        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+            if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Lightning)) {
+                ccache.CreatureDamageBonus[DamageType.Lightning] += config.basepower + (config.perlevelpower * ccache.Level);
+            } else {
+                ccache.CreatureDamageBonus[DamageType.Lightning] = config.basepower + (config.perlevelpower * ccache.Level);
+            }
+        }
+    }
+}

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -14,8 +15,14 @@ namespace StarLevelSystem.modules
         public static Vector2 center = new Vector2(0, 0);
 
 
-        public static int DetermineLevelSetAndRetrieve(Character character, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings)
+        public static int DetermineLevelSetAndRetrieve(Character character, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
         {
+            if (leveloverride > 0) {
+                character.m_nview.GetZDO().Set(ZDOVars.s_level, leveloverride);
+                character.m_level = leveloverride;
+                return leveloverride;
+            }
+
             int clevel = character.m_nview.GetZDO().GetInt(ZDOVars.s_level, 0);
             if (clevel <= 0) {
                 // Determine max level

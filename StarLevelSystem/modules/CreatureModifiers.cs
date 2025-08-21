@@ -44,6 +44,7 @@ namespace StarLevelSystem.modules
                 foreach (string mod in SelectOrLoadModifiers(character, num_minor_mods, chanceMinor, ModifierType.Minor)) {
                     //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
                     if (!CreatureModifiersData.CreatureModifiers.MinorModifiers.ContainsKey(mod)) {
+                        if (mod == "none") { continue; }
                         Logger.LogWarning($"Minor modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
                         continue;
                     }
@@ -96,8 +97,9 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static string CheckOrBuildCreatureName(Character chara, CreatureDetailCache cacheEntry)
-        {
+        internal static string CheckOrBuildCreatureName(Character chara, CreatureDetailCache cacheEntry) {
+            // Skip if the creature is getting deleted
+            if (cacheEntry.creatureDisabledInBiome == true) { return Localization.instance.Localize(chara.m_name); }
             string setName = chara.m_nview.GetZDO().GetString("SLE_Name");
             if (setName == "") {
                 string prefix = "";

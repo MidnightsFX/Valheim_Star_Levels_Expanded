@@ -10,31 +10,6 @@ namespace StarLevelSystem.modules
 {
     class SpawnLevelExtension
     {
-
-        //[HarmonyPatch(typeof(CreatureSpawner))]
-        //public static class ModifyMaxLevel
-        //{
-        //    [HarmonyTranspiler]
-        //    [HarmonyPatch(nameof(CreatureSpawner.Spawn))]
-        //    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-        //    {
-        //        var codeMatcher = new CodeMatcher(instructions);
-        //        codeMatcher.MatchStartForward(
-        //            new CodeMatch(OpCodes.Ldarg_0),
-        //            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CreatureSpawner), nameof(CreatureSpawner.m_maxLevel)))
-        //            ).RemoveInstructions(2).InsertAndAdvance(
-        //            Transpilers.EmitDelegate(CreatureSpawnerLevel)
-        //            ).ThrowIfNotMatch("Unable to patch Spawner max level.");
-
-        //        return codeMatcher.Instructions();
-        //    }
-
-        //    private static int CreatureSpawnerLevel() {
-        //        return ValConfig.MaxLevel.Value + 1;
-        //    }
-        //}
-
-
         [HarmonyPatch]
         static class SpawnCommandDelegate
         {
@@ -93,7 +68,7 @@ namespace StarLevelSystem.modules
             }
 
             static void SetCreatureSpawnLevel(Character chara, int level) {
-                Logger.LogWarning($"Setting creature level");
+                //Logger.LogWarning($"Setting creature level");
                 ModificationExtensionSystem.CreatureSetup(chara, true, level);
                 chara.SetupMaxHealth();
             }

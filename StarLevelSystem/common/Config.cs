@@ -43,6 +43,9 @@ namespace StarLevelSystem
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
         public static ConfigEntry<float> ChanceMajorModifier;
         public static ConfigEntry<float> ChanceMinorModifier;
+        public static ConfigEntry<bool> EnableBossModifiers;
+        public static ConfigEntry<float> ChanceOfBossModifier;
+        public static ConfigEntry<int> MaxBossModifiersPerBoss;
 
         public static ConfigEntry<bool> EnableDistanceLevelScalingBonus;
         public static ConfigEntry<bool> EnableMultiplayerEnemyHealthScaling;
@@ -109,6 +112,9 @@ namespace StarLevelSystem
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
             ChanceMajorModifier = BindServerConfig("Modifiers", "ChanceMajorModifier", 0.15f, "The chance that a creature will have a major modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
             ChanceMinorModifier = BindServerConfig("Modifiers", "ChanceMinorModifier", 0.25f, "The chance that a creature will have a minor modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
+            EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Wether or not bosses can spawn with modifiers.");
+            ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 0.75f, "The chance that a boss will have a modifier.", false, 0, 1f);
+            MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
         }
 
         internal void LoadYamlConfigs()

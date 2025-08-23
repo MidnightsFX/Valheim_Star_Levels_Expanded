@@ -18,6 +18,28 @@ namespace StarLevelSystem.modules
             NameSelectionStyle.RandomBoth
         };
 
+        public static Dictionary<string, ModifierType> SetupBossModifiers(Character character, CreatureDetailCache cacheEntry, int max_mods, float chance) {
+            Dictionary<string, ModifierType> mods = new Dictionary<string, ModifierType>();
+            foreach (string mod in SelectOrLoadModifiers(character, max_mods, chance, ModifierType.Boss)) {
+                if (mod == "none") { continue; }
+                if (!CreatureModifiersData.CreatureModifiers.BossModifiers.ContainsKey(mod)) {
+                    Logger.LogWarning($"Major modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
+                    continue;
+                }
+                mods.Add(mod, ModifierType.Boss);
+                var selectedMod = CreatureModifiersData.CreatureModifiers.BossModifiers[mod];
+                selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
+                SetupCreatureVFX(character, selectedMod);
+                if (selectedMod.name_prefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
+                    cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.name_prefixes);
+                }
+                if (selectedMod.name_suffixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
+                    cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.name_suffixes);
+                }
+            }
+            return mods;
+        }
+
         public static Dictionary<string, ModifierType> SetupModifiers(Character character, CreatureDetailCache cacheEntry, int num_major_mods, int num_minor_mods, float chanceMajor, float chanceMinor) {
             Dictionary<string, ModifierType> mods = new Dictionary<string, ModifierType>();
             if (num_major_mods > 0) {
@@ -70,7 +92,7 @@ namespace StarLevelSystem.modules
 
         internal static void SetupCreatureVFX(Character character, CreatureModifier cmodifier) {
             if (cmodifier.visualEffect != null) {
-                bool hasVFXAlready = character.transform.Find(cmodifier.visualEffectPrefab.name);
+                bool hasVFXAlready = character.transform.Find($"{cmodifier.visualEffectPrefab.name}(Clone)");
                 Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {
                     Logger.LogDebug($"Adding visual effects for {character.name}");

@@ -19,7 +19,7 @@ namespace StarLevelSystem.modules
                 if (__instance.IsPlayer()) { return; }
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                ApplySizeModifications(__instance, cDetails);
+                LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
             }
         }
 
@@ -31,7 +31,7 @@ namespace StarLevelSystem.modules
                 if (__instance.IsPlayer()) { return; }
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                ApplySizeModifications(__instance, cDetails);
+                LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
             }
         }
 
@@ -41,6 +41,18 @@ namespace StarLevelSystem.modules
             public static void Postfix(Character __instance) {
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
                 CreatureSetup(__instance);
+            }
+        }
+
+        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.OnRagdollCreated))]
+        public static class ModifyRagdollHumanoid
+        {
+            public static void Postfix(Character __instance, Ragdoll ragdoll)
+            {
+                Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
+                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
+                ModificationExtensionSystem.LoadApplySizeModifications(ragdoll.gameObject, __instance.m_nview, cDetails);
+                CompositeLazyCache.RemoveFromCache(__instance);
             }
         }
 
@@ -166,7 +178,7 @@ namespace StarLevelSystem.modules
             // Modify the creatures stats by custom character/biome modifications
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
-            ApplySizeModifications(__instance, cDetails);
+            LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails, refresh_cache);
 
             if (__instance.m_level <= 1) { return; }
             // Colorization and visual adjustments
@@ -174,25 +186,46 @@ namespace StarLevelSystem.modules
             Colorization.ApplyLevelVisual(__instance);
         }
 
-        private static void ApplySizeModifications(Character creature, CreatureDetailCache cDetails) {
+        internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CreatureDetailCache cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
             // Don't scale in dungeons
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
+                return;
+            }
+
+            float current_size = zview.GetZDO().GetFloat("SLE_Size", 0f);
+            if (current_size > 0f && force_update == false) {
+
+                if (cDetails.CreaturePrefab) {
+                    Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * current_size;
+                    creature.transform.localScale = sizeEstimate;
+                    Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
+                }
+                Physics.SyncTransforms();
+                return;
+            }
+            if (include_existing && current_size > 0) {
+                zview.GetZDO().Set("SLE_Size", current_size + bonus);
+                if (cDetails.CreaturePrefab) {
+                    Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * current_size;
+                    creature.transform.localScale = sizeEstimate;
+                    Logger.LogDebug($"Increasing character size from existing {current_size} + {bonus}.");
+                }
+                Physics.SyncTransforms();
                 return;
             }
 
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
             float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
 
-            float creature_level_size = (per_level_mod * creature.m_level);
+            float creature_level_size = (per_level_mod * cDetails.Level);
             float scale = base_size_mod + creature_level_size;
+
             if (cDetails.CreaturePrefab) {
                 Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * scale;
                 creature.transform.localScale = sizeEstimate;
                 Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
-            } else {
-                //creature.transform.localScale *= scale;
-                Logger.LogDebug($"No reference for creature size, size not set.");
             }
+            zview.GetZDO().Set("SLE_Size", scale);
             Physics.SyncTransforms();
         }
 
@@ -223,6 +256,12 @@ namespace StarLevelSystem.modules
             } else {
                 Logger.LogWarning("Creature reference not set, can't apply speed modifiers.");
             }
+        }
+
+        public static void ForceUpdateDamageMod(Character creature, float increase_dmg_by)
+        {
+            float current_dmg_bonus = creature.m_nview.GetZDO().GetFloat("SLE_DMod");
+            creature.m_nview.GetZDO().Set("SLE_DMod", current_dmg_bonus + increase_dmg_by);
         }
 
         private static void ApplyDamageModification(Character creature, CreatureDetailCache cDetails) {

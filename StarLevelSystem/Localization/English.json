@@ -23,4 +23,11 @@
   "lightning_prefix2": "Thunderous",
   "lightning_prefix3": "Stormy",
   "lightning_suffix1": "of Lightning",
+  "staminaDrain_prefix1": "Exhausting",
+  "staminaDrain_prefix2": "Sapping",
+  "bossSummoner_prefix1": "Summoner",
+  "bossSummoner_prefix2": "Summoning",
+  "bossSummoner_suffix1": "Of Summoning",
+  "SoulEater_prefix1": "Soul Eater",
+  "SoulEater_suffix1": "Soul Eater"
 }

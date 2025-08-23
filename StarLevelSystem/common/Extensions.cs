@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace StarLevelSystem.common
 {
     public static class Extensions
     {
-        static Random rand = new Random();
         public static void Times(this int count, Action action)
         {
             for (int i = 0; i < count; i++)
@@ -27,6 +27,19 @@ namespace StarLevelSystem.common
             }
             string key = keys[UnityEngine.Random.Range(0, keys.Count - 1)];
             return new KeyValuePair<string, List<string>>(key: key, value: dict[key]);
+        }
+
+        public static List<Character> GetCharactersInRange(Vector3 position, float range)
+        {
+            Collider[] objs_near = Physics.OverlapSphere(position, range);
+            List <Character> characters = new List<Character>();
+
+            foreach (var col in objs_near) {
+                var chara = col.GetComponentInChildren<Character>();
+                if (chara != null) { characters.Add(chara); }
+            }
+
+            return characters;
         }
     }
 }

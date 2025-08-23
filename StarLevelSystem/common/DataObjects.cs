@@ -108,6 +108,8 @@ namespace StarLevelSystem.common
             public float ChanceForMajorModifier { get; set; } = -1f;
             public int MaxMinorModifiers { get; set; } = -1;
             public float ChanceForMinorModifier { get; set; } = -1f;
+            public int MaxBossModifiers { get; set; } = -1;
+            public float ChanceForBossModifier { get; set; } = -1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
         }
@@ -161,6 +163,7 @@ namespace StarLevelSystem.common
             }
 
             public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
+                if (setupMethodClass == null || setupMethodClass == "") { return; }
                 Type methodClass = Type.GetType(setupMethodClass);
                 Logger.LogInfo($"Setting up modifier {setupMethodClass} with signature {methodClass}");
                 MethodInfo theMethod = methodClass.GetMethod("Setup");
@@ -171,6 +174,7 @@ namespace StarLevelSystem.common
         public class CreatureModConfig {
             public float perlevelpower { get; set; }
             public float basepower { get; set; }
+            public Dictionary<Heightmap.Biome, List<string>> biomeObjects { get; set; }
         }
 
         public class CreatureModifierCollection

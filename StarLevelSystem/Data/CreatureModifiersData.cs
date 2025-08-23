@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -20,10 +21,58 @@ namespace StarLevelSystem.Data
 
         public static Dictionary<string,List<ProbabilityEntry>> cMajorModifierProbabilityList = new Dictionary<string,List<ProbabilityEntry>>();
         public static Dictionary<string,List<ProbabilityEntry>> cMinorModifierProbabilityList = new Dictionary<string, List<ProbabilityEntry>>();
+        public static Dictionary<string, List<ProbabilityEntry>> cBossModifierProbabilityList = new Dictionary<string, List<ProbabilityEntry>>();
+
+        public static List<string> NonCombatCreatures = new List<string>() {
+            "Deer",
+            "Hare",
+            "Chicken",
+            "Hen"
+        };
 
         static CreatureModifierCollection CustomModifiers = new CreatureModifierCollection();
         static CreatureModifierCollection APIAdded = new CreatureModifierCollection();
         static CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
+            BossModifiers = new Dictionary<string, CreatureModifier>() {
+                {"BossSummoner", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$bossSummoner_prefix1", "$bossSummoner_prefix2" },
+                    name_suffixes = new List<string>() { "$bossSummoner_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffectStyle = VisualEffectStyle.bottom,
+                    //visualEffect = "creatureFire",
+                    starVisual = "summoner",
+                    config = new CreatureModConfig() {
+                        basepower = 2.0f,
+                        perlevelpower = 1.0f,
+                        biomeObjects = new Dictionary<Heightmap.Biome, List<string>>() {
+                            { Heightmap.Biome.Meadows, new List<string>() { "Greyling" } },
+                            { Heightmap.Biome.BlackForest, new List<string>() { "Greydwarf_Shaman" } },
+                            { Heightmap.Biome.Swamp, new List<string>() { "BlobElite" } },
+                            { Heightmap.Biome.Mountain, new List<string>() { "Hatchling" } },
+                            { Heightmap.Biome.Plains, new List<string>() { "Goblin", "GoblinShaman", "GoblinBrute" } },
+                            { Heightmap.Biome.Mistlands, new List<string>() { "SeekerBrute", "Seeker" } },
+                            { Heightmap.Biome.AshLands, new List<string>() { "Charred_Archer", "Charred_Melee" } }
+                            },
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Summoner",
+                    unallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {"SoulEater", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$SoulEater_prefix1" },
+                    name_suffixes = new List<string>() { "$SoulEater_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureLightning",
+                    starVisual = "vortex",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.01f,
+                        },
+                    unallowedCreatures = NonCombatCreatures
+                    }
+                }
+            },
             MajorModifiers = new Dictionary<string, CreatureModifier>() {
                 {"Fire", new CreatureModifier() {
                     selectionWeight = 10,
@@ -37,7 +86,8 @@ namespace StarLevelSystem.Data
                         perlevelpower = 0.01f,
                         basepower = 1.3f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Flame"
+                    setupMethodClass = "StarLevelSystem.Modifiers.Flame",
+                    unallowedCreatures = NonCombatCreatures
                     }
                 },
                 {"Frost", new CreatureModifier() {
@@ -51,7 +101,8 @@ namespace StarLevelSystem.Data
                         perlevelpower = 0.01f,
                         basepower = 1.3f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Frost"
+                    setupMethodClass = "StarLevelSystem.Modifiers.Frost",
+                    unallowedCreatures = NonCombatCreatures
                     }
                 },
                 {"Poison", new CreatureModifier() {
@@ -65,7 +116,8 @@ namespace StarLevelSystem.Data
                         perlevelpower = 0.05f,
                         basepower = 2f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Poison"
+                    setupMethodClass = "StarLevelSystem.Modifiers.Poison",
+                    unallowedCreatures = NonCombatCreatures
                     }
                 },
                 {"Lightning", new CreatureModifier() {
@@ -73,13 +125,28 @@ namespace StarLevelSystem.Data
                     name_prefixes = new List<string>() { "$lightning_prefix1", "$lightning_prefix2", "$lightning_prefix3" },
                     name_suffixes = new List<string>() { "$lightning_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
-                    //visualEffect = "creatureFrost",
+                    visualEffectStyle = VisualEffectStyle.objectCenter,
+                    visualEffect = "creatureLightning",
                     starVisual = "lightning",
                     config = new CreatureModConfig() {
                         perlevelpower = 0.05f,
                         basepower = 2f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Lightning"
+                    setupMethodClass = "StarLevelSystem.Modifiers.Lightning",
+                    unallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {"SoulEater", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$SoulEater_prefix1" },
+                    name_suffixes = new List<string>() { "$SoulEater_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureLightning",
+                    starVisual = "vortex",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.05f,
+                        },
+                    unallowedCreatures = NonCombatCreatures
                     }
                 }
             },
@@ -121,6 +188,18 @@ namespace StarLevelSystem.Data
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Fast"
                     }
+                },
+                {"StaminaDrain", new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$staminaDrain_prefix1", "$staminaDrain_prefix2" },
+                    namingConvention = NameSelectionStyle.RandomFirst,
+                    starVisual = "staminaDrain",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 2.0f,
+                        basepower = 3.0f
+                        },
+                    unallowedCreatures = NonCombatCreatures
+                    }
                 }
             }
         };
@@ -136,21 +215,42 @@ namespace StarLevelSystem.Data
         }
 
         public static List<ProbabilityEntry> LazyCacheCreatureModifierSelect(string creature, ModifierType type = ModifierType.Major) {
+            Logger.LogDebug($"Getting modifier probability list for {creature} of type {type}");
+            // Check type cache first
+            switch (type) {
+                case ModifierType.Major:
+                    if (cMajorModifierProbabilityList.ContainsKey(creature)) { return cMajorModifierProbabilityList[creature]; }
+                    break;
+                case ModifierType.Minor:
+                    if (cMinorModifierProbabilityList.ContainsKey(creature)) { return cMinorModifierProbabilityList[creature]; }
+                    break;
+                case ModifierType.Boss:
+                    if (cBossModifierProbabilityList.ContainsKey(creature)) { return cBossModifierProbabilityList[creature]; }
+                    break;
+            }
+
+            if (type == ModifierType.Boss) {
+                List<ProbabilityEntry> bossProbability = BuildProbabilityEntries(creature, CreatureModifiers.BossModifiers);
+                if (!cMinorModifierProbabilityList.ContainsKey(creature)) {
+                    cMinorModifierProbabilityList.Add(creature, bossProbability);
+                }
+                return bossProbability;
+            }
+
             if (type == ModifierType.Major) {
-                if (cMajorModifierProbabilityList.ContainsKey(creature)) { return cMajorModifierProbabilityList[creature]; }
-            } else {
-                if (cMinorModifierProbabilityList.ContainsKey(creature)) { return cMinorModifierProbabilityList[creature]; }
+                List<ProbabilityEntry> majorProbability = BuildProbabilityEntries(creature, CreatureModifiers.MajorModifiers);
+                if (!cMajorModifierProbabilityList.ContainsKey(creature)) {
+                    cMajorModifierProbabilityList.Add(creature, majorProbability);
+                }
+                return majorProbability;
             }
 
-            if (type == ModifierType.Minor) {
-                List<ProbabilityEntry> minorProbability = BuildProbabilityEntries(creature, CreatureModifiers.MinorModifiers);
+            List<ProbabilityEntry> minorProbability = BuildProbabilityEntries(creature, CreatureModifiers.MinorModifiers);
+            if (!cMinorModifierProbabilityList.ContainsKey(creature)) {
                 cMinorModifierProbabilityList.Add(creature, minorProbability);
-                return minorProbability;
             }
-
-            List<ProbabilityEntry> majorProbability = BuildProbabilityEntries(creature, CreatureModifiers.MajorModifiers);
-            cMajorModifierProbabilityList.Add(creature, majorProbability);
-            return majorProbability;
+            
+            return minorProbability;
         }
 
         private static List<ProbabilityEntry> BuildProbabilityEntries(string creature, Dictionary<string, CreatureModifier> modifiers) {
@@ -199,6 +299,12 @@ namespace StarLevelSystem.Data
             if (CustomModifiers.MinorModifiers != null && CustomModifiers.MinorModifiers.Count > 0) { CreatureModifiers.MinorModifiers.AddRange(CustomModifiers.MinorModifiers); }
             if (APIAdded.MinorModifiers != null && APIAdded.MinorModifiers.Count > 0) { CreatureModifiers.MinorModifiers.AddRange(APIAdded.MinorModifiers); }
             if (APIAdded.MinorModifiers == null && CustomModifiers.MinorModifiers == null) { CreatureModifiers.MinorModifiers.AddRange(DefaultModifiers.MinorModifiers); }
+
+            // Update major modifiers
+            Logger.LogDebug("Merging config Boss mod definitions");
+            if (CustomModifiers.BossModifiers != null && CustomModifiers.BossModifiers.Count > 0) { CreatureModifiers.BossModifiers.AddRange(CustomModifiers.BossModifiers); }
+            if (APIAdded.BossModifiers != null && APIAdded.BossModifiers.Count > 0) { CreatureModifiers.BossModifiers.AddRange(APIAdded.BossModifiers); }
+            if (APIAdded.BossModifiers == null && CustomModifiers.BossModifiers == null) { CreatureModifiers.BossModifiers.AddRange(DefaultModifiers.BossModifiers); }
         }
 
         internal static string GetModifierDefaultConfig() {

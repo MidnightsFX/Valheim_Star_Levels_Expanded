@@ -17,13 +17,23 @@ namespace StarLevelSystem.modules
 
         public static int DetermineLevelSetAndRetrieve(Character character, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
         {
+            if (character == null || character.m_nview == null) {
+                Logger.LogWarning($"Creature null or nview null, cannot set level.");
+                return 0;
+            }
+            ZDO cZDO = character.m_nview.GetZDO();
+            if (cZDO == null) {
+                Logger.LogWarning($"Creature {character.name} has no ZDO, cannot set level.");
+                return 0;
+            }
             if (leveloverride > 0) {
-                character.m_nview.GetZDO().Set(ZDOVars.s_level, leveloverride);
+                cZDO.Set(ZDOVars.s_level, leveloverride);
                 character.m_level = leveloverride;
                 return leveloverride;
             }
 
-            int clevel = character.m_nview.GetZDO().GetInt(ZDOVars.s_level, 0);
+            int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
+            Logger.LogDebug($"Current level from ZDO: {clevel}");
             if (clevel <= 0) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value + 1;
@@ -48,7 +58,7 @@ namespace StarLevelSystem.modules
                 }
                 int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
                 character.m_level = level;
-                character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
+                cZDO.Set(ZDOVars.s_level, level);
                 character.SetupMaxHealth();
                 return level;
             }
@@ -430,6 +440,7 @@ namespace StarLevelSystem.modules
             public static float CharacterHealthMultiplier(Character character) {
                 if (character.IsPlayer()) { return 1f; }
                 CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(character);
+                if (ccd == null) { return character.m_health; }
                 float base_health_mod = ccd.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
                 float base_health_per_level = ccd.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel];
 

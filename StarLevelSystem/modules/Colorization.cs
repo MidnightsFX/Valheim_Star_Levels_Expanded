@@ -94,6 +94,7 @@ namespace StarLevelSystem.modules
         }
 
         internal static ColorDef DetermineCharacterColorization(Character cgo, int level) {
+            if (cgo == null) { return null; }
             string cname = Utils.GetPrefabName(cgo.gameObject);
             //Logger.LogDebug($"Checking for character specific colorization {cname}");
             if (creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname)) {

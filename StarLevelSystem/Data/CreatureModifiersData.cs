@@ -283,6 +283,8 @@ namespace StarLevelSystem.Data
         {
             Logger.LogDebug("Updating Creature Modifiers");
             CreatureModifiers.MajorModifiers.Clear();
+            CreatureModifiers.MinorModifiers.Clear();
+            CreatureModifiers.BossModifiers.Clear();
             // Set new modifiers, if provided
             Logger.LogDebug("Setting config definitions");
             if (creatureMods != null) { CustomModifiers = creatureMods; }

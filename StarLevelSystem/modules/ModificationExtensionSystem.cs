@@ -51,7 +51,7 @@ namespace StarLevelSystem.modules
             {
                 Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                ModificationExtensionSystem.LoadApplySizeModifications(ragdoll.gameObject, __instance.m_nview, cDetails);
+                ApplySizeModificationZRefOnly(ragdoll.gameObject, __instance.m_nview);
                 CompositeLazyCache.RemoveFromCache(__instance);
             }
         }
@@ -226,6 +226,17 @@ namespace StarLevelSystem.modules
                 Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
             }
             zview.GetZDO().Set("SLE_Size", scale);
+            Physics.SyncTransforms();
+        }
+
+        private static void ApplySizeModificationZRefOnly(GameObject obj, ZNetView zview) {
+            // Don't scale in dungeons
+            if (obj.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false)
+            {
+                return;
+            }
+            float current_size = zview.GetZDO().GetFloat("SLE_Size", 0f);
+            obj.transform.localScale *= current_size;
             Physics.SyncTransforms();
         }
 

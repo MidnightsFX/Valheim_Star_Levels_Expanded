@@ -4,14 +4,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.common
 {
     internal static class RandomSelect
     {
-        public static string RandomSelectFromWeightedList(List<ProbabilityEntry> listOfWeights) {
+        public static ModifierNames RandomSelectFromWeightedList(List<ProbabilityEntry> listOfWeights) {
             float totalweight = listOfWeights.Select(x => x.selectionWeight).Sum();
-            if (totalweight == 0) { return "none"; }
+            if (totalweight == 0) { return ModifierNames.None; }
             float selection = UnityEngine.Random.Range(0, totalweight);
             float current_weight = 0f;
             //Logger.LogDebug($"Total weight is {totalweight}, random selection is {selection}");

@@ -14,9 +14,9 @@ namespace StarLevelSystem.Data
     public static class CreatureModifiersData
     {
         public static CreatureModifierCollection CreatureModifiers = new CreatureModifierCollection() {
-            MajorModifiers = new Dictionary<string, CreatureModifier>(),
-            MinorModifiers = new Dictionary<string, CreatureModifier>(),
-            BossModifiers = new Dictionary<string, CreatureModifier>()
+            MajorModifiers = new Dictionary<ModifierNames, CreatureModifier>(),
+            MinorModifiers = new Dictionary<ModifierNames, CreatureModifier>(),
+            BossModifiers = new Dictionary<ModifierNames, CreatureModifier>()
         };
 
         public static Dictionary<string,List<ProbabilityEntry>> cMajorModifierProbabilityList = new Dictionary<string,List<ProbabilityEntry>>();
@@ -30,11 +30,30 @@ namespace StarLevelSystem.Data
             "Hen"
         };
 
+        public enum ModifierNames
+        {
+            None = 0,
+            BossSummoner = 1,
+            SoulEater = 2,
+            Fire = 11,
+            Frost = 12,
+            Poison = 13,
+            Lightning = 14,
+            ResistSlash = 21,
+            ResistBlunt = 22,
+            ResistPierce = 23,
+            Alert = 51,
+            Big = 52,
+            Fast = 53,
+            StaminaDrain = 54,
+            EitrDrain = 55
+        }
+
         static CreatureModifierCollection CustomModifiers = new CreatureModifierCollection();
         static CreatureModifierCollection APIAdded = new CreatureModifierCollection();
         static CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
-            BossModifiers = new Dictionary<string, CreatureModifier>() {
-                {"BossSummoner", new CreatureModifier() {
+            BossModifiers = new Dictionary<ModifierNames, CreatureModifier>() {
+                {ModifierNames.BossSummoner, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$bossSummoner_prefix1", "$bossSummoner_prefix2" },
                     name_suffixes = new List<string>() { "$bossSummoner_suffix1" },
@@ -59,7 +78,7 @@ namespace StarLevelSystem.Data
                     unallowedCreatures = NonCombatCreatures
                     }
                 },
-                {"SoulEater", new CreatureModifier() {
+                {ModifierNames.SoulEater, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$SoulEater_prefix1" },
                     name_suffixes = new List<string>() { "$SoulEater_suffix1" },
@@ -71,10 +90,23 @@ namespace StarLevelSystem.Data
                         },
                     unallowedCreatures = NonCombatCreatures
                     }
+                },
+                {ModifierNames.ResistPierce, new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$SoulEater_prefix1" },
+                    name_suffixes = new List<string>() { "$SoulEater_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureLightning",
+                    starVisual = "vortex",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.05f,
+                        },
+                    unallowedCreatures = NonCombatCreatures
+                    }
                 }
             },
-            MajorModifiers = new Dictionary<string, CreatureModifier>() {
-                {"Fire", new CreatureModifier() {
+            MajorModifiers = new Dictionary<ModifierNames, CreatureModifier>() {
+                {ModifierNames.Fire, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$fire_prefix1", "$fire_prefix2", "$fire_prefix3" },
                     name_suffixes = new List<string>() { "$fire_suffix1" },
@@ -90,7 +122,7 @@ namespace StarLevelSystem.Data
                     unallowedCreatures = NonCombatCreatures
                     }
                 },
-                {"Frost", new CreatureModifier() {
+                {ModifierNames.Frost, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$frost_prefix1", "$frost_prefix2", "$frost_prefix3" },
                     name_suffixes = new List<string>() { "$frost_suffix1" },
@@ -105,7 +137,7 @@ namespace StarLevelSystem.Data
                     unallowedCreatures = NonCombatCreatures
                     }
                 },
-                {"Poison", new CreatureModifier() {
+                {ModifierNames.Poison, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$poison_prefix1", "$poison_prefix2", "$poison_prefix3" },
                     name_suffixes = new List<string>() { "$poison_suffix1" },
@@ -120,7 +152,7 @@ namespace StarLevelSystem.Data
                     unallowedCreatures = NonCombatCreatures
                     }
                 },
-                {"Lightning", new CreatureModifier() {
+                {ModifierNames.Lightning, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$lightning_prefix1", "$lightning_prefix2", "$lightning_prefix3" },
                     name_suffixes = new List<string>() { "$lightning_suffix1" },
@@ -136,7 +168,7 @@ namespace StarLevelSystem.Data
                     unallowedCreatures = NonCombatCreatures
                     }
                 },
-                {"SoulEater", new CreatureModifier() {
+                {ModifierNames.SoulEater, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$SoulEater_prefix1" },
                     name_suffixes = new List<string>() { "$SoulEater_suffix1" },
@@ -150,8 +182,8 @@ namespace StarLevelSystem.Data
                     }
                 }
             },
-            MinorModifiers = new Dictionary<string, CreatureModifier>() {
-                {"Alert", new CreatureModifier() {
+            MinorModifiers = new Dictionary<ModifierNames, CreatureModifier>() {
+                {ModifierNames.Alert, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$alert_prefix1" },
                     name_suffixes = new List<string>() { "$alert_suffix1" },
@@ -164,7 +196,7 @@ namespace StarLevelSystem.Data
                     setupMethodClass = "StarLevelSystem.Modifiers.Alert"
                     }
                 },
-                {"Big", new CreatureModifier() {
+                {ModifierNames.Big, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$big_prefix1", "$big_prefix2" },
                     name_suffixes = new List<string>() { "$big_suffix1" },
@@ -177,7 +209,7 @@ namespace StarLevelSystem.Data
                     setupMethodClass = "StarLevelSystem.Modifiers.Big"
                     }
                 },
-                {"Fast", new CreatureModifier() {
+                {ModifierNames.Fast, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$fast_prefix1", "$fast_prefix2", "$fast_prefix3" },
                     namingConvention = NameSelectionStyle.RandomFirst,
@@ -189,7 +221,7 @@ namespace StarLevelSystem.Data
                     setupMethodClass = "StarLevelSystem.Modifiers.Fast"
                     }
                 },
-                {"StaminaDrain", new CreatureModifier() {
+                {ModifierNames.StaminaDrain, new CreatureModifier() {
                     selectionWeight = 10,
                     name_prefixes = new List<string>() { "$staminaDrain_prefix1", "$staminaDrain_prefix2" },
                     namingConvention = NameSelectionStyle.RandomFirst,
@@ -200,11 +232,23 @@ namespace StarLevelSystem.Data
                         },
                     unallowedCreatures = NonCombatCreatures
                     }
+                },
+                {ModifierNames.EitrDrain, new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$EitrDrain_prefix1", "$EitrDrain_prefix2" },
+                    namingConvention = NameSelectionStyle.RandomFirst,
+                    starVisual = "EitrDrain",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 4.0f,
+                        basepower = 10.0f
+                        },
+                    unallowedCreatures = NonCombatCreatures
+                    }
                 }
             }
         };
 
-        public static CreatureModConfig GetConfig(string name, ModifierType type = ModifierType.Major) {
+        public static CreatureModConfig GetConfig(ModifierNames name, ModifierType type = ModifierType.Major) {
             // Check minor if requested, otherwise default to major
             if (type == ModifierType.Minor) {
                 if (!CreatureModifiers.MinorModifiers.ContainsKey(name)) { return new CreatureModConfig() { }; }
@@ -253,7 +297,7 @@ namespace StarLevelSystem.Data
             return minorProbability;
         }
 
-        private static List<ProbabilityEntry> BuildProbabilityEntries(string creature, Dictionary<string, CreatureModifier> modifiers) {
+        private static List<ProbabilityEntry> BuildProbabilityEntries(string creature, Dictionary<ModifierNames, CreatureModifier> modifiers) {
             List<ProbabilityEntry> creatureModifierProbability = new List<ProbabilityEntry>();
             Logger.LogDebug($"Building probability entries for creature {creature} with {modifiers.Count} modifiers");
             foreach (var entry in modifiers) {

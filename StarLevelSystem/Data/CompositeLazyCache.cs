@@ -63,6 +63,27 @@ namespace StarLevelSystem.Data
             characterCacheEntry.Colorization = Colorization.DetermineCharacterColorization(character, characterCacheEntry.Level);
             if (characterCacheEntry.Colorization == null) { return null; }
 
+            // Set the creatures damage recieved modifiers
+            Logger.LogDebug("Computing damage recieved modifiers");
+            if (biome_settings != null && biome_settings.DamageRecievedModifiers != null) {
+                foreach (var entry in biome_settings.DamageRecievedModifiers) {
+                    if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
+                        characterCacheEntry.DamageRecievedModifiers[entry.Key] = entry.Value;
+                    } else {
+                        characterCacheEntry.DamageRecievedModifiers.Add(entry.Key, entry.Value);
+                    }
+                }
+            }
+            if (creature_settings != null && creature_settings.DamageRecievedModifiers != null) {
+                foreach (var entry in creature_settings.DamageRecievedModifiers) {
+                    if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
+                        characterCacheEntry.DamageRecievedModifiers[entry.Key] = entry.Value;
+                    } else {
+                        characterCacheEntry.DamageRecievedModifiers.Add(entry.Key, entry.Value);
+                    }
+                }
+            }
+
             // Set creature base settings
             Logger.LogDebug("Computing base creature modifiers");
             if (biome_settings != null && biome_settings.CreatureBaseValueModifiers != null) {

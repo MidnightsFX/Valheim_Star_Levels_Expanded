@@ -29,7 +29,7 @@ Transform:
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 7648317224529754275}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -120,7 +120,7 @@ ParticleSystem:
   m_GameObject: {fileID: 387887816952093265}
   serializedVersion: 8
   lengthInSec: 0.05
-  simulationSpeed: 0.05
+  simulationSpeed: 0.03
   stopAction: 0
   cullingMode: 0
   ringBufferMode: 0
@@ -9728,7 +9728,7 @@ Transform:
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 7648317224529754275}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -9819,7 +9819,7 @@ ParticleSystem:
   m_GameObject: {fileID: 3193609208053833594}
   serializedVersion: 8
   lengthInSec: 1
-  simulationSpeed: 0.05
+  simulationSpeed: 0.03
   stopAction: 0
   cullingMode: 0
   ringBufferMode: 0
@@ -13729,7 +13729,7 @@ ParticleSystem:
     lifetime:
       serializedVersion: 2
       minMaxState: 3
-      scalar: 1
+      scalar: 0.4
       minScalar: 0.1
       maxCurve:
         serializedVersion: 2
@@ -13781,7 +13781,7 @@ ParticleSystem:
         m_RotationOrder: 4
     minVertexDistance: 1
     textureMode: 1
-    textureScale: {x: 1, y: 1}
+    textureScale: {x: 0.5, y: 0.5}
     ribbonCount: 1
     shadowBias: 0.5
     worldSpace: 1

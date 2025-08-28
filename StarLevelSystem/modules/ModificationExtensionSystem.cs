@@ -74,12 +74,32 @@ namespace StarLevelSystem.modules
                 if (hit.m_attacker == null) { return; }
                 ZDO atkr = ZDOMan.instance.GetZDO(hit.m_attacker);
                 if (atkr == null) { return; }
-                float damage_mod = atkr.GetFloat("SLE_DMod", 1);
-                DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty("SLE_DBon", __instance.m_nview, new Dictionary<DamageType, float>());
+                ZNetView zview = ZNetScene.instance.FindInstance(atkr);
+                Character atkrChar = hit.GetAttacker();
+                if (zview == null || atkrChar == null) { return; }
+
+
+                // Modify damage types based on bonusees
+                DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty("SLE_DBon", zview, new Dictionary<DamageType, float>());
                 AddDamagesToHit(hit, DamageBonuses.Get());
-                //Logger.LogDebug($"Damages D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+                // Modify damage totals
+                float damage_mod = atkr.GetFloat("SLE_DMod", 1);
                 hit.m_damage.Modify(damage_mod);
                 Logger.LogDebug($"Applied dmg mod {damage_mod} new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+
+                // Apply damage recieved Modifiers for the target
+                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
+                if (cdc == null) { return; }
+                hit.m_damage.m_fire *= cdc.DamageRecievedModifiers[DamageType.Fire];
+                hit.m_damage.m_frost *= cdc.DamageRecievedModifiers[DamageType.Frost];
+                hit.m_damage.m_lightning *= cdc.DamageRecievedModifiers[DamageType.Lightning];
+                hit.m_damage.m_poison *= cdc.DamageRecievedModifiers[DamageType.Poison];
+                hit.m_damage.m_spirit *= cdc.DamageRecievedModifiers[DamageType.Spirit];
+                hit.m_damage.m_blunt *= cdc.DamageRecievedModifiers[DamageType.Blunt];
+                hit.m_damage.m_slash *= cdc.DamageRecievedModifiers[DamageType.Slash];
+                hit.m_damage.m_pierce *= cdc.DamageRecievedModifiers[DamageType.Pierce];
+                Logger.LogDebug($"Applied dmg recieved mods new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+
             }
         }
 

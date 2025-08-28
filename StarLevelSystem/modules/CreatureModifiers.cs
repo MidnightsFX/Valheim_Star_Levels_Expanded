@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.modules
 {
@@ -18,10 +19,10 @@ namespace StarLevelSystem.modules
             NameSelectionStyle.RandomBoth
         };
 
-        public static Dictionary<string, ModifierType> SetupBossModifiers(Character character, CreatureDetailCache cacheEntry, int max_mods, float chance) {
-            Dictionary<string, ModifierType> mods = new Dictionary<string, ModifierType>();
-            foreach (string mod in SelectOrLoadModifiers(character, max_mods, chance, ModifierType.Boss)) {
-                if (mod == "none") { continue; }
+        public static Dictionary<ModifierNames, ModifierType> SetupBossModifiers(Character character, CreatureDetailCache cacheEntry, int max_mods, float chance) {
+            Dictionary<ModifierNames, ModifierType> mods = new Dictionary<ModifierNames, ModifierType>();
+            foreach (ModifierNames mod in SelectOrLoadModifiers(character, max_mods, chance, ModifierType.Boss)) {
+                if (mod == ModifierNames.None) { continue; }
                 if (!CreatureModifiersData.CreatureModifiers.BossModifiers.ContainsKey(mod)) {
                     Logger.LogWarning($"Major modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
                     continue;
@@ -40,11 +41,11 @@ namespace StarLevelSystem.modules
             return mods;
         }
 
-        public static Dictionary<string, ModifierType> SetupModifiers(Character character, CreatureDetailCache cacheEntry, int num_major_mods, int num_minor_mods, float chanceMajor, float chanceMinor) {
-            Dictionary<string, ModifierType> mods = new Dictionary<string, ModifierType>();
+        public static Dictionary<ModifierNames, ModifierType> SetupModifiers(Character character, CreatureDetailCache cacheEntry, int num_major_mods, int num_minor_mods, float chanceMajor, float chanceMinor) {
+            Dictionary<ModifierNames, ModifierType> mods = new Dictionary<ModifierNames, ModifierType>();
             if (num_major_mods > 0) {
-                foreach (string mod in SelectOrLoadModifiers(character, num_major_mods, chanceMajor, ModifierType.Major)) {
-                    if (mod == "none") { continue; }
+                foreach (ModifierNames mod in SelectOrLoadModifiers(character, num_major_mods, chanceMajor, ModifierType.Major)) {
+                    if (mod == ModifierNames.None) { continue; }
                     Logger.LogDebug($"Setting up major modifier {mod} for character {character.name}");
                     if (!CreatureModifiersData.CreatureModifiers.MajorModifiers.ContainsKey(mod)) {
                         Logger.LogWarning($"Major modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
@@ -63,10 +64,10 @@ namespace StarLevelSystem.modules
                 }
             }
             if (num_minor_mods > 0) {
-                foreach (string mod in SelectOrLoadModifiers(character, num_minor_mods, chanceMinor, ModifierType.Minor)) {
+                foreach (ModifierNames mod in SelectOrLoadModifiers(character, num_minor_mods, chanceMinor, ModifierType.Minor)) {
                     //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
                     if (!CreatureModifiersData.CreatureModifiers.MinorModifiers.ContainsKey(mod)) {
-                        if (mod == "none") { continue; }
+                        if (mod == ModifierNames.None) { continue; }
                         Logger.LogWarning($"Minor modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
                         continue;
                     }
@@ -126,17 +127,17 @@ namespace StarLevelSystem.modules
             string setName = chara.m_nview.GetZDO().GetString("SLE_Name");
             if (setName == "") {
                 string prefix = "";
-                string prefixFromMod = "";
+                ModifierNames prefixFromMod = ModifierNames.None;
                 if (cacheEntry.ModifierPrefixNames.Count > 0) {
-                    KeyValuePair<string, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
+                    KeyValuePair<ModifierNames, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
                     prefixFromMod = selected.Key;
                     prefix = selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)];
                 }
                 string suffix = "";
                 if (cacheEntry.ModifierSuffixNames.Count > 0) {
-                    KeyValuePair<string, List<string>> selected;
-                    if (prefixFromMod != "") {
-                        selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames, new List<string>() { prefixFromMod });
+                    KeyValuePair<ModifierNames, List<string>> selected;
+                    if (prefixFromMod != ModifierNames.None) {
+                        selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames, new List<ModifierNames>() { prefixFromMod });
                     } else {
                         selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames);
                     }
@@ -158,23 +159,23 @@ namespace StarLevelSystem.modules
             return Localization.instance.Localize(setName);
         }
 
-        public static List<string> SelectOrLoadModifiers(Character character, int num_mods, float chanceForMod, ModifierType modType = ModifierType.Major) {
+        public static List<ModifierNames> SelectOrLoadModifiers(Character character, int num_mods, float chanceForMod, ModifierType modType = ModifierType.Major) {
             // Select major and minor based on creature whole config
-            ListStringZNetProperty characterMods = new ListStringZNetProperty($"SLS_{modType}_Mods", character.m_nview, new List<string>() { });
-            List<string> savedMods = characterMods.Get();
+            ListModifierZNetProperty characterMods = new ListModifierZNetProperty($"SLS_{modType}_MODS", character.m_nview, new List<ModifierNames>() { });
+            List<ModifierNames> savedMods = characterMods.Get();
             if (savedMods.Count > 0) {
                 Logger.LogDebug($"Loaded {savedMods.Count} {modType} for {character.name}");
                 return savedMods;
             }
             // Select a major modifiers
-            List<string> modifiers = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), chanceForMod, num_mods, modType);
+            List<ModifierNames> modifiers = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), chanceForMod, num_mods, modType);
             characterMods.Set(modifiers);
             return modifiers;
         }
 
-        public static List<string> SelectCreatureModifiers(string creature, float chance, int num_mods, ModifierType type = ModifierType.Major)
+        public static List<ModifierNames> SelectCreatureModifiers(string creature, float chance, int num_mods, ModifierType type = ModifierType.Major)
         {
-            List<string> selectedModifiers = new List<string>();
+            List<ModifierNames> selectedModifiers = new List<ModifierNames>();
             List<ProbabilityEntry> probabilities = CreatureModifiersData.LazyCacheCreatureModifierSelect(creature, type);
             if (probabilities.Count == 0) {
                 Logger.LogDebug($"No modifiers found for creature {creature} of type {type}");
@@ -193,7 +194,7 @@ namespace StarLevelSystem.modules
                 }
             });
             Logger.LogDebug($"Selected {selectedModifiers.Count} modifiers for creature {creature} of type {type} with chance {chance}");
-            if (selectedModifiers.Count == 0) { selectedModifiers.Add("none"); }
+            if (selectedModifiers.Count == 0) { selectedModifiers.Add(ModifierNames.None); }
             return selectedModifiers;
         }
 

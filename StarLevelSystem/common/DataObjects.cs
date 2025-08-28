@@ -10,6 +10,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.common
 {
@@ -97,6 +98,7 @@ namespace StarLevelSystem.common
             public float DistanceScaleModifier { get; set; } = 1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+            public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
             public List<string> creatureSpawnsDisabled { get; set; }
         }
 
@@ -112,6 +114,7 @@ namespace StarLevelSystem.common
             public float ChanceForBossModifier { get; set; } = -1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+            public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
         }
 
         public class CreatureColorizationSettings {
@@ -132,7 +135,7 @@ namespace StarLevelSystem.common
         }
 
         public class ProbabilityEntry {
-            public string Name { get; set; }
+            public ModifierNames Name { get; set; }
             public float selectionWeight { get; set; } = 1f;
         }
 
@@ -167,6 +170,10 @@ namespace StarLevelSystem.common
                 Type methodClass = Type.GetType(setupMethodClass);
                 Logger.LogInfo($"Setting up modifier {setupMethodClass} with signature {methodClass}");
                 MethodInfo theMethod = methodClass.GetMethod("Setup");
+                if (theMethod == null) {
+                    Logger.LogWarning($"Could not find setup method, skipping setup.");
+                    return;
+                }
                 theMethod.Invoke(this, new object[] { chara, cfg, cdc });
             }
         }
@@ -179,20 +186,30 @@ namespace StarLevelSystem.common
 
         public class CreatureModifierCollection
         {
-            public Dictionary<string, CreatureModifier> MajorModifiers { get; set; }
-            public Dictionary<string, CreatureModifier> MinorModifiers { get; set; }
-            public Dictionary<string, CreatureModifier> BossModifiers { get; set; }
+            public Dictionary<ModifierNames, CreatureModifier> MajorModifiers { get; set; }
+            public Dictionary<ModifierNames, CreatureModifier> MinorModifiers { get; set; }
+            public Dictionary<ModifierNames, CreatureModifier> BossModifiers { get; set; }
         }
 
         public class CreatureDetailCache {
             public bool creatureDisabledInBiome { get; set; } = false;
             public int Level { get; set; }
-            public Dictionary<string, ModifierType> Modifiers { get; set; }
-            public Dictionary<string, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<string, List<string>>();
-            public Dictionary<string, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<string, List<string>>();
+            public Dictionary<ModifierNames, ModifierType> Modifiers { get; set; }
+            public Dictionary<ModifierNames, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<ModifierNames, List<string>>();
+            public Dictionary<ModifierNames, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<ModifierNames, List<string>>();
             public ColorDef Colorization { get; set; }
             public Heightmap.Biome Biome { get; set; }
             public GameObject CreaturePrefab { get; set; }
+            public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
+                { DamageType.Blunt, 1f },
+                { DamageType.Pierce, 1f },
+                { DamageType.Slash, 1f },
+                { DamageType.Fire, 1f },
+                { DamageType.Frost, 1f },
+                { DamageType.Lightning, 1f },
+                { DamageType.Poison, 1f },
+                { DamageType.Spirit, 1f },
+            };
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; } = new Dictionary<CreatureBaseAttribute, float>() {
                 { CreatureBaseAttribute.BaseDamage, 1f },
                 { CreatureBaseAttribute.BaseHealth, 1f },
@@ -312,6 +329,32 @@ namespace StarLevelSystem.common
             }
 
             protected override void SetValue(List<string> value)
+            {
+                var mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
+
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class ListModifierZNetProperty : ZNetProperty<List<ModifierNames>>
+        {
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            public ListModifierZNetProperty(string key, ZNetView zNetView, List<ModifierNames> defaultValue) : base(key, zNetView, defaultValue)
+            {
+            }
+
+            public override List<ModifierNames> Get()
+            {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return new List<ModifierNames>(); }
+                var mStream = new MemoryStream(stored);
+                var deserializedDictionary = (List<ModifierNames>)binFormatter.Deserialize(mStream);
+                return deserializedDictionary;
+            }
+
+            protected override void SetValue(List<ModifierNames> value)
             {
                 var mStream = new MemoryStream();
                 binFormatter.Serialize(mStream, value);

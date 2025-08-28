@@ -396,36 +396,36 @@ namespace StarLevelSystem.modules
             // Logger.LogInfo("Setting star levels active");
             switch (level) {
                 case 2:
-                    extended_hud.starlevel2.SetActive(true);
+                    extended_hud.starlevel2?.SetActive(true);
                     break;
                 case 3:
-                    extended_hud.starlevel2.SetActive(true);
-                    extended_hud.starlevel3.SetActive(true);
+                    extended_hud.starlevel2?.SetActive(true);
+                    extended_hud.starlevel3?.SetActive(true);
                     break;
                 case 4:
-                    extended_hud.starlevel2.SetActive(true);
-                    extended_hud.starlevel3.SetActive(true);
-                    extended_hud.starlevel4.SetActive(true);
+                    extended_hud.starlevel2?.SetActive(true);
+                    extended_hud.starlevel3?.SetActive(true);
+                    extended_hud.starlevel4?.SetActive(true);
                     break;
                 case 5:
-                    extended_hud.starlevel2.SetActive(true);
-                    extended_hud.starlevel3.SetActive(true);
-                    extended_hud.starlevel4.SetActive(true);
-                    extended_hud.starlevel5.SetActive(true);
+                    extended_hud.starlevel2?.SetActive(true);
+                    extended_hud.starlevel3?.SetActive(true);
+                    extended_hud.starlevel4?.SetActive(true);
+                    extended_hud.starlevel5?.SetActive(true);
                     break;
                 case 6:
-                    extended_hud.starlevel2.SetActive(true);
-                    extended_hud.starlevel3.SetActive(true);
-                    extended_hud.starlevel4.SetActive(true);
-                    extended_hud.starlevel5.SetActive(true);
-                    extended_hud.starlevel6.SetActive(true);
+                    extended_hud.starlevel2?.SetActive(true);
+                    extended_hud.starlevel3?.SetActive(true);
+                    extended_hud.starlevel4?.SetActive(true);
+                    extended_hud.starlevel5?.SetActive(true);
+                    extended_hud.starlevel6?.SetActive(true);
                     break;
             }
 
             // Logger.LogInfo("Setting Nstar levels active");
             // Enable dynamic levels
             if (level > 6) {
-                extended_hud.starlevel_N.SetActive(true);
+                extended_hud.starlevel_N?.SetActive(true);
                 // get the text componet here and set its display
                 extended_hud.starlevel_N_Text.text = (level - 1).ToString();
             }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.common
 {
@@ -17,16 +18,16 @@ namespace StarLevelSystem.common
             }
         }
 
-        public static KeyValuePair<string, List<string>> RandomEntry(Dictionary<string, List<string>> dict, List<string> removedKeys = null) {
-            List<string> keys = dict.Keys.ToList();
+        public static KeyValuePair<ModifierNames, List<string>> RandomEntry(Dictionary<ModifierNames, List<string>> dict, List<ModifierNames> removedKeys = null) {
+            List<ModifierNames> keys = dict.Keys.ToList();
             if (removedKeys != null) {
                 keys = keys.Where(k => !removedKeys.Contains(k)).ToList();
             }
             if (keys.Count == 0) {
-                return new KeyValuePair<string, List<string>>(key: null, value: null);
+                return new KeyValuePair<ModifierNames, List<string>>(key: ModifierNames.None, value: null);
             }
-            string key = keys[UnityEngine.Random.Range(0, keys.Count - 1)];
-            return new KeyValuePair<string, List<string>>(key: key, value: dict[key]);
+            ModifierNames key = keys[UnityEngine.Random.Range(0, keys.Count - 1)];
+            return new KeyValuePair<ModifierNames, List<string>>(key: key, value: dict[key]);
         }
 
         public static List<Character> GetCharactersInRange(Vector3 position, float range)

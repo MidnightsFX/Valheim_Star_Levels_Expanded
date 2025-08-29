@@ -38,6 +38,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> BossEnemyDamageMultiplier;
         public static ConfigEntry<bool> EnableScalingBirds;
         public static ConfigEntry<float> BirdSizeScalePerLevel;
+        public static ConfigEntry<bool> RandomizeTameChildrenLevels;
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
@@ -95,6 +96,7 @@ namespace StarLevelSystem
             EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
             BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
+            RandomizeTameChildrenLevels = BindServerConfig("LevelSystems", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
             EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%", true, 0, 2f);

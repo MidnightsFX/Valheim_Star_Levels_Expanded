@@ -93,7 +93,11 @@ namespace StarLevelSystem.modules
 
         internal static void SetupCreatureVFX(Character character, CreatureModifier cmodifier) {
             if (cmodifier.visualEffect != null) {
-                if (cmodifier.visualEffectPrefab == null) { cmodifier.LoadAndSetGameObjects(); }
+                if (cmodifier.visualEffectPrefab == null) { 
+                    cmodifier.LoadAndSetGameObjects();
+                    if (cmodifier.visualEffectPrefab == null) { return; }
+                }
+                
                 bool hasVFXAlready = character.transform.Find($"{cmodifier.visualEffectPrefab.name}(Clone)");
                 Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {

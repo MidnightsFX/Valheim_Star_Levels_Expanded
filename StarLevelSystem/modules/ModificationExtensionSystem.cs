@@ -3,6 +3,7 @@ using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection.Emit;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -41,6 +42,31 @@ namespace StarLevelSystem.modules
             public static void Postfix(Character __instance) {
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
                 CreatureSetup(__instance);
+            }
+        }
+
+        public static class SetChildLevel
+        {
+            // [HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(Procreation.Procreate))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchForward(true,
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                    ).RemoveInstructions(1).InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc, (byte)6),
+                    Transpilers.EmitDelegate(SetupChildCharacter)
+                    ).RemoveInstructions(23).ThrowIfNotMatch("Unable to patch child spawn level set.");
+
+                return codeMatcher.Instructions();
+            }
+
+            internal static void SetupChildCharacter(Character chara, int level) {
+                if (!ValConfig.RandomizeTameChildrenLevels.Value) {
+                    CreatureSetup(chara, true, level);
+                } 
             }
         }
 

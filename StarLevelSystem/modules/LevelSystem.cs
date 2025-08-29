@@ -31,6 +31,10 @@ namespace StarLevelSystem.modules
                 character.m_level = leveloverride;
                 return leveloverride;
             }
+            if (character.IsTamed() && ValConfig.RandomizeTameChildrenLevels.Value == false) {
+                // Tamed but does not have its level set yet, and we do not want to randomize it
+                
+            }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             Logger.LogDebug($"Current level from ZDO: {clevel}");

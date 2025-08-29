@@ -36,166 +36,38 @@ namespace StarLevelSystem.Data
             },
             BiomeConfiguration = new Dictionary<Heightmap.Biome, DataObjects.BiomeSpecificSetting>()
             {
-                { Heightmap.Biome.None, new DataObjects.BiomeSpecificSetting()
+                { Heightmap.Biome.All, new DataObjects.BiomeSpecificSetting()
                     {
                         EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 1f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 1f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
                         BiomeMaxLevelOverride = 20,
-                    }
-                },
-                { Heightmap.Biome.Meadows, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
+                        SpawnRateModifier = 1.5f,
+                        DistanceScaleModifier = 1.5f,
+                        DamageRecievedModifiers = new Dictionary<DataObjects.DamageType, float>() {
+                            {DataObjects.DamageType.Poison, 1.5f } 
+                        },
                         CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
                             { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
                             { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
                             { DataObjects.CreatureBaseAttribute.Speed, 1f },
+                            { DataObjects.CreatureBaseAttribute.Size, 1f }
                         },
                         CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 1f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 1f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
+                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.4f },
+                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.1f },
+                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 0f },
+                            { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.10f }
                         },
-                        BiomeMaxLevelOverride = 3,
-                    }
-                },
-                { Heightmap.Biome.BlackForest, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 1f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 1f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 4,
-                    }
-                },
-                { Heightmap.Biome.Swamp, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 5,
-                    }
-                },
-                { Heightmap.Biome.Mountain, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 6,
-                    }
-                },
-                { Heightmap.Biome.Plains, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 7,
-                    }
-                },
-                { Heightmap.Biome.Mistlands, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 8,
+                        
                     }
                 },
                 { Heightmap.Biome.AshLands, new DataObjects.BiomeSpecificSetting()
                     {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
                         DistanceScaleModifier = 0.5f,
-                        BiomeMaxLevelOverride = 9,
                     }
                 },
                 { Heightmap.Biome.DeepNorth, new DataObjects.BiomeSpecificSetting()
                     {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 10,
                         DistanceScaleModifier = 0.5f,
-                    }
-                },
-                { Heightmap.Biome.Ocean, new DataObjects.BiomeSpecificSetting()
-                    {
-                        EnableBiomeLevelOverride = true,
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 0.85f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 0.85f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.85f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 1f },
-                        },
-                        BiomeMaxLevelOverride = 8
                     }
                 }
             },
@@ -207,6 +79,13 @@ namespace StarLevelSystem.Data
                             { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 0.9f },
                         }
                     }
+                },
+                { "Troll", new DataObjects.CreatureSpecificSetting()
+                    {
+                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
+                            { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.05f },
+                        }
+                    }
                 }
             },
 
@@ -214,55 +93,64 @@ namespace StarLevelSystem.Data
             DistanceLevelBonus = new SortedDictionary<int, SortedDictionary<int, float>>()
             {
                 { 1250, new SortedDictionary<int, float>() {
-                        { 1, 0.15f },
+                        { 1, 0.25f },
                     }
                 },
                 { 2500, new SortedDictionary<int, float>() {
-                        { 1, 0.15f },
-                        { 2, 0.10f },
+                        { 1, 0.5f },
+                        { 2, 0.25f },
                     }
                 },
                 { 3750, new SortedDictionary<int, float>() {
-                        { 1, 0.15f },
-                        { 2, 0.10f },
-                        { 3, 0.05f },
+                        { 1, 1f },
+                        { 2, 0.75f },
+                        { 3, 0.5f },
+                        { 4, 0.25f },
                     }
                 },
                 { 5000, new SortedDictionary<int, float>() {
-                        { 1, 0.20f },
-                        { 2, 0.15f },
-                        { 3, 0.10f },
-                        { 4, 0.05f },
+                        { 1, 1f },
+                        { 2, 1f },
+                        { 3, 0.75f },
+                        { 4, 0.5f },
+                        { 5, 0.25f },
+                        { 6, 0.15f },
                     }
                 },
                 { 6250, new SortedDictionary<int, float>() {
-                        { 1, 0.25f },
-                        { 2, 0.20f },
-                        { 3, 0.15f },
-                        { 4, 0.10f },
-                        { 5, 0.05f },
+                        { 1, 1f },
+                        { 2, 1f },
+                        { 3, 1f },
+                        { 4, 0.75f },
+                        { 5, 0.5f },
+                        { 6, 0.25f },
+                        { 7, 0.20f },
+                        { 8, 0.15f },
                     }
                 },
                 { 7500, new SortedDictionary<int, float>() {
-                        { 1, 0.35f },
-                        { 2, 0.30f },
-                        { 3, 0.25f },
-                        { 4, 0.20f },
-                        { 5, 0.15f },
-                        { 6, 0.10f },
-                        { 7, 0.05f },
+                        { 1, 1f },
+                        { 2, 1f },
+                        { 3, 1f },
+                        { 4, 1f },
+                        { 5, 0.75f },
+                        { 6, 0.5f },
+                        { 7, 0.25f },
+                        { 8, 0.20f },
+                        { 9, 0.15f },
                     }
                 },
                 { 8750, new SortedDictionary<int, float>() {
-                        { 1, 0.45f },
-                        { 2, 0.40f },
-                        { 3, 0.35f },
-                        { 4, 0.30f },
-                        { 5, 0.25f },
-                        { 6, 0.20f },
-                        { 7, 0.15f },
-                        { 8, 0.10f },
-                        { 9, 0.05f },
+                        { 1, 1f },
+                        { 2, 1f },
+                        { 3, 1f },
+                        { 4, 1f },
+                        { 5, 1f },
+                        { 6, 0.75f },
+                        { 7, 0.5f },
+                        { 8, 0.25f },
+                        { 9, 0.20f },
+                        { 10, 0.15f },
                     }
                 }
             }

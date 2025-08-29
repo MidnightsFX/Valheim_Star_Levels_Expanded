@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.common
@@ -41,6 +42,48 @@ namespace StarLevelSystem.common
             }
 
             return characters;
+        }
+
+        public static BiomeSpecificSetting MergeBiomeConfigs(BiomeSpecificSetting prioritycfg, BiomeSpecificSetting othercfg)
+        {
+            BiomeSpecificSetting biomecfg = othercfg;
+            if (prioritycfg.CustomCreatureLevelUpChance != null) { biomecfg.CustomCreatureLevelUpChance = prioritycfg.CustomCreatureLevelUpChance; }
+            biomecfg.EnableBiomeLevelOverride = prioritycfg.EnableBiomeLevelOverride;
+            biomecfg.BiomeMaxLevelOverride = prioritycfg.BiomeMaxLevelOverride;
+            biomecfg.DistanceScaleModifier = prioritycfg.DistanceScaleModifier;
+            if (biomecfg.CreatureBaseValueModifiers != null && prioritycfg.CreatureBaseValueModifiers != null)
+            {
+                biomecfg.CreatureBaseValueModifiers.ToList().ForEach(x => prioritycfg.CreatureBaseValueModifiers[x.Key] = x.Value);
+            }
+            else if (prioritycfg.CreatureBaseValueModifiers != null)
+            {
+                biomecfg.CreatureBaseValueModifiers = prioritycfg.CreatureBaseValueModifiers;
+            }
+            if (biomecfg.CreaturePerLevelValueModifiers != null && prioritycfg.CreaturePerLevelValueModifiers != null)
+            {
+                biomecfg.CreaturePerLevelValueModifiers.ToList().ForEach(x => prioritycfg.CreaturePerLevelValueModifiers[x.Key] = x.Value);
+            }
+            else if (prioritycfg.CreaturePerLevelValueModifiers != null)
+            {
+                biomecfg.CreaturePerLevelValueModifiers = prioritycfg.CreaturePerLevelValueModifiers;
+            }
+            if (biomecfg.DamageRecievedModifiers != null && prioritycfg.DamageRecievedModifiers != null)
+            {
+                biomecfg.DamageRecievedModifiers.ToList().ForEach(x => prioritycfg.DamageRecievedModifiers[x.Key] = x.Value);
+            }
+            else if (prioritycfg.DamageRecievedModifiers != null)
+            {
+                biomecfg.DamageRecievedModifiers = prioritycfg.DamageRecievedModifiers;
+            }
+            if (biomecfg.creatureSpawnsDisabled != null && prioritycfg.creatureSpawnsDisabled != null)
+            {
+                biomecfg.creatureSpawnsDisabled.Union(prioritycfg.creatureSpawnsDisabled);
+            }
+            else if (prioritycfg.creatureSpawnsDisabled != null)
+            {
+                biomecfg.creatureSpawnsDisabled = prioritycfg.creatureSpawnsDisabled;
+            }
+            return biomecfg;
         }
     }
 }

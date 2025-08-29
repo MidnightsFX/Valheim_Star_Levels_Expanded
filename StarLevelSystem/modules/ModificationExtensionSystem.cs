@@ -216,7 +216,7 @@ namespace StarLevelSystem.modules
             // Determine if this creature should get deleted due to disableSpawn
             // We do not delete tamed creatures, to allow supporting taming of creatures, bringing them to a banned biome and breeding
             if (__instance.m_tamed == false && cDetails.creatureDisabledInBiome) {
-                Logger.LogDebug($"Creature {__instance.name} in biome {cDetails.Biome} is a disabled spawn, deleting.");
+                Logger.LogDebug($"Creature {__instance.name} in biome {cDetails.Biome} selected for deletion.");
                 ZNetScene.instance.StartCoroutine(DestroyCoroutine(__instance.gameObject));
                 return;
             }
@@ -309,7 +309,7 @@ namespace StarLevelSystem.modules
                 creature.m_flyTurnSpeed = refChar.m_flyTurnSpeed * speedmod;
                 creature.m_swimSpeed = refChar.m_swimSpeed * speedmod;
                 creature.m_crouchSpeed = refChar.m_crouchSpeed * speedmod;
-                Logger.LogDebug($"Applying speed modifications for {creature.name}-{creature.m_level} speed modified by: {speedmod}, per level mod: {base_speed} + {perlevelmod}");
+                Logger.LogDebug($"Applying speed modifications for {creature.name}-{creature.m_level} speed modified by: {speedmod}, b{base_speed} + p{perlevelmod}");
             } else {
                 Logger.LogWarning("Creature reference not set, can't apply speed modifiers.");
             }

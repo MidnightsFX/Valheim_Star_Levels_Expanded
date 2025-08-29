@@ -15,15 +15,10 @@ namespace StarLevelSystem.modules
         public static Vector2 center = new Vector2(0, 0);
 
 
-        public static int DetermineLevelSetAndRetrieve(Character character, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
+        public static int DetermineLevelSetAndRetrieve(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
         {
-            if (character == null || character.m_nview == null) {
+            if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
-                return 0;
-            }
-            ZDO cZDO = character.m_nview.GetZDO();
-            if (cZDO == null) {
-                Logger.LogWarning($"Creature {character.name} has no ZDO, cannot set level.");
                 return 0;
             }
             if (leveloverride > 0) {
@@ -486,9 +481,19 @@ namespace StarLevelSystem.modules
             creature_name = Utils.GetPrefabName(creature.gameObject);
             ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
             creature_biome = biome;
+            biome_settings = null;
             Logger.LogDebug($"{creature_name} {biome} {p}");
+
+            bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
+            if (biome_all_setting_check) {
+                biome_settings = allBiomeConfig;
+            }
             bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
-            if (biome_setting_check) { biome_settings = biomeConfig; } else { biome_settings = null; }
+            if (biome_setting_check && biome_all_setting_check) { 
+                biome_settings = Extensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig); 
+            } else if (biome_setting_check) {
+                biome_settings = biomeConfig;
+            }
             bool creature_setting_check = LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig);
             if (creature_setting_check) { creature_settings = creatureConfig; } else { creature_settings = null; }
         }

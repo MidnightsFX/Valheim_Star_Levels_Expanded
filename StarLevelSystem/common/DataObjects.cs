@@ -4,6 +4,7 @@ using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -18,7 +19,7 @@ namespace StarLevelSystem.common
     {
 
         public static IDeserializer yamldeserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
-        public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).DisableAliases().ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
+        public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
 
         public enum CreatureBaseAttribute {
             BaseHealth,
@@ -96,6 +97,7 @@ namespace StarLevelSystem.common
             public bool EnableBiomeLevelOverride { get; set; } = false;
             public int BiomeMaxLevelOverride { get; set; }
             public float DistanceScaleModifier { get; set; } = 1f;
+            public float SpawnRateModifier { get; set; } = 1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
@@ -112,6 +114,7 @@ namespace StarLevelSystem.common
             public float ChanceForMinorModifier { get; set; } = -1f;
             public int MaxBossModifiers { get; set; } = -1;
             public float ChanceForBossModifier { get; set; } = -1f;
+            public float SpawnRateModifier { get; set; } = 1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }

@@ -38,13 +38,17 @@ namespace StarLevelSystem.Data
             // Get character based biome and creature configuration
             Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+            ZDO creatureZDO = character.m_nview?.GetZDO();
+
+            // Check creature spawn rate
+            bool set_despawn = Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
 
             // Set biome | used to deletion check
             characterCacheEntry.Biome = biome;
 
             // Set if the creature spawn is disabled, and return the entry but do not cache it.
             Logger.LogDebug("Checking Creature biome Disable spawn");
-            if (biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
+            if (set_despawn || biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
                 characterCacheEntry.creatureDisabledInBiome = true;
                 return characterCacheEntry;
             }
@@ -52,9 +56,11 @@ namespace StarLevelSystem.Data
             // Set the creature
             characterCacheEntry.CreaturePrefab = PrefabManager.Instance.GetPrefab(creature_name);
 
+
+
             // Check for level or set it
             Logger.LogDebug("Setting creature level");
-            characterCacheEntry.Level = LevelSystem.DetermineLevelSetAndRetrieve(character, creature_settings, biome_settings, leveloverride);
+            characterCacheEntry.Level = LevelSystem.DetermineLevelSetAndRetrieve(character, creatureZDO, creature_settings, biome_settings, leveloverride);
             Logger.LogDebug($"Creature level set {characterCacheEntry.Level}");
             if (characterCacheEntry.Level == 0) {return null; }
 
@@ -125,6 +131,7 @@ namespace StarLevelSystem.Data
                     }
                 }
             }
+
 
             // Set or load creature modifiers
             if (!character.IsPlayer() && character != null) {

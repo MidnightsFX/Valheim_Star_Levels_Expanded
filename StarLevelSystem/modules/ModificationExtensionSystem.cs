@@ -45,27 +45,34 @@ namespace StarLevelSystem.modules
             }
         }
 
+        [HarmonyPatch(typeof(Procreation))]
         public static class SetChildLevel
         {
-            // [HarmonyDebug]
+            //[HarmonyDebug]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(Procreation.Procreate))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
             {
                 var codeMatcher = new CodeMatcher(instructions);
                 codeMatcher.MatchForward(true,
-                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
-                    ).RemoveInstructions(1).InsertAndAdvance(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Tameable), nameof(Tameable.IsTamed))),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetTamed)))
+                    ).RemoveInstructions(15).InsertAndAdvance(
                     new CodeInstruction(OpCodes.Ldloc, (byte)6),
+                    new CodeInstruction(OpCodes.Ldarg_0),
                     Transpilers.EmitDelegate(SetupChildCharacter)
-                    ).RemoveInstructions(23).ThrowIfNotMatch("Unable to patch child spawn level set.");
+                    ).ThrowIfNotMatch("Unable to patch child spawn level set.");
 
                 return codeMatcher.Instructions();
             }
 
-            internal static void SetupChildCharacter(Character chara, int level) {
+            internal static void SetupChildCharacter(Character chara, Procreation proc) {
+                Logger.LogDebug($"Setting child level for {chara.m_name}");
                 if (!ValConfig.RandomizeTameChildrenLevels.Value) {
+                    int level = Mathf.Max(proc.m_character.GetLevel(), proc.m_minOffspringLevel);
+                    Logger.LogDebug($"character specific level {level} being used for child.");
                     CreatureSetup(chara, true, level);
+                    chara.SetTamed(true);
                 } 
             }
         }

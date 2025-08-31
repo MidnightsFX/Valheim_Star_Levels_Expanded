@@ -3,8 +3,11 @@ using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -45,35 +48,10 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(Procreation))]
-        public static class SetChildLevel
-        {
-            //[HarmonyDebug]
-            [HarmonyTranspiler]
-            [HarmonyPatch(nameof(Procreation.Procreate))]
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-            {
-                var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchForward(true,
-                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Tameable), nameof(Tameable.IsTamed))),
-                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetTamed)))
-                    ).RemoveInstructions(15).InsertAndAdvance(
-                    new CodeInstruction(OpCodes.Ldloc, (byte)6),
-                    new CodeInstruction(OpCodes.Ldarg_0),
-                    Transpilers.EmitDelegate(SetupChildCharacter)
-                    ).ThrowIfNotMatch("Unable to patch child spawn level set.");
-
-                return codeMatcher.Instructions();
-            }
-
-            internal static void SetupChildCharacter(Character chara, Procreation proc) {
-                Logger.LogDebug($"Setting child level for {chara.m_name}");
-                if (!ValConfig.RandomizeTameChildrenLevels.Value) {
-                    int level = Mathf.Max(proc.m_character.GetLevel(), proc.m_minOffspringLevel);
-                    Logger.LogDebug($"character specific level {level} being used for child.");
-                    CreatureSetup(chara, true, level);
-                    chara.SetTamed(true);
-                } 
+        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Awake))]
+        public static class PostfixSetupBosses {
+            public static void Postfix(Humanoid __instance) {
+                CreatureSetup(__instance);
             }
         }
 
@@ -92,10 +70,9 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
         public static class ModifyCharacterVisualsToLevel
         {
-            public static bool Prefix(Character __instance) {
-                Logger.LogDebug("Setting Charcter level");
-                CreatureSetup(__instance);
-                __instance.SetupMaxHealth();
+            public static bool Prefix(Character __instance)
+            {
+                //CreatureSetup(__instance);
                 return false;
             }
         }
@@ -232,11 +209,30 @@ namespace StarLevelSystem.modules
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
             LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails, refresh_cache);
+            ApplyHealthModifications(__instance, cDetails);
+
 
             if (__instance.m_level <= 1) { return; }
             // Colorization and visual adjustments
             Colorization.ApplyColorizationWithoutLevelEffects(__instance, cDetails.Colorization);
             Colorization.ApplyLevelVisual(__instance);
+        }
+
+        internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {
+            float num = chara.m_health;
+            if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
+                num *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
+            }
+            if (chara.IsBoss()) {
+                num *= ValConfig.BossEnemyHealthMultiplier.Value;
+            } else {
+                num *= ValConfig.EnemyHealthMultiplier.Value;
+            }
+            float basehp = num * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
+            float perlvlhp = (num * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * cDetails.Level);
+            float hp = (basehp + perlvlhp);
+            Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {num}");
+            chara.SetMaxHealth(hp);
         }
 
         internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CreatureDetailCache cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {

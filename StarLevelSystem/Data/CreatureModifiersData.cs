@@ -75,7 +75,6 @@ namespace StarLevelSystem.Data
                             },
                         },
                     setupMethodClass = "StarLevelSystem.Modifiers.Summoner",
-                    unallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.SoulEater, new CreatureModifier() {
@@ -88,20 +87,18 @@ namespace StarLevelSystem.Data
                     config = new CreatureModConfig() {
                         perlevelpower = 0.01f,
                         },
-                    unallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.ResistPierce, new CreatureModifier() {
                     selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$SoulEater_prefix1" },
-                    name_suffixes = new List<string>() { "$SoulEater_suffix1" },
+                    name_prefixes = new List<string>() { "$ResistPierce_prefix1" },
+                    name_suffixes = new List<string>() { "$ResistPierce_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "vortex",
+                    starVisual = "resistPierce",
                     config = new CreatureModConfig() {
                         perlevelpower = 0.05f,
                         },
-                    unallowedCreatures = NonCombatCreatures
                     }
                 }
             },

@@ -171,7 +171,7 @@ namespace StarLevelSystem.common
             public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
                 if (setupMethodClass == null || setupMethodClass == "") { return; }
                 Type methodClass = Type.GetType(setupMethodClass);
-                Logger.LogInfo($"Setting up modifier {setupMethodClass} with signature {methodClass}");
+                Logger.LogDebug($"Setting up modifier {setupMethodClass} with signature {methodClass}");
                 MethodInfo theMethod = methodClass.GetMethod("Setup");
                 if (theMethod == null) {
                     Logger.LogWarning($"Could not find setup method, skipping setup.");

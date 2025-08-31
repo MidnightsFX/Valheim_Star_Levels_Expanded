@@ -31,14 +31,21 @@ namespace StarLevelSystem.Data
             if (sessionCache.ContainsKey(czoid) && update == false) {
                 return sessionCache[czoid];
             }
-
             // Setup cache
             CreatureDetailCache characterCacheEntry = new CreatureDetailCache() { };
+
+            ZDO creatureZDO = character.m_nview?.GetZDO();
+            if (creatureZDO == null) {
+                Logger.LogDebug("ZDO null, skipping.");
+                return characterCacheEntry;
+            }
+
+
 
             // Get character based biome and creature configuration
             Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-            ZDO creatureZDO = character.m_nview?.GetZDO();
+
 
             // Check creature spawn rate
             bool set_despawn = Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);

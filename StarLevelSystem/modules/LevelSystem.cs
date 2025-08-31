@@ -14,7 +14,6 @@ namespace StarLevelSystem.modules
     {
         public static Vector2 center = new Vector2(0, 0);
 
-
         public static int DetermineLevelSetAndRetrieve(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
         {
             if (character == null || cZDO == null) {
@@ -248,10 +247,10 @@ namespace StarLevelSystem.modules
         //                new CodeMatch(OpCodes.Ldarg_0),
         //                new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(TriggerSpawner), nameof(TriggerSpawner.m_minLevel))),
         //                new CodeMatch(OpCodes.Stloc_S)
-        //                ).RemoveInstructions(21).InsertAndAdvance(
-        //                new CodeInstruction(OpCodes.Ldloc_S, (byte)5), // Load the spawned creature
-        //                Transpilers.EmitDelegate(DetermineLevelInline),
-        //                new CodeInstruction(OpCodes.Stloc_S, (byte)8)
+        //                ).RemoveInstructions(24).InsertAndAdvance(
+        //                //new CodeInstruction(OpCodes.Ldloc_S, (byte)5), // Load the spawned creature
+        //                //Transpilers.EmitDelegate(DetermineLevelInline),
+        //                //new CodeInstruction(OpCodes.Stloc_S, (byte)8)
         //                ).ThrowIfNotMatch("Unable to patch Creature Spawner set level.");
 
         //            return codeMatcher.Instructions();
@@ -259,39 +258,32 @@ namespace StarLevelSystem.modules
         //    }
         //}
 
-        public static class ExpandLevelupRollBosses
-        {
-            // private static readonly string QueenName = "SeekerQueen(Clone)";
+        //public static class ExpandLevelupRollBosses
+        //{
+        //    // private static readonly string QueenName = "SeekerQueen(Clone)";
 
-            //[HarmonyPatch(typeof(OfferingBowl))]
-            //public static class SetupCreatureSpawnerLevelExtendedRoll
-            //{
-            //    //[HarmonyDebug]
-            //    [HarmonyTranspiler]
-            //    [HarmonyPatch(nameof(OfferingBowl.DelayedSpawnBoss))]
-            //    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-            //    {
-            //        var codeMatcher = new CodeMatcher(instructions);
-            //        codeMatcher.MatchStartForward(
-            //            new CodeMatch(OpCodes.Ldarg_0),
-            //            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(OfferingBowl), nameof(OfferingBowl.m_bossPrefab)))
-            //            ).Advance(7).InsertAndAdvance(
-            //            new CodeInstruction(OpCodes.Ldloc_0),
-            //            Transpilers.EmitDelegate(DetermineApplyLevelInline)
-            //            ).ThrowIfNotMatch("Unable to patch boss Spawner set level.");
-            //        return codeMatcher.Instructions();
-            //    }
-            //}
+        //    //[HarmonyPatch(typeof(OfferingBowl))]
+        //    //public static class SetupCreatureSpawnerLevelExtendedRoll
+        //    //{
+        //    //    //[HarmonyDebug]
+        //    //    [HarmonyTranspiler]
+        //    //    [HarmonyPatch(nameof(OfferingBowl.DelayedSpawnBoss))]
+        //    //    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+        //    //    {
+        //    //        var codeMatcher = new CodeMatcher(instructions);
+        //    //        codeMatcher.MatchStartForward(
+        //    //            new CodeMatch(OpCodes.Ldarg_0),
+        //    //            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(OfferingBowl), nameof(OfferingBowl.m_bossPrefab)))
+        //    //            ).Advance(7).InsertAndAdvance(
+        //    //            new CodeInstruction(OpCodes.Ldloc_0),
+        //    //            Transpilers.EmitDelegate(DetermineApplyLevelInline)
+        //    //            ).ThrowIfNotMatch("Unable to patch boss Spawner set level.");
+        //    //        return codeMatcher.Instructions();
+        //    //    }
+        //    //}
 
-            
 
-            [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Awake))]
-            public static class PostfixSetupBosses {
-                public static void Postfix(Humanoid __instance) {
-                    ModificationExtensionSystem.CreatureSetup(__instance);
-                }
-            }
-        }
+        //}
 
         //public static class ExpandLevelupRollAreaSpawner
         //{
@@ -312,11 +304,11 @@ namespace StarLevelSystem.modules
         //                new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(SpawnArea.SpawnData), nameof(SpawnArea.SpawnData.m_maxLevel))),
         //                new CodeMatch(OpCodes.Ldc_I4_1)
         //                ).RemoveInstructions(27).InsertAndAdvance(
-        //                new CodeInstruction(OpCodes.Ldloc_S, (byte)4), // Load the spawned creature
-        //                Transpilers.EmitDelegate(DetermineLevelInline),
-        //                new CodeInstruction(OpCodes.Stloc_S, (byte)8),
-        //                new CodeInstruction(OpCodes.Ldloc_S, (byte)5),
-        //                new CodeInstruction(OpCodes.Ldloc_S, (byte)8)
+        //                //new CodeInstruction(OpCodes.Ldloc_S, (byte)4), // Load the spawned creature
+        //                //Transpilers.EmitDelegate(DetermineLevelInline),
+        //                //new CodeInstruction(OpCodes.Stloc_S, (byte)8),
+        //                //new CodeInstruction(OpCodes.Ldloc_S, (byte)5),
+        //                //new CodeInstruction(OpCodes.Ldloc_S, (byte)8)
         //                ).ThrowIfNotMatch("Unable to patch Area Spawner set level.");
 
         //            return codeMatcher.Instructions();
@@ -324,14 +316,15 @@ namespace StarLevelSystem.modules
         //    }
         //}
 
-        //public static class ExpandLevelupRollSpawnSystem {
+        //public static class ExpandLevelupRollSpawnSystem
+        //{
         //    // Does not need a patch for max level since its overriden in the spawner
 
         //    //[HarmonyEmitIL("./dumps")]
         //    [HarmonyPatch(typeof(SpawnSystem))]
         //    public static class SetupAreaSpawnerLevelExtendedRoll
         //    {
-        //        //[HarmonyDebug]
+        //        [HarmonyDebug]
         //        [HarmonyTranspiler]
         //        [HarmonyPatch(nameof(SpawnSystem.Spawn))]
         //        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
@@ -342,8 +335,8 @@ namespace StarLevelSystem.modules
         //                new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(SpawnSystem.SpawnData), nameof(SpawnSystem.SpawnData.m_levelUpMinCenterDistance))),
         //                new CodeMatch(OpCodes.Ldc_R4)
         //            ).Advance(1).RemoveInstructions(62).InsertAndAdvance(
-        //                new CodeInstruction(OpCodes.Ldloc_0), // Load the spawned creature
-        //                Transpilers.EmitDelegate(DetermineApplyCreatureLevelOrUpgrade)
+        //                //new CodeInstruction(OpCodes.Ldloc_0), // Load the spawned creature
+        //                //Transpilers.EmitDelegate(DetermineApplyCreatureLevelOrUpgrade)
         //            ).ThrowIfNotMatch("Unable to patch Spawn System set level.");
 
         //            return codeMatcher.Instructions();
@@ -356,10 +349,12 @@ namespace StarLevelSystem.modules
         //    [HarmonyPatch(typeof(CreatureSpawner), nameof(CreatureSpawner.Awake))]
         //    public static class PostfixLevelSetupCreatureSpawner
         //    {
-        //        public static void Postfix(CreatureSpawner __instance) {
+        //        public static void Postfix(CreatureSpawner __instance)
+        //        {
         //            Vector3 p = __instance.transform.position;
         //            ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
-        //            try {
+        //            try
+        //            {
         //                if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration.ContainsKey(biome))
         //                {
         //                    DataObjects.BiomeSpecificSetting biomeConfig = LevelSystemData.SLE_Level_Settings.BiomeConfiguration[biome];
@@ -376,89 +371,151 @@ namespace StarLevelSystem.modules
         //                {
         //                    __instance.m_maxLevel = ValConfig.MaxLevel.Value + 1;
         //                }
-        //            } catch (Exception ex) {
+        //            }
+        //            catch (Exception ex)
+        //            {
         //                Logger.LogWarning($"Exception trying to set CreatureSpawner max level {ex}");
         //            }
-                    
+
         //        }
         //    }
 
-        //    //[HarmonyEmitIL("./dumps")]
-        //    [HarmonyPatch(typeof(CreatureSpawner))]
-        //    public static class SetupCreatureSpawnerLevelExtendedRoll
+        ////[HarmonyEmitIL("./dumps")]
+        //[HarmonyPatch(typeof(CreatureSpawner))]
+        //public static class SetupCreatureSpawnerLevelExtendedRoll
+        //{
+        //    // [HarmonyDebug]
+        //    [HarmonyTranspiler]
+        //    [HarmonyPatch(nameof(CreatureSpawner.Spawn))]
+        //    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
         //    {
-        //        // [HarmonyDebug]
-        //        [HarmonyTranspiler]
-        //        [HarmonyPatch(nameof(CreatureSpawner.Spawn))]
-        //        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-        //        {
-        //            var codeMatcher = new CodeMatcher(instructions);
-        //            codeMatcher.MatchStartForward(
-        //                new CodeMatch(OpCodes.Ldloc_3),
-        //                new CodeMatch(OpCodes.Callvirt),
-        //                new CodeMatch(OpCodes.Stloc_S),
-        //                new CodeMatch(OpCodes.Ldloc_S),
-        //                new CodeMatch(OpCodes.Call)
-        //            ).Advance(6).RemoveInstructions(16).InsertAndAdvance(
-        //                new CodeInstruction(OpCodes.Ldloc_3), // Load the spawned creature
-        //                Transpilers.EmitDelegate(DetermineLevelInline),
-        //                new CodeInstruction(OpCodes.Stloc_S, (byte)11)
-        //            ).ThrowIfNotMatch("Unable to patch Creature Spawner set level.");
+        //        var codeMatcher = new CodeMatcher(instructions);
+        //        codeMatcher.MatchStartForward(
+        //            new CodeMatch(OpCodes.Ldloc_S, (byte)7),
+        //            new CodeMatch(OpCodes.Stloc_S, (byte)11),
+        //            new CodeMatch(OpCodes.Stloc_S),
+        //            new CodeMatch(OpCodes.Ldloc_S),
+        //            new CodeMatch(OpCodes.Call)
+        //        ).RemoveInstructions(22).InsertAndAdvance(
+        //            //new CodeInstruction(OpCodes.Ldloc_3), // Load the spawned creature
+        //            //Transpilers.EmitDelegate(DetermineLevelInline),
+        //            //new CodeInstruction(OpCodes.Stloc_S, (byte)11)
+        //        ).ThrowIfNotMatch("Unable to patch Creature Spawner set level.");
 
-        //            return codeMatcher.Instructions();
-        //        }
+        //        return codeMatcher.Instructions();
         //    }
         //}
 
 
-        [HarmonyPatch(typeof(Character), nameof(Character.GetMaxHealthBase))]
-        public static class SetupMaxLevelHealthPatch
+        //[HarmonyPatch(typeof(Character), nameof(Character.GetMaxHealthBase))]
+        //public static class SetupMaxLevelHealthPatch
+        //{
+        //    // Modify the max health that a creature can have based on the levelup health bonus value
+        //    // [HarmonyDebug]
+        //    [HarmonyTranspiler]
+        //    [HarmonyPatch(nameof(Character.GetMaxHealthBase))]
+        //    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+        //    {
+        //        var codeMatcher = new CodeMatcher(instructions);
+        //        codeMatcher.MatchStartForward(
+        //            new CodeMatch(OpCodes.Ldarg_0),
+        //            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Character), nameof(Character.m_health))), // AccessTools.Field(typeof(Character), nameof(Character.m_health)
+        //            new CodeMatch(OpCodes.Stloc_0)
+        //            ).Advance(1).RemoveInstructions(1).InsertAndAdvance(
+        //            Transpilers.EmitDelegate(CharacterHealthMultiplier)
+        //            ).ThrowIfNotMatch("Unable to patch enemy base health and world level modifiers.");
+        //        return codeMatcher.Instructions();
+        //    }
+
+        //    //public static float CharacterMaxHealthModifiersApplied(Character character) {
+        //    //    // Filter out if we want the world level and game instance multipliers to be applied
+        //    //    return character.m_health * (Game.m_worldLevel * ValConfig.EnemyHealthPerWorldLevel.Value);
+        //    //}
+
+        //    public static float CharacterHealthMultiplier(Character character) {
+        //        if (character.IsPlayer()) { return 1f; }
+        //        CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(character);
+        //        if (ccd == null) { return character.m_health; }
+        //        float base_health_mod = ccd.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
+        //        float base_health_per_level = ccd.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel];
+
+        //        float per_level_health_factor = Mathf.Pow(base_health_per_level, character.m_level - 1);
+        //        float base_health = (character.m_health * base_health_mod) * per_level_health_factor;
+        //        //Logger.LogDebug($"Setting {character.m_name} health {character.m_health} to {base_health} using basehealth mod {base_health_mod} and perlevel mod {base_health_per_level} ({per_level_health_factor})");
+        //        if (character.IsBoss()) {
+        //            // Use character specific customization OR the default configuration
+        //            if (base_health_per_level != 1f) {
+        //                return base_health * base_health_per_level;
+        //            } else {
+        //                return base_health * ValConfig.BossEnemyHealthMultiplier.Value;
+        //            }
+        //        } else {
+        //            if (base_health_per_level != 1f) {
+        //                return base_health * base_health_per_level;
+        //            } else {
+        //                return base_health * ValConfig.EnemyHealthMultiplier.Value;
+        //            }
+        //        }
+        //    }
+        //}
+
+        [HarmonyPatch(typeof(Growup))]
+        public static class SetGrowUpLevel
         {
-            // Modify the max health that a creature can have based on the levelup health bonus value
-            // [HarmonyDebug]
+            //[HarmonyDebug]
             [HarmonyTranspiler]
-            [HarmonyPatch(nameof(Character.GetMaxHealthBase))]
+            [HarmonyPatch(nameof(Growup.GrowUpdate))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
             {
                 var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchStartForward(
-                    new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Character), nameof(Character.m_health))), // AccessTools.Field(typeof(Character), nameof(Character.m_health)
-                    new CodeMatch(OpCodes.Stloc_0)
-                    ).Advance(1).RemoveInstructions(1).InsertAndAdvance(
-                    Transpilers.EmitDelegate(CharacterHealthMultiplier)
-                    ).ThrowIfNotMatch("Unable to patch enemy base health and world level modifiers.");
+                codeMatcher.MatchForward(true,
+                    //new CodeMatch(OpCodes.Ldloc_1),
+                    //new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.GetLevel))),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                    ).RemoveInstructions(1).InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetupGrownUp)
+                    ).ThrowIfNotMatch("Unable to patch child grow up level set.");
+
                 return codeMatcher.Instructions();
             }
 
-            //public static float CharacterMaxHealthModifiersApplied(Character character) {
-            //    // Filter out if we want the world level and game instance multipliers to be applied
-            //    return character.m_health * (Game.m_worldLevel * ValConfig.EnemyHealthPerWorldLevel.Value);
-            //}
+            internal static void SetupGrownUp(Character grownup, int level)
+            {
+                ModificationExtensionSystem.CreatureSetup(grownup, true, level);
+            }
+        }
 
-            public static float CharacterHealthMultiplier(Character character) {
-                if (character.IsPlayer()) { return 1f; }
-                CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(character);
-                if (ccd == null) { return character.m_health; }
-                float base_health_mod = ccd.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
-                float base_health_per_level = ccd.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel];
 
-                float per_level_health_factor = Mathf.Pow(base_health_per_level, character.m_level - 1);
-                float base_health = (character.m_health * base_health_mod) * per_level_health_factor;
-                //Logger.LogDebug($"Setting {character.m_name} health {character.m_health} to {base_health} using basehealth mod {base_health_mod} and perlevel mod {base_health_per_level} ({per_level_health_factor})");
-                if (character.IsBoss()) {
-                    // Use character specific customization OR the default configuration
-                    if (base_health_per_level != 1f) {
-                        return base_health * base_health_per_level;
-                    } else {
-                        return base_health * ValConfig.BossEnemyHealthMultiplier.Value;
-                    }
-                } else {
-                    if (base_health_per_level != 1f) {
-                        return base_health * base_health_per_level;
-                    } else {
-                        return base_health * ValConfig.EnemyHealthMultiplier.Value;
-                    }
+        [HarmonyPatch(typeof(Procreation))]
+        public static class SetChildLevel
+        {
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(Procreation.Procreate))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchForward(true,
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Tameable), nameof(Tameable.IsTamed))),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetTamed)))
+                    ).RemoveInstructions(15).InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc, (byte)6),
+                    new CodeInstruction(OpCodes.Ldarg_0),
+                    Transpilers.EmitDelegate(SetupChildCharacter)
+                    ).ThrowIfNotMatch("Unable to patch child spawn level set.");
+
+                return codeMatcher.Instructions();
+            }
+
+            internal static void SetupChildCharacter(Character chara, Procreation proc)
+            {
+                Logger.LogDebug($"Setting child level for {chara.m_name}");
+                if (!ValConfig.RandomizeTameChildrenLevels.Value)
+                {
+                    int level = Mathf.Max(proc.m_character.GetLevel(), proc.m_minOffspringLevel);
+                    Logger.LogDebug($"character specific level {level} being used for child.");
+                    ModificationExtensionSystem.CreatureSetup(chara, true, level);
+                    chara.SetTamed(true);
                 }
             }
         }

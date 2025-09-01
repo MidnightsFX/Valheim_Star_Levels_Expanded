@@ -38,6 +38,10 @@ namespace StarLevelSystem
         public static ConfigEntry<float> BossEnemyDamageMultiplier;
         public static ConfigEntry<bool> EnableScalingBirds;
         public static ConfigEntry<float> BirdSizeScalePerLevel;
+        public static ConfigEntry<bool> EnableScalingFish;
+        public static ConfigEntry<float> FishSizeScalePerLevel;
+        public static ConfigEntry<bool> EnableTreeScaling;
+        public static ConfigEntry<float> TreeSizeScalePerLevel;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
@@ -99,6 +103,10 @@ namespace StarLevelSystem
             RandomizeTameChildrenLevels = BindServerConfig("LevelSystems", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
             EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
+            EnableScalingFish = BindServerConfig("LevelSystem", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
+            FishSizeScalePerLevel = BindServerConfig("LevelSystem", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
+            EnableTreeScaling = BindServerConfig("LevelSystem", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
+            TreeSizeScalePerLevel = BindServerConfig("LevelSystem", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "The additional amount of health enemies gain when players are grouped together, per player. .3 = 30%", true, 0, 2f);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 0, 10);

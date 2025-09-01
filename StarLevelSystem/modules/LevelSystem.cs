@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.UIElements;
+using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -103,18 +104,11 @@ namespace StarLevelSystem.modules
             if (biome_settings != null) { distance_level_modifier = biome_settings.DistanceScaleModifier; }
             // creature specific override
             if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.ContainsKey(creature_name)) {
-                Logger.LogDebug($"Creature specific config found for {creature_name}");
+                //Logger.LogDebug($"Creature specific config found for {creature_name}");
                 if (creature_settings.CustomCreatureLevelUpChance != null) {
                     if (creature_settings.EnableCreatureLevelOverride) { maxLevel = creature_settings.CreatureMaxLevelOverride; }
                     if (creature_settings.CustomCreatureLevelUpChance != null) { levelup_chances = creature_settings.CustomCreatureLevelUpChance; }
                     return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
-                }
-            } else {
-                if (ValConfig.EnableDebugMode.Value) {
-                    Logger.LogDebug($"Creature specific setting not found for {creature_name}.");
-                    //foreach (var kvp in LevelSystemData.SLE_Global_Settings.CreatureConfiguration) {
-                    //    Logger.LogDebug($"Creature: {kvp.Key}");
-                    //}
                 }
             }
 
@@ -155,7 +149,7 @@ namespace StarLevelSystem.modules
             //    Logger.LogDebug($"levelup bonus: {lb.Key} {lb.Value}");
             //}
             foreach (KeyValuePair<int, float> kvp in creature_levelup_chance) {
-                Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
+                //Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
                 if (levelup_bonus.ContainsKey(kvp.Key)) {
                     float distance_bonus = ((1f + levelup_bonus[kvp.Key]) * distance_influence);
                     float levelup_req = kvp.Value * distance_bonus;
@@ -459,6 +453,163 @@ namespace StarLevelSystem.modules
         //    }
         //}
 
+        [HarmonyPatch(typeof(Fish), nameof(Fish.Awake))]
+        public static class RandomFishLevelExtension
+        {
+            public static void Postfix(Fish __instance)
+            {
+                if (ValConfig.EnableScalingFish.Value == false) { return; }
+                int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Fish", 0);
+                if (storedLevel == 0)
+                {
+                    LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
+                    __instance.m_nview.GetZDO().Set("SLE_Fish", storedLevel);
+                }
+                if (storedLevel > 1)
+                {
+                    float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
+                    __instance.GetComponent<ItemDrop>().SetQuality(storedLevel);
+                    Logger.LogDebug($"Setting Fish level {storedLevel} size {scale}.");
+                    __instance.transform.localScale *= scale;
+                    Physics.SyncTransforms();
+
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(TreeBase), nameof(TreeBase.Awake))]
+        public static class RandomTreeLevelExtension
+        {
+            public static void Postfix(TreeBase __instance)
+            {
+                if (ValConfig.EnableTreeScaling.Value == false) { return; }
+
+                int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Tree", 0);
+                if (storedLevel == 0)
+                {
+                    LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
+                    __instance.m_nview.GetZDO().Set("SLE_Tree", storedLevel);
+                }
+                if (storedLevel > 1)
+                {
+                    float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * storedLevel);
+                    __instance.m_health += (__instance.m_health * 0.1f * storedLevel);
+                    // Logger.LogDebug($"Setting Tree size {scale}.");
+                    __instance.transform.localScale *= scale;
+                    List<DropTable.DropData> drops = new List<DropTable.DropData>();
+                    foreach (var drop in __instance.m_dropWhenDestroyed.m_drops)
+                    {
+                        DropTable.DropData lvlupdrop = new DropTable.DropData();
+                        // Scale the amount of drops based on level
+                        lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * storedLevel));
+                        lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * storedLevel));
+                        // Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
+                        lvlupdrop.m_item = drop.m_item;
+                        drops.Add(lvlupdrop);
+                    }
+                    Physics.SyncTransforms();
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(TreeLog))]
+        public static class SetTreeLogPassLevel
+        {
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(TreeLog.Destroy))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(TreeLog), nameof(TreeLog.m_subLogPrefab))),
+                    new CodeMatch(OpCodes.Ldloc_S)
+                    ).Advance(1).RemoveInstructions(10).InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc_S, (byte)10),
+                    new CodeInstruction(OpCodes.Ldloc_S, (byte)11),
+                    Transpilers.EmitDelegate(SetupTreeLog)
+                    )
+                    .ThrowIfNotMatch("Unable to patch child grow up level set.");
+
+                return codeMatcher.Instructions();
+            }
+
+            [HarmonyPatch(nameof(TreeLog.Awake))]
+            static void Postfix(TreeLog __instance) {
+                int level = __instance.m_nview.GetZDO().GetInt("SLE_Tree", 0);
+                UpdateDrops(__instance, level);
+                __instance.m_health += (__instance.m_health * 0.1f * level);
+            }
+
+            internal static void SetupTreeLog(TreeLog instance, Transform tform, Quaternion qt)
+            {
+                GameObject go = GameObject.Instantiate(instance.m_subLogPrefab, tform.position, qt);
+                ZNetView nview = go.GetComponent<ZNetView>();
+                nview.SetLocalScale(instance.transform.localScale);
+                TreeLog tlog = go.GetComponent<TreeLog>();
+                // pass on the level
+                int level = instance.m_nview.GetZDO().GetInt("SLE_Tree", 0);
+                nview.GetZDO().Set("SLE_Tree", level);
+                UpdateDrops(instance, level);
+                instance.m_health += (instance.m_health * 0.1f * level);
+            }
+
+            internal static void UpdateDrops(TreeLog log, int level) {
+                List<DropTable.DropData> drops = new List<DropTable.DropData>();
+                // Update Drops
+                foreach (var drop in log.m_dropWhenDestroyed.m_drops) {
+                    DropTable.DropData lvlupdrop = new DropTable.DropData();
+                    // Scale the amount of drops based on level
+                    lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * level));
+                    lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * level));
+                    //Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
+                    lvlupdrop.m_item = drop.m_item;
+                    drops.Add(lvlupdrop);
+                }
+                log.m_dropWhenDestroyed.m_drops = drops;
+            }
+        }
+
+
+        [HarmonyPatch(typeof(RandomFlyingBird), nameof(RandomFlyingBird.Awake))]
+        public static class RandomFlyingBirdExtension
+        {
+            public static void Postfix(RandomFlyingBird __instance)
+            {
+                if (ValConfig.EnableScalingBirds.Value == false) { return; }
+                int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Bird", 0);
+                if (storedLevel == 0)
+                {
+                    LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
+                    __instance.m_nview.GetZDO().Set("SLE_Bird", storedLevel);
+                }
+                if (storedLevel > 1)
+                {
+                    float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
+                    //Logger.LogDebug($"Setting bird size {scale}.");
+                    __instance.transform.localScale *= scale;
+                    Physics.SyncTransforms();
+                    DropOnDestroyed dropondeath = __instance.gameObject.GetComponent<DropOnDestroyed>();
+                    List<DropTable.DropData> drops = new List<DropTable.DropData>();
+                    foreach (var drop in dropondeath.m_dropWhenDestroyed.m_drops)
+                    {
+                        DropTable.DropData lvlupdrop = new DropTable.DropData();
+                        // Scale the amount of drops based on level
+                        lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * storedLevel));
+                        lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * storedLevel));
+                        //Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
+                        lvlupdrop.m_item = drop.m_item;
+                        drops.Add(lvlupdrop);
+                    }
+                    dropondeath.m_dropWhenDestroyed.m_drops = drops;
+                }
+            }
+        }
+
         [HarmonyPatch(typeof(Growup))]
         public static class SetGrowUpLevel
         {
@@ -539,7 +690,7 @@ namespace StarLevelSystem.modules
             ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
             creature_biome = biome;
             biome_settings = null;
-            Logger.LogDebug($"{creature_name} {biome} {p}");
+            //Logger.LogDebug($"{creature_name} {biome} {p}");
 
             bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
             if (biome_all_setting_check) {

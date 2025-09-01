@@ -31,5 +31,11 @@
   "SoulEater_prefix1": "Soul Eater",
   "SoulEater_suffix1": "Soul Eater",
   "EitrDrain_prefix1": "Eitr Devouring",
-  "EitrDrain_prefix2": "Eitr Eating"
+  "EitrDrain_prefix2": "Eitr Eating",
+  "ResistPierce_prefix1": "Pierce Resistant",
+  "ResistPierce_suffix1": "Arrow Blocking",
+  "ResistSlash_prefix1": "Slash Resistant",
+  "ResistSlash_suffix1": "Sword Blocking",
+  "ResistBlunt_prefix1": "Blunt Resistant",
+  "ResistBlunt_suffix1": "Blunt Blocking"
 }

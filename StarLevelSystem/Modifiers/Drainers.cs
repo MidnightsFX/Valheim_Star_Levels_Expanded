@@ -18,7 +18,7 @@ namespace StarLevelSystem.Modifiers
                 Character attacker = hit.GetAttacker();
                 if (attacker == null || attacker.IsPlayer()) { return; }
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(attacker);
-                if (cDetails != null && cDetails.Modifiers != null) { return; }
+                if (cDetails == null || cDetails.Modifiers == null) { return; }
                 if (cDetails.Modifiers.Keys.Contains(ModifierNames.StaminaDrain)) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain, cDetails.Modifiers[ModifierNames.StaminaDrain]);
                     __instance.UseStamina(cmcfg.basepower + (cmcfg.perlevelpower * cDetails.Level));

@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using PlayFab.EconomyModels;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections;
@@ -100,6 +101,7 @@ namespace StarLevelSystem.modules
                 // Apply damage recieved Modifiers for the target
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (cdc == null) { return; }
+                Logger.LogDebug($"Damage recieved mods: Fire:{cdc.DamageRecievedModifiers[DamageType.Fire]} Frost:{cdc.DamageRecievedModifiers[DamageType.Frost]} Lightning:{cdc.DamageRecievedModifiers[DamageType.Lightning]} Poison:{cdc.DamageRecievedModifiers[DamageType.Poison]} Spirit:{cdc.DamageRecievedModifiers[DamageType.Spirit]} Blunt:{cdc.DamageRecievedModifiers[DamageType.Blunt]} Slash:{cdc.DamageRecievedModifiers[DamageType.Slash]} Pierce:{cdc.DamageRecievedModifiers[DamageType.Pierce]}");
                 hit.m_damage.m_fire *= cdc.DamageRecievedModifiers[DamageType.Fire];
                 hit.m_damage.m_frost *= cdc.DamageRecievedModifiers[DamageType.Frost];
                 hit.m_damage.m_lightning *= cdc.DamageRecievedModifiers[DamageType.Lightning];
@@ -150,36 +152,6 @@ namespace StarLevelSystem.modules
                     case DamageType.Pickaxe:
                         hit.m_damage.m_pickaxe += hitdamage * dmg.Value;
                         break;
-                }
-            }
-        }
-
-
-        [HarmonyPatch(typeof(RandomFlyingBird), nameof(RandomFlyingBird.Awake))]
-        public static class RandomFlyingBirdExtension
-        {
-            public static void Postfix(RandomFlyingBird __instance) {
-                if (ValConfig.EnableScalingBirds.Value == false) { return; }
-                LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                int level = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
-                if (level > 1) {
-                    float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * level);
-                    Logger.LogDebug($"Setting bird size {scale}.");
-                    __instance.transform.localScale *= scale;
-                    Physics.SyncTransforms();
-                    DropOnDestroyed dropondeath = __instance.gameObject.GetComponent<DropOnDestroyed>();
-                    List<DropTable.DropData> drops = new List<DropTable.DropData>();
-                    foreach (var drop in dropondeath.m_dropWhenDestroyed.m_drops)
-                    {
-                        DropTable.DropData lvlupdrop = new DropTable.DropData();
-                        // Scale the amount of drops based on level
-                        lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * level));
-                        lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * level));
-                        Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {level}.");
-                        lvlupdrop.m_item = drop.m_item;
-                        drops.Add(lvlupdrop);
-                    }
-                    dropondeath.m_dropWhenDestroyed.m_drops = drops;
                 }
             }
         }
@@ -243,13 +215,12 @@ namespace StarLevelSystem.modules
 
             float current_size = zview.GetZDO().GetFloat("SLE_Size", 0f);
             if (current_size > 0f && force_update == false) {
-
                 if (cDetails.CreaturePrefab) {
                     Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * current_size;
-                    creature.transform.localScale = sizeEstimate;
                     Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
+                    creature.transform.localScale = sizeEstimate;
+                    Physics.SyncTransforms();
                 }
-                Physics.SyncTransforms();
                 return;
             }
             if (include_existing && current_size > 0) {

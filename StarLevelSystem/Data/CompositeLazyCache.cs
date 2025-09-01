@@ -23,7 +23,14 @@ namespace StarLevelSystem.Data
             }
         }
 
-        public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0) {
+        public static void UpdateCacheEntry(Character character, CreatureDetailCache cacheEntry) {
+            uint czoid = character.GetZDOID().ID;
+            if (sessionCache.ContainsKey(czoid)) {
+                sessionCache[czoid] = cacheEntry;
+            }
+        }
+
+        public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0, bool onlycache = false, bool setupModifiers = true) {
             if (character == null) { return null; }
             if (character.IsPlayer()) { return null; }
             //Logger.LogDebug("Checking CreatureDetailCache");
@@ -31,12 +38,13 @@ namespace StarLevelSystem.Data
             if (sessionCache.ContainsKey(czoid) && update == false) {
                 return sessionCache[czoid];
             }
+            if (onlycache) { return null; }
             // Setup cache
             CreatureDetailCache characterCacheEntry = new CreatureDetailCache() { };
 
             ZDO creatureZDO = character.m_nview?.GetZDO();
             if (creatureZDO == null) {
-                Logger.LogDebug("ZDO null, skipping.");
+                Logger.LogWarning("ZDO null, skipping.");
                 return characterCacheEntry;
             }
 
@@ -141,26 +149,34 @@ namespace StarLevelSystem.Data
 
 
             // Set or load creature modifiers
-            if (!character.IsPlayer() && character != null) {
-                if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true) {
-                    int numBossMods = ValConfig.MaxMajorModifiersPerCreature.Value;
-                    if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
-                    float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
-                    if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
-                    characterCacheEntry.Modifiers = CreatureModifiers.SetupBossModifiers(character, characterCacheEntry, numBossMods, chanceForBossMod);
-                } else {
-                    Logger.LogDebug("Setting up creature modifiers");
-                    int majorMods = ValConfig.MaxMajorModifiersPerCreature.Value;
-                    if (creature_settings != null && creature_settings.MaxMajorModifiers > -1) { majorMods = creature_settings.MaxMajorModifiers; }
-                    int minorMods = ValConfig.MaxMinorModifiersPerCreature.Value;
-                    if (creature_settings != null && creature_settings.MaxMinorModifiers > -1) { minorMods = creature_settings.MaxMinorModifiers; }
-                    float chanceMajorMod = ValConfig.ChanceMajorModifier.Value;
-                    if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceMajorMod = creature_settings.ChanceForMajorModifier; }
-                    float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
-                    if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
-                    characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, majorMods, minorMods, chanceMajorMod, chanceMinorMod);
+            if (setupModifiers)
+            {
+                if (!character.IsPlayer() && character != null)
+                {
+                    if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true)
+                    {
+                        int numBossMods = ValConfig.MaxMajorModifiersPerCreature.Value;
+                        if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
+                        float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
+                        if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
+                        characterCacheEntry.Modifiers = CreatureModifiers.SetupBossModifiers(character, characterCacheEntry, numBossMods, chanceForBossMod);
+                    }
+                    else
+                    {
+                        Logger.LogDebug("Setting up creature modifiers");
+                        int majorMods = ValConfig.MaxMajorModifiersPerCreature.Value;
+                        if (creature_settings != null && creature_settings.MaxMajorModifiers > -1) { majorMods = creature_settings.MaxMajorModifiers; }
+                        int minorMods = ValConfig.MaxMinorModifiersPerCreature.Value;
+                        if (creature_settings != null && creature_settings.MaxMinorModifiers > -1) { minorMods = creature_settings.MaxMinorModifiers; }
+                        float chanceMajorMod = ValConfig.ChanceMajorModifier.Value;
+                        if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceMajorMod = creature_settings.ChanceForMajorModifier; }
+                        float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
+                        if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
+                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, majorMods, minorMods, chanceMajorMod, chanceMinorMod);
+                    }
                 }
             }
+
 
             // Add it to the cache, and return it
             if (character == null) {return null; }

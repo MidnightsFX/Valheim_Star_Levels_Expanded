@@ -1,7 +1,6 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -28,6 +27,7 @@ namespace StarLevelSystem.modules
                     continue;
                 }
                 mods.Add(mod, ModifierType.Boss);
+                cacheEntry.Modifiers = mods;
                 var selectedMod = CreatureModifiersData.CreatureModifiers.BossModifiers[mod];
                 selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
                 SetupCreatureVFX(character, selectedMod);
@@ -52,6 +52,7 @@ namespace StarLevelSystem.modules
                         continue;
                     }
                     mods.Add(mod, ModifierType.Major);
+                    cacheEntry.Modifiers = mods;
                     var selectedMod = CreatureModifiersData.CreatureModifiers.MajorModifiers[mod];
                     selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
                     SetupCreatureVFX(character, selectedMod);
@@ -72,6 +73,7 @@ namespace StarLevelSystem.modules
                         continue;
                     }
                     mods.Add(mod, ModifierType.Minor);
+                    cacheEntry.Modifiers = mods;
                     //Logger.LogDebug($"Checking {CreatureModifiersData.CreatureModifiers.MinorModifiers.Count} for {mod}");
                     var selectedMod = CreatureModifiersData.CreatureModifiers.MinorModifiers[mod];
                     //Logger.LogDebug($"Setting up mod");
@@ -127,18 +129,18 @@ namespace StarLevelSystem.modules
 
         internal static string CheckOrBuildCreatureName(Character chara, CreatureDetailCache cacheEntry) {
             // Skip if the creature is getting deleted
-            if (cacheEntry.creatureDisabledInBiome == true) { return Localization.instance.Localize(chara.m_name); }
+            if (cacheEntry.creatureDisabledInBiome == true || cacheEntry == null) { return Localization.instance.Localize(chara.m_name); }
             string setName = chara.m_nview.GetZDO().GetString("SLE_Name");
             if (setName == "") {
                 string prefix = "";
                 ModifierNames prefixFromMod = ModifierNames.None;
-                if (cacheEntry.ModifierPrefixNames.Count > 0) {
+                if (cacheEntry.ModifierPrefixNames != null && cacheEntry.ModifierPrefixNames.Count > 0) {
                     KeyValuePair<ModifierNames, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
                     prefixFromMod = selected.Key;
-                    prefix = selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)];
+                    prefix = selected.Value[Random.Range(0, selected.Value.Count - 1)];
                 }
                 string suffix = "";
-                if (cacheEntry.ModifierSuffixNames.Count > 0) {
+                if (cacheEntry.ModifierSuffixNames != null && cacheEntry.ModifierSuffixNames.Count > 0) {
                     KeyValuePair<ModifierNames, List<string>> selected;
                     if (prefixFromMod != ModifierNames.None) {
                         selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames, new List<ModifierNames>() { prefixFromMod });

@@ -95,10 +95,12 @@ namespace StarLevelSystem.Data
                     name_suffixes = new List<string>() { "$ResistPierce_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "resistPierce",
+                    starVisual = "pierceResist",
                     config = new CreatureModConfig() {
-                        perlevelpower = 0.05f,
+                        perlevelpower = 0.02f,
+                        basepower = 0.5f
                         },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
                     }
                 }
             },
@@ -176,6 +178,48 @@ namespace StarLevelSystem.Data
                         perlevelpower = 0.05f,
                         },
                     unallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.ResistPierce, new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$ResistPierce_prefix1" },
+                    name_suffixes = new List<string>() { "$ResistPierce_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureLightning",
+                    starVisual = "pierceResist",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.02f,
+                        basepower = 0.5f
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    }
+                },
+                {ModifierNames.ResistSlash, new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$ResistSlash_prefix1" },
+                    name_suffixes = new List<string>() { "$ResistSlash_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureLightning",
+                    starVisual = "slashResist",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.02f,
+                        basepower = 0.5f
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    }
+                },
+                {ModifierNames.ResistBlunt, new CreatureModifier() {
+                    selectionWeight = 10,
+                    name_prefixes = new List<string>() { "$ResistBlunt_prefix1" },
+                    name_suffixes = new List<string>() { "$ResistBlunt_suffix1" },
+                    namingConvention = NameSelectionStyle.RandomBoth,
+                    //visualEffect = "creatureLightning",
+                    starVisual = "bluntResist",
+                    config = new CreatureModConfig() {
+                        perlevelpower = 0.02f,
+                        basepower = 0.5f
+                        },
+                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
                     }
                 }
             },
@@ -272,8 +316,8 @@ namespace StarLevelSystem.Data
 
             if (type == ModifierType.Boss) {
                 List<ProbabilityEntry> bossProbability = BuildProbabilityEntries(creature, CreatureModifiers.BossModifiers);
-                if (!cMinorModifierProbabilityList.ContainsKey(creature)) {
-                    cMinorModifierProbabilityList.Add(creature, bossProbability);
+                if (!cBossModifierProbabilityList.ContainsKey(creature)) {
+                    cBossModifierProbabilityList.Add(creature, bossProbability);
                 }
                 return bossProbability;
             }

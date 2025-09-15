@@ -7,8 +7,8 @@ namespace StarLevelSystem.Modifiers
     {
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
-            ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] += config.basepower + (config.perlevelpower * ccache.Level);
-            ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] += config.basepower + (config.perlevelpower * ccache.Level);
+            ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] += config.BasePower + (config.PerlevelPower * ccache.Level);
+            ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] += config.BasePower + (config.PerlevelPower * ccache.Level);
         }
     }
 }

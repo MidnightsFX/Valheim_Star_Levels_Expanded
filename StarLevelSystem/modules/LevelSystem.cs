@@ -37,7 +37,7 @@ namespace StarLevelSystem.modules
                 if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) {
                     max_level = biome_settings.BiomeMaxLevelOverride;
                 }
-                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride != 0) {
+                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) {
                     max_level = creature_settings.CreatureMaxLevelOverride;
                 }
 
@@ -104,7 +104,7 @@ namespace StarLevelSystem.modules
             if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.ContainsKey(creature_name)) {
                 //Logger.LogDebug($"Creature specific config found for {creature_name}");
                 if (creature_settings.CustomCreatureLevelUpChance != null) {
-                    if (creature_settings.EnableCreatureLevelOverride) { maxLevel = creature_settings.CreatureMaxLevelOverride; }
+                    if (creature_settings.CreatureMaxLevelOverride > -1) { maxLevel = creature_settings.CreatureMaxLevelOverride; }
                     if (creature_settings.CustomCreatureLevelUpChance != null) { levelup_chances = creature_settings.CustomCreatureLevelUpChance; }
                     return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
                 }

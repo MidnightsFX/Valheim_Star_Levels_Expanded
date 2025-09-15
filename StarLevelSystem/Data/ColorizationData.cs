@@ -1,5 +1,6 @@
 ﻿using StarLevelSystem.modules;
 using System.Collections.Generic;
+using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Data
 {
@@ -852,6 +853,26 @@ namespace StarLevelSystem.Data
             { 8,new ColorDef() { hue = -0.3575756f, saturation = 0.09342755f, value = 0.3008582f } },
             { 9,new ColorDef() { hue = 0.3575756f, saturation = 0.09342755f, value = -0.1008582f } },
             { 10,new ColorDef() { hue = 0f, saturation = -0.25f, value = 0f } }
+        };
+
+        internal static readonly Dictionary<string, List<ColorRangeDef>> defaultColorGenerators = new Dictionary<string, List<ColorRangeDef>>()
+        {
+            { "DefaultGenerator", new List<ColorRangeDef>() {
+                { new ColorRangeDef() {
+                    CharacterSpecific = false,
+                    RangeStart = 1,
+                    RangeEnd = 15,
+                    StartColorDef = new ColorDef() { hue = 0.07130837f, saturation = 0.05205864f, value = 0.01721987f },
+                    EndColorDef = new ColorDef() { hue = -0.07488244f, saturation = 0.09342755f, value = -0.1008582f }
+                }},
+                { new ColorRangeDef() {
+                    CharacterSpecific = false,
+                    RangeStart = 16,
+                    RangeEnd = 32,
+                    StartColorDef = new ColorDef() { hue = 0f, saturation = -0.3959962f, value = 0f },
+                    EndColorDef = new ColorDef() { hue = -0.3575756f, saturation = 0.2f, value = -0.2270744f }
+                }},
+            } }
         };
     }
 }

@@ -202,7 +202,7 @@ namespace StarLevelSystem.modules
 
             // Determine if this creature should get deleted due to disableSpawn
             // We do not delete tamed creatures, to allow supporting taming of creatures, bringing them to a banned biome and breeding
-            if (__instance.m_tamed == false && cDetails.creatureDisabledInBiome) {
+            if (__instance.m_tamed == false && cDetails.CreatureDisabledInBiome) {
                 Logger.LogDebug($"Creature {__instance.name} in biome {cDetails.Biome} selected for deletion.");
                 ZNetScene.instance.StartCoroutine(DestroyCoroutine(__instance.gameObject));
                 return;

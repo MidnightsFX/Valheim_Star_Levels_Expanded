@@ -8,8 +8,8 @@ namespace StarLevelSystem.Modifiers
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache)
         {
-            ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] += config.basepower;
-            ccache.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.AttackSpeedPerLevel] += (config.perlevelpower * ccache.Level);
+            ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] += config.BasePower;
+            ccache.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.AttackSpeedPerLevel] += (config.PerlevelPower * ccache.Level);
         }
     }
 }

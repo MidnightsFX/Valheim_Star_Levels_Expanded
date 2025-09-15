@@ -9,9 +9,9 @@ namespace StarLevelSystem.Modifiers
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache)
         {
             if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Poison)) {
-                ccache.CreatureDamageBonus[DamageType.Poison] += config.basepower + (config.perlevelpower * ccache.Level);
+                ccache.CreatureDamageBonus[DamageType.Poison] += config.BasePower + (config.PerlevelPower * ccache.Level);
             } else {
-                ccache.CreatureDamageBonus[DamageType.Poison] = config.basepower + (config.perlevelpower * ccache.Level);
+                ccache.CreatureDamageBonus[DamageType.Poison] = config.BasePower + (config.PerlevelPower * ccache.Level);
             }
         }
     }

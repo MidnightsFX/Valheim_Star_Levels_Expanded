@@ -16,23 +16,23 @@ namespace StarLevelSystem.Data
                     new ExtendedDrop{
                             Drop = new Drop
                             {
-                                prefab = "GiantBloodSack",
-                                min = 1,
-                                max = 1,
-                                chance = 1f
+                                Prefab = "GiantBloodSack",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 1f
                             },
-                            amountScaleFactor = 0.5f,
+                            AmountScaleFactor = 0.5f,
                         },
                     new ExtendedDrop{
                             Drop = new Drop
                             {
-                                prefab = "TrophyTick",
-                                min = 1,
-                                max = 1,
-                                chance = 0.05f
+                                Prefab = "TrophyTick",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.05f
                             },
-                            chanceScaleFactor = 1.01f,
-                            maxScaledAmount = 1,
+                            ChanceScaleFactor = 1.01f,
+                            MaxScaledAmount = 1,
                         }
                     }
                 },
@@ -40,12 +40,12 @@ namespace StarLevelSystem.Data
                     new ExtendedDrop{
                             Drop = new Drop
                             {
-                                prefab = "Resin",
-                                min = 1,
-                                max = 1,
-                                chance = 0.25f
+                                Prefab = "Resin",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.25f
                             },
-                            amountScaleFactor = 0.5f,
+                            AmountScaleFactor = 0.5f,
                         }
                     }
                 },
@@ -53,32 +53,32 @@ namespace StarLevelSystem.Data
                     new ExtendedDrop{
                             Drop = new Drop
                             {
-                                prefab = "Stone",
-                                min = 1,
-                                max = 1,
-                                chance = 1f
+                                Prefab = "Stone",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 1f
                             },
-                            amountScaleFactor = 0.5f,
+                            AmountScaleFactor = 0.5f,
                         },
                     new ExtendedDrop{
                             Drop = new Drop
                             {
-                                prefab = "Wood",
-                                min = 1,
-                                max = 1,
-                                chance = 1f
+                                Prefab = "Wood",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 1f
                             },
-                            amountScaleFactor = 0.5f,
+                            AmountScaleFactor = 0.5f,
                         },
                     new ExtendedDrop{
                             Drop = new Drop
                             {
-                                prefab = "Resin",
-                                min = 1,
-                                max = 1,
-                                chance = 0.25f
+                                Prefab = "Resin",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.25f
                             },
-                            amountScaleFactor = 0.5f,
+                            AmountScaleFactor = 0.5f,
                         }
                     }
                 }
@@ -87,45 +87,45 @@ namespace StarLevelSystem.Data
             DistanceLootModifier = new SortedDictionary<int, DistanceLootModifier>()
             {
                 { 1250, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.02f,
-                        maxAmountScaleFactorBonus = 1.02f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.02f,
+                        MaxAmountScaleFactorBonus = 1.02f
                     }
                 },
                 { 2500, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.05f,
-                        maxAmountScaleFactorBonus = 1.05f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.05f,
+                        MaxAmountScaleFactorBonus = 1.05f
                     }
                 },
                 { 3750, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.08f,
-                        maxAmountScaleFactorBonus = 1.08f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.08f,
+                        MaxAmountScaleFactorBonus = 1.08f
                     }
                 },
                 { 5000, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.12f,
-                        maxAmountScaleFactorBonus = 1.12f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.12f,
+                        MaxAmountScaleFactorBonus = 1.12f
                     }
                 },
                 { 6250, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.15f,
-                        maxAmountScaleFactorBonus = 1.15f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.15f,
+                        MaxAmountScaleFactorBonus = 1.15f
                     }
                 },
                 { 7500, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.2f,
-                        maxAmountScaleFactorBonus = 1.2f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.2f,
+                        MaxAmountScaleFactorBonus = 1.2f
                     }
                 },
                 { 8750, new DistanceLootModifier() {
-                        chanceScaleFactorBonus = 0f,
-                        minAmountScaleFactorBonus = 1.35f,
-                        maxAmountScaleFactorBonus = 1.35f
+                        ChanceScaleFactorBonus = 0f,
+                        MinAmountScaleFactorBonus = 1.35f,
+                        MaxAmountScaleFactorBonus = 1.35f
                     }
                 }
             }

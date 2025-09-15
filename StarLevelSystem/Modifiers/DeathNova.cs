@@ -27,13 +27,13 @@ namespace StarLevelSystem.Modifiers
                 if (cDetails.Modifiers.Keys.Contains(ModifierNames.FireNova)) {
                     Logger.LogDebug("Activating FireNova");
                     CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova, cDetails.Modifiers[ModifierNames.FireNova]);
-                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.secondaryEffect], __instance.transform.position, __instance.transform.rotation);
+                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
                     go.SetActive(false);
                     Aoe aoe = go.GetComponent<Aoe>();
                     // Configure damage
                     if (aoe) {
                         float characterdmg = Extensions.EstimateCharacterDamage(__instance);
-                        float dmgmod = cmdef.config.basepower + (cmdef.config.perlevelpower * __instance.m_level);
+                        float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                         aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 4f;
                         aoe.m_damage.m_fire = (characterdmg * dmgmod);
                     }

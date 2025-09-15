@@ -15,8 +15,8 @@ namespace StarLevelSystem.Modifiers
             Logger.LogDebug($"Setting up Summoner for {creature.name} summon script {summoningScript}");
             if (summoningScript == null) {
                 SLSSummoner summoner = creature.gameObject.AddComponent<SLSSummoner>();
-                if (config.biomeObjects.ContainsKey(ccache.Biome)) {
-                    summoner.SetupSummoner(creature, config.biomeObjects[ccache.Biome]);
+                if (config.BiomeObjects.ContainsKey(ccache.Biome)) {
+                    summoner.SetupSummoner(creature, config.BiomeObjects[ccache.Biome], Mathf.RoundToInt(config.BasePower), config.PerlevelPower);
                 }
             }
         }

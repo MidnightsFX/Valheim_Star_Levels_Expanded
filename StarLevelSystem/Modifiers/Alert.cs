@@ -12,7 +12,7 @@ namespace StarLevelSystem.Modifiers
     {
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
-            creature.m_baseAI.m_hearRange *= config.basepower + (config.perlevelpower * ccache.Level);
+            creature.m_baseAI.m_hearRange *= config.BasePower + (config.PerlevelPower * ccache.Level);
         }
     }
 }

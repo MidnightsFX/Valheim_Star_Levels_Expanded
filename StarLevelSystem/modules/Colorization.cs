@@ -1,7 +1,9 @@
-﻿using HarmonyLib;
+﻿using BepInEx;
+using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEngine;
@@ -10,31 +12,15 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
-    public class ColorDef
-    {
-        public float hue {  get; set; } = 0f;
-        public float saturation { get; set; } = 0f;
-        public float value { get; set; } = 0f;
-        public bool is_emissive { get; set; } = false;
 
-        public LevelEffects.LevelSetup toLevelEffect() {
-            return new LevelEffects.LevelSetup() {
-                m_scale = 1f,
-                m_hue = hue,
-                m_saturation = saturation,
-                m_value = value,
-                m_setEmissiveColor = is_emissive,
-                m_emissiveColor = new Color(hue, saturation, value)
-            };
-        }
-    }
     public static class Colorization
     {
         public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;
         private static CreatureColorizationSettings defaultColorizationSettings = new CreatureColorizationSettings()
         {
             characterSpecificColorization = ColorizationData.characterColorizationData,
-            defaultLevelColorization = ColorizationData.defaultColorizationData
+            defaultLevelColorization = ColorizationData.defaultColorizationData,
+            CharacterColorGenerators = ColorizationData.defaultColorGenerators,
         };
         public static ColorDef defaultColorization = new ColorDef()
         {
@@ -65,6 +51,17 @@ namespace StarLevelSystem.modules
                         creatureColorizationSettings.defaultLevelColorization.Add(entry.Key, entry.Value);
                     }
                 }
+                if (creatureColorizationSettings.CharacterColorGenerators != null) {
+                    Logger.LogInfo("Running color generators");
+                    foreach (var entry in creatureColorizationSettings.CharacterColorGenerators) {
+                        Logger.LogInfo($"Building color range for {entry.Key}");
+                        foreach (var colorRange in entry.Value) { BuildAddColorRange(entry.Key, colorRange); }
+                    }
+                    if (ValConfig.OutputColorizationGeneratorsData.Value) {
+                        File.WriteAllText(Path.Combine(Paths.ConfigPath, "StarLevelSystem", "DebugGeneratedColorValues.yaml"), DataObjects.yamlserializer.Serialize(creatureColorizationSettings));
+                    }
+                }
+
                 Logger.LogInfo($"Updated ColorizationSettings.");
                 // This might need to be async
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
@@ -135,6 +132,68 @@ namespace StarLevelSystem.modules
             }
         }
 
+        internal static void BuildAddColorRange(string creatureKey, ColorRangeDef colorGen) {
+            float hueRange = Mathf.Abs(colorGen.EndColorDef.hue) + Mathf.Abs(colorGen.StartColorDef.hue);
+            Mathf.Clamp(hueRange, 0f, 2f);
+
+            float satRange = Mathf.Abs(colorGen.EndColorDef.saturation) + Mathf.Abs(colorGen.StartColorDef.saturation);
+            Mathf.Clamp(satRange, 0f, 2f);
+
+            float valRange = Mathf.Abs(colorGen.EndColorDef.value) + Mathf.Abs(colorGen.StartColorDef.value);
+            Mathf.Clamp(valRange, 0f, 2f);
+
+            int steps = colorGen.RangeEnd - colorGen.RangeStart;
+
+            float hueStep = hueRange / steps;
+            float satStep = satRange / steps;
+            float valStep = valRange / steps;
+            int hueDirection = colorGen.StartColorDef.hue > colorGen.EndColorDef.hue ? -1 : 1;
+            int satDirection = colorGen.StartColorDef.saturation > colorGen.EndColorDef.saturation ? -1 : 1;
+            int valueDirection = colorGen.StartColorDef.value > colorGen.EndColorDef.value ? -1 : 1;
+
+            if (colorGen.CharacterSpecific && !creatureColorizationSettings.characterSpecificColorization.ContainsKey(creatureKey)) {
+                creatureColorizationSettings.characterSpecificColorization.Add(creatureKey, new Dictionary<int, ColorDef>());
+            }
+
+            int currentLevel = colorGen.RangeStart;
+            int currentSegment = 0;
+            while(currentLevel < colorGen.RangeEnd + 1) {
+                //Logger.LogDebug($"Generating ColorDef for {currentLevel}");
+                ColorDef colorRangeDef = new ColorDef() {
+                    hue = colorGen.StartColorDef.hue + (hueStep * currentSegment * hueDirection),
+                    saturation = colorGen.StartColorDef.saturation + (satStep * currentSegment * satDirection),
+                    value = colorGen.StartColorDef.value + (valStep * currentSegment * valueDirection),
+                    is_emissive = false
+                };
+
+                if (colorGen.CharacterSpecific == true) {
+                    if (!creatureColorizationSettings.characterSpecificColorization.ContainsKey(creatureKey)) {
+                        creatureColorizationSettings.characterSpecificColorization.Add(creatureKey , new Dictionary<int, ColorDef>());
+                    }
+
+                    if (creatureColorizationSettings.characterSpecificColorization[creatureKey].ContainsKey(currentLevel)) {
+                        if (colorGen.OverwriteExisting == true) {
+                            creatureColorizationSettings.characterSpecificColorization[creatureKey][currentLevel] = colorRangeDef;
+                        }
+                    } else {
+                        creatureColorizationSettings.characterSpecificColorization[creatureKey].Add(currentLevel, colorRangeDef);
+                    }
+                } else {
+                    if (creatureColorizationSettings.defaultLevelColorization.ContainsKey(currentLevel)) {
+                        if (colorGen.OverwriteExisting == true) {
+                            creatureColorizationSettings.defaultLevelColorization[currentLevel] = colorRangeDef;
+                        }
+                    } else {
+                        creatureColorizationSettings.defaultLevelColorization.Add(currentLevel, colorRangeDef);
+                    }
+                }
+
+                currentLevel++;
+                currentSegment++;
+            }
+        }
+
+        // TODO: move to a command?
         //public static void DumpDefaultColorizations()
         //{
         //    foreach(var noid in  Resources.FindObjectsOfTypeAll<Humanoid>()) {

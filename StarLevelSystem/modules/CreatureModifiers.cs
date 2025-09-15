@@ -30,13 +30,13 @@ namespace StarLevelSystem.modules
                 cacheEntry.Modifiers = mods;
                 var selectedMod = CreatureModifiersData.ActiveCreatureModifiers.BossModifiers[mod];
                 selectedMod.LoadAndSetGameObjects();
-                selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
+                selectedMod.SetupMethodCall(character, selectedMod.Config, cacheEntry);
                 SetupCreatureVFX(character, selectedMod);
-                if (selectedMod.name_prefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
-                    cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.name_prefixes);
+                if (selectedMod.NamePrefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
+                    cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.NamePrefixes);
                 }
-                if (selectedMod.name_suffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
-                    cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.name_suffixes);
+                if (selectedMod.NameSuffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
+                    cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.NameSuffixes);
                 }
             }
             return mods;
@@ -55,13 +55,13 @@ namespace StarLevelSystem.modules
                     mods.Add(mod, ModifierType.Major);
                     cacheEntry.Modifiers = mods;
                     var selectedMod = CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers[mod];
-                    selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
+                    selectedMod.SetupMethodCall(character, selectedMod.Config, cacheEntry);
                     SetupCreatureVFX(character, selectedMod);
-                    if (selectedMod.name_prefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
-                        cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.name_prefixes);
+                    if (selectedMod.NamePrefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
+                        cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.NamePrefixes);
                     }
-                    if (selectedMod.name_suffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
-                        cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.name_suffixes);
+                    if (selectedMod.NameSuffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
+                        cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.NameSuffixes);
                     }
                 }
             }
@@ -78,16 +78,16 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Checking {CreatureModifiersData.CreatureModifiers.MinorModifiers.Count} for {mod}");
                     var selectedMod = CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers[mod];
                     //Logger.LogDebug($"Setting up mod");
-                    selectedMod.SetupMethodCall(character, selectedMod.config, cacheEntry);
+                    selectedMod.SetupMethodCall(character, selectedMod.Config, cacheEntry);
                     //Logger.LogDebug($"Setting up mod vfx");
                     SetupCreatureVFX(character, selectedMod);
                     //Logger.LogDebug($"Setting updating name prefixes");
-                    if (selectedMod.name_prefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
-                        cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.name_prefixes);
+                    if (selectedMod.NamePrefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
+                        cacheEntry.ModifierPrefixNames.Add(mod, selectedMod.NamePrefixes);
                     }
                     //Logger.LogDebug($"Setting updating name postfixes");
-                    if (selectedMod.name_suffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
-                        cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.name_suffixes);
+                    if (selectedMod.NameSuffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
+                        cacheEntry.ModifierSuffixNames.Add(mod, selectedMod.NameSuffixes);
                     }
                 }
             }
@@ -95,9 +95,9 @@ namespace StarLevelSystem.modules
         }
 
         internal static void SetupCreatureVFX(Character character, CreatureModifier cmodifier) {
-            if (cmodifier.visualEffect != null) {
+            if (cmodifier.VisualEffect != null) {
 
-                GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.visualEffect];
+                GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
                 bool hasVFXAlready = character.transform.Find($"{effectPrefab.name}(Clone)");
                 Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {
@@ -107,7 +107,7 @@ namespace StarLevelSystem.modules
                     float scale = height / 5f;
                     float rscale = character.GetRadius() / 2f;
 
-                    switch (cmodifier.visualEffectStyle)
+                    switch (cmodifier.VisualEffectStyle)
                     {
                         case VisualEffectStyle.top:
                             vfxadd.transform.localPosition = new Vector3(0, height, 0);
@@ -127,7 +127,7 @@ namespace StarLevelSystem.modules
 
         internal static string CheckOrBuildCreatureName(Character chara, CreatureDetailCache cacheEntry, bool useChache = true) {
             // Skip if the creature is getting deleted
-            if (cacheEntry.creatureDisabledInBiome == true || cacheEntry == null) { return Localization.instance.Localize(chara.m_name); }
+            if (cacheEntry.CreatureDisabledInBiome == true || cacheEntry == null) { return Localization.instance.Localize(chara.m_name); }
             string setName = chara.m_nview.GetZDO().GetString("SLE_Name");
             if (setName == "" || useChache == false) {
                 string prefix = "";
@@ -219,21 +219,21 @@ namespace StarLevelSystem.modules
 
             var selectedMod = CreatureModifiersData.GetModifierDef(newModifier, modType);
             Logger.LogDebug($"Setting up modifier.");
-            selectedMod.SetupMethodCall(character, selectedMod.config, cdc);
+            selectedMod.SetupMethodCall(character, selectedMod.Config, cdc);
             SetupCreatureVFX(character, selectedMod);
 
             // Name monikers
             Logger.LogDebug($"Updating naming monikers.");
-            if (selectedMod.name_prefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
+            if (selectedMod.NamePrefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
                 Logger.LogDebug($"Adding prefix names.");
                 if (!cdc.ModifierPrefixNames.ContainsKey(newModifier)) {
-                    cdc.ModifierPrefixNames.Add(newModifier, selectedMod.name_prefixes);
+                    cdc.ModifierPrefixNames.Add(newModifier, selectedMod.NamePrefixes);
                 }
             }
-            if (selectedMod.name_suffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
+            if (selectedMod.NameSuffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
                 Logger.LogDebug($"Adding suffix names.");
                 if (!cdc.ModifierSuffixNames.ContainsKey(newModifier)) {
-                    cdc.ModifierSuffixNames.Add(newModifier, selectedMod.name_suffixes);
+                    cdc.ModifierSuffixNames.Add(newModifier, selectedMod.NameSuffixes);
                 }
             }
             Logger.LogDebug($"Updating character cache entry.");

@@ -21,11 +21,11 @@ namespace StarLevelSystem.Modifiers
                 if (cDetails == null || cDetails.Modifiers == null) { return; }
                 if (cDetails.Modifiers.Keys.Contains(ModifierNames.StaminaDrain)) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain, cDetails.Modifiers[ModifierNames.StaminaDrain]);
-                    __instance.UseStamina(cmcfg.basepower + (cmcfg.perlevelpower * cDetails.Level));
+                    __instance.UseStamina(cmcfg.BasePower + (cmcfg.PerlevelPower * cDetails.Level));
                 }
                 if (cDetails.Modifiers.Keys.Contains(ModifierNames.EitrDrain)) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.EitrDrain, cDetails.Modifiers[ModifierNames.EitrDrain]);
-                    __instance.UseEitr(cmcfg.basepower + (cmcfg.perlevelpower * cDetails.Level));
+                    __instance.UseEitr(cmcfg.BasePower + (cmcfg.PerlevelPower * cDetails.Level));
                 }
             }
         }

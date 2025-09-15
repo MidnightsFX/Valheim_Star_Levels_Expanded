@@ -11,13 +11,13 @@ namespace StarLevelSystem.common
     internal static class RandomSelect
     {
         public static ModifierNames RandomSelectFromWeightedList(List<ProbabilityEntry> listOfWeights) {
-            float totalweight = listOfWeights.Select(x => x.selectionWeight).Sum();
+            float totalweight = listOfWeights.Select(x => x.SelectionWeight).Sum();
             if (totalweight == 0) { return ModifierNames.None; }
             float selection = UnityEngine.Random.Range(0, totalweight);
             float current_weight = 0f;
             //Logger.LogDebug($"Total weight is {totalweight}, random selection is {selection}");
             foreach (var entry in listOfWeights) {
-                current_weight += entry.selectionWeight;
+                current_weight += entry.SelectionWeight;
                 //Logger.LogDebug($"Current weight is {current_weight} >= {selection} for entry {entry.Name} - {entry.selectionWeight}");
                 if (current_weight >= selection) {
                     // Logger.LogDebug($"Randomly selected {entry.Name} with weight {entry.selectionWeight} from total {totalweight}");

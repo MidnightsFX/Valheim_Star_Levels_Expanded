@@ -17,7 +17,7 @@ namespace StarLevelSystem.Modifiers
                 if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Splitter)) {
                     Logger.LogDebug("Checking splitter multiplication");
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter, cDetails.Modifiers[ModifierNames.Splitter]);
-                    float totalsplits = cmcfg.basepower + (__instance.m_level * cmcfg.perlevelpower);
+                    float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
                     while (totalsplits >= 1) {
                         GameObject.Instantiate(cDetails.CreaturePrefab, __instance.transform.position, __instance.transform.rotation);

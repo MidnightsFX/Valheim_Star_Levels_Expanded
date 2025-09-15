@@ -16,7 +16,7 @@ namespace StarLevelSystem.Modifiers
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (cdc != null && cdc.Modifiers.ContainsKey(ModifierNames.LifeLink)) {
                     CreatureModifier cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink, cdc.Modifiers[ModifierNames.LifeLink]);
-                    float damage_reduction = 1 - (cm.config.basepower + (cm.config.perlevelpower* __instance.m_level));
+                    float damage_reduction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower* __instance.m_level));
                     if (damage_reduction < 0) { damage_reduction = 0f; }
 
                     hit.m_damage.Modify(damage_reduction);
@@ -29,9 +29,9 @@ namespace StarLevelSystem.Modifiers
                         // No players, and not self
                         if (character.IsPlayer() || character == __instance) { continue; }
                         Logger.LogDebug($"Distributing Damage to {character.m_name}");
-                        if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(cm.secondaryEffect)) {
+                        if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(cm.SecondaryEffect)) {
                             Vector3 targetTravel = __instance.transform.position - character.transform.position;
-                            GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cm.secondaryEffect], targetTravel, Quaternion.identity);
+                            GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cm.SecondaryEffect], targetTravel, Quaternion.identity);
                         }
                         
                         character.Damage(transferHit);

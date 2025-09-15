@@ -40,7 +40,7 @@ namespace StarLevelSystem.common
                     Logger.LogInfo($"Modifier Name must be one of {string.Join(",", Enum.GetValues(typeof(ModifierNames)))}");
                 }
                 CreatureModConfig cmfg = CreatureModifiersData.GetConfig(modname, modtype);
-                if (cmfg.perlevelpower == float.NaN || cmfg.perlevelpower == 0f && cmfg.basepower == float.NaN || cmfg.basepower == 0) {
+                if (cmfg.PerlevelPower == float.NaN || cmfg.PerlevelPower == 0f && cmfg.BasePower == float.NaN || cmfg.BasePower == 0) {
                     Logger.LogInfo($"{modtype} did not contain a definition for {modname}. Types availabe in {modtype}: {string.Join(",", GetModifiersOfType(modtype).Keys)}");
                 }
 
@@ -115,13 +115,13 @@ namespace StarLevelSystem.common
                         {
                             Drop = new DataObjects.Drop
                             {
-                                prefab = drop.m_prefab.name,
-                                min = drop.m_amountMin,
-                                max = drop.m_amountMax,
-                                chance = drop.m_chance,
-                                onePerPlayer = drop.m_onePerPlayer,
-                                levelMultiplier = drop.m_levelMultiplier,
-                                dontScale = drop.m_dontScale
+                                Prefab = drop.m_prefab.name,
+                                Min = drop.m_amountMin,
+                                Max = drop.m_amountMax,
+                                Chance = drop.m_chance,
+                                OnePerPlayer = drop.m_onePerPlayer,
+                                LevelMultiplier = drop.m_levelMultiplier,
+                                DontScale = drop.m_dontScale
                             }
                         };
                         extendedDrops.Add(extendedDrop);

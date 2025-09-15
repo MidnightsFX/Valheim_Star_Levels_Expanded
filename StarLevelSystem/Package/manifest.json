@@ -1,10 +1,11 @@
 ﻿{
   "name": "StarLevelSystem",
-  "description": "",
-  "version_number": "0.0.1",
+  "description": "We have two levels yes, but why not... MORE?",
+  "version_number": "0.8.0",
   "website_url": "",
   "dependencies": [
-    "denikson-BepInExPack_Valheim-5.4.2202",
-    "ValheimModding-Jotunn-2.23.2"
+    "denikson-BepInExPack_Valheim-5.4.2333",
+    "ValheimModding-Jotunn-2.26.1",
+    "ValheimModding-YamlDotNet-16.3.1"
   ]
 }

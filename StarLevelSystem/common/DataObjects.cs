@@ -5,6 +5,7 @@ using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -100,7 +101,9 @@ namespace StarLevelSystem.common
         public class BiomeSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             public int BiomeMaxLevelOverride { get; set; }
+            [DefaultValue(1f)]
             public float DistanceScaleModifier { get; set; } = 1f;
+            [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
@@ -110,14 +113,21 @@ namespace StarLevelSystem.common
 
         public class CreatureSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
-            public bool EnableCreatureLevelOverride { get; set; } = false;
-            public int CreatureMaxLevelOverride { get; set; }
+            [DefaultValue(-1)]
+            public int CreatureMaxLevelOverride { get; set; } = -1;
+            [DefaultValue(-1)]
             public int MaxMajorModifiers { get; set; } = -1;
+            [DefaultValue(-1f)]
             public float ChanceForMajorModifier { get; set; } = -1f;
+            [DefaultValue(-1)]
             public int MaxMinorModifiers { get; set; } = -1;
+            [DefaultValue(-1f)]
             public float ChanceForMinorModifier { get; set; } = -1f;
+            [DefaultValue(-1)]
             public int MaxBossModifiers { get; set; } = -1;
+            [DefaultValue(-1f)]
             public float ChanceForBossModifier { get; set; } = -1f;
+            [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
@@ -127,6 +137,7 @@ namespace StarLevelSystem.common
         public class CreatureColorizationSettings {
             public Dictionary<string, Dictionary<int, ColorDef>> characterSpecificColorization { get; set; }
             public Dictionary<int, ColorDef> defaultLevelColorization { get; set; }
+            public Dictionary<string, List<ColorRangeDef>> CharacterColorGenerators { get; set; }
         }
 
         public class LootSettings {
@@ -136,57 +147,62 @@ namespace StarLevelSystem.common
         }
 
         public class DistanceLootModifier {
-            public float minAmountScaleFactorBonus { get; set; } = 0f;
-            public float maxAmountScaleFactorBonus { get; set; } = 0f;
-            public float chanceScaleFactorBonus { get; set; } = 0f;
+            [DefaultValue(0f)]
+            public float MinAmountScaleFactorBonus { get; set; } = 0f;
+            [DefaultValue(0f)]
+            public float MaxAmountScaleFactorBonus { get; set; } = 0f;
+            [DefaultValue(0f)]
+            public float ChanceScaleFactorBonus { get; set; } = 0f;
         }
 
         public class ProbabilityEntry {
             public ModifierNames Name { get; set; }
-            public float selectionWeight { get; set; } = 1f;
+            [DefaultValue(1f)]
+            public float SelectionWeight { get; set; } = 1f;
         }
 
         public class CreatureModifier
         {
             public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
-            public List<string> name_prefixes { get; set; }
-            public List<string> name_suffixes { get; set; }
-            public float selectionWeight { get; set; } = 1f;
-            public CreatureModConfig config { get; set; } = new CreatureModConfig();
-            public string starVisual {  get; set; }
-            public string visualEffect { get; set; }
-            public string secondaryEffect { get; set; }
-            public VisualEffectStyle visualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
-            public List<string> allowedCreatures { get; set; } = new List<string>() { };
-            public List<string> unallowedCreatures { get; set; } = new List<string>() { };
-            public List<Heightmap.Biome> allowedBiomes { get; set; }
-            public string setupMethodClass { get; set; }
+            public List<string> NamePrefixes { get; set; }
+            public List<string> NameSuffixes { get; set; }
+            [DefaultValue(1f)]
+            public float SelectionWeight { get; set; } = 1f;
+            public CreatureModConfig Config { get; set; } = new CreatureModConfig();
+            public string StarVisual { get; set; }
+            public string VisualEffect { get; set; }
+            public string SecondaryEffect { get; set; }
+            public VisualEffectStyle VisualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
+            public List<string> AllowedCreatures { get; set; }
+            public List<string> UnallowedCreatures { get; set; }
+            public List<Heightmap.Biome> AllowedBiomes { get; set; }
+            public string SetupMethodClass { get; set; }
 
             // Add fallbacks to load prefabs that are not in the embedded resource bundle
             public void LoadAndSetGameObjects() {
-                if (starVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(starVisual)) {
-                    Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>($"assets/custom/starlevels/icons/{starVisual}.png");
-                    CreatureModifiersData.LoadedModifierSprites.Add(starVisual, game_obj);
+                if (StarVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(StarVisual)) {
+                    Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>($"assets/custom/starlevels/icons/{StarVisual}.png");
+                    CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, game_obj);
                 }
-                if (visualEffect != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(visualEffect)) {
-                    GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(visualEffect);
+                if (VisualEffect != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(VisualEffect)) {
+                    GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(VisualEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
-                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(visualEffect);
-                    CreatureModifiersData.LoadedModifierEffects.Add(visualEffect, mockfixedgo);
+                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(VisualEffect);
+                    CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockfixedgo);
                 }
-                if (secondaryEffect != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(secondaryEffect)) {
-                    GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(secondaryEffect);
+                if (SecondaryEffect != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(SecondaryEffect)) {
+                    GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(SecondaryEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
-                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(secondaryEffect);
-                    CreatureModifiersData.LoadedSecondaryEffects.Add(secondaryEffect, mockfixedgo);
+                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(SecondaryEffect);
+                    CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockfixedgo);
                 }
             }
 
             public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
-                if (setupMethodClass == null || setupMethodClass == "") { return; }
-                Type methodClass = Type.GetType(setupMethodClass);
+                if (SetupMethodClass == null || SetupMethodClass == "") { return; }
+                Type methodClass = Type.GetType(SetupMethodClass);
                 //Logger.LogDebug($"Setting up modifier {setupMethodClass} with signature {methodClass}");
                 MethodInfo theMethod = methodClass.GetMethod("Setup");
                 if (theMethod == null) {
@@ -198,9 +214,9 @@ namespace StarLevelSystem.common
         }
 
         public class CreatureModConfig {
-            public float perlevelpower { get; set; }
-            public float basepower { get; set; }
-            public Dictionary<Heightmap.Biome, List<string>> biomeObjects { get; set; }
+            public float PerlevelPower { get; set; }
+            public float BasePower { get; set; }
+            public Dictionary<Heightmap.Biome, List<string>> BiomeObjects { get; set; }
         }
 
         public class CreatureModifierCollection
@@ -211,8 +227,8 @@ namespace StarLevelSystem.common
         }
 
         public class CreatureDetailCache {
-            public bool creatureDisabledInBiome { get; set; } = false;
-            public bool creatureCheckedSpawnMult { get; set; } = false;
+            public bool CreatureDisabledInBiome { get; set; } = false;
+            public bool CreatureCheckedSpawnMult { get; set; } = false;
             public int Level { get; set; }
             public Dictionary<ModifierNames, ModifierType> Modifiers { get; set; }
             public Dictionary<ModifierNames, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<ModifierNames, List<string>>();
@@ -252,47 +268,87 @@ namespace StarLevelSystem.common
         {
             // Use fractional scaling for decaying drop increases
             public Drop Drop { get; set; }
-            public CharacterDrop.Drop gameDrop { get; private set; }
-            public float amountScaleFactor { get; set; } = 0f;
-            public float chanceScaleFactor { get; set; } = 0f;
-            public bool useChanceAsMultiplier { get; set; } = false;
+            public CharacterDrop.Drop GameDrop { get; private set; }
+            [DefaultValue(0f)]
+            public float AmountScaleFactor { get; set; } = 0f;
+            [DefaultValue(0f)]
+            public float ChanceScaleFactor { get; set; } = 0f;
+            public bool UseChanceAsMultiplier { get; set; } = false;
             // Scale amount dropped from the base amount to max, based on level
-            public bool scalebyMaxLevel { get; set; } = false;
-            public bool doesNotScale { get; set; } = false;
-            public int maxScaledAmount { get; set; } = 0;
+            public bool ScalebyMaxLevel { get; set; } = false;
+            public bool DoesNotScale { get; set; } = false;
+            [DefaultValue(0)]
+            public int MaxScaledAmount { get; set; } = 0;
             // Modify drop amount based on creature stars
-            public bool scalePerNearbyPlayer { get; set; } = false;
-            public bool untamedOnlyDrop { get; set; } = false;
-            public bool tamedOnlyDrop { get; set; } = false;
+            public bool ScalePerNearbyPlayer { get; set; } = false;
+            public bool UntamedOnlyDrop { get; set; } = false;
+            public bool TamedOnlyDrop { get; set; } = false;
             public void SetupDrop() {
-                gameDrop = Drop.ToCharDrop();
+                GameDrop = Drop.ToCharDrop();
             }
         }
 
         [DataContract]
         public class Drop
         {
-            public string prefab { get; set; }
-            public int min { get; set; } = 1;
-            public int max { get; set; } = 1;
-            public float chance { get; set; } = 1f;
-            public bool onePerPlayer { get; set; } = false;
-            public bool levelMultiplier { get; set; } = true;
-            public bool dontScale { get; set; } = false;
+            public string Prefab { get; set; }
+            [DefaultValue(1)]
+            public int Min { get; set; } = 1;
+            [DefaultValue(1)]
+            public int Max { get; set; } = 1;
+            [DefaultValue(1f)]
+            public float Chance { get; set; } = 1f;
+            public bool OnePerPlayer { get; set; } = false;
+            public bool LevelMultiplier { get; set; } = true;
+            public bool DontScale { get; set; } = false;
 
             public CharacterDrop.Drop ToCharDrop()
             {
                 return new CharacterDrop.Drop
                 {
-                    m_prefab = PrefabManager.Instance.GetPrefab(prefab),
-                    m_amountMin = min,
-                    m_amountMax = max,
-                    m_chance = chance,
-                    m_onePerPlayer = onePerPlayer,
-                    m_levelMultiplier = levelMultiplier,
-                    m_dontScale = dontScale
+                    m_prefab = PrefabManager.Instance.GetPrefab(Prefab),
+                    m_amountMin = Min,
+                    m_amountMax = Max,
+                    m_chance = Chance,
+                    m_onePerPlayer = OnePerPlayer,
+                    m_levelMultiplier = LevelMultiplier,
+                    m_dontScale = DontScale
                 };
             }
+        }
+
+        public class ColorDef
+        {
+            public float hue { get; set; } = 0f;
+            public float saturation { get; set; } = 0f;
+            public float value { get; set; } = 0f;
+            public bool is_emissive { get; set; } = false;
+
+            public LevelEffects.LevelSetup toLevelEffect()
+            {
+                return new LevelEffects.LevelSetup()
+                {
+                    m_scale = 1f,
+                    m_hue = hue,
+                    m_saturation = saturation,
+                    m_value = value,
+                    m_setEmissiveColor = is_emissive,
+                    m_emissiveColor = new Color(hue, saturation, value)
+                };
+            }
+        }
+
+        [DataContract]
+        public class ColorRangeDef
+        {
+            [DefaultValue(true)]
+            public bool CharacterSpecific { get; set; } = true;
+            [DefaultValue(false)]
+            public bool OverwriteExisting { get; set; } = false;
+            public ColorDef StartColorDef { get; set; }
+            public ColorDef EndColorDef { get; set; }
+            public int RangeStart { get; set; }
+            public int RangeEnd { get; set; }
         }
 
 

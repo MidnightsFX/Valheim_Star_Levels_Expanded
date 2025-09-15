@@ -58,9 +58,9 @@ namespace StarLevelSystem.Data
 
             // Check creature spawn rate
             //Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
-            if (characterCacheEntry.creatureCheckedSpawnMult == false) {
+            if (characterCacheEntry.CreatureCheckedSpawnMult == false) {
                 ZNetScene.instance.StartCoroutine(Spawnrate.CheckSpawnRate(character, creatureZDO, creature_settings, biome_settings));
-                characterCacheEntry.creatureCheckedSpawnMult = true;
+                characterCacheEntry.CreatureCheckedSpawnMult = true;
             }
             
 
@@ -70,7 +70,7 @@ namespace StarLevelSystem.Data
             // Set if the creature spawn is disabled, and return the entry but do not cache it.
             Logger.LogDebug("Checking Creature biome Disable spawn");
             if (biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
-                characterCacheEntry.creatureDisabledInBiome = true;
+                characterCacheEntry.CreatureDisabledInBiome = true;
                 return characterCacheEntry;
             }
 

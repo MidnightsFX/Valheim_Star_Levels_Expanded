@@ -60,6 +60,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> MultiplayerEnemyHealthModifier;
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
+        public static ConfigEntry<bool> OutputColorizationGeneratorsData;
 
         public ValConfig(ConfigFile cf)
         {
@@ -129,6 +130,7 @@ namespace StarLevelSystem
             MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
+            OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
         }
 
         internal void LoadYamlConfigs()

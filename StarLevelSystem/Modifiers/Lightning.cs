@@ -13,9 +13,9 @@ namespace StarLevelSystem.Modifiers
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
             if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Lightning)) {
-                ccache.CreatureDamageBonus[DamageType.Lightning] += config.basepower + (config.perlevelpower * ccache.Level);
+                ccache.CreatureDamageBonus[DamageType.Lightning] += config.BasePower + (config.PerlevelPower * ccache.Level);
             } else {
-                ccache.CreatureDamageBonus[DamageType.Lightning] = config.basepower + (config.perlevelpower * ccache.Level);
+                ccache.CreatureDamageBonus[DamageType.Lightning] = config.BasePower + (config.PerlevelPower * ccache.Level);
             }
         }
     }

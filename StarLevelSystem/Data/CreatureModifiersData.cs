@@ -63,17 +63,17 @@ namespace StarLevelSystem.Data
         static CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
             BossModifiers = new Dictionary<ModifierNames, CreatureModifier>() {
                 {ModifierNames.BossSummoner, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$bossSummoner_prefix1", "$bossSummoner_prefix2" },
-                    name_suffixes = new List<string>() { "$bossSummoner_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$bossSummoner_prefix1", "$bossSummoner_prefix2" },
+                    NameSuffixes = new List<string>() { "$bossSummoner_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffectStyle = VisualEffectStyle.bottom,
                     //visualEffect = "creatureFire",
-                    starVisual = "summoner",
-                    config = new CreatureModConfig() {
-                        basepower = 2.0f,
-                        perlevelpower = 1.0f,
-                        biomeObjects = new Dictionary<Heightmap.Biome, List<string>>() {
+                    StarVisual = "summoner",
+                    Config = new CreatureModConfig() {
+                        BasePower = 10.0f,
+                        PerlevelPower = 120.0f,
+                        BiomeObjects = new Dictionary<Heightmap.Biome, List<string>>() {
                             { Heightmap.Biome.Meadows, new List<string>() { "Greyling" } },
                             { Heightmap.Biome.BlackForest, new List<string>() { "Greydwarf_Shaman" } },
                             { Heightmap.Biome.Swamp, new List<string>() { "BlobElite" } },
@@ -83,301 +83,301 @@ namespace StarLevelSystem.Data
                             { Heightmap.Biome.AshLands, new List<string>() { "Charred_Archer", "Charred_Melee" } }
                             },
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Summoner",
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Summoner",
                     }
                 },
                 {ModifierNames.SoulEater, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$SoulEater_prefix1" },
-                    name_suffixes = new List<string>() { "$SoulEater_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$SoulEater_prefix1" },
+                    NameSuffixes = new List<string>() { "$SoulEater_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "vortex",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.01f,
+                    StarVisual = "vortex",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.01f,
                         },
                     }
                 },
                 {ModifierNames.LifeLink, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$LifeLink_prefix1" },
-                    name_suffixes = new List<string>() { "$LifeLink_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$LifeLink_prefix1" },
+                    NameSuffixes = new List<string>() { "$LifeLink_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "LifeLink2",
-                    secondaryEffect = "LifelinkEffect",
-                    config = new CreatureModConfig() {
-                        basepower = 0.7f,
-                        perlevelpower = 0.02f,
+                    StarVisual = "LifeLink2",
+                    SecondaryEffect = "LifelinkEffect",
+                    Config = new CreatureModConfig() {
+                        BasePower = 0.7f,
+                        PerlevelPower = 0.02f,
                         },
                     }
                 },
                 {ModifierNames.ResistPierce, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$ResistPierce_prefix1" },
-                    name_suffixes = new List<string>() { "$ResistPierce_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$ResistPierce_prefix1" },
+                    NameSuffixes = new List<string>() { "$ResistPierce_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "pierceresist",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.02f,
-                        basepower = 0.5f
+                    StarVisual = "pierceresist",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.02f,
+                        BasePower = 0.5f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
                     }
                 },
                 {ModifierNames.Brutal, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$Brutal_prefix1", "$Brutal_prefix2", "$Brutal_prefix3" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$Brutal_prefix1", "$Brutal_prefix2", "$Brutal_prefix3" },
                     namingConvention = NameSelectionStyle.RandomFirst,
-                    visualEffectStyle = VisualEffectStyle.bottom,
+                    VisualEffectStyle = VisualEffectStyle.bottom,
                     //visualEffect = "creatureFire",
-                    starVisual = "brutal",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.0f,
-                        basepower = 1.05f
+                    StarVisual = "brutal",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.0f,
+                        BasePower = 1.03f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Brutal",
-                    unallowedCreatures = NonCombatCreatures
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Brutal",
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
             },
             MajorModifiers = new Dictionary<ModifierNames, CreatureModifier>() {
                 {ModifierNames.Brutal, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$Brutal_prefix1", "$Brutal_prefix2", "$Brutal_prefix3" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$Brutal_prefix1", "$Brutal_prefix2", "$Brutal_prefix3" },
                     namingConvention = NameSelectionStyle.RandomFirst,
-                    visualEffectStyle = VisualEffectStyle.bottom,
+                    VisualEffectStyle = VisualEffectStyle.bottom,
                     //visualEffect = "creatureFire",
-                    starVisual = "brutal",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.0f,
-                        basepower = 1.15f
+                    StarVisual = "brutal",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.0f,
+                        BasePower = 1.15f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Brutal",
-                    unallowedCreatures = NonCombatCreatures
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Brutal",
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.Fire, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$fire_prefix1", "$fire_prefix2", "$fire_prefix3" },
-                    name_suffixes = new List<string>() { "$fire_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$fire_prefix1", "$fire_prefix2", "$fire_prefix3" },
+                    NameSuffixes = new List<string>() { "$fire_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
-                    visualEffectStyle = VisualEffectStyle.bottom,
-                    visualEffect = "creatureFire",
-                    starVisual = "flame",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.01f,
-                        basepower = 1.3f
+                    VisualEffectStyle = VisualEffectStyle.bottom,
+                    VisualEffect = "creatureFire",
+                    StarVisual = "flame",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.01f,
+                        BasePower = 1.3f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Flame",
-                    unallowedCreatures = NonCombatCreatures
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Flame",
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.Frost, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$frost_prefix1", "$frost_prefix2", "$frost_prefix3" },
-                    name_suffixes = new List<string>() { "$frost_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$frost_prefix1", "$frost_prefix2", "$frost_prefix3" },
+                    NameSuffixes = new List<string>() { "$frost_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
-                    visualEffect = "creatureFrost",
-                    starVisual = "snowflake",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.01f,
-                        basepower = 1.3f
+                    VisualEffect = "creatureFrost",
+                    StarVisual = "snowflake",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.01f,
+                        BasePower = 1.3f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Frost",
-                    unallowedCreatures = NonCombatCreatures
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Frost",
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.Poison, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$poison_prefix1", "$poison_prefix2", "$poison_prefix3" },
-                    name_suffixes = new List<string>() { "$poison_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$poison_prefix1", "$poison_prefix2", "$poison_prefix3" },
+                    NameSuffixes = new List<string>() { "$poison_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
-                    visualEffect = "creaturePoison",
-                    starVisual = "poison",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.05f,
-                        basepower = 2f
+                    VisualEffect = "creaturePoison",
+                    StarVisual = "poison",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.05f,
+                        BasePower = 2f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Poison",
-                    unallowedCreatures = NonCombatCreatures
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Poison",
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.Lightning, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$lightning_prefix1", "$lightning_prefix2", "$lightning_prefix3" },
-                    name_suffixes = new List<string>() { "$lightning_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$lightning_prefix1", "$lightning_prefix2", "$lightning_prefix3" },
+                    NameSuffixes = new List<string>() { "$lightning_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
-                    visualEffectStyle = VisualEffectStyle.objectCenter,
-                    visualEffect = "creatureLightning",
-                    starVisual = "lightning",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.05f,
-                        basepower = 2f
+                    VisualEffectStyle = VisualEffectStyle.objectCenter,
+                    VisualEffect = "creatureLightning",
+                    StarVisual = "lightning",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.05f,
+                        BasePower = 2f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Lightning",
-                    unallowedCreatures = NonCombatCreatures
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Lightning",
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.Splitter, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$Splitter_prefix1" },
-                    name_suffixes = new List<string>() { "$Splitter_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$Splitter_prefix1" },
+                    NameSuffixes = new List<string>() { "$Splitter_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "splitting",
-                    config = new CreatureModConfig() {
-                        basepower = 2.0f,
-                        perlevelpower = 0.1f,
+                    StarVisual = "splitting",
+                    Config = new CreatureModConfig() {
+                        BasePower = 2.0f,
+                        PerlevelPower = 0.1f,
                         },
                     }
                 },
                 {ModifierNames.SoulEater, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$SoulEater_prefix1" },
-                    name_suffixes = new List<string>() { "$SoulEater_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$SoulEater_prefix1" },
+                    NameSuffixes = new List<string>() { "$SoulEater_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "vortex",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.05f,
+                    StarVisual = "vortex",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.05f,
                         },
-                    unallowedCreatures = NonCombatCreatures
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.ResistPierce, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$ResistPierce_prefix1" },
-                    name_suffixes = new List<string>() { "$ResistPierce_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$ResistPierce_prefix1" },
+                    NameSuffixes = new List<string>() { "$ResistPierce_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "pierceresist",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.02f,
-                        basepower = 0.5f
+                    StarVisual = "pierceresist",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.02f,
+                        BasePower = 0.5f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
                     }
                 },
                 {ModifierNames.ResistSlash, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$ResistSlash_prefix1" },
-                    name_suffixes = new List<string>() { "$ResistSlash_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$ResistSlash_prefix1" },
+                    NameSuffixes = new List<string>() { "$ResistSlash_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "slashresist",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.02f,
-                        basepower = 0.5f
+                    StarVisual = "slashresist",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.02f,
+                        BasePower = 0.5f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
                     }
                 },
                 {ModifierNames.ResistBlunt, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$ResistBlunt_prefix1" },
-                    name_suffixes = new List<string>() { "$ResistBlunt_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$ResistBlunt_prefix1" },
+                    NameSuffixes = new List<string>() { "$ResistBlunt_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "bluntresist",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.02f,
-                        basepower = 0.5f
+                    StarVisual = "bluntresist",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.02f,
+                        BasePower = 0.5f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
                     }
                 },
             },
             MinorModifiers = new Dictionary<ModifierNames, CreatureModifier>() {
                 {ModifierNames.FireNova, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$FireNova_prefix1", "$FireNova_prefix2" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$FireNova_prefix1", "$FireNova_prefix2" },
                     namingConvention = NameSelectionStyle.RandomFirst,
                     //visualEffect = "creatureLightning",
-                    starVisual = "firenova",
-                    secondaryEffect = "DeathFireNova",
-                    config = new CreatureModConfig() {
-                        basepower = 2.0f,
-                        perlevelpower = 0.1f,
+                    StarVisual = "firenova",
+                    SecondaryEffect = "DeathFireNova",
+                    Config = new CreatureModConfig() {
+                        BasePower = 2.0f,
+                        PerlevelPower = 0.1f,
                         },
-                    unallowedCreatures = NonCombatCreatures
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.Lootbags, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$Lootbags_prefix1" },
-                    name_suffixes = new List<string>() { "$Lootbags_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$Lootbags_prefix1" },
+                    NameSuffixes = new List<string>() { "$Lootbags_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect = "creatureLightning",
-                    starVisual = "lootbag",
-                    config = new CreatureModConfig() {
-                        basepower = 2.0f,
-                        perlevelpower = 0.1f,
+                    StarVisual = "lootbag",
+                    Config = new CreatureModConfig() {
+                        BasePower = 2.0f,
+                        PerlevelPower = 0.1f,
                         },
                     }
                 },
                 {ModifierNames.Alert, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$alert_prefix1" },
-                    name_suffixes = new List<string>() { "$alert_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$alert_prefix1" },
+                    NameSuffixes = new List<string>() { "$alert_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.05f,
-                        basepower = 2f
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.05f,
+                        BasePower = 2f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Alert"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Alert"
                     }
                 },
                 {ModifierNames.Big, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$big_prefix1", "$big_prefix2" },
-                    name_suffixes = new List<string>() { "$big_suffix1" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$big_prefix1", "$big_prefix2" },
+                    NameSuffixes = new List<string>() { "$big_suffix1" },
                     namingConvention = NameSelectionStyle.RandomBoth,
                     //visualEffect
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.00f,
-                        basepower = 0.3f
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.00f,
+                        BasePower = 0.3f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Big"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Big"
                     }
                 },
                 {ModifierNames.Fast, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$fast_prefix1", "$fast_prefix2", "$fast_prefix3" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$fast_prefix1", "$fast_prefix2", "$fast_prefix3" },
                     namingConvention = NameSelectionStyle.RandomFirst,
                     //visualEffect
-                    config = new CreatureModConfig() {
-                        perlevelpower = 0.00f,
-                        basepower = 0.2f
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.00f,
+                        BasePower = 0.2f
                         },
-                    setupMethodClass = "StarLevelSystem.Modifiers.Fast"
+                    SetupMethodClass = "StarLevelSystem.Modifiers.Fast"
                     }
                 },
                 {ModifierNames.StaminaDrain, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$staminaDrain_prefix1", "$staminaDrain_prefix2" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$staminaDrain_prefix1", "$staminaDrain_prefix2" },
                     namingConvention = NameSelectionStyle.RandomFirst,
-                    starVisual = "staminadrain",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 2.0f,
-                        basepower = 3.0f
+                    StarVisual = "staminadrain",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 2.0f,
+                        BasePower = 3.0f
                         },
-                    unallowedCreatures = NonCombatCreatures
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
                 {ModifierNames.EitrDrain, new CreatureModifier() {
-                    selectionWeight = 10,
-                    name_prefixes = new List<string>() { "$EitrDrain_prefix1", "$EitrDrain_prefix2" },
+                    SelectionWeight = 10,
+                    NamePrefixes = new List<string>() { "$EitrDrain_prefix1", "$EitrDrain_prefix2" },
                     namingConvention = NameSelectionStyle.RandomFirst,
-                    starVisual = "EitrEater",
-                    config = new CreatureModConfig() {
-                        perlevelpower = 4.0f,
-                        basepower = 10.0f
+                    StarVisual = "EitrEater",
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 4.0f,
+                        BasePower = 10.0f
                         },
-                    unallowedCreatures = NonCombatCreatures,
-                    allowedBiomes = new List<Biome>() {
+                    UnallowedCreatures = NonCombatCreatures,
+                    AllowedBiomes = new List<Biome>() {
                             Biome.Meadows,
                             Biome.BlackForest,
                             Biome.Swamp,
@@ -398,14 +398,14 @@ namespace StarLevelSystem.Data
             // Check minor if requested, otherwise default to major
             if (type == ModifierType.Minor) {
                 if (!ActiveCreatureModifiers.MinorModifiers.ContainsKey(name)) { return new CreatureModConfig() { }; }
-                return ActiveCreatureModifiers.MinorModifiers[name].config;
+                return ActiveCreatureModifiers.MinorModifiers[name].Config;
             }
             if (type == ModifierType.Boss) {
                 if (!ActiveCreatureModifiers.BossModifiers.ContainsKey(name)) { return new CreatureModConfig() { }; }
-                return ActiveCreatureModifiers.BossModifiers[name].config;
+                return ActiveCreatureModifiers.BossModifiers[name].Config;
             }
             if (!ActiveCreatureModifiers.MajorModifiers.ContainsKey(name)) { return new CreatureModConfig() { }; }
-            return ActiveCreatureModifiers.MajorModifiers[name].config;
+            return ActiveCreatureModifiers.MajorModifiers[name].Config;
         }
 
         public static CreatureModifier GetModifierDef(ModifierNames name, ModifierType type = ModifierType.Major)
@@ -477,14 +477,14 @@ namespace StarLevelSystem.Data
             foreach (var entry in modifiers) {
                 // Logger.LogDebug($"Checking modifier {entry.Key}");
                 // Skip if in the deny list
-                if (entry.Value.unallowedCreatures.Contains(creature)) { continue; }
-                if (entry.Value.allowedBiomes != null && !entry.Value.allowedBiomes.Contains(biome)) { continue; }
+                if (entry.Value.UnallowedCreatures != null && entry.Value.UnallowedCreatures.Contains(creature)) { continue; }
+                if (entry.Value.AllowedBiomes != null && !entry.Value.AllowedBiomes.Contains(biome)) { continue; }
 
                 // Add if in the allow list, skip if allow list defined and not in there
                 // Logger.LogDebug($"Checking Allowed creatures {entry.Key}");
-                if (entry.Value.allowedCreatures.Count > 0) {
-                    if (entry.Value.allowedCreatures.Contains(creature)) {
-                        creatureModifierProbability.Add(new ProbabilityEntry() { Name = entry.Key, selectionWeight = entry.Value.selectionWeight });
+                if (entry.Value.AllowedCreatures != null && entry.Value.AllowedCreatures.Count > 0) {
+                    if (entry.Value.AllowedCreatures.Contains(creature)) {
+                        creatureModifierProbability.Add(new ProbabilityEntry() { Name = entry.Key, SelectionWeight = entry.Value.SelectionWeight });
                     } else {
                         continue;
                     }
@@ -492,7 +492,7 @@ namespace StarLevelSystem.Data
 
 
                 // Add if allow and deny list are not defined, default
-                creatureModifierProbability.Add(new ProbabilityEntry() { Name = entry.Key, selectionWeight = entry.Value.selectionWeight });
+                creatureModifierProbability.Add(new ProbabilityEntry() { Name = entry.Key, SelectionWeight = entry.Value.SelectionWeight });
             }
             // Logger.LogDebug($"Built {creatureModifierProbability.Count} probability entries for creature {creature}");
             return creatureModifierProbability;

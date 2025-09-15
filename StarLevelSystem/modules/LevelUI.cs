@@ -299,8 +299,8 @@ namespace StarLevelSystem.modules
                 foreach (var entry in ccd.Modifiers) {
                     Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
                     CreatureModifier cmd = CreatureModifiersData.GetModifierDef(entry.Key, entry.Value);
-                    if (cmd.starVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.starVisual)) {
-                        Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.starVisual];
+                    if (cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
+                        Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
                         starReplacements.Add(star, starsprite);
                     }
                     star++;

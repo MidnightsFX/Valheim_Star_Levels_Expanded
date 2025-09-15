@@ -29,7 +29,7 @@ namespace StarLevelSystem.Modifiers
                 if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Lootbags)) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags, cDetails.Modifiers[ModifierNames.Lootbags]);
                     List <KeyValuePair<GameObject, int>> ExtraLoot = new List <KeyValuePair<GameObject, int>>();
-                    float modifier = cmcfg.basepower + cmcfg.perlevelpower * cDetails.Level;
+                    float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * cDetails.Level;
                     foreach (var kvp in __result) {
                         ExtraLoot.Add(new KeyValuePair<GameObject, int>(key: kvp.Key, value: Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier)));
                     }

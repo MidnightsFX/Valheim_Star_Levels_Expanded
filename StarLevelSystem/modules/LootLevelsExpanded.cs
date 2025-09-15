@@ -71,12 +71,13 @@ namespace StarLevelSystem.modules
         }
 
         [HarmonyPatch(typeof(CharacterDrop), nameof(CharacterDrop.GenerateDropList))]
+        [HarmonyPriority(Priority.Last)]
         public static class ModifyLootPerLevelEffect
         {
             public static bool Prefix(ref List<KeyValuePair<GameObject, int>> __result, CharacterDrop __instance) {
                 // Passthrough for things that are not managed by SLS or that do not have characters attached to their drops
                 if (__instance.m_character == null) { return true; }
-                string name = __instance.m_character.gameObject.name;
+                string name = Utils.GetPrefabName(__instance.m_character.gameObject);
                 Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
                 if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot.ContainsKey(name) != true) { return true; }
 
@@ -287,7 +288,7 @@ namespace StarLevelSystem.modules
 
         
 
-        static IEnumerator DropItemsAsync(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea) {
+        public static IEnumerator DropItemsAsync(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea) {
             int obj_spawns = 0;
 
             foreach (var drop in drops)

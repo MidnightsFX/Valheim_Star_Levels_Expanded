@@ -9,7 +9,6 @@ using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using System.Reflection;
 using UnityEngine;
-using static StarLevelSystem.modules.Commands;
 
 namespace StarLevelSystem
 {
@@ -20,7 +19,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.0.10";
+        public const string PluginVersion = "0.8.0";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -45,10 +44,11 @@ namespace StarLevelSystem
             CreatureModifiersData.Init();
             LocalizationLoader.AddLocalizations();
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
+            PrefabManager.OnVanillaPrefabsAvailable += LevelSystem.UpdateMaxLevel;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
 
+
             TerminalCommands.AddCommands();
-            CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
         }
     }

@@ -1,13 +1,15 @@
-﻿using Jotunn.Entities;
+﻿using BepInEx;
+using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.common
 {
@@ -16,6 +18,41 @@ namespace StarLevelSystem.common
         internal static void AddCommands()
         {
             CommandManager.Instance.AddConsoleCommand(new ResetZOIDModifiers());
+            CommandManager.Instance.AddConsoleCommand(new GiveCreatureModifier());
+            CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
+        }
+
+        internal class GiveCreatureModifier : ConsoleCommand
+        {
+            public override string Name => "SLS-give-modifier";
+            public override string Help => "Format: [boss/major/minor] [modifier-name] Gives nearby creatures the specified modifier";
+
+            public override void Run(string[] args)
+            {
+                if (args.Length < 2) {
+                    Logger.LogInfo("Two arguments required, modifier type and modifier name. Eg: Major FireNova");
+                }
+                if (!Enum.TryParse(args[0], true, out ModifierType modtype)) {
+                    Logger.LogInfo($"Modifier type must be one of {string.Join(",", Enum.GetValues(typeof(ModifierType)))}");
+                }
+                if (!Enum.TryParse(args[1], true, out ModifierNames modname))
+                {
+                    Logger.LogInfo($"Modifier Name must be one of {string.Join(",", Enum.GetValues(typeof(ModifierNames)))}");
+                }
+                CreatureModConfig cmfg = CreatureModifiersData.GetConfig(modname, modtype);
+                if (cmfg.perlevelpower == float.NaN || cmfg.perlevelpower == 0f && cmfg.basepower == float.NaN || cmfg.basepower == 0) {
+                    Logger.LogInfo($"{modtype} did not contain a definition for {modname}. Types availabe in {modtype}: {string.Join(",", GetModifiersOfType(modtype).Keys)}");
+                }
+
+                
+                List<Character> nearbyCreatures = Extensions.GetCharactersInRange(Player.m_localPlayer.transform.position, 5f);
+                Logger.LogInfo($"Adding {modtype} {modname} to {nearbyCreatures.Count}");
+                foreach (Character chara in nearbyCreatures) {
+                    if (chara.IsPlayer()) { continue; }
+                    // modify the modifers the creature has, and re-init modifiers for the creature
+                    CreatureModifiers.AddCreatureModifier(chara, modtype, modname);
+                }
+            }
         }
 
         internal class ResetZOIDModifiers : ConsoleCommand
@@ -49,6 +86,56 @@ namespace StarLevelSystem.common
                 };
                 existingDmgMods.Set(dmgBonuses);
                 Logger.LogInfo($"Reset Player {id}");
+            }
+        }
+
+        internal class DumpLootTablesCommand : ConsoleCommand
+        {
+            public override string Name => "SLS-Dump-LootTables";
+
+            public override string Help => "Writes all creature loot-tables to a debug file.";
+
+            public override bool IsCheat => true;
+
+            public override void Run(string[] args)
+            {
+                string dumpfile = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LootTablesDump.yaml");
+                Dictionary<string, List<ExtendedDrop>> characterModDrops = new Dictionary<string, List<ExtendedDrop>>();
+                foreach (var chardrop in Resources.FindObjectsOfTypeAll<CharacterDrop>().Where(cdrop => cdrop.name.EndsWith("(Clone)") != true).ToList<CharacterDrop>())
+                {
+                    Logger.LogDebug($"Checking {chardrop.name} for loot tables");
+                    string name = chardrop.name;
+                    if (characterModDrops.ContainsKey(name)) { continue; }
+                    Logger.LogDebug($"checking {name}");
+                    var extendedDrops = new List<ExtendedDrop>();
+                    Logger.LogDebug($"drops {chardrop.m_drops.Count}");
+                    foreach (var drop in chardrop.m_drops)
+                    {
+                        var extendedDrop = new ExtendedDrop
+                        {
+                            Drop = new DataObjects.Drop
+                            {
+                                prefab = drop.m_prefab.name,
+                                min = drop.m_amountMin,
+                                max = drop.m_amountMax,
+                                chance = drop.m_chance,
+                                onePerPlayer = drop.m_onePerPlayer,
+                                levelMultiplier = drop.m_levelMultiplier,
+                                dontScale = drop.m_dontScale
+                            }
+                        };
+                        extendedDrops.Add(extendedDrop);
+                    }
+                    characterModDrops.Add(name, extendedDrops);
+                    Logger.LogDebug($"Adding {name} loot-table");
+                }
+                Logger.LogDebug($"Serializing data");
+                var yaml = DataObjects.yamlserializer.Serialize(characterModDrops);
+                Logger.LogDebug($"Writing file to disk");
+                using (StreamWriter writetext = new StreamWriter(dumpfile))
+                {
+                    writetext.WriteLine(yaml);
+                }
             }
         }
     }

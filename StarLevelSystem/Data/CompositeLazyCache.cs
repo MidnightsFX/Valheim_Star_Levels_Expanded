@@ -26,6 +26,7 @@ namespace StarLevelSystem.Data
         public static void UpdateCacheEntry(Character character, CreatureDetailCache cacheEntry) {
             uint czoid = character.GetZDOID().ID;
             if (sessionCache.ContainsKey(czoid)) {
+                Logger.LogDebug($"Updated creature from cache {character.name}-{czoid}");
                 sessionCache[czoid] = cacheEntry;
             }
         }
@@ -44,8 +45,8 @@ namespace StarLevelSystem.Data
 
             ZDO creatureZDO = character.m_nview?.GetZDO();
             if (creatureZDO == null) {
-                Logger.LogWarning("ZDO null, skipping.");
-                return characterCacheEntry;
+                //Logger.LogWarning("ZDO null, skipping.");
+                return null;
             }
 
 
@@ -56,14 +57,19 @@ namespace StarLevelSystem.Data
 
 
             // Check creature spawn rate
-            bool set_despawn = Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
+            //Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
+            if (characterCacheEntry.creatureCheckedSpawnMult == false) {
+                ZNetScene.instance.StartCoroutine(Spawnrate.CheckSpawnRate(character, creatureZDO, creature_settings, biome_settings));
+                characterCacheEntry.creatureCheckedSpawnMult = true;
+            }
+            
 
             // Set biome | used to deletion check
             characterCacheEntry.Biome = biome;
 
             // Set if the creature spawn is disabled, and return the entry but do not cache it.
             Logger.LogDebug("Checking Creature biome Disable spawn");
-            if (set_despawn || biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
+            if (biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
                 characterCacheEntry.creatureDisabledInBiome = true;
                 return characterCacheEntry;
             }
@@ -190,5 +196,8 @@ namespace StarLevelSystem.Data
             return characterCacheEntry;
         }
 
+        //public static void UpdateCacheFromConfigChange() {
+        //    sessionCache.Clear();
+        //}
     }
 }

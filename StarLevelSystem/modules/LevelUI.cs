@@ -4,6 +4,7 @@ using StarLevelSystem.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
+using System.Security.Policy;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
@@ -37,6 +38,11 @@ namespace StarLevelSystem.modules
     {
         public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>();
         private static GameObject star;
+
+        public static void InvalidateCacheEntry(ZDOID zdo)
+        {
+            if (characterExtendedHuds.ContainsKey(zdo)) { characterExtendedHuds.Remove(zdo); }
+        }
 
         [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.Awake))]
         public static class EnableLevelDisplay
@@ -197,8 +203,8 @@ namespace StarLevelSystem.modules
                         if (value.m_level2 == null || value.m_level3 == null) {
                             return;
                         }
-                        value.m_level2.gameObject.SetActive(false);
-                        value.m_level3.gameObject.SetActive(false);
+                        value.m_level2?.gameObject?.SetActive(false);
+                        value.m_level3?.gameObject?.SetActive(false);
                     }
                 }
             }
@@ -279,32 +285,28 @@ namespace StarLevelSystem.modules
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
                 extended_hud = characterExtendedHuds[czoid];
+                if (extended_hud == null || extended_hud.starlevel3 == null) {
+                    Logger.LogDebug($"UI Cache Invalid for {czoid}, removing.");
+                    characterExtendedHuds.Remove(czoid);
+                    return;
+                }
             } else {
                 CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(ehud.m_character);
-                Logger.LogDebug($"Creating new hud for {czoid} with level {level}");
+                Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
                 foreach (var entry in ccd.Modifiers) {
                     Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
-                    if (entry.Value == ModifierType.Minor) { continue; }
-                    if (CreatureModifiersData.CreatureModifiers.MajorModifiers.ContainsKey(entry.Key)) {
-                        Sprite sprite = CreatureModifiersData.CreatureModifiers.MajorModifiers[entry.Key].starVisualPrefab;
-                        if (sprite == null) { continue; }
-                        starReplacements.Add(star, sprite);
-                        star++;
-                        continue;
+                    CreatureModifier cmd = CreatureModifiersData.GetModifierDef(entry.Key, entry.Value);
+                    if (cmd.starVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.starVisual)) {
+                        Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.starVisual];
+                        starReplacements.Add(star, starsprite);
                     }
-                    if (CreatureModifiersData.CreatureModifiers.BossModifiers.ContainsKey(entry.Key)) {
-                        Sprite sprite = CreatureModifiersData.CreatureModifiers.BossModifiers[entry.Key].starVisualPrefab;
-                        if (sprite == null) { continue; }
-                        starReplacements.Add(star, sprite);
-                        star++;
-                        continue;
-                    }
-
                     star++;
                 }
+
+                Logger.LogDebug($"Determined replacement stars {starReplacements.Count()}");
 
                 extended_hud.isBoss = ehud.m_character.IsBoss();
 
@@ -315,8 +317,6 @@ namespace StarLevelSystem.modules
                 extended_hud.starlevel2_back_image = t2_star.gameObject.GetComponent<Image>();
                 Transform t2_star_back = ehud.m_gui.transform.Find("level_2/star(Clone)/star (1)") ?? ehud.m_gui.transform.Find("level_2/star/star (1)");
                 extended_hud.starlevel2_front_image = t2_star_back.gameObject.GetComponent<Image>();
-                
-
                 if (starReplacements.ContainsKey(2)) {
                     extended_hud.starlevel2_front_image.sprite = starReplacements[2];
                     extended_hud.starlevel2_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
@@ -393,7 +393,7 @@ namespace StarLevelSystem.modules
             }
             // Star level display starts at 2
             // Enable static star levels
-            // Logger.LogInfo("Setting star levels active");
+            //Logger.LogInfo("Setting star levels active");
             switch (level) {
                 case 2:
                     extended_hud.starlevel2?.SetActive(true);
@@ -422,9 +422,9 @@ namespace StarLevelSystem.modules
                     break;
             }
 
-            // Logger.LogInfo("Setting Nstar levels active");
             // Enable dynamic levels
             if (level > 6) {
+                // Logger.LogInfo("Setting Nstar levels active");
                 extended_hud.starlevel_N?.SetActive(true);
                 // get the text componet here and set its display
                 extended_hud.starlevel_N_Text.text = (level - 1).ToString();

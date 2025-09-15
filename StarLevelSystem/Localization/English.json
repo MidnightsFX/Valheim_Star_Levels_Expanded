@@ -37,5 +37,18 @@
   "ResistSlash_prefix1": "Slash Resistant",
   "ResistSlash_suffix1": "Sword Blocking",
   "ResistBlunt_prefix1": "Blunt Resistant",
-  "ResistBlunt_suffix1": "Blunt Blocking"
+  "ResistBlunt_suffix1": "Blunt Blocking",
+  "Splitter_prefix1": "Multiplying",
+  "Splitter_suffix1": "of Hoardes",
+  "Lootbags_prefix1": "Hoarding",
+  "Lootbags_prefix2": "Loot Bags",
+  "Lootbags_suffix1": "of Loot",
+  "Lootbags_suffix2": "Valuable",
+  "FireNova_prefix1": "Volatile",
+  "FireNova_prefix2": "Explosive",
+  "LifeLink_prefix1": "Life-linked",
+  "LifeLink_suffix1": "Redirecting",
+  "Brutal_prefix1": "Brutal",
+  "Brutal_prefix2": "Skilled",
+  "Brutal_prefix3": "Merciless"
 }

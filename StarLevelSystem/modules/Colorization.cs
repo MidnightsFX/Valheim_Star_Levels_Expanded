@@ -3,6 +3,7 @@ using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 using static LevelEffects;
 using static StarLevelSystem.common.DataObjects;
@@ -59,13 +60,17 @@ namespace StarLevelSystem.modules
             try {
                 creatureColorizationSettings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
-                creatureColorizationSettings.defaultLevelColorization = defaultColorizationSettings.defaultLevelColorization;
+                foreach (var entry in defaultColorizationSettings.defaultLevelColorization) {
+                    if (!creatureColorizationSettings.defaultLevelColorization.Keys.Contains(entry.Key)) {
+                        creatureColorizationSettings.defaultLevelColorization.Add(entry.Key, entry.Value);
+                    }
+                }
                 Logger.LogInfo($"Updated ColorizationSettings.");
                 // This might need to be async
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
-                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara);
-                    ApplyColorizationWithoutLevelEffects(chara, ccd.Colorization);
+                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara, true);
+                    ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                 }
             } catch (System.Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
@@ -97,17 +102,17 @@ namespace StarLevelSystem.modules
             if (cgo == null) { return null; }
             string cname = Utils.GetPrefabName(cgo.gameObject);
             //Logger.LogDebug($"Checking for character specific colorization {cname}");
-            if (creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname)) {
+            if (creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname) && creatureColorizationSettings.characterSpecificColorization[cname].ContainsKey(level - 1)) {
                 if (creatureColorizationSettings.characterSpecificColorization[cname].TryGetValue((level-1), out ColorDef charspecific_color_def)) {
                     //Logger.LogDebug($"Found character specific colorization for {cname} - {level}");
                     return charspecific_color_def;
                 }
             }
-            return GetDefaultColorization(level);
+            return GetDefaultColorization(level-1);
         }
 
 
-        internal static void ApplyColorizationWithoutLevelEffects(Character cgo, ColorDef colorization) {
+        internal static void ApplyColorizationWithoutLevelEffects(GameObject cgo, ColorDef colorization) {
             LevelSetup genlvlup = colorization.toLevelEffect();
             // Material assignment changes must occur in a try block- they can quietly crash the game otherwise
             try {

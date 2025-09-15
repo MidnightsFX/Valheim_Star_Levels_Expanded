@@ -1,12 +1,10 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -32,7 +30,7 @@ namespace StarLevelSystem.modules
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
-            Logger.LogDebug($"Current level from ZDO: {clevel}");
+            // Logger.LogDebug($"Current level from ZDO: {clevel}");
             if (clevel <= 0) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value + 1;
@@ -114,7 +112,7 @@ namespace StarLevelSystem.modules
 
             // biome override 
             if (biome_settings != null) {
-                if (biome_settings.EnableBiomeLevelOverride == true) { maxLevel = biome_settings.BiomeMaxLevelOverride; }
+                if (biome_settings.BiomeMaxLevelOverride > 0) { maxLevel = biome_settings.BiomeMaxLevelOverride; }
                 if (biome_settings.CustomCreatureLevelUpChance != null) { levelup_chances = biome_settings.CustomCreatureLevelUpChance; }
                 return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
             }
@@ -131,7 +129,7 @@ namespace StarLevelSystem.modules
                 {
                     if (distance_from_center <= kvp.Key)
                     {
-                        Logger.LogDebug($"Distance Level area: {kvp.Key}");
+                        //Logger.LogDebug($"Distance Level area: {kvp.Key}");
                         distance_levelup_bonuses = kvp.Value;
                         break;
                     }
@@ -155,13 +153,13 @@ namespace StarLevelSystem.modules
                     float levelup_req = kvp.Value * distance_bonus;
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {distance_bonus} | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {distance_bonus} | Selected Level: {selected_level}");
                         break;
                     }
                 } else {
                     if (roll >= kvp.Value || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        Logger.LogDebug($"Level Roll: {roll} | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} | Selected Level: {selected_level}");
                         break;
                     }
                 }
@@ -456,24 +454,35 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Fish), nameof(Fish.Awake))]
         public static class RandomFishLevelExtension
         {
-            public static void Postfix(Fish __instance)
-            {
+            public static void Postfix(Fish __instance) {
                 if (ValConfig.EnableScalingFish.Value == false) { return; }
+                if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) {  return; }
                 int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Fish", 0);
-                if (storedLevel == 0)
-                {
+                if (storedLevel == 0) {
                     LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
                     storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
                     __instance.m_nview.GetZDO().Set("SLE_Fish", storedLevel);
-                }
-                if (storedLevel > 1)
-                {
-                    float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
                     __instance.GetComponent<ItemDrop>().SetQuality(storedLevel);
-                    Logger.LogDebug($"Setting Fish level {storedLevel} size {scale}.");
+                    __instance.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = storedLevel + 1;
+                }
+                if (storedLevel > 1) {
+                    float scale = 1 + (ValConfig.FishSizeScalePerLevel.Value * storedLevel);
+                    __instance.GetComponent<ItemDrop>().SetQuality(storedLevel);
+                    __instance.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = storedLevel + 1;
+                    //Logger.LogDebug($"Setting Fish level {storedLevel} size {scale}.");
                     __instance.transform.localScale *= scale;
                     Physics.SyncTransforms();
 
+                }
+            }
+        }
+
+        public static void UpdateMaxLevel() {
+            IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
+            foreach (GameObject fish in fishes) {
+                if (fish.GetComponent<Fish>() != null) {
+                    //Logger.LogDebug($"Updating max quality {fish.gameObject.name}");
+                    fish.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = 999;
                 }
             }
         }
@@ -523,43 +532,81 @@ namespace StarLevelSystem.modules
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
             {
                 var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchStartForward(
-                    new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(TreeLog), nameof(TreeLog.m_subLogPrefab))),
-                    new CodeMatch(OpCodes.Ldloc_S)
-                    ).Advance(1).RemoveInstructions(10).InsertAndAdvance(
-                    new CodeInstruction(OpCodes.Ldloc_S, (byte)10),
-                    new CodeInstruction(OpCodes.Ldloc_S, (byte)11),
-                    Transpilers.EmitDelegate(SetupTreeLog)
-                    )
-                    .ThrowIfNotMatch("Unable to patch child grow up level set.");
+                codeMatcher
+                    .MatchStartForward(
+                        new CodeMatch(OpCodes.Call),
+                        new CodeMatch(OpCodes.Ldarg_0),
+                        new CodeMatch(OpCodes.Call),
+                        new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(ZNetScene), nameof(ZNetScene.Destroy)))
+                    ).RemoveInstructions(4)
+                    .MatchStartForward(
+                        new CodeMatch(OpCodes.Ldarg_0),
+                        new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(TreeLog), nameof(TreeLog.m_subLogPrefab))),
+                        new CodeMatch(OpCodes.Ldloc_S),
+                        new CodeMatch(OpCodes.Callvirt)
+                    ).Advance(1)
+                    .RemoveInstructions(10)
+                    .InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldloc_S, (byte)10),
+                        new CodeInstruction(OpCodes.Ldloc_S, (byte)11),
+                        Transpilers.EmitDelegate(SetupTreeLog)
+                    //).MatchStartForward(
+                    //    new CodeMatch(OpCodes.Blt_S),
+                    //    new CodeMatch(OpCodes.Ret)
+                    //).Advance(1)
+                    //.Insert(
+                    //    new CodeInstruction(OpCodes.Ldarg_0),
+                    //    Transpilers.EmitDelegate(RemoveTreeLogInst)
+                    ).ThrowIfNotMatch("Unable to patch Tree Log Child Spawn Set Level.");
 
                 return codeMatcher.Instructions();
             }
 
             [HarmonyPatch(nameof(TreeLog.Awake))]
-            static void Postfix(TreeLog __instance) {
-                int level = __instance.m_nview.GetZDO().GetInt("SLE_Tree", 0);
+            [HarmonyPostfix]
+            static void SetupAwakeLog(TreeLog __instance) {
+                int level = __instance.m_nview.GetZDO().GetInt("SLE_Tree", 1);
                 UpdateDrops(__instance, level);
                 __instance.m_health += (__instance.m_health * 0.1f * level);
+                __instance.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
+            }
+
+            [HarmonyPatch(nameof(TreeLog.Destroy))]
+            [HarmonyPostfix]
+            internal static void RemoveTreeLogInst(TreeLog __instance) {
+                Logger.LogDebug("Destroying Treelog");
+                ZNetScene.instance.Destroy(__instance.gameObject);
             }
 
             internal static void SetupTreeLog(TreeLog instance, Transform tform, Quaternion qt)
             {
                 GameObject go = GameObject.Instantiate(instance.m_subLogPrefab, tform.position, qt);
                 ZNetView nview = go.GetComponent<ZNetView>();
+                TreeLog tchild = go.GetComponent<TreeLog>();
+                //Logger.LogDebug($"Setting Treelog scale {nview}");
                 nview.SetLocalScale(instance.transform.localScale);
-                TreeLog tlog = go.GetComponent<TreeLog>();
                 // pass on the level
-                int level = instance.m_nview.GetZDO().GetInt("SLE_Tree", 0);
+                // Logger.LogDebug($"Getting tree level");
+                int level = 1;
+                if (instance.m_nview.GetZDO() != null) {
+                    Logger.LogDebug("Checking stored Zvalue for tree level");
+                    level = instance.m_nview.GetZDO().GetInt("SLE_Tree", 1);
+                }
+                Logger.LogDebug($"Got Tree level {level}");
+                UpdateDrops(tchild, level);
+                tchild.m_health += (tchild.m_health * 0.1f * level);
+                go.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
+                Logger.LogDebug($"Setting tree level {level}");
                 nview.GetZDO().Set("SLE_Tree", level);
-                UpdateDrops(instance, level);
-                instance.m_health += (instance.m_health * 0.1f * level);
+                // This is the last log point, destroy the parent
+                ZNetScene.instance.Destroy(instance.gameObject);
             }
 
             internal static void UpdateDrops(TreeLog log, int level) {
+                if (log.m_dropWhenDestroyed == null || log.m_dropWhenDestroyed.m_drops == null || level == 1) { return; }
                 List<DropTable.DropData> drops = new List<DropTable.DropData>();
                 // Update Drops
+                Logger.LogDebug($"Updating Drops for tree to: {level}");
                 foreach (var drop in log.m_dropWhenDestroyed.m_drops) {
                     DropTable.DropData lvlupdrop = new DropTable.DropData();
                     // Scale the amount of drops based on level
@@ -687,23 +734,36 @@ namespace StarLevelSystem.modules
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
             creature_name = Utils.GetPrefabName(creature.gameObject);
-            ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
+            Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            //Logger.LogDebug($"{creature_name} {biome} {p}");
+            // Logger.LogDebug($"{creature_name} {biome} {p}");
 
-            bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
-            if (biome_all_setting_check) {
-                biome_settings = allBiomeConfig;
+            if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
+                bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
+                if (biome_all_setting_check)
+                {
+                    biome_settings = allBiomeConfig;
+                }
+                //Logger.LogDebug($"Biome all config checked");
+                bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
+                if (biome_setting_check && biome_all_setting_check)
+                {
+                    biome_settings = Extensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig);
+                }
+                else if (biome_setting_check)
+                {
+                    biome_settings = biomeConfig;
+                }
+                //Logger.LogDebug($"Merged biome configs");
             }
-            bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
-            if (biome_setting_check && biome_all_setting_check) { 
-                biome_settings = Extensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig); 
-            } else if (biome_setting_check) {
-                biome_settings = biomeConfig;
+
+            creature_settings = null;
+            if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null) {
+                bool creature_setting_check = LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig);
+                if (creature_setting_check) { creature_settings = creatureConfig; }
+                //Logger.LogDebug($"Set character specific configs");
             }
-            bool creature_setting_check = LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig);
-            if (creature_setting_check) { creature_settings = creatureConfig; } else { creature_settings = null; }
         }
 
     }

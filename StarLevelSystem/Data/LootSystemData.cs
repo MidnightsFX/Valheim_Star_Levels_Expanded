@@ -35,6 +35,52 @@ namespace StarLevelSystem.Data
                             maxScaledAmount = 1,
                         }
                     }
+                },
+                { "Greyling", new List<ExtendedDrop>() {
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                prefab = "Resin",
+                                min = 1,
+                                max = 1,
+                                chance = 0.25f
+                            },
+                            amountScaleFactor = 0.5f,
+                        }
+                    }
+                },
+                { "Greydwarf", new List<ExtendedDrop>() {
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                prefab = "Stone",
+                                min = 1,
+                                max = 1,
+                                chance = 1f
+                            },
+                            amountScaleFactor = 0.5f,
+                        },
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                prefab = "Wood",
+                                min = 1,
+                                max = 1,
+                                chance = 1f
+                            },
+                            amountScaleFactor = 0.5f,
+                        },
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                prefab = "Resin",
+                                min = 1,
+                                max = 1,
+                                chance = 0.25f
+                            },
+                            amountScaleFactor = 0.5f,
+                        }
+                    }
                 }
             },
             EnableDistanceLootModifier = true,

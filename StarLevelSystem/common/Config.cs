@@ -59,6 +59,8 @@ namespace StarLevelSystem
         public static ConfigEntry<float> MultiplayerEnemyDamageModifier;
         public static ConfigEntry<float> MultiplayerEnemyHealthModifier;
 
+        public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
+
         public ValConfig(ConfigFile cf)
         {
             // ensure all the config values are created
@@ -125,6 +127,8 @@ namespace StarLevelSystem
             EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Wether or not bosses can spawn with modifiers.");
             ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 0.75f, "The chance that a boss will have a modifier.", false, 0, 1f);
             MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
+
+            NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
         }
 
         internal void LoadYamlConfigs()

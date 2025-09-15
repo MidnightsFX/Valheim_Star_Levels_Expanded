@@ -1,5 +1,7 @@
 ﻿using Jotunn.Configs;
+using Jotunn.Entities;
 using Jotunn.Managers;
+using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
@@ -24,6 +26,7 @@ namespace StarLevelSystem.common
         public enum CreatureBaseAttribute {
             BaseHealth,
             BaseDamage,
+            AttackSpeed,
             Speed,
             Size,
         }
@@ -32,6 +35,7 @@ namespace StarLevelSystem.common
             CreatureBaseAttribute.BaseHealth,
             CreatureBaseAttribute.BaseDamage,
             CreatureBaseAttribute.Speed,
+            CreatureBaseAttribute.AttackSpeed,
         };
 
         public enum CreaturePerLevelAttribute
@@ -39,6 +43,7 @@ namespace StarLevelSystem.common
             HealthPerLevel,
             DamagePerLevel,
             SpeedPerLevel,
+            AttackSpeedPerLevel,
             SizePerLevel,
         }
 
@@ -94,7 +99,6 @@ namespace StarLevelSystem.common
 
         public class BiomeSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
-            public bool EnableBiomeLevelOverride { get; set; } = false;
             public int BiomeMaxLevelOverride { get; set; }
             public float DistanceScaleModifier { get; set; } = 1f;
             public float SpawnRateModifier { get; set; } = 1f;
@@ -150,28 +154,40 @@ namespace StarLevelSystem.common
             public float selectionWeight { get; set; } = 1f;
             public CreatureModConfig config { get; set; } = new CreatureModConfig();
             public string starVisual {  get; set; }
-            public Sprite starVisualPrefab { get; set; }
             public string visualEffect { get; set; }
-            public GameObject visualEffectPrefab { get; set; }
+            public string secondaryEffect { get; set; }
             public VisualEffectStyle visualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
             public List<string> allowedCreatures { get; set; } = new List<string>() { };
             public List<string> unallowedCreatures { get; set; } = new List<string>() { };
+            public List<Heightmap.Biome> allowedBiomes { get; set; }
             public string setupMethodClass { get; set; }
 
             // Add fallbacks to load prefabs that are not in the embedded resource bundle
             public void LoadAndSetGameObjects() {
-                if (starVisual != null) {
-                    starVisualPrefab = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>(starVisual);
+                if (starVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(starVisual)) {
+                    Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>($"assets/custom/starlevels/icons/{starVisual}.png");
+                    CreatureModifiersData.LoadedModifierSprites.Add(starVisual, game_obj);
                 }
-                if (visualEffect != null) {
-                    visualEffectPrefab = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(visualEffect);
+                if (visualEffect != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(visualEffect)) {
+                    GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(visualEffect);
+                    CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
+                    PrefabManager.Instance.AddPrefab(prefab_obj);
+                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(visualEffect);
+                    CreatureModifiersData.LoadedModifierEffects.Add(visualEffect, mockfixedgo);
+                }
+                if (secondaryEffect != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(secondaryEffect)) {
+                    GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(secondaryEffect);
+                    CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
+                    PrefabManager.Instance.AddPrefab(prefab_obj);
+                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(secondaryEffect);
+                    CreatureModifiersData.LoadedSecondaryEffects.Add(secondaryEffect, mockfixedgo);
                 }
             }
 
             public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
                 if (setupMethodClass == null || setupMethodClass == "") { return; }
                 Type methodClass = Type.GetType(setupMethodClass);
-                Logger.LogDebug($"Setting up modifier {setupMethodClass} with signature {methodClass}");
+                //Logger.LogDebug($"Setting up modifier {setupMethodClass} with signature {methodClass}");
                 MethodInfo theMethod = methodClass.GetMethod("Setup");
                 if (theMethod == null) {
                     Logger.LogWarning($"Could not find setup method, skipping setup.");
@@ -196,6 +212,7 @@ namespace StarLevelSystem.common
 
         public class CreatureDetailCache {
             public bool creatureDisabledInBiome { get; set; } = false;
+            public bool creatureCheckedSpawnMult { get; set; } = false;
             public int Level { get; set; }
             public Dictionary<ModifierNames, ModifierType> Modifiers { get; set; }
             public Dictionary<ModifierNames, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<ModifierNames, List<string>>();
@@ -218,12 +235,14 @@ namespace StarLevelSystem.common
                 { CreatureBaseAttribute.BaseHealth, 1f },
                 { CreatureBaseAttribute.Size, 1f },
                 { CreatureBaseAttribute.Speed, 1f },
+                { CreatureBaseAttribute.AttackSpeed, 1f },
             };
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; } = new Dictionary<CreaturePerLevelAttribute, float>() {
                 { CreaturePerLevelAttribute.DamagePerLevel, 0f },
                 { CreaturePerLevelAttribute.HealthPerLevel, ValConfig.EnemyHealthMultiplier.Value },
                 { CreaturePerLevelAttribute.SizePerLevel, ValConfig.PerLevelScaleBonus.Value },
                 { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
+                { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() {};
         }

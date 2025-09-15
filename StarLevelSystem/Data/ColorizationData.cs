@@ -150,6 +150,18 @@ namespace StarLevelSystem.Data
                     { 9, new ColorDef() { hue = 0.9f, saturation = 0.3f, value = 0f }},
                     { 10, new ColorDef() { hue = 1f, saturation = 0.5f, value = 0f }}
                 }},
+                {"Bjorn", new Dictionary<int, ColorDef>() {
+                    { 1, new ColorDef() { hue = 0f, saturation = 0.1f, value = 0f }},
+                    { 2, new ColorDef() { hue = 0f, saturation = 0.3f, value = 0f }},
+                    { 3, new ColorDef() { hue = 05f, saturation = 0.3f, value = -0.1f }},
+                    { 4, new ColorDef() { hue = 0.12f, saturation = 0.3f, value = -0.1f }},
+                    { 5, new ColorDef() { hue = 0.18f, saturation = 0.3f, value = -0.1f }},
+                    { 6, new ColorDef() { hue = 0.2f, saturation = 0.3f, value = -0.12f }},
+                    { 7, new ColorDef() { hue = -0.08f, saturation = 0.3f, value = -0.10f }},
+                    { 8, new ColorDef() { hue = 0.05f, saturation = 0.3f, value = -0.12f }},
+                    { 9, new ColorDef() { hue = 0.15f, saturation = 0.3f, value = -0.10f }},
+                    { 10, new ColorDef() { hue = 1f, saturation = 0.5f, value = -0.05f }}
+                }},
                 {"Serpent", new Dictionary<int, ColorDef>() {
                     { 1, new ColorDef() { hue = -0.05f, saturation = 0f, value = -0.01f }},
                     { 2, new ColorDef() { hue = -0.1f, saturation = 0f, value = -0.01f }},

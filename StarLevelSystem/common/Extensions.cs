@@ -44,11 +44,31 @@ namespace StarLevelSystem.common
             return characters;
         }
 
+        public static float EstimateCharacterDamage(Character chara, bool highest = true) {
+            if (chara == null || chara.IsPlayer()) return 0;
+            Humanoid noid = chara as Humanoid;
+            float dmg = 0;
+            ItemDrop.ItemData item = noid.GetCurrentWeapon();
+            if (highest) {
+                foreach(var defweapon in noid.m_defaultItems) {
+                    float? wepdmg = defweapon.GetComponent<ItemDrop>()?.m_itemData?.GetDamage().GetTotalDamage();
+                    if (wepdmg != null) { if (wepdmg > dmg) { dmg = (float)wepdmg; } }
+                }
+            } else {
+                if (item != null) {
+                    HitData.DamageTypes dmgs = item.GetDamage();
+                    // Spirit and Poison get reduced weights here because they are dmg over time primarily and taking into account the whole value immediately results in a dmg spike
+                    dmg = dmgs.m_fire + dmgs.m_frost + dmgs.m_lightning + (dmgs.m_spirit / 2) + (dmgs.m_poison / 6) + dmgs.m_blunt + dmgs.m_pierce + dmgs.m_slash;
+                }
+            }
+
+            return dmg;
+        }
+
         public static BiomeSpecificSetting MergeBiomeConfigs(BiomeSpecificSetting prioritycfg, BiomeSpecificSetting othercfg)
         {
             BiomeSpecificSetting biomecfg = othercfg;
             if (prioritycfg.CustomCreatureLevelUpChance != null) { biomecfg.CustomCreatureLevelUpChance = prioritycfg.CustomCreatureLevelUpChance; }
-            biomecfg.EnableBiomeLevelOverride = prioritycfg.EnableBiomeLevelOverride;
             biomecfg.BiomeMaxLevelOverride = prioritycfg.BiomeMaxLevelOverride;
             biomecfg.DistanceScaleModifier = prioritycfg.DistanceScaleModifier;
             if (biomecfg.CreatureBaseValueModifiers != null && prioritycfg.CreatureBaseValueModifiers != null)

@@ -1,6 +1,7 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.common;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -10,6 +11,13 @@ namespace StarLevelSystem.modules
 {
     internal class Spawnrate
     {
+        public static IEnumerator CheckSpawnRate(Character character, ZDO creatureZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings, float delay = 0.2f) {
+            yield return new WaitForSeconds(delay);
+            if (CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biomeSettings) == true) {
+                ZNetScene.instance.Destroy(character.gameObject);
+            }
+        }
+
         // Returns a bool based on whether or not the creature should be deleted, true = delete, false = do not delete
         internal static bool CheckSetApplySpawnrate(Character character, ZDO creatureZDO,  CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings) {
             if (character == null || creatureZDO == null) {
@@ -24,22 +32,22 @@ namespace StarLevelSystem.modules
 
             creatureZDO.Set("SLS_DSpwnMlt", true);
             // Chance to increase spawn, or decrease it
-            Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
+            // Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
             if (spawnrate > 1f) {
                 spawnrate -= 1f; // Normalize spawnrate to just the bonus
                 // For more than 100% spawn increases, 
                 while (spawnrate > 0) {
                     float randv = UnityEngine.Random.value;
-                    Logger.LogDebug($"Spawn increase check {randv} <= {spawnrate} {randv <= spawnrate}");
+                    // Logger.LogDebug($"Spawn increase check {randv} <= {spawnrate} {randv <= spawnrate}");
                     if (randv <= spawnrate) {
                         Vector3 position = character.transform.position;
                         if (character.transform.position.y < 3000f) {
                             // Randomize position a little
-                            position = DetermineOffsetPosition(position, 5f);
+                            position = DetermineOffsetPosition(position, 15f);
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
                         GameObject spawnedCreature = GameObject.Instantiate(PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(character.gameObject)), position, rotation);
-                        Logger.LogDebug($"Spawned {spawnedCreature.gameObject}");
+                        // Logger.LogDebug($"Spawned {spawnedCreature.gameObject}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         spawnedCreature.GetComponent<Character>()?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);
                     }
@@ -47,10 +55,10 @@ namespace StarLevelSystem.modules
                 }
             } else if (spawnrate < 1f) {
                 float randv = UnityEngine.Random.value;
-                Logger.LogDebug($"Checking for spawn rate reduction {randv} >= {spawnrate}");
+                // Logger.LogDebug($"Checking for spawn rate reduction {randv} >= {spawnrate}");
                 // Chance to reduce spawnrate, if triggered this creature will be queued for deletion
                 if (randv >= spawnrate) {
-                    Logger.LogDebug($"Selecting {character.gameObject} for deletion.");
+                    // Logger.LogDebug($"Selecting {character.gameObject} for deletion.");
                     return true;
                 }
             }

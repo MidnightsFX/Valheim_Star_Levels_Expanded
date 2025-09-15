@@ -125,7 +125,6 @@ Shader "JVLmock_Legacy Shaders/Particles/Alpha Blended"
 			}
 		}
 	}
-	CustomEditor "AmplifyShaderEditor.MaterialInspector"
 	
 	Fallback Off
 }

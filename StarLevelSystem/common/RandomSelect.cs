@@ -20,7 +20,7 @@ namespace StarLevelSystem.common
                 current_weight += entry.selectionWeight;
                 //Logger.LogDebug($"Current weight is {current_weight} >= {selection} for entry {entry.Name} - {entry.selectionWeight}");
                 if (current_weight >= selection) {
-                    Logger.LogDebug($"Randomly selected {entry.Name} with weight {entry.selectionWeight} from total {totalweight}");
+                    // Logger.LogDebug($"Randomly selected {entry.Name} with weight {entry.selectionWeight} from total {totalweight}");
                     return entry.Name;
                 }
             }

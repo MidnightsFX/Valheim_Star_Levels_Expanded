@@ -419,6 +419,10 @@ namespace StarLevelSystem.modules
                     ModificationExtensionSystem.CreatureSetup(chara, true, level);
                     chara.SetTamed(true);
                 }
+                if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null) {
+                    Logger.LogDebug("Disabling spawn multiplier for tamed child.");
+                    chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
+                }
             }
         }
 

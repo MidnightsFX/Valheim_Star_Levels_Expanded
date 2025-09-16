@@ -4,6 +4,7 @@
  - Adding incompatibility with CLLC
  - Improving compatibility for spawned child creatures multiplied by biome multipliers
  - Improving multiplier compatibility for spawn command and boss spawns
+ - Adding initial translations for 26 languages
  ```
 
 **0.8.0**

@@ -35,12 +35,80 @@
 
   <ItemGroup>
     <None Remove="assets\starlevelsystems" />
+    <None Remove="Localization\Bulgarian.json" />
+    <None Remove="Localization\Chinese.json" />
+    <None Remove="Localization\Chinese_Trad.json" />
+    <None Remove="Localization\Croatian.json" />
+    <None Remove="Localization\Czech.json" />
+    <None Remove="Localization\Danish.json" />
+    <None Remove="Localization\Dutch.json" />
     <None Remove="Localization\English.json" />
+    <None Remove="Localization\Finnish.json" />
+    <None Remove="Localization\French.json" />
+    <None Remove="Localization\Georgian.json" />
+    <None Remove="Localization\German.json" />
+    <None Remove="Localization\Greek.json" />
+    <None Remove="Localization\Hindi.json" />
+    <None Remove="Localization\Hungarian.json" />
+    <None Remove="Localization\Icelandic.json" />
+    <None Remove="Localization\Italian.json" />
+    <None Remove="Localization\Japanese.json" />
+    <None Remove="Localization\Korean.json" />
+    <None Remove="Localization\Latvian.json" />
+    <None Remove="Localization\Lithuanian.json" />
+    <None Remove="Localization\Macedonian.json" />
+    <None Remove="Localization\Norwegian.json" />
+    <None Remove="Localization\Polish.json" />
+    <None Remove="Localization\Portuguese_Brazilian.json" />
+    <None Remove="Localization\Portuguese_European.json" />
+    <None Remove="Localization\Romanian.json" />
+    <None Remove="Localization\Russian.json" />
+    <None Remove="Localization\Serbian.json" />
+    <None Remove="Localization\Slovak.json" />
+    <None Remove="Localization\Spanish.json" />
+    <None Remove="Localization\Swedish.json" />
+    <None Remove="Localization\Thai.json" />
+    <None Remove="Localization\Turkish.json" />
+    <None Remove="Localization\Ukrainian.json" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="assets\starlevelsystems" />
+    <EmbeddedResource Include="Localization\Bulgarian.json" />
+    <EmbeddedResource Include="Localization\Chinese.json" />
+    <EmbeddedResource Include="Localization\Chinese_Trad.json" />
+    <EmbeddedResource Include="Localization\Croatian.json" />
+    <EmbeddedResource Include="Localization\Czech.json" />
+    <EmbeddedResource Include="Localization\Danish.json" />
+    <EmbeddedResource Include="Localization\Dutch.json" />
     <EmbeddedResource Include="Localization\English.json" />
+    <EmbeddedResource Include="Localization\Finnish.json" />
+    <EmbeddedResource Include="Localization\French.json" />
+    <EmbeddedResource Include="Localization\Georgian.json" />
+    <EmbeddedResource Include="Localization\German.json" />
+    <EmbeddedResource Include="Localization\Greek.json" />
+    <EmbeddedResource Include="Localization\Hindi.json" />
+    <EmbeddedResource Include="Localization\Hungarian.json" />
+    <EmbeddedResource Include="Localization\Icelandic.json" />
+    <EmbeddedResource Include="Localization\Italian.json" />
+    <EmbeddedResource Include="Localization\Japanese.json" />
+    <EmbeddedResource Include="Localization\Korean.json" />
+    <EmbeddedResource Include="Localization\Latvian.json" />
+    <EmbeddedResource Include="Localization\Lithuanian.json" />
+    <EmbeddedResource Include="Localization\Macedonian.json" />
+    <EmbeddedResource Include="Localization\Norwegian.json" />
+    <EmbeddedResource Include="Localization\Polish.json" />
+    <EmbeddedResource Include="Localization\Portuguese_Brazilian.json" />
+    <EmbeddedResource Include="Localization\Portuguese_European.json" />
+    <EmbeddedResource Include="Localization\Romanian.json" />
+    <EmbeddedResource Include="Localization\Russian.json" />
+    <EmbeddedResource Include="Localization\Serbian.json" />
+    <EmbeddedResource Include="Localization\Slovak.json" />
+    <EmbeddedResource Include="Localization\Spanish.json" />
+    <EmbeddedResource Include="Localization\Swedish.json" />
+    <EmbeddedResource Include="Localization\Thai.json" />
+    <EmbeddedResource Include="Localization\Turkish.json" />
+    <EmbeddedResource Include="Localization\Ukrainian.json" />
   </ItemGroup>
 
   <ItemGroup>

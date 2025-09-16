@@ -1,4 +1,4 @@
-﻿# StarLevelSystem
+# StarLevelSystem
 
 ![TitleHeader](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/TitleHeader.png?raw=true)
 
@@ -27,7 +27,11 @@ Features:
 	- level scaled BIRDS
 	- level scaled TREES
 
-![Header1](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true)
+
+Got a bug to report or just want to chat about the mod? Drop by the discord or github.
+
+[![discord logo](https://i.imgur.com/uE6umQE.png)](https://discord.gg/Dmr9PQTy9m) [![github logo](https://i.imgur.com/lvbP5OF.png)](https://github.com/MidnightsFX/Valheim_Armory)
+
 
 ## Features
 

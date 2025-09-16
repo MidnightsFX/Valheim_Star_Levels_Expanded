@@ -255,6 +255,14 @@ Once you are ready to install mods, they must be unzipped first and go into the 
 - Download and install [Yaml.net](https://thunderstore.io/c/valheim/p/ValheimModding/YamlDotNet/) and [Jotunn](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/)
 - Download this mod and install it!
 
+## Comptabilities
+- This mod is incompatible with Creature Level and Loot Control (they do the same things)
+
+Compatibility is being worked on for the following mods:
+- CarryMeMaster
+- PortablePals
+- 
+
 ## Planned Features
 This mod is still in active development and is not considered complete yet.
 

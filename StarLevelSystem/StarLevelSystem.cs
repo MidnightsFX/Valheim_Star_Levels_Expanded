@@ -15,11 +15,12 @@ namespace StarLevelSystem
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency(Jotunn.Main.ModGuid)]
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
+    [BepInIncompatibility("org.bepinex.plugins.creaturelevelcontrol")]
     internal class StarLevelSystem : BaseUnityPlugin
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.8.0";
+        public const string PluginVersion = "0.8.1";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game

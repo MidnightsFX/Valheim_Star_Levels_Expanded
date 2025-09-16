@@ -4,7 +4,6 @@ using StarLevelSystem.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
-using System.Security.Policy;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;

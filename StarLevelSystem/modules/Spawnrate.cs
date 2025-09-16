@@ -11,7 +11,7 @@ namespace StarLevelSystem.modules
 {
     internal class Spawnrate
     {
-        public static IEnumerator CheckSpawnRate(Character character, ZDO creatureZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings, float delay = 0.2f) {
+        public static IEnumerator CheckSpawnRate(Character character, ZDO creatureZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings, float delay = 1f) {
             yield return new WaitForSeconds(delay);
             if (CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biomeSettings) == true) {
                 ZNetScene.instance.Destroy(character.gameObject);
@@ -31,6 +31,9 @@ namespace StarLevelSystem.modules
             if (creature_settings != null) { spawnrate *= creature_settings.SpawnRateModifier; }
 
             creatureZDO.Set("SLS_DSpwnMlt", true);
+            if (character.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
+                return false;
+            }
             // Chance to increase spawn, or decrease it
             // Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
             if (spawnrate > 1f) {
@@ -47,6 +50,9 @@ namespace StarLevelSystem.modules
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
                         GameObject spawnedCreature = GameObject.Instantiate(PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(character.gameObject)), position, rotation);
+                        if (character.IsTamed()) {
+                            spawnedCreature.GetComponent<Character>()?.SetTamed(true);
+                        }
                         // Logger.LogDebug($"Spawned {spawnedCreature.gameObject}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         spawnedCreature.GetComponent<Character>()?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);

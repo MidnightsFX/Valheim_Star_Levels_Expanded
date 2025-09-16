@@ -23,8 +23,8 @@ Features:
 	- level up the FISH!
 	- level scaled BIRDS
 	- level scaled TREES
-- Server synchronized configs
-- Active config reloading
+
+![Header1](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true)
 
 ## Features
 

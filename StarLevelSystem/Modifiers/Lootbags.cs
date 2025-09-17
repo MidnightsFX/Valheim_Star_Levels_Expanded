@@ -13,8 +13,8 @@ namespace StarLevelSystem.Modifiers
     internal static class Lootbags
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache)
-        {
+        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+            if (ccache == null) { return; }
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed] += 0.25f;
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] += 1f;
         }

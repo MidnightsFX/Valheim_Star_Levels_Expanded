@@ -12,6 +12,7 @@ namespace StarLevelSystem.Modifiers
     {
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+            if (ccache == null) { return; }
             if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Fire)) {
                 ccache.CreatureDamageBonus[DamageType.Fire] += config.BasePower + (config.PerlevelPower * ccache.Level);
             } else {

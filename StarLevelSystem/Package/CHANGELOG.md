@@ -1,3 +1,11 @@
+**0.8.2**
+ ---
+ ```
+ - Fix for splitting tames not spawned tamed minions
+ - NPE fix for creatures death before setup
+ - Config spelling fix for LootDropCalculationType
+ ```
+
 **0.8.1**
  ---
  ```

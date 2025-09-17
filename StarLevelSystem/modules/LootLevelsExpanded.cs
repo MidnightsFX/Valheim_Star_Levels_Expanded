@@ -27,7 +27,7 @@ namespace StarLevelSystem.modules
 
         internal static void LootFactorChanged(object s, EventArgs e)
         {
-            SelectedLootFactor = (LootFactorType)Enum.Parse(typeof(LootFactorType), ValConfig.LootDropCaluationType.Value);
+            SelectedLootFactor = (LootFactorType)Enum.Parse(typeof(LootFactorType), ValConfig.LootDropCalculationType.Value);
         }
 
         [HarmonyPatch(typeof(CharacterDrop))]
@@ -148,7 +148,7 @@ namespace StarLevelSystem.modules
                     } else {
                         drop *= ExponentLootPerLevel(level, distance_bonus, scale_factor);
                     }
-                    Logger.LogDebug($"Drop {loot.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCaluationType.Value} = {drop}");
+                    Logger.LogDebug($"Drop {loot.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCalculationType.Value} = {drop}");
 
                     // Enforce max drop cap
                     if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) { 

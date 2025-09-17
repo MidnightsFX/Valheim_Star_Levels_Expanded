@@ -30,7 +30,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<int> LootDropsPerTick;
-        public static ConfigEntry<string> LootDropCaluationType;
+        public static ConfigEntry<string> LootDropCalculationType;
         public static ConfigEntry<float> EnemyHealthMultiplier;
         public static ConfigEntry<float> BossEnemyHealthMultiplier;
         public static ConfigEntry<float> EnemyHealthPerWorldLevel;
@@ -119,8 +119,8 @@ namespace StarLevelSystem
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Wether or not creatures gain more damage when players are grouped up.");
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
-            LootDropCaluationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calcuation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
-            LootDropCaluationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;
+            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
+            LootDropCalculationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "DefaultMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");

@@ -19,9 +19,11 @@ namespace StarLevelSystem.Modifiers
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter, cDetails.Modifiers[ModifierNames.Splitter]);
                     float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
+                    bool shouldTame = __instance.IsTamed();
                     while (totalsplits >= 1) {
-                        GameObject.Instantiate(cDetails.CreaturePrefab, __instance.transform.position, __instance.transform.rotation);
+                        GameObject sgo = GameObject.Instantiate(cDetails.CreaturePrefab, __instance.transform.position, __instance.transform.rotation);
                         totalsplits -= 1f;
+                        if (shouldTame) { sgo.GetComponent<Character>()?.SetTamed(true); }
                     }
                 }
             }

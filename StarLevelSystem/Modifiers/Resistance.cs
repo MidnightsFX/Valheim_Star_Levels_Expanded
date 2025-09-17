@@ -7,8 +7,8 @@ namespace StarLevelSystem.Modifiers
     internal static class Resistance
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache)
-        {
+        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+            if (ccache == null) { return; }
             if (ccache.Modifiers.ContainsKey(CreatureModifiersData.ModifierNames.ResistBlunt)) {
                 ccache.DamageRecievedModifiers[DamageType.Blunt] -= config.BasePower + (config.PerlevelPower * ccache.Level);
                 if (ccache.DamageRecievedModifiers[DamageType.Blunt] < 0) { ccache.DamageRecievedModifiers[DamageType.Blunt] = 0; }

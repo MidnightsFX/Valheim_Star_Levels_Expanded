@@ -7,6 +7,7 @@ namespace StarLevelSystem.Modifiers
     {
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+            if (ccache == null) { return; }
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed] += config.BasePower + (config.PerlevelPower * ccache.Level);
         }
     }

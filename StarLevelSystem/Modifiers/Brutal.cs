@@ -6,8 +6,8 @@ namespace StarLevelSystem.Modifiers
     internal static class Brutal
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache)
-        {
+        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+            if (ccache == null) { return; }
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] += config.BasePower;
             ccache.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.AttackSpeedPerLevel] += (config.PerlevelPower * ccache.Level);
         }

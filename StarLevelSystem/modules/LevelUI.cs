@@ -13,21 +13,10 @@ namespace StarLevelSystem.modules
     public class StarLevelHud
     {
         public bool isBoss { get; set; }
-        public GameObject starlevel2 { get; set; }
-        public Image starlevel2_front_image { get; set; }
-        public Image starlevel2_back_image { get; set; }
-        public GameObject starlevel3 { get; set; }
-        public Image starlevel3_front_image { get; set; }
-        public Image starlevel3_back_image { get; set; }
-        public GameObject starlevel4 {  get; set; }
-        public Image starlevel4_front_image { get; set; }
-        public Image starlevel4_back_image { get; set; }
-        public GameObject starlevel5 { get; set; }
-        public Image starlevel5_front_image { get; set; }
-        public Image starlevel5_back_image { get; set; }
-        public GameObject starlevel6 { get; set; }
-        public Image starlevel6_front_image { get; set; }
-        public Image starlevel6_back_image { get; set; }
+
+        public Dictionary<int, GameObject> starlevel = new Dictionary<int, GameObject>();
+        public Dictionary<int, Image> starlevel_front = new Dictionary<int, Image>();
+        public Dictionary<int, Image> starlevel_back = new Dictionary<int, Image>();
         public GameObject starlevel_N { get; set; }
         public Image starlevelN_front_image { get; set; }
         public Image starlevelN_back_image { get; set; }
@@ -53,7 +42,8 @@ namespace StarLevelSystem.modules
                 star = __instance.m_baseHud.transform.Find("level_2/star").gameObject;
 
                 // Destroys the extra star for level 3, so that we can just enable levels 2-6 to add their respective star
-                Object.Destroy(__instance.m_baseHud.transform.Find("level_3/star").gameObject);
+                // Object.Destroy(__instance.m_baseHud.transform.Find("level_3/star").gameObject);
+                __instance.m_baseHud.transform.Find("level_3/star").gameObject.SetActive(false);
 
                 // Levels 1-5 get their stars, then we also get the n* setup
                 StarLevelHudDisplay(star, __instance.m_baseHud.transform, __instance.m_baseHudBoss.transform);
@@ -61,12 +51,14 @@ namespace StarLevelSystem.modules
 
             private static void StarLevelHudDisplay(GameObject star, Transform basehud, Transform bosshud)
             {
+                SetupStar(star, 2, basehud);
+                SetupStar(star, 3, basehud);
                 SetupStar(star, 4, basehud);
                 SetupStar(star, 5, basehud);
                 SetupStar(star, 6, basehud);
 
                 // Star N | this position is set as the same 
-                GameObject star_7 = new GameObject(name: "level_n");
+                GameObject star_7 = new GameObject(name: "SLS_level_n");
                 star_7.transform.SetParent(basehud);
                 GameObject star7 = Object.Instantiate(star, star_7.transform);
                 // star7.transform.SetParent(star_7.transform);
@@ -99,7 +91,7 @@ namespace StarLevelSystem.modules
                 SetupStar(star, 6, bosshud, true);
 
                 // Star N | this position is set as the same 
-                GameObject star_7_boss = new GameObject(name: "level_n");
+                GameObject star_7_boss = new GameObject(name: "SLS_level_n");
                 star_7_boss.transform.SetParent(bosshud);
                 GameObject star7_boss = Object.Instantiate(star, star_7_boss.transform);
                 // Size increase boss stars
@@ -131,7 +123,7 @@ namespace StarLevelSystem.modules
 
             private static void SetupStar(GameObject star, int level, Transform parent_t, bool boss = false)
             {
-                GameObject new_star_holder = new GameObject(name: $"level_{level}");
+                GameObject new_star_holder = new GameObject(name: $"SLS_level_{level}");
                 new_star_holder.transform.SetParent(parent_t);
                 GameObject new_star = Object.Instantiate(star, new_star_holder.transform);
 
@@ -146,42 +138,58 @@ namespace StarLevelSystem.modules
 
                 new_star_holder.SetActive(false);
 
-                switch(level) {
+                switch (level)
+                {
                     // Level 1 is the base level, so we don't need to do anything
                     // Level 2-3 don't have a non-boss entry because they use the vanilla entries
                     case 2:
                         if (boss) {
                             new_star_holder.transform.localPosition = new Vector3(x: 0, y: -6, z: 0);
+                        } else {
+                            new_star_holder.transform.localPosition = new Vector3(x: -41, y: 19, z: 0);
+                            new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         }
                         break;
                     case 3:
                         if (boss) {
                             new_star_holder.transform.localPosition = new Vector3(x: -20, y: -6, z: 0);
+                        } else {
+                            new_star_holder.transform.localPosition = new Vector3(x: -25, y: 19, z: 0);
+                            new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         }
                         break;
                     case 4:
-                        if (boss) {
+                        if (boss)
+                        {
                             new_star_holder.transform.localPosition = new Vector3(x: 20, y: -6, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
-                        } else {
+                        }
+                        else
+                        {
                             new_star_holder.transform.localPosition = new Vector3(x: -9, y: 19, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         }
                         break;
                     case 5:
-                        if (boss) {
+                        if (boss)
+                        {
                             new_star_holder.transform.localPosition = new Vector3(x: -40, y: -6, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
-                        } else {
+                        }
+                        else
+                        {
                             new_star_holder.transform.localPosition = new Vector3(x: 7, y: 19, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         }
                         break;
                     case 6:
-                        if (boss) {
+                        if (boss)
+                        {
                             new_star_holder.transform.localPosition = new Vector3(x: 40, y: -6, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
-                        } else {
+                        }
+                        else
+                        {
                             new_star_holder.transform.localPosition = new Vector3(x: 23, y: 19, z: 0);
                             new_star.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                         }
@@ -284,7 +292,7 @@ namespace StarLevelSystem.modules
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
                 extended_hud = characterExtendedHuds[czoid];
-                if (extended_hud == null || extended_hud.starlevel3 == null) {
+                if (extended_hud == null || extended_hud.starlevel.ContainsKey(3) && extended_hud.starlevel[3] == null) {
                     Logger.LogDebug($"UI Cache Invalid for {czoid}, removing.");
                     characterExtendedHuds.Remove(czoid);
                     return;
@@ -296,7 +304,7 @@ namespace StarLevelSystem.modules
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
                 foreach (var entry in ccd.Modifiers) {
-                    Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
+                    //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
                     CreatureModifier cmd = CreatureModifiersData.GetModifierDef(entry.Key, entry.Value);
                     if (cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
                         Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
@@ -305,86 +313,40 @@ namespace StarLevelSystem.modules
                     star++;
                 }
 
-                Logger.LogDebug($"Determined replacement stars {starReplacements.Count()}");
+                //Logger.LogDebug($"Determined replacement stars {string.Join(",", starReplacements.Keys)}");
 
                 extended_hud.isBoss = ehud.m_character.IsBoss();
-
-                //Logger.LogDebug($"Assigning star level 2");
-                // Add the entry to the cache, and provide references
-                extended_hud.starlevel2 = ehud.m_gui.transform.Find("level_2").gameObject;
-                Transform t2_star = ehud.m_gui.transform.Find("level_2/star") ?? ehud.m_gui.transform.Find("level_2/star(Clone)");
-                extended_hud.starlevel2_back_image = t2_star.gameObject.GetComponent<Image>();
-                Transform t2_star_back = ehud.m_gui.transform.Find("level_2/star(Clone)/star (1)") ?? ehud.m_gui.transform.Find("level_2/star/star (1)");
-                extended_hud.starlevel2_front_image = t2_star_back.gameObject.GetComponent<Image>();
-                if (starReplacements.ContainsKey(2)) {
-                    extended_hud.starlevel2_front_image.sprite = starReplacements[2];
-                    extended_hud.starlevel2_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
-                    extended_hud.starlevel2_back_image.sprite = starReplacements[2];
-                    extended_hud.starlevel2_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
+                int star_index = 2;
+                while (star_index < 7)
+                {
+                    //Logger.LogDebug($"Assigning star level {star_index}");
+                    extended_hud.starlevel.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
+                    extended_hud.starlevel_back.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
+                    extended_hud.starlevel_front.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
+                    if (starReplacements.ContainsKey(star_index)) {
+                        //Logger.LogDebug($"Updating Icon to modifier icon {star_index} Front: {string.Join(",", extended_hud.starlevel_front.Keys)} Back: {string.Join(",", extended_hud.starlevel_back.Keys)}");
+                        if (extended_hud.starlevel_front[star_index] != null) {
+                            extended_hud.starlevel_front[star_index].sprite = starReplacements[star_index];
+                            extended_hud.starlevel_front[star_index].rectTransform.sizeDelta = new Vector2(17, 17);
+                        }
+                        if (extended_hud.starlevel_back[star_index] != null) {
+                            extended_hud.starlevel_back[star_index].sprite = starReplacements[star_index];
+                            extended_hud.starlevel_back[star_index].rectTransform.sizeDelta = new Vector2(21, 21);
+                        }
+                    }
+                    star_index++;
                 }
 
-                //Logger.LogDebug($"Assigning star level 3");
-                extended_hud.starlevel3 = ehud.m_gui.transform.Find("level_3").gameObject;
-                Transform t3_star = ehud.m_gui.transform.Find("level_3/star (1)") ?? ehud.m_gui.transform.Find("level_3/star(Clone)");
-                extended_hud.starlevel3_back_image = t3_star.gameObject.GetComponent<Image>();
-                Transform t3_star_back = ehud.m_gui.transform.Find("level_3/star (1)/star (1)") ?? ehud.m_gui.transform.Find("level_3/star(Clone)/star (1)");
-                extended_hud.starlevel3_front_image = t3_star_back.gameObject.GetComponent<Image>();
-                if (starReplacements.ContainsKey(3)) {
-                    extended_hud.starlevel3_front_image.sprite = starReplacements[3];
-                    extended_hud.starlevel3_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
-                    extended_hud.starlevel3_back_image.sprite = starReplacements[3];
-                    extended_hud.starlevel3_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
-                }
-
-                //Logger.LogDebug($"Assigning star level 4");
-                extended_hud.starlevel4 = ehud.m_gui.transform.Find("level_4").gameObject;
-                extended_hud.starlevel4_back_image = ehud.m_gui.transform.Find("level_4/star(Clone)").gameObject.GetComponent<Image>();
-                extended_hud.starlevel4_front_image = ehud.m_gui.transform.Find("level_4/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-                if (starReplacements.ContainsKey(4)) {
-                    extended_hud.starlevel4_front_image.sprite = starReplacements[4];
-                    extended_hud.starlevel4_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
-                    extended_hud.starlevel4_back_image.sprite = starReplacements[4];
-                    extended_hud.starlevel4_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
-                }
-
-                //Logger.LogDebug($"Assigning star level 5");
-                extended_hud.starlevel5 = ehud.m_gui.transform.Find("level_5").gameObject;
-                extended_hud.starlevel5_back_image = ehud.m_gui.transform.Find("level_5/star(Clone)").gameObject.GetComponent<Image>();
-                extended_hud.starlevel5_front_image = ehud.m_gui.transform.Find("level_5/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-                if (starReplacements.ContainsKey(5)) {
-                    extended_hud.starlevel5_front_image.sprite = starReplacements[5];
-                    extended_hud.starlevel5_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
-                    extended_hud.starlevel5_back_image.sprite = starReplacements[5];
-                    extended_hud.starlevel5_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
-                }
-
-                //Logger.LogDebug($"Assigning star level 6");
-                extended_hud.starlevel6 = ehud.m_gui.transform.Find("level_6").gameObject;
-                extended_hud.starlevel6_back_image = ehud.m_gui.transform.Find("level_6/star(Clone)").gameObject.GetComponent<Image>();
-                extended_hud.starlevel6_front_image = ehud.m_gui.transform.Find("level_6/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-                if (starReplacements.ContainsKey(6)) {
-                    extended_hud.starlevel6_front_image.sprite = starReplacements[6];
-                    extended_hud.starlevel6_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
-                    extended_hud.starlevel6_back_image.sprite = starReplacements[6];
-                    extended_hud.starlevel6_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
-                }
-
-                //Logger.LogDebug($"Assigning star level N");
-                extended_hud.starlevel_N = ehud.m_gui.transform.Find("level_n").gameObject;
-                extended_hud.starlevelN_back_image = ehud.m_gui.transform.Find("level_n/star(Clone)").gameObject.GetComponent<Image>();
-                extended_hud.starlevelN_front_image = ehud.m_gui.transform.Find("level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-                extended_hud.starlevel_N_Text = ehud.m_gui.transform.Find("level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
+                Logger.LogDebug($"Assigning star level N");
+                extended_hud.starlevel_N = ehud.m_gui.transform.Find("SLS_level_n").gameObject;
+                extended_hud.starlevelN_back_image = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
+                extended_hud.starlevelN_front_image = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
+                extended_hud.starlevel_N_Text = ehud.m_gui.transform.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
                 if (starReplacements.Count > 0) {
                     extended_hud.starlevelN_front_image.sprite = starReplacements.First().Value;
                     extended_hud.starlevelN_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
                     extended_hud.starlevelN_back_image.sprite = starReplacements.First().Value;
                     extended_hud.starlevelN_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
-                }
-
-                if (extended_hud.starlevel2 == null || extended_hud.starlevel3 == null || extended_hud.starlevel4 == null || extended_hud.starlevel5 == null || extended_hud.starlevel6 == null || extended_hud.starlevel_N == null)
-                {
-                    Logger.LogDebug($"Unable to find all hud information for {ehud.m_character.name}");
-                    return;
                 }
 
                 // Need to find and add the N level text for updating here
@@ -393,31 +355,32 @@ namespace StarLevelSystem.modules
             // Star level display starts at 2
             // Enable static star levels
             //Logger.LogInfo("Setting star levels active");
+
             switch (level) {
                 case 2:
-                    extended_hud.starlevel2?.SetActive(true);
+                    extended_hud.starlevel[2]?.SetActive(true);
                     break;
                 case 3:
-                    extended_hud.starlevel2?.SetActive(true);
-                    extended_hud.starlevel3?.SetActive(true);
+                    extended_hud.starlevel[2]?.SetActive(true);
+                    extended_hud.starlevel[3]?.SetActive(true);
                     break;
                 case 4:
-                    extended_hud.starlevel2?.SetActive(true);
-                    extended_hud.starlevel3?.SetActive(true);
-                    extended_hud.starlevel4?.SetActive(true);
+                    extended_hud.starlevel[2]?.SetActive(true);
+                    extended_hud.starlevel[3]?.SetActive(true);
+                    extended_hud.starlevel[4]?.SetActive(true);
                     break;
                 case 5:
-                    extended_hud.starlevel2?.SetActive(true);
-                    extended_hud.starlevel3?.SetActive(true);
-                    extended_hud.starlevel4?.SetActive(true);
-                    extended_hud.starlevel5?.SetActive(true);
+                    extended_hud.starlevel[2]?.SetActive(true);
+                    extended_hud.starlevel[3]?.SetActive(true);
+                    extended_hud.starlevel[4]?.SetActive(true);
+                    extended_hud.starlevel[5]?.SetActive(true);
                     break;
                 case 6:
-                    extended_hud.starlevel2?.SetActive(true);
-                    extended_hud.starlevel3?.SetActive(true);
-                    extended_hud.starlevel4?.SetActive(true);
-                    extended_hud.starlevel5?.SetActive(true);
-                    extended_hud.starlevel6?.SetActive(true);
+                    extended_hud.starlevel[2]?.SetActive(true);
+                    extended_hud.starlevel[3]?.SetActive(true);
+                    extended_hud.starlevel[4]?.SetActive(true);
+                    extended_hud.starlevel[5]?.SetActive(true);
+                    extended_hud.starlevel[6]?.SetActive(true);
                     break;
             }
 

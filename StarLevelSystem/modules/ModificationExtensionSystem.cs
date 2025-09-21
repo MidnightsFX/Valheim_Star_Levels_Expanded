@@ -95,7 +95,6 @@ namespace StarLevelSystem.modules
             }
         }
 
-
         [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
         public static class ModifyCharacterAnimationSpeed {
             public static void Postfix(CharacterAnimEvent __instance) {
@@ -193,7 +192,25 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        internal static void CreatureSetup(Character __instance, bool refresh_cache = false, int leveloverride = 0) {
+        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, CreatureDetailCache cDetails, float delay = 1f) {
+            yield return new WaitForSeconds(delay);
+
+            // Character is gone :shrug:
+            if (__instance == null) { yield break; }
+            // Modify the creatures stats by custom character/biome modifications
+            ApplySpeedModifications(__instance, cDetails);
+            ApplyDamageModification(__instance, cDetails);
+            LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails, refresh_cache);
+            ApplyHealthModifications(__instance, cDetails);
+
+
+            if (__instance.m_level <= 1) { yield break; }
+            // Colorization and visual adjustments
+            Colorization.ApplyColorizationWithoutLevelEffects(__instance.gameObject, cDetails.Colorization);
+            Colorization.ApplyLevelVisual(__instance);
+        }
+
+        internal static void CreatureSetup(Character __instance, bool refresh_cache = false, int leveloverride = 0, float delayedSetupTimer = 1f) {
             if (__instance.IsPlayer()) { return; }
 
             // Select the creature data
@@ -208,17 +225,7 @@ namespace StarLevelSystem.modules
                 return;
             }
 
-            // Modify the creatures stats by custom character/biome modifications
-            ApplySpeedModifications(__instance, cDetails);
-            ApplyDamageModification(__instance, cDetails);
-            LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails, refresh_cache);
-            ApplyHealthModifications(__instance, cDetails);
-
-
-            if (__instance.m_level <= 1) { return; }
-            // Colorization and visual adjustments
-            Colorization.ApplyColorizationWithoutLevelEffects(__instance.gameObject, cDetails.Colorization);
-            Colorization.ApplyLevelVisual(__instance);
+            ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, cDetails, delayedSetupTimer));
         }
 
         internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {

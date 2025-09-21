@@ -1,6 +1,7 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -130,31 +131,40 @@ namespace StarLevelSystem.modules
             if (cacheEntry.CreatureDisabledInBiome == true || cacheEntry == null) { return Localization.instance.Localize(chara.m_name); }
             string setName = chara.m_nview.GetZDO().GetString("SLE_Name");
             if (setName == "" || useChache == false) {
-                string prefix = "";
-                ModifierNames prefixFromMod = ModifierNames.None;
-                if (cacheEntry.ModifierPrefixNames != null && cacheEntry.ModifierPrefixNames.Count > 0) {
-                    KeyValuePair<ModifierNames, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
-                    prefixFromMod = selected.Key;
-                    prefix = selected.Value[Random.Range(0, selected.Value.Count - 1)];
-                }
-                string suffix = "";
-                if (cacheEntry.ModifierSuffixNames != null && cacheEntry.ModifierSuffixNames.Count > 0) {
-                    KeyValuePair<ModifierNames, List<string>> selected;
-                    if (prefixFromMod != ModifierNames.None) {
-                        selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames, new List<ModifierNames>() { prefixFromMod });
-                    } else {
-                        selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames);
+                List<string> prefix_names = new List<string>();
+                List<string> suffix_names = new List<string>();
+                int nameEntries = 0;
+                List<ModifierNames> remainingNameSegments = cacheEntry.Modifiers.Keys.ToList();
+                while (nameEntries < cacheEntry.Modifiers.Count) {
+                    if (remainingNameSegments.Count == 0) { break; }
+                    // Try selecting a prefix name
+                    if (cacheEntry.ModifierPrefixNames != null && cacheEntry.ModifierPrefixNames.Count > 0) {
+                        KeyValuePair<ModifierNames, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
+                        // Remove this modifier from future selection lists
+                        remainingNameSegments.Remove(selected.Key);
+                        cacheEntry.ModifierPrefixNames.Remove(selected.Key);
+                        cacheEntry.ModifierSuffixNames.Remove(selected.Key);
+                        // Randomly select one of the prefix entries for this modifier
+                        prefix_names.Add(selected.Value[Random.Range(0, selected.Value.Count - 1)]);
                     }
-                    if (selected.Value != null) {
-                        suffix = selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)];
+                    if (cacheEntry.ModifierSuffixNames != null && cacheEntry.ModifierSuffixNames.Count > 0) {
+                        KeyValuePair<ModifierNames, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames);
+                        remainingNameSegments.Remove(selected.Key);
+                        cacheEntry.ModifierPrefixNames.Remove(selected.Key);
+                        cacheEntry.ModifierSuffixNames.Remove(selected.Key);
+                        suffix_names.Add(selected.Value[Random.Range(0, selected.Value.Count - 1)]);
                     }
+                    nameEntries++;
                 }
+
+                
+
                 Tameable component = chara.GetComponent<Tameable>();
                 string cname = chara.m_name;
                 if ((bool)component) {
                     cname = component.GetHoverName();
                 }
-                setName = $"{prefix} {cname} {suffix}";
+                setName = $"{string.Join(" ", prefix_names)} {cname} {string.Join(" ", suffix_names)}";
                 chara.m_nview.GetZDO().Set("SLE_Name", setName);
                 Logger.LogDebug($"Setting creature name for {chara.name} to {setName}");
                 return Localization.instance.Localize(setName.Trim());
@@ -172,12 +182,12 @@ namespace StarLevelSystem.modules
                 return savedMods;
             }
             // Select a major modifiers
-            List<ModifierNames> modifiers = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceForMod, num_mods, modType);
+            List<ModifierNames> modifiers = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceForMod, num_mods, cdc.Level, modType);
             characterMods.Set(modifiers);
             return modifiers;
         }
 
-        public static List<ModifierNames> SelectCreatureModifiers(string creature, Heightmap.Biome biome, float chance, int num_mods, ModifierType type = ModifierType.Major)
+        public static List<ModifierNames> SelectCreatureModifiers(string creature, Heightmap.Biome biome, float chance, int num_mods, int level, ModifierType type = ModifierType.Major)
         {
             List<ModifierNames> selectedModifiers = new List<ModifierNames>();
             List<ProbabilityEntry> probabilities = CreatureModifiersData.LazyCacheCreatureModifierSelect(creature, biome, type);
@@ -185,18 +195,20 @@ namespace StarLevelSystem.modules
                 // Logger.LogDebug($"No modifiers found for creature {creature} of type {type}");
                 return selectedModifiers;
             }
-            num_mods.Times(() => {
+            int mod_attemps = 0;
+            while (num_mods > mod_attemps) {
+                if (mod_attemps + 1 >= level) { break; }
                 if (chance < 1) {
                     float roll = UnityEngine.Random.value;
                     // Logger.LogDebug($"Rolling Chance {roll} < {chance}");
                     if (roll < chance) {
                         selectedModifiers.Add(RandomSelect.RandomSelectFromWeightedList(probabilities));
                     }
-                } 
-                else {
+                } else {
                     selectedModifiers.Add(RandomSelect.RandomSelectFromWeightedList(probabilities));
                 }
-            });
+                mod_attemps++;
+            }
             // Logger.LogDebug($"Selected {selectedModifiers.Count} modifiers for creature {creature} of type {type} with chance {chance}");
             if (selectedModifiers.Count == 0) { selectedModifiers.Add(ModifierNames.None); }
             return selectedModifiers;

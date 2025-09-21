@@ -25,6 +25,10 @@ namespace StarLevelSystem.modules
                 return false;
             }
             if (creatureZDO.GetBool("SLS_DSpwnMlt", false) == true) { return false; }
+            if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && character.IsBoss()) {
+                creatureZDO.Set("SLS_DSpwnMlt", true);
+                return false;
+            }
 
             float spawnrate = 1f;
             if (biomeSettings != null) { spawnrate *= biomeSettings.SpawnRateModifier; }

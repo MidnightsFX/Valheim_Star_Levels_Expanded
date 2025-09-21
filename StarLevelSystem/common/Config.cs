@@ -44,9 +44,11 @@ namespace StarLevelSystem
         public static ConfigEntry<float> TreeSizeScalePerLevel;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
+        public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
+        public static ConfigEntry<bool> LimitCreatureModifiersToCreatureStarLevel;
         public static ConfigEntry<float> ChanceMajorModifier;
         public static ConfigEntry<float> ChanceMinorModifier;
         public static ConfigEntry<bool> EnableBossModifiers;
@@ -106,6 +108,7 @@ namespace StarLevelSystem
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
             RandomizeTameChildrenLevels = BindServerConfig("LevelSystems", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystems", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
+            BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
             EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
             EnableScalingFish = BindServerConfig("LevelSystem", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
@@ -117,6 +120,7 @@ namespace StarLevelSystem
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 0, 10);
             EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Wether or not creatures gain more health when players are grouped up.");
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Wether or not creatures gain more damage when players are grouped up.");
+            
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
@@ -125,6 +129,7 @@ namespace StarLevelSystem
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "DefaultMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
+            LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
             ChanceMajorModifier = BindServerConfig("Modifiers", "ChanceMajorModifier", 0.15f, "The chance that a creature will have a major modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
             ChanceMinorModifier = BindServerConfig("Modifiers", "ChanceMinorModifier", 0.25f, "The chance that a creature will have a minor modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
             EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Wether or not bosses can spawn with modifiers.");

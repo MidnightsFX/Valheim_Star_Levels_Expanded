@@ -1,3 +1,18 @@
+**0.8.4**
+ ---
+ ```
+ - Compatibility improvements for mods with weaponless characters
+ - Adds a config option to limit the number of modifiers that a creature gets to its star level in addition to the max number of modifiers
+ - Updated name generation to always add available modifiers
+ - Added a config option to avoid spawn multiplying boss creatures
+ ```
+
+**0.8.3**
+ ---
+ ```
+ - Compatibility improvement with mods that manipulate or add star entries
+ ```
+
 **0.8.2**
  ---
  ```

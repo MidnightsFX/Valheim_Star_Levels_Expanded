@@ -182,11 +182,9 @@
     <Copy SourceFiles="$(TargetDir)\$(TargetFileName)" DestinationFolder="$(ProjectDir)\Package\plugins\" />
   </Target>
 
-  <!-- Temporarily disabled PreBuild for development
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <Exec Command="xcopy &quot;$(ProjectDir)\..\StarLevelUnity\AssetBundles\StandaloneWindows\starlevelsystems&quot; &quot;$(ProjectDir)assets\starlevelsystems&quot; /q /y /i&#xA;&#xA;" />
   </Target>
-  -->
 
   <PropertyGroup>
     <BuildDependsOn>

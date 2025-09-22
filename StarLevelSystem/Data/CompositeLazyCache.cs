@@ -58,7 +58,7 @@ namespace StarLevelSystem.Data
 
             // Check creature spawn rate
             //Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
-            if (characterCacheEntry.CreatureCheckedSpawnMult == false) {
+            if (characterCacheEntry.CreatureCheckedSpawnMult == false && character.m_nview?.IsOwner() == true) {
                 ZNetScene.instance.StartCoroutine(Spawnrate.CheckSpawnRate(character, creatureZDO, creature_settings, biome_settings));
                 characterCacheEntry.CreatureCheckedSpawnMult = true;
             }

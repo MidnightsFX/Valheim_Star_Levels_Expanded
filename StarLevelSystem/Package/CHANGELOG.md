@@ -1,6 +1,12 @@
 **0.8.4**
  ---
  ```
+ - Concurrent spawnrate checks across clients limited (overspawn reduction)
+ ```
+
+**0.8.4**
+ ---
+ ```
  - Compatibility improvements for mods with weaponless characters
  - Adds a config option to limit the number of modifiers that a creature gets to its star level in addition to the max number of modifiers
  - Updated name generation to always add available modifiers

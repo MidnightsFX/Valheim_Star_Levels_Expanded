@@ -1,7 +1,9 @@
-**0.8.4**
+**0.9.0**
  ---
  ```
- - Concurrent spawnrate checks across clients limited (overspawn reduction)
+ - Partial API support, manipulation of creature levels, color, attributes, damage, damage recived
+ - Reduces spawn multiplier checks during race conditions
+ - Prevents UI errors when creatures have duplicated modifiers
  ```
 
 **0.8.4**

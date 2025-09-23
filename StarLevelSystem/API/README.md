@@ -1,157 +1,38 @@
-# CreatureDetailCache Reflection API Documentation
+# Star Level System - API
 
 ## Overview
 
-This API provides reflection-based access to the `CreatureDetailCache` entries stored in the `CompositeLazyCache.sessionCache`. It uses strongly typed wrappers to provide safe and convenient access to cache data without requiring direct dependencies on internal types.
+This API provides access to the internal creature detail cache used by Star Level System.
+It allows reading, modifying, and managing creature cache entries through reflection.
 
-## Key Components
-
-### 1. CreatureCacheEntry
-
-A strongly typed wrapper around the internal `CreatureDetailCache` object that provides safe property access through reflection.
-
-**Key Properties:**
-- `Level`: Creature level
-- `CreatureDisabledInBiome`: Whether creature is disabled in current biome  
-- `Modifiers`: Dictionary of creature modifiers and their types
-- `DamageRecievedModifiers`: Damage resistance values by damage type
-- `CreatureBaseValueModifiers`: Base attribute multipliers
-- `CreaturePerLevelValueModifiers`: Per-level attribute multipliers
-- `CreatureDamageBonus`: Damage bonus values by damage type
-- `ModifierPrefixNames`: Naming prefixes for modifiers
-- `ModifierSuffixNames`: Naming suffixes for modifiers
-
-### 2. CreatureCacheAPI
-
-Main API class providing reflection-based access to the cache.
-
-**Key Methods:**
-- `GetAllCacheEntries()`: Get all cache entries as a dictionary
-- `GetCacheEntry(uint creatureId)`: Get a specific cache entry
-- `UpdateCacheEntry(uint creatureId, CreatureCacheEntry entry)`: Update an entry
-- `RemoveCacheEntry(uint creatureId)`: Remove an entry
-- `ContainsCacheEntry(uint creatureId)`: Check if entry exists
-- `GetCacheSize()`: Get total number of entries
-- `ClearCache()`: Remove all entries
-- `GetCachedCreatureIds()`: Get all creature IDs in cache
-
-### 3. CacheEntryFactory
-
-Factory for creating new cache entries.
-
-**Key Methods:**
-- `CreateDefault()`: Create entry with default values
-- `CreateWithLevel(int level)`: Create entry with specified level
-- `CreateWithModifiers(int level, IDictionary<ModifierNames, ModifierType> modifiers)`: Create entry with level and modifiers
-- `CreateCopy(CreatureCacheEntry source)`: Create a deep copy of an existing entry
-
-### 4. APIValidator
-
-Utility for validating API functionality.
-
-**Key Methods:**
-- `ValidateAPIAccess()`: Validate reflection access to required types
-- `TestCacheEntryFunctionality()`: Test basic cache entry operations
-- `PerformFullValidation()`: Comprehensive validation
-
-### 5. APIExamples
-
-Example usage patterns and common operations.
-
-## Usage Examples
-
-### Basic Cache Access
-
-```csharp
-// Get all cache entries
-var allEntries = CreatureCacheAPI.GetAllCacheEntries();
-
-// Get a specific creature's cache entry
-uint creatureId = 12345;
-var cacheEntry = CreatureCacheAPI.GetCacheEntry(creatureId);
-
-// Check if a creature exists in cache
-bool exists = CreatureCacheAPI.ContainsCacheEntry(creatureId);
+In order to use this API copy the API folder into your project and set a soft reference to the Star Level System assembly.
+This gets added to your plugin class as an annotation:
+```
+[BepInDependency("MidnightsFX.StarLevelSystem", BepInDependency.DependencyFlags.SoftDependency)]
 ```
 
-### Modifying Cache Entries
+## Usage
 
+To check if the API is available:
 ```csharp
-// Create a new cache entry
-var newEntry = CacheEntryFactory.CreateWithLevel(5);
-newEntry.Modifiers = new Dictionary<ModifierNames, ModifierType>
-{
-    { ModifierNames.Fire, ModifierType.Major }
-};
-
-// Update cache
-CreatureCacheAPI.UpdateCacheEntry(creatureId, newEntry);
+if (StarLevelSystem.API.StarLevelSystemAPI.IsAvailable) {
+	// API is available, safe to use
+	}
 ```
 
-### Working with Modifiers
-
+To set a creatures star level:
 ```csharp
-var entry = CreatureCacheAPI.GetCacheEntry(creatureId);
-if (entry != null)
-{
-    // Add a new modifier
-    var modifiers = new Dictionary<ModifierNames, ModifierType>(entry.Modifiers);
-    modifiers[ModifierNames.Fast] = ModifierType.Minor;
-    entry.Modifiers = modifiers;
-    
-    // Update damage resistance
-    var resistances = new Dictionary<DamageType, float>(entry.DamageRecievedModifiers);
-    resistances[DamageType.Fire] = 0.5f; // 50% fire resistance
-    entry.DamageRecievedModifiers = resistances;
-    
-    CreatureCacheAPI.UpdateCacheEntry(creatureId, entry);
-}
+StarLevelSystem.API.StarLevelSystemAPI.SetCreatureLevel(Character creature, int newLevel);
 ```
 
-### Bulk Operations
-
+To modify a creatures attributes:
 ```csharp
-// Find all creatures with specific level
-var highLevelCreatures = CreatureCacheAPI.GetAllCacheEntries()
-    .Where(kvp => kvp.Value.Level >= 8)
-    .ToList();
-
-// Apply global changes
-var allIds = CreatureCacheAPI.GetCachedCreatureIds().ToList();
-foreach (var id in allIds)
-{
-    var entry = CreatureCacheAPI.GetCacheEntry(id);
-    if (entry != null)
-    {
-        // Boost all creatures' health by 10%
-        var baseModifiers = new Dictionary<CreatureBaseAttribute, float>(entry.CreatureBaseValueModifiers);
-        baseModifiers[CreatureBaseAttribute.BaseHealth] *= 1.1f;
-        entry.CreatureBaseValueModifiers = baseModifiers;
-        CreatureCacheAPI.UpdateCacheEntry(id, entry);
-    }
-}
+int attribute = 0; // 0 = Health, 1 = Stamina, 2 = Mana, 3 = CarryWeight, 4 = Damage, 5 = Armor
+// Gets the current base health of the creature, this might already be modifier by other effects
+float basehealth = StarLevelSystem.API.StarLevelSystemAPI.GetCreatureBaseAttribute(Character creatureId, attribute);
+basehealth *= 1.5f; // Increase base health by 50%
+// Sets the new base health of the creature in the cache
+StarLevelSystem.API.StarLevelSystemAPI.SetCreatureBaseAttribute(Character creatureId, attribute, basehealth);
+// Applies the changes to the creature
+StarLevelSystem.API.StarLevelSystemAPI.ApplyCreatureUpdates(Character creatureId);
 ```
-
-## Error Handling
-
-All API methods include comprehensive error handling:
-
-- `InvalidOperationException`: Thrown when reflection fails or required types/members aren't found
-- `ArgumentNullException`: Thrown when required parameters are null
-- `ArgumentException`: Thrown when parameters have invalid values
-
-## Thread Safety
-
-The API accesses the underlying cache through reflection and does not provide additional thread safety beyond what the original cache provides. Users should implement appropriate synchronization if accessing from multiple threads.
-
-## Performance Considerations
-
-- Property access uses cached `PropertyInfo` objects for better performance
-- Dictionary operations are performed through reflection, which has some overhead
-- For high-frequency operations, consider caching entries locally where appropriate
-
-## Limitations
-
-- Requires the internal types to be available at runtime
-- Some properties (like `Biome`, `CreaturePrefab`, `Colorization`) are not exposed in the wrapper to avoid Unity dependencies
-- Changes made through this API bypass any validation logic in the original system

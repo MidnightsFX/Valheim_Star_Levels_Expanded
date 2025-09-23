@@ -13,6 +13,15 @@ namespace StarLevelSystem.modules
     {
         public static Vector2 center = new Vector2(0, 0);
 
+        public static void SetAndUpdateCharacterLevel(Character character, int level) {
+            if (character == null) { return; }
+            character.m_level = level;
+            character.SetupMaxHealth();
+            if (character.GetComponent<ZNetView>() != null && character.GetComponent<ZNetView>().GetZDO() != null) {
+                character.GetComponent<ZNetView>().GetZDO().Set(ZDOVars.s_level, level);
+            }
+        }
+
         public static int DetermineLevelSetAndRetrieve(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
         {
             if (character == null || cZDO == null) {

@@ -23,12 +23,14 @@ namespace StarLevelSystem.Data
             }
         }
 
-        public static void UpdateCacheEntry(Character character, CreatureDetailCache cacheEntry) {
+        public static bool UpdateCacheEntry(Character character, CreatureDetailCache cacheEntry) {
             uint czoid = character.GetZDOID().ID;
             if (sessionCache.ContainsKey(czoid)) {
                 Logger.LogDebug($"Updated creature from cache {character.name}-{czoid}");
                 sessionCache[czoid] = cacheEntry;
+                return true;
             }
+            return false;
         }
 
         public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0, bool onlycache = false, bool setupModifiers = true) {
@@ -194,6 +196,24 @@ namespace StarLevelSystem.Data
                 sessionCache[character.GetZDOID().ID] = characterCacheEntry;
             }
             return characterCacheEntry;
+        }
+
+        public static bool ApplyCachedChanges(Character character)
+        {
+            CreatureDetailCache cdc = GetAndSetDetailCache(character);
+            if (cdc == null) { return false; }
+            // Modify the creatures stats by custom character/biome modifications
+            ModificationExtensionSystem.ApplySpeedModifications(character, cdc);
+            ModificationExtensionSystem.ApplyDamageModification(character, cdc);
+            ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, cdc, true);
+            ModificationExtensionSystem.ApplyHealthModifications(character, cdc);
+            LevelSystem.SetAndUpdateCharacterLevel(character, cdc.Level);
+
+            if (character.m_level <= 1) { return true; }
+            // Colorization and visual adjustments
+            Colorization.ApplyColorizationWithoutLevelEffects(character.gameObject, cdc.Colorization);
+            Colorization.ApplyLevelVisual(character);
+            return true;
         }
 
         //public static void UpdateCacheFromConfigChange() {

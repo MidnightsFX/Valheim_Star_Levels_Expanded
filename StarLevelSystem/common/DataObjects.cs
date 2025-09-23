@@ -22,11 +22,11 @@ namespace StarLevelSystem.common
         public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
 
         public enum CreatureBaseAttribute {
-            BaseHealth,
-            BaseDamage,
-            AttackSpeed,
-            Speed,
-            Size,
+            BaseHealth = 0,
+            BaseDamage = 1,
+            AttackSpeed = 2,
+            Speed = 3,
+            Size = 4,
         }
 
         public static List<CreatureBaseAttribute> CreatureBaseAttributes = new List<CreatureBaseAttribute> {
@@ -38,25 +38,25 @@ namespace StarLevelSystem.common
 
         public enum CreaturePerLevelAttribute
         {
-            HealthPerLevel,
-            DamagePerLevel,
-            SpeedPerLevel,
-            AttackSpeedPerLevel,
-            SizePerLevel,
+            HealthPerLevel = 0,
+            DamagePerLevel = 1,
+            SpeedPerLevel = 2,
+            AttackSpeedPerLevel = 3,
+            SizePerLevel = 4,
         }
 
         public enum DamageType
         {
-            Blunt,
-            Slash,
-            Pierce,
-            Fire,
-            Frost,
-            Lightning,
-            Poison,
-            Spirit,
-            Chop,
-            Pickaxe,
+            Blunt = 0,
+            Slash = 1,
+            Pierce = 2,
+            Fire = 3,
+            Frost = 4,
+            Lightning = 5,
+            Poison = 6,
+            Spirit = 7,
+            Chop = 8,
+            Pickaxe = 9,
         }
 
         public enum NameSelectionStyle
@@ -320,6 +320,14 @@ namespace StarLevelSystem.common
             public float saturation { get; set; } = 0f;
             public float value { get; set; } = 0f;
             public bool is_emissive { get; set; } = false;
+
+            public ColorDef(float hue = 0f, float saturation = 0f, float value = 0f, bool is_emissive = false)
+            {
+                this.hue = hue;
+                this.saturation = saturation;
+                this.value = value;
+                this.is_emissive = is_emissive;
+            }
 
             public LevelEffects.LevelSetup toLevelEffect()
             {

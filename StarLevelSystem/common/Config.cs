@@ -237,6 +237,7 @@ namespace StarLevelSystem
             SetupFileWatcher("ColorSettings.yaml");
             SetupFileWatcher("LevelSettings.yaml");
             SetupFileWatcher("Modifiers.yaml");
+            SetupFileWatcher("CreatureLootSettings.yaml");
         }
 
         private void SetupFileWatcher(string filtername)

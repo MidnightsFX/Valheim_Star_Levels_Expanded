@@ -33,7 +33,7 @@ namespace StarLevelSystem.Data
             return false;
         }
 
-        public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0, bool onlycache = false, bool setupModifiers = true) {
+        public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0, bool onlycache = false, bool setupModifiers = true, bool rebuildModifiers = false) {
             if (character == null) { return null; }
             if (character.IsPlayer()) { return null; }
             //Logger.LogDebug("Checking CreatureDetailCache");
@@ -56,7 +56,7 @@ namespace StarLevelSystem.Data
             // Get character based biome and creature configuration
             Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-
+            characterCacheEntry.CreatureName = creature_name;
 
             // Check creature spawn rate
             //Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
@@ -166,7 +166,7 @@ namespace StarLevelSystem.Data
                         if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
                         float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
                         if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
-                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, num_boss_mods: numBossMods, chanceBoss: chanceForBossMod, isboss: true);
+                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, num_boss_mods: numBossMods, chanceBoss: chanceForBossMod, isboss: true, rebuildMods: rebuildModifiers);
                     } else {
                         //Logger.LogDebug("Setting up creature modifiers");
                         int majorMods = ValConfig.MaxMajorModifiersPerCreature.Value;
@@ -178,7 +178,7 @@ namespace StarLevelSystem.Data
                         float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
                         if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
                         // Logger.LogDebug($"Setting up to {majorMods} major at chance {chanceMajorMod} and {minorMods} minor modifiers with chances {chanceMinorMod}");
-                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, num_major_mods: majorMods, num_minor_mods: minorMods, chanceMajor: chanceMajorMod, chanceMinor: chanceMinorMod);
+                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, num_major_mods: majorMods, num_minor_mods: minorMods, chanceMajor: chanceMajorMod, chanceMinor: chanceMinorMod, rebuildMods: rebuildModifiers);
                     }
                 }
             }
@@ -194,6 +194,13 @@ namespace StarLevelSystem.Data
                 sessionCache[character.GetZDOID().ID] = characterCacheEntry;
             }
             return characterCacheEntry;
+        }
+
+        public static void RecalculateModifiers(Character chara)
+        {
+            CreatureDetailCache cdc = GetAndSetDetailCache(chara, update: true, setupModifiers: true);
+            if (cdc == null) { return; }
+            ApplyCachedChanges(chara);
         }
 
         public static bool ApplyCachedChanges(Character character)

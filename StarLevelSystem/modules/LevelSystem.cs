@@ -144,13 +144,13 @@ namespace StarLevelSystem.modules
             //    Logger.LogDebug($"levelup bonus: {lb.Key} {lb.Value}");
             //}
             foreach (KeyValuePair<int, float> kvp in creature_levelup_chance) {
-                //Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
+                // Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
                 if (levelup_bonus.ContainsKey(kvp.Key)) {
                     float distance_bonus = ((1f + levelup_bonus[kvp.Key]) * distance_influence);
                     float levelup_req = kvp.Value * distance_bonus;
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {distance_bonus} | Selected Level: {selected_level}");
+                        // Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {distance_bonus} | Selected Level: {selected_level}");
                         break;
                     }
                 } else {

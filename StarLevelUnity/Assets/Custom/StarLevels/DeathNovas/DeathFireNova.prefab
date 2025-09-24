@@ -153,7 +153,7 @@ MonoBehaviour:
   m_ttl: 1
   m_ttlMax: 1
   m_hitAfterTtl: 1
-  m_hitInterval: 1
+  m_hitInterval: 0
   m_hitOnEnable: 0
   m_attachToCaster: 0
   m_hitEffects:

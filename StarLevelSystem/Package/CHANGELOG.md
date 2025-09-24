@@ -1,3 +1,14 @@
+**0.9.2**
+ ---
+ ```
+- Ensures manually spawned creatures get a fair chance of modifiers
+- Fixes CreatureLootSettings.yaml not being live reloaded after edits
+- Added a global exclusion list for modifiers that will apply to all creatures, defaults to just TWIG
+	- Delete your config (Modifiers.yaml) if you want the new default
+- Fixes modifier configuration not being reloaded on startup
+- Removed the immediate explosion from FireNova, it now only has the 1 second delayed explosion
+ ```
+
 **0.9.1**
  ---
  ```

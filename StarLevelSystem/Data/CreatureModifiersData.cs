@@ -2,6 +2,7 @@
 using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using static Heightmap;
 using static StarLevelSystem.common.DataObjects;
@@ -13,7 +14,9 @@ namespace StarLevelSystem.Data
         public static CreatureModifierCollection ActiveCreatureModifiers = new CreatureModifierCollection() {
             MajorModifiers = new Dictionary<string, CreatureModifier>(),
             MinorModifiers = new Dictionary<string, CreatureModifier>(),
-            BossModifiers = new Dictionary<string, CreatureModifier>()
+            BossModifiers = new Dictionary<string, CreatureModifier>(),
+            ModifierGlobalSettings = new GlobalModifierSettings() {
+            }
         };
 
         public static Dictionary<Heightmap.Biome, Dictionary<string, List<ProbabilityEntry>>> biomeMajorProbabilityList = new();
@@ -386,7 +389,8 @@ namespace StarLevelSystem.Data
                         }
                     }
                 }
-            }
+            },
+            ModifierGlobalSettings = new GlobalModifierSettings() { GlobalIgnorePrefabList = new List<string>() { "piece_TrainingDummy" } }
         };
 
         public static Dictionary<string, CreatureModifier> GetModifiersOfType(ModifierType type)
@@ -511,8 +515,14 @@ namespace StarLevelSystem.Data
             if (creatureMods != null) { CustomModifiers = creatureMods; }
             if (APIcreatureMods != null) { APIAdded = APIcreatureMods; }
 
+            // Applying global settings
+            if (CustomModifiers.ModifierGlobalSettings != null) {
+                ActiveCreatureModifiers.ModifierGlobalSettings = CustomModifiers.ModifierGlobalSettings;
+            } else {
+                ActiveCreatureModifiers.ModifierGlobalSettings = DefaultModifiers.ModifierGlobalSettings;
+            }
             // Update major modifiers
-            Logger.LogDebug("Merging config Major mod definitions");
+                Logger.LogDebug("Merging config Major mod definitions");
             if (CustomModifiers.MajorModifiers != null &&  CustomModifiers.MajorModifiers.Count > 0) { ActiveCreatureModifiers.MajorModifiers.AddRange(CustomModifiers.MajorModifiers); }
             if (APIAdded.MajorModifiers != null && APIAdded.MajorModifiers.Count > 0) { ActiveCreatureModifiers.MajorModifiers.AddRange(APIAdded.MajorModifiers); }
             if (APIAdded.MajorModifiers == null && CustomModifiers.MajorModifiers == null) { ActiveCreatureModifiers.MajorModifiers.AddRange(DefaultModifiers.MajorModifiers); }
@@ -585,13 +595,8 @@ namespace StarLevelSystem.Data
         }
 
 
-        internal static void Init()
-        {
-            // Read config file?
-            UpdateModifiers();
-            LoadPrefabs();
-
-            //Logger.LogDebug($"Assets: {string.Join("\n", StarLevelSystem.EmbeddedResourceBundle.GetAllAssetNames())}"); 
+        internal static void Init() {
+            UpdateModifierConfig(File.ReadAllText(ValConfig.creatureModifierFilePath));
         }
     }
 }

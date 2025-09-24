@@ -30,7 +30,7 @@ namespace StarLevelSystem.modules
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
                 float healthscaler = 1f + ((playerDifficulty - 1) * ValConfig.MultiplayerEnemyHealthModifier.Value);
                 __result = 1f / healthscaler;
-                Logger.LogDebug($"Player difficulty Enemy Health scale: {__result}");
+                // Logger.LogDebug($"Player difficulty Enemy Health scale: {__result}");
                 return false;
             }
         }

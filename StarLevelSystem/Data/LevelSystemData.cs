@@ -117,6 +117,17 @@ namespace StarLevelSystem.Data
             },
 
             CreatureConfiguration = new Dictionary<string, DataObjects.CreatureSpecificSetting>() {
+                { "piece_TrainingDummy", new DataObjects.CreatureSpecificSetting()
+                    {
+                        CreatureMaxLevelOverride = 11,
+                        SpawnRateModifier = 1f,
+                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
+                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.3f },
+                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.05f },
+                            { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.005f }
+                        },
+                    }
+                },
                 { "Lox", new DataObjects.CreatureSpecificSetting()
                     {
                         CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {

@@ -31,8 +31,8 @@ namespace StarLevelSystem.modules
             }
 
             float spawnrate = 1f;
-            if (biomeSettings != null) { spawnrate *= biomeSettings.SpawnRateModifier; }
-            if (creature_settings != null) { spawnrate *= creature_settings.SpawnRateModifier; }
+            if (biomeSettings != null) { spawnrate = biomeSettings.SpawnRateModifier; }
+            if (creature_settings != null) { spawnrate = creature_settings.SpawnRateModifier; }
 
             creatureZDO.Set("SLS_DSpwnMlt", true);
             if (character.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {

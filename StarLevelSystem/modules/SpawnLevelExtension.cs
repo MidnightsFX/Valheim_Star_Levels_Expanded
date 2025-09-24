@@ -71,7 +71,7 @@ namespace StarLevelSystem.modules
                 //Logger.LogWarning($"Setting creature level");
                 chara.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true); // prevent multispawn from these spawned creatures
                 chara.m_nview?.GetZDO()?.Set(ZDOVars.s_level, level);
-                ModificationExtensionSystem.CreatureSetup(chara, true, level);
+                ModificationExtensionSystem.CreatureSetup(chara, true, level, 0f, true);
                 //chara.SetupMaxHealth();
             }
         }

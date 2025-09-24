@@ -210,11 +210,11 @@ namespace StarLevelSystem.modules
             Colorization.ApplyLevelVisual(__instance);
         }
 
-        internal static void CreatureSetup(Character __instance, bool refresh_cache = false, int leveloverride = 0, float delayedSetupTimer = 1f) {
+        internal static void CreatureSetup(Character __instance, bool refresh_cache = false, int leveloverride = 0, float delayedSetupTimer = 1f, bool rebuildMods = false) {
             if (__instance.IsPlayer()) { return; }
 
             // Select the creature data
-            CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, refresh_cache, leveloverride);
+            CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, refresh_cache, leveloverride, rebuildModifiers: rebuildMods);
             if (cDetails == null) { return; } // For invalid things, skip. This happens when placing TWIG etc (not a valid or awake character)
 
             // Determine if this creature should get deleted due to disableSpawn
@@ -281,7 +281,7 @@ namespace StarLevelSystem.modules
             if (cDetails.CreaturePrefab) {
                 Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * scale;
                 creature.transform.localScale = sizeEstimate;
-                Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+                // Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
             }
             zview.GetZDO().Set("SLE_Size", scale);
             Physics.SyncTransforms();

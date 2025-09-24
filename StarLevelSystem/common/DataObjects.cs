@@ -291,9 +291,14 @@ namespace StarLevelSystem.common
 
         public class CreatureModifierCollection
         {
+            public GlobalModifierSettings ModifierGlobalSettings { get; set; } = new GlobalModifierSettings();
             public Dictionary<string, CreatureModifier> MajorModifiers { get; set; }
             public Dictionary<string, CreatureModifier> MinorModifiers { get; set; }
             public Dictionary<string, CreatureModifier> BossModifiers { get; set; }
+        }
+
+        public class GlobalModifierSettings {
+            public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
         public class CreatureDetailCache {
@@ -306,6 +311,7 @@ namespace StarLevelSystem.common
             public ColorDef Colorization { get; set; }
             public Heightmap.Biome Biome { get; set; }
             public GameObject CreaturePrefab { get; set; }
+            public string CreatureName { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
                 { DamageType.Blunt, 1f },
                 { DamageType.Pierce, 1f },

@@ -79,6 +79,7 @@ namespace StarLevelSystem.modules
                 if (__instance.m_character == null) { return true; }
                 string name = Utils.GetPrefabName(__instance.m_character.gameObject);
                 Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
+                if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot == null) { return true; }
                 if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.characterSpecificLoot.ContainsKey(name) != true) { return true; }
 
                 List<KeyValuePair<GameObject, int>> drop_results = new List<KeyValuePair<GameObject, int>>();

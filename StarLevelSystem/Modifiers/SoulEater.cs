@@ -25,7 +25,7 @@ namespace StarLevelSystem.Modifiers
 
                 List<Character> characters = Extensions.GetCharactersInRange(__instance.transform.position, 5);
                 foreach (Character character in characters) {
-                    Logger.LogDebug($"Checking SoulEater on {character.name}");
+                    // Logger.LogDebug($"Checking SoulEater on {character.name}");
                     if (character == null || character.IsPlayer()) { continue; }
                     CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(character, onlycache: true);
                     if (cDetails != null && cDetails.Modifiers.Keys.Contains(ModifierNames.SoulEater.ToString())) {

@@ -20,14 +20,14 @@ namespace StarLevelSystem.modules
         {
             characterSpecificColorization = ColorizationData.characterColorizationData,
             defaultLevelColorization = ColorizationData.defaultColorizationData,
-            CharacterColorGenerators = ColorizationData.defaultColorGenerators,
+            characterColorGenerators = ColorizationData.defaultColorGenerators,
         };
         public static ColorDef defaultColorization = new ColorDef()
         {
             hue = 0f,
             saturation = 0f,
             value = 0f,
-            is_emissive = false
+            IsEmissive = false
         };
 
         public static void Init() {
@@ -43,7 +43,8 @@ namespace StarLevelSystem.modules
         }
 
         public static bool UpdateYamlConfig(string yaml) {
-            try {
+            //try {
+                //Logger.LogInfo($"Updating ColorizationSettings from YAML:\n{yaml}");
                 creatureColorizationSettings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
                 foreach (var entry in defaultColorizationSettings.defaultLevelColorization) {
@@ -51,9 +52,9 @@ namespace StarLevelSystem.modules
                         creatureColorizationSettings.defaultLevelColorization.Add(entry.Key, entry.Value);
                     }
                 }
-                if (creatureColorizationSettings.CharacterColorGenerators != null) {
+                if (creatureColorizationSettings.characterColorGenerators != null) {
                     Logger.LogInfo("Running color generators");
-                    foreach (var entry in creatureColorizationSettings.CharacterColorGenerators) {
+                    foreach (var entry in creatureColorizationSettings.characterColorGenerators) {
                         Logger.LogInfo($"Building color range for {entry.Key}");
                         foreach (var colorRange in entry.Value) { BuildAddColorRange(entry.Key, colorRange); }
                     }
@@ -69,10 +70,10 @@ namespace StarLevelSystem.modules
                     CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara, true);
                     ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                 }
-            } catch (System.Exception ex) {
-                StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
+            //} catch (System.Exception ex) {
+                // StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
                 return false;
-            }
+            //}
             return true;
         }
 
@@ -163,7 +164,7 @@ namespace StarLevelSystem.modules
                     hue = colorGen.StartColorDef.hue + (hueStep * currentSegment * hueDirection),
                     saturation = colorGen.StartColorDef.saturation + (satStep * currentSegment * satDirection),
                     value = colorGen.StartColorDef.value + (valStep * currentSegment * valueDirection),
-                    is_emissive = false
+                    IsEmissive = false
                 };
 
                 if (colorGen.CharacterSpecific == true) {

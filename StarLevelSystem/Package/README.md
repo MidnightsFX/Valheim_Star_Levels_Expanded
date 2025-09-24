@@ -233,6 +233,12 @@ Localization is available for everything in the mod. I accept community translat
 
 Otherwise localizations are available at `Bepinex/config/StarLevelSystems/localizations`, new languages can be made using any of [Jotunns language specific names](https://valheim-modding.github.io/Jotunn/data/localization/language-list.html)
 
+### API Usage (WIP)
+Star Level Systems provides a public API for other mods to interact with.
+The API currently allows reading, modifying and managing creature stat modifiers, color, and level.
+Check out the API Documentation [here](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/tree/master/StarLevelSystem/API)
+
+
 ## Some of my other mods
 - [Valheim Armory](https://thunderstore.io/c/valheim/p/MidnightMods/ValheimArmory/) - Fill in vanilla weapon gaps with fitting weapons
 - [Impactful Skills](https://thunderstore.io/c/valheim/p/MidnightMods/ImpactfulSkills/) - Make your skills meaningful
@@ -261,7 +267,6 @@ Once you are ready to install mods, they must be unzipped first and go into the 
 Compatibility is being worked on for the following mods:
 - CarryMeMaster
 - PortablePals
-- 
 
 ## Planned Features
 This mod is still in active development and is not considered complete yet.

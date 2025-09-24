@@ -1,5 +1,7 @@
-﻿using Jotunn.Entities;
+﻿using JetBrains.Annotations;
+using Jotunn.Entities;
 using Jotunn.Managers;
+using MonoMod.Utils;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -19,7 +21,9 @@ namespace StarLevelSystem.common
     {
 
         public static IDeserializer yamldeserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
+        //public static IDeserializer yamldeserializerNoRef = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
+        //public static ISerializer yamlserializerNoRef = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).DisableAliases().Build();
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -61,16 +65,16 @@ namespace StarLevelSystem.common
 
         public enum NameSelectionStyle
         {
-            RandomFirst,
-            RandomLast,
-            RandomBoth
+            RandomFirst = 0,
+            RandomLast = 1,
+            RandomBoth = 2,
         }
 
         public enum VisualEffectStyle
         {
-            objectCenter,
-            top,
-            bottom
+            objectCenter = 0,
+            top = 1,
+            bottom = 2,
         }
 
         public static List<CreaturePerLevelAttribute> CreaturePerLevelAttributes = new List<CreaturePerLevelAttribute> {
@@ -86,6 +90,54 @@ namespace StarLevelSystem.common
             Minor = 1,
             Boss = 2
         }
+
+        public class DNum {
+            private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
+            private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
+
+            public DNum() { }
+
+            public DNum(Array modnames)
+            {
+                foreach(int enumvalue in modnames)
+                {
+                    string name = Enum.GetName(typeof(ModifierNames), enumvalue);
+                    _enumData[name] = enumvalue;
+                    _enumReverseLookup[enumvalue] = name;
+                }
+            }
+            public DNum(Dictionary<string, int> initialValues) {
+                _enumData.AddRange(initialValues);
+                foreach (var pair in initialValues) {
+                    _enumReverseLookup[pair.Value] = pair.Key;
+                }
+            }
+
+            public void AddValue(string name, int id)
+            {
+                if (_enumData.ContainsKey(name)) {
+                    Logger.LogWarning($"Tried to add duplicate enum name {name} to DNum, skipping.");
+                }
+                _enumData[name] = id;
+                _enumReverseLookup[id] = name;
+            }
+
+            [CanBeNull]
+            public string GetValue(int id) {
+                return _enumReverseLookup.TryGetValue(id, out string value) ? value : null;
+            }
+
+            public int GetValue(string name) {
+                return _enumData.TryGetValue(name, out int id) ? id : -1;
+            }
+            public bool ContainsName(string name) {
+                return _enumData.ContainsKey(name);
+            }
+            public bool ContainsID(int id) {
+                return _enumReverseLookup.ContainsKey(id);
+            }
+        }
+
 
         public class CreatureLevelSettings {
             public Dictionary<Heightmap.Biome, BiomeSpecificSetting> BiomeConfiguration { get; set; }
@@ -131,10 +183,11 @@ namespace StarLevelSystem.common
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
         }
 
+        [DataContract]
         public class CreatureColorizationSettings {
             public Dictionary<string, Dictionary<int, ColorDef>> characterSpecificColorization { get; set; }
             public Dictionary<int, ColorDef> defaultLevelColorization { get; set; }
-            public Dictionary<string, List<ColorRangeDef>> CharacterColorGenerators { get; set; }
+            public Dictionary<string, List<ColorRangeDef>> characterColorGenerators { get; set; }
         }
 
         public class LootSettings {
@@ -153,7 +206,7 @@ namespace StarLevelSystem.common
         }
 
         public class ProbabilityEntry {
-            public ModifierNames Name { get; set; }
+            public string Name { get; set; }
             [DefaultValue(1f)]
             public float SelectionWeight { get; set; } = 1f;
         }
@@ -174,9 +227,17 @@ namespace StarLevelSystem.common
             public List<string> UnallowedCreatures { get; set; }
             public List<Heightmap.Biome> AllowedBiomes { get; set; }
             public string SetupMethodClass { get; set; }
+            public bool FromAPI { get; set; } = false;
+            public Sprite StarVisualAPI { get; set; }
+            public GameObject VisualEffectAPI { get; set; }
+            public GameObject SecondaryEffectAPI { get; set; }
 
             // Add fallbacks to load prefabs that are not in the embedded resource bundle
             public void LoadAndSetGameObjects() {
+                if (FromAPI) {
+                    LoadAPIGameObjects();
+                    return;
+                }
                 if (StarVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(StarVisual)) {
                     Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>($"assets/custom/starlevels/icons/{StarVisual}.png");
                     CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, game_obj);
@@ -194,6 +255,18 @@ namespace StarLevelSystem.common
                     PrefabManager.Instance.AddPrefab(prefab_obj);
                     GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(SecondaryEffect);
                     CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockfixedgo);
+                }
+            }
+
+            public void LoadAPIGameObjects() {
+                if (StarVisualAPI != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(StarVisual)) {
+                    CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, StarVisualAPI);
+                }
+                if (VisualEffectAPI != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(VisualEffect)) {
+                    CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, VisualEffectAPI);
+                }
+                if (SecondaryEffectAPI != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(SecondaryEffect)) {
+                    CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, SecondaryEffectAPI);
                 }
             }
 
@@ -218,18 +291,18 @@ namespace StarLevelSystem.common
 
         public class CreatureModifierCollection
         {
-            public Dictionary<ModifierNames, CreatureModifier> MajorModifiers { get; set; }
-            public Dictionary<ModifierNames, CreatureModifier> MinorModifiers { get; set; }
-            public Dictionary<ModifierNames, CreatureModifier> BossModifiers { get; set; }
+            public Dictionary<string, CreatureModifier> MajorModifiers { get; set; }
+            public Dictionary<string, CreatureModifier> MinorModifiers { get; set; }
+            public Dictionary<string, CreatureModifier> BossModifiers { get; set; }
         }
 
         public class CreatureDetailCache {
             public bool CreatureDisabledInBiome { get; set; } = false;
             public bool CreatureCheckedSpawnMult { get; set; } = false;
             public int Level { get; set; }
-            public Dictionary<ModifierNames, ModifierType> Modifiers { get; set; }
-            public Dictionary<ModifierNames, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<ModifierNames, List<string>>();
-            public Dictionary<ModifierNames, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<ModifierNames, List<string>>();
+            public Dictionary<string, ModifierType> Modifiers { get; set; }
+            public Dictionary<string, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<string, List<string>>();
+            public Dictionary<string, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<string, List<string>>();
             public ColorDef Colorization { get; set; }
             public Heightmap.Biome Biome { get; set; }
             public GameObject CreaturePrefab { get; set; }
@@ -314,19 +387,21 @@ namespace StarLevelSystem.common
             }
         }
 
+        [DataContract]
         public class ColorDef
         {
             public float hue { get; set; } = 0f;
             public float saturation { get; set; } = 0f;
             public float value { get; set; } = 0f;
-            public bool is_emissive { get; set; } = false;
+            public bool IsEmissive { get; set; } = false;
 
+            public ColorDef() { }
             public ColorDef(float hue = 0f, float saturation = 0f, float value = 0f, bool is_emissive = false)
             {
                 this.hue = hue;
                 this.saturation = saturation;
                 this.value = value;
-                this.is_emissive = is_emissive;
+                this.IsEmissive = is_emissive;
             }
 
             public LevelEffects.LevelSetup toLevelEffect()
@@ -337,7 +412,7 @@ namespace StarLevelSystem.common
                     m_hue = hue,
                     m_saturation = saturation,
                     m_value = value,
-                    m_setEmissiveColor = is_emissive,
+                    m_setEmissiveColor = IsEmissive,
                     m_emissiveColor = new Color(hue, saturation, value)
                 };
             }
@@ -416,6 +491,64 @@ namespace StarLevelSystem.common
                 var mStream = new MemoryStream();
                 binFormatter.Serialize(mStream, value);
 
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class CreatureModifiersZNetProperty : ZNetProperty<Dictionary<string, ModifierType>>
+        {
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            public CreatureModifiersZNetProperty(string key, ZNetView zNetView, Dictionary<string, ModifierType> defaultValue) : base(key, zNetView, defaultValue)
+            {
+            }
+            public override Dictionary<string, ModifierType> Get()
+            {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return new Dictionary<string, ModifierType>(); }
+                var mStream = new MemoryStream(stored);
+                var deserializedDictionary = (Dictionary<int, ModifierType>)binFormatter.Deserialize(mStream);
+                Dictionary<string, ModifierType> modifierNamesToTypes =  new Dictionary<string, ModifierType>();
+                foreach (var kvp in deserializedDictionary) {
+                    string key = CreatureModifiersData.ModifierNamesLookupTable.GetValue(kvp.Key);
+                    if (key == null) { continue; }
+                    modifierNamesToTypes.Add(key, kvp.Value);
+                }
+                return modifierNamesToTypes;
+            }
+            protected override void SetValue(Dictionary<string, ModifierType> value)
+            {
+                Dictionary<int, ModifierType> serializableModifiers = new Dictionary<int, ModifierType>();
+                foreach (var kvp in value) {
+                    int key = CreatureModifiersData.ModifierNamesLookupTable.GetValue(kvp.Key);
+                    if (key == -1) { continue; }
+                    serializableModifiers.Add(key, kvp.Value);
+                }
+                var mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, serializableModifiers);
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class ListIntZNetProperty : ZNetProperty<List<int>>
+        {
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            public ListIntZNetProperty(string key, ZNetView zNetView, List<int> defaultValue) : base(key, zNetView, defaultValue)
+            {
+            }
+            public override List<int> Get()
+            {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return new List<int>(); }
+                var mStream = new MemoryStream(stored);
+                var deserializedDictionary = (List<int>)binFormatter.Deserialize(mStream);
+                return deserializedDictionary;
+            }
+            protected override void SetValue(List<int> value)
+            {
+                var mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
                 zNetView.GetZDO().Set(Key, mStream.ToArray());
             }
         }

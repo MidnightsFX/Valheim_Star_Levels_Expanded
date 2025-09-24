@@ -26,8 +26,8 @@ namespace StarLevelSystem.Modifiers
                     return;
                 }
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance.m_character);
-                if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Lootbags)) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags, cDetails.Modifiers[ModifierNames.Lootbags]);
+                if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Lootbags.ToString())) {
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), cDetails.Modifiers[ModifierNames.Lootbags.ToString()]);
                     List <KeyValuePair<GameObject, int>> ExtraLoot = new List <KeyValuePair<GameObject, int>>();
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * cDetails.Level;
                     foreach (var kvp in __result) {

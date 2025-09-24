@@ -1,3 +1,12 @@
+**0.9.1**
+ ---
+ ```
+ - Fixes NPE when no loot configuration is defined
+ - Fixes NPE when trying to add a modifier that does not exist
+ - Improves support for huge numbers of modifiers on creatures
+ - Adds API functions to add modifiers to creatures
+ ```
+
 **0.9.0**
  ---
  ```

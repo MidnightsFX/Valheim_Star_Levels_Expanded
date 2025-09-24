@@ -39,7 +39,7 @@ namespace StarLevelSystem.common
                 {
                     Logger.LogInfo($"Modifier Name must be one of {string.Join(",", Enum.GetValues(typeof(ModifierNames)))}");
                 }
-                CreatureModConfig cmfg = CreatureModifiersData.GetConfig(modname, modtype);
+                CreatureModConfig cmfg = CreatureModifiersData.GetConfig(modname.ToString(), modtype);
                 if (cmfg.PerlevelPower == float.NaN || cmfg.PerlevelPower == 0f && cmfg.BasePower == float.NaN || cmfg.BasePower == 0) {
                     Logger.LogInfo($"{modtype} did not contain a definition for {modname}. Types availabe in {modtype}: {string.Join(",", GetModifiersOfType(modtype).Keys)}");
                 }
@@ -50,7 +50,7 @@ namespace StarLevelSystem.common
                 foreach (Character chara in nearbyCreatures) {
                     if (chara.IsPlayer()) { continue; }
                     // modify the modifers the creature has, and re-init modifiers for the creature
-                    CreatureModifiers.AddCreatureModifier(chara, modtype, modname);
+                    CreatureModifiers.AddCreatureModifier(chara, modtype, modname.ToString());
                 }
             }
         }

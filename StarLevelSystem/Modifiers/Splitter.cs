@@ -14,9 +14,9 @@ namespace StarLevelSystem.Modifiers
                     return;
                 }
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Splitter)) {
+                if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Splitter.ToString())) {
                     Logger.LogDebug("Checking splitter multiplication");
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter, cDetails.Modifiers[ModifierNames.Splitter]);
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter.ToString(), cDetails.Modifiers[ModifierNames.Splitter.ToString()]);
                     float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
                     bool shouldTame = __instance.IsTamed();

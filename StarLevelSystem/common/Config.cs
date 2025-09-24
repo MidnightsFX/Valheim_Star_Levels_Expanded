@@ -131,9 +131,12 @@ namespace StarLevelSystem
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
             ChanceMajorModifier = BindServerConfig("Modifiers", "ChanceMajorModifier", 0.15f, "The chance that a creature will have a major modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
+            ChanceMajorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             ChanceMinorModifier = BindServerConfig("Modifiers", "ChanceMinorModifier", 0.25f, "The chance that a creature will have a minor modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
+            ChanceMinorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Wether or not bosses can spawn with modifiers.");
             ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 0.75f, "The chance that a boss will have a modifier.", false, 0, 1f);
+            ChanceOfBossModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
@@ -249,44 +252,6 @@ namespace StarLevelSystem
             fw.EnableRaisingEvents = true;
         }
 
-        private static void UpdateLevelsOnChange(object sender, FileSystemEventArgs e)
-        {
-            if (SynchronizationManager.Instance.PlayerIsAdmin == false)
-            {
-                Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
-                return;
-            }
-            if (!File.Exists(e.FullPath)) { return; }
-
-            try {
-                string filetext = File.ReadAllText(e.FullPath);
-                LevelSystemData.UpdateYamlConfig(filetext);
-                LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-            } catch {
-                Logger.LogWarning("Failed to update levels configuration");
-            }
-        }
-
-        private static void UpdateColorsOnChange(object sender, FileSystemEventArgs e) {
-            if (SynchronizationManager.Instance.PlayerIsAdmin == false)
-            {
-                Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
-                return;
-            }
-            if (!File.Exists(e.FullPath)) { return; }
-
-            try
-            {
-                string filetext = File.ReadAllText(e.FullPath);
-                LevelSystemData.UpdateYamlConfig(filetext);
-                LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-            }
-            catch
-            {
-                Logger.LogWarning("Failed to update levels configuration");
-            }
-        }
-
         private static void UpdateConfigFileOnChange(object sender, FileSystemEventArgs e) {
             if (SynchronizationManager.Instance.PlayerIsAdmin == false) {
                 Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
@@ -315,6 +280,7 @@ namespace StarLevelSystem
                     break;
                 case "Modifiers.yaml":
                     Logger.LogDebug("Triggering Modifiers Settings update.");
+                    CreatureModifiersData.UpdateModifierConfig(filetext);
                     ModifiersRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
             }
@@ -354,14 +320,14 @@ namespace StarLevelSystem
 
         private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
             var levelsyaml = package.ReadString();
-            bool level_update_valid = LevelSystemData.UpdateYamlConfig(levelsyaml);
+            LevelSystemData.UpdateYamlConfig(levelsyaml);
 
             yield return null;
         }
 
         private static IEnumerator OnClientReceiveColorConfigs(long sender, ZPackage package) {
             var colorsyaml = package.ReadString();
-            bool level_update_valid = Colorization.UpdateYamlConfig(colorsyaml);
+            Colorization.UpdateYamlConfig(colorsyaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
@@ -370,7 +336,7 @@ namespace StarLevelSystem
         private static IEnumerator OnClientReceiveCreatureLootConfigs(long sender, ZPackage package)
         {
             var colorsyaml = package.ReadString();
-            bool level_update_valid = LootSystemData.UpdateYamlConfig(colorsyaml);
+            LootSystemData.UpdateYamlConfig(colorsyaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
@@ -379,7 +345,7 @@ namespace StarLevelSystem
         private static IEnumerator OnClientReceiveModifiersConfigs(long sender, ZPackage package)
         {
             var yaml = package.ReadString();
-            bool level_update_valid = CreatureModifiersData.UpdateModifierConfig(yaml);
+            CreatureModifiersData.UpdateModifierConfig(yaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;

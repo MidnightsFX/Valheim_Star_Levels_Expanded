@@ -36,3 +36,15 @@ StarLevelSystem.API.StarLevelSystemAPI.SetCreatureBaseAttribute(Character creatu
 // Applies the changes to the creature
 StarLevelSystem.API.StarLevelSystemAPI.ApplyCreatureUpdates(Character creatureId);
 ```
+
+To Add an existing creature modifier to a creature:
+```csharp
+string modifierName = "Lootbags";
+int modifierType = 0; // 0 = Major, 1 = Minor, 2 = Boss
+StarLevelSystem.API.StarLevelSystemAPI.AddModifierToTargetCreature(Character creatureId, modifierName, modifierType, bool update = true)
+```
+
+To add a new custom creature modifier to the modifier system.
+```csharp
+StarLevelSystem.API.StarLevelSystemAPI.
+```

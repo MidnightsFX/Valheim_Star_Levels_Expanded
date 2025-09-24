@@ -19,12 +19,12 @@ namespace StarLevelSystem.Modifiers
                 if (attacker == null || attacker.IsPlayer()) { return; }
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(attacker);
                 if (cDetails == null || cDetails.Modifiers == null) { return; }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.StaminaDrain)) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain, cDetails.Modifiers[ModifierNames.StaminaDrain]);
+                if (cDetails.Modifiers.Keys.Contains(ModifierNames.StaminaDrain.ToString())) {
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), cDetails.Modifiers[ModifierNames.StaminaDrain.ToString()]);
                     __instance.UseStamina(cmcfg.BasePower + (cmcfg.PerlevelPower * cDetails.Level));
                 }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.EitrDrain)) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.EitrDrain, cDetails.Modifiers[ModifierNames.EitrDrain]);
+                if (cDetails.Modifiers.Keys.Contains(ModifierNames.EitrDrain.ToString())) {
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.EitrDrain.ToString(), cDetails.Modifiers[ModifierNames.EitrDrain.ToString()]);
                     __instance.UseEitr(cmcfg.BasePower + (cmcfg.PerlevelPower * cDetails.Level));
                 }
             }

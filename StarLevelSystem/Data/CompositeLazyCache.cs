@@ -161,17 +161,14 @@ namespace StarLevelSystem.Data
             {
                 if (!character.IsPlayer() && character != null)
                 {
-                    if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true)
-                    {
+                    if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true) {
                         int numBossMods = ValConfig.MaxMajorModifiersPerCreature.Value;
                         if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
                         float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
                         if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
-                        characterCacheEntry.Modifiers = CreatureModifiers.SetupBossModifiers(character, characterCacheEntry, numBossMods, chanceForBossMod);
-                    }
-                    else
-                    {
-                        Logger.LogDebug("Setting up creature modifiers");
+                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, num_boss_mods: numBossMods, chanceBoss: chanceForBossMod, isboss: true);
+                    } else {
+                        //Logger.LogDebug("Setting up creature modifiers");
                         int majorMods = ValConfig.MaxMajorModifiersPerCreature.Value;
                         if (creature_settings != null && creature_settings.MaxMajorModifiers > -1) { majorMods = creature_settings.MaxMajorModifiers; }
                         int minorMods = ValConfig.MaxMinorModifiersPerCreature.Value;
@@ -180,7 +177,8 @@ namespace StarLevelSystem.Data
                         if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceMajorMod = creature_settings.ChanceForMajorModifier; }
                         float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
                         if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
-                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, majorMods, minorMods, chanceMajorMod, chanceMinorMod);
+                        // Logger.LogDebug($"Setting up to {majorMods} major at chance {chanceMajorMod} and {minorMods} minor modifiers with chances {chanceMinorMod}");
+                        characterCacheEntry.Modifiers = CreatureModifiers.SetupModifiers(character, characterCacheEntry, num_major_mods: majorMods, num_minor_mods: minorMods, chanceMajor: chanceMajorMod, chanceMinor: chanceMinorMod);
                     }
                 }
             }

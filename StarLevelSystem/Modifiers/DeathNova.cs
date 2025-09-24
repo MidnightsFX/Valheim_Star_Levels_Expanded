@@ -24,9 +24,9 @@ namespace StarLevelSystem.Modifiers
                 }
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (cDetails == null) { return; }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.FireNova)) {
+                if (cDetails.Modifiers.Keys.Contains(ModifierNames.FireNova.ToString())) {
                     Logger.LogDebug("Activating FireNova");
-                    CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova, cDetails.Modifiers[ModifierNames.FireNova]);
+                    CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), cDetails.Modifiers[ModifierNames.FireNova.ToString()]);
                     GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
                     go.SetActive(false);
                     Aoe aoe = go.GetComponent<Aoe>();

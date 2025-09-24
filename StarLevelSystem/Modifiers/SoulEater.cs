@@ -28,8 +28,8 @@ namespace StarLevelSystem.Modifiers
                     Logger.LogDebug($"Checking SoulEater on {character.name}");
                     if (character == null || character.IsPlayer()) { continue; }
                     CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(character, onlycache: true);
-                    if (cDetails != null && cDetails.Modifiers.Keys.Contains(ModifierNames.SoulEater)) {
-                        CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater, cDetails.Modifiers[ModifierNames.SoulEater]);
+                    if (cDetails != null && cDetails.Modifiers.Keys.Contains(ModifierNames.SoulEater.ToString())) {
+                        CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater.ToString(), cDetails.Modifiers[ModifierNames.SoulEater.ToString()]);
                         int powerIncrease = Mathf.RoundToInt(cmcfg.PerlevelPower * character.m_level);
                         Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}");
                         ModificationExtensionSystem.ForceUpdateDamageMod(character, powerIncrease);

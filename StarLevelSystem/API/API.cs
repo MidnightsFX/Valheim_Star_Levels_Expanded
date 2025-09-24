@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEngine;
 
 namespace StarLevelSystem
 {
@@ -35,6 +36,12 @@ namespace StarLevelSystem
 
         private static readonly MethodInfo ApplyUpdatesToCreature;
 
+        private static readonly MethodInfo GetPossibleModifiersForType;
+        private static readonly MethodInfo GetAllModifiersForCreature;
+        private static readonly MethodInfo AddModifierToCreature;
+
+        private static readonly MethodInfo AddNewModifierToSLS;
+
         public static bool IsAvailable => APIReciever != null;
 
         static API() {
@@ -58,6 +65,10 @@ namespace StarLevelSystem
             GetAllDamageBonus = APIReciever.GetMethod("GetAllDamageBonus", BindingFlags.Public | BindingFlags.Static);
             SetAllDamageBonus = APIReciever.GetMethod("SetAllDamageBonus", BindingFlags.Public | BindingFlags.Static);
             ApplyUpdatesToCreature = APIReciever.GetMethod("ApplyUpdatesToCreature", BindingFlags.Public | BindingFlags.Static);
+            GetPossibleModifiersForType = APIReciever.GetMethod("GetPossibleModifiersForType", BindingFlags.Public | BindingFlags.Static);
+            GetAllModifiersForCreature = APIReciever.GetMethod("GetAllModifiersForCreature", BindingFlags.Public | BindingFlags.Static);
+            AddModifierToCreature = APIReciever.GetMethod("AddModifierToCreature", BindingFlags.Public | BindingFlags.Static);
+            AddNewModifierToSLS = APIReciever.GetMethod("AddNewModifierToSLS", BindingFlags.Public | BindingFlags.Static);
         }
 
         /////////////////////
@@ -295,6 +306,89 @@ namespace StarLevelSystem
         /// returns>bool success</returns>
         public static bool ApplyCreatureUpdates(Character creatureId) {
             return (bool)ApplyUpdatesToCreature.Invoke(null, new object[] { creatureId });
+        }
+
+        ////////////////////////////////////////
+        /// Creature Modifier Management
+        ////////////////////////////////////////
+
+        /// <summary>
+        /// Gets all of the loaded modifiers that are available for a particular type
+        /// types = 0 = Major, 1 = Minro, 2 = Boss
+        /// </summary>
+        /// <param name="modType">The type of modifier to get (types = 0 = Major, 1 = Minro, 2 = Boss)</param>
+        /// returns>List<string> of modifier names</returns>
+        public static List<string> GetPossibleModifiers(int modType = 0) {
+            return (List<string>)GetPossibleModifiersForType.Invoke(null, new object[] { modType });
+        }
+
+        /// <summary>
+        /// Gets all of the modifiers currently applied to a creature
+        /// Dictionary key = modifier name, value = modifier type
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// returns>Dictionary<string, int> of modifier names and type int</returns>
+        public static Dictionary<string, int> GetCreaturesModifiers(Character creatureId) {
+            return (Dictionary<string, int>)GetAllModifiersForCreature.Invoke(null, new object[] { creatureId });
+        }
+
+        /// <summary>
+        /// Adds a modifier to a creature, by default this applies immediately
+        /// Requires a valid modifer name, which can be retrieved with GetPossibleModifiers
+        /// Modifiers are sorted into 3 types, Major (0), Minor (1), and Boss (2)
+        /// <param name="creatureId">The creature's Character class</param>
+        /// <param name="modifierName">The modifiers name</param>
+        /// <param name="modifierType">The modifiers type Major (0), Minor (1), and Boss (2)</param>
+        /// <param name="update">If true applies updates to the creature to rebuild the creatures name and other stats</param>
+        /// returns>bool success</returns>
+        public static bool AddModifierToTargetCreature(Character creatureId, string modifierName, int modifierType, bool update = true) {
+            return (bool)AddModifierToCreature.Invoke(null, new object[] { creatureId, modifierName, modifierType, update });
+        }
+
+        ////////////////////////////////////////
+        /// Modifier Creation | In-development
+        ////////////////////////////////////////
+
+
+        /// <summary>
+        /// Add a new modifier to Star Level System
+        /// This modifier can then be applied to creatures using the API, or it can be randomly applied based on the configuration parameters
+        /// Every modifier of a particular type with a weight that is above 0 has a chance to be applied when a creature selects that type of modifier
+        /// <param name="modifierID">[Required] An integer ID for the modifier, must be unique, used to save and load this modifier</param>
+        /// <param name="modifier_name">[Required] The name of the modifier, must be unique, used to reference the config for this modifier</param>
+        /// <param name="setupMethod">The name of the class containing a Setup method (if needed) Should specify the assembly name. eg: Midnight.TestPluginClass, TestPlugin </param>
+        /// <param name="selectionWeight">The weight of this modifier when randomly selecting modifiers, higher weights increase the chance of being selected</param>
+        /// <param name="basepower">The base power of this modifier, this is applied once</param>
+        /// <param name="perlevelpower">The per level power of this modifier, this is applied once for each level of the creature.</param>
+        /// <param name="biomeConfig">A dictionary of biomes with string values, optional configuration specific to each biome for this modifier.</param>
+        /// <param name="namingStyle">The naming style of this modifier, 0 = prefix only, 1 = suffix only, 2 = prefix and suffix</param>
+        /// <param name="name_suffixes">A list of suffixes to use for this modifier, can be localized</param>
+        /// <param name="name_prefixes">A list of prefixes to use for this modifier, can be localized</param>
+        /// <param name="visualStyle">At what point visual effects are attached to the creature</param>
+        /// <param name="starIcon">The icon to use for this modifier in the star display</param>
+        /// <param name="visualEffect">The visual effect to attach to the creature </param>
+        /// <param name="allowed_creatures">A list of creature names that this modifier can be applied to, if null or empty, all creatures are allowed</param>
+        /// <param name="unallowed_creatures">A list of creature names that this modifier will not be applied to, if null or empty, no creatures are excluded</param>
+        /// returns>bool success</returns>
+        public static bool AddNewModifier(
+            int modifierID,
+            string modifier_name,
+            string setupMethod = null,
+            float selectionWeight = 10f,
+            float basepower = 0f,
+            float perlevelpower = 0f,
+            Dictionary<Heightmap.Biome, List<string>> biomeConfig = null,
+            int namingStyle = 2,
+            List<string> name_suffixes = null,
+            List<string> name_prefixes = null,
+            int visualStyle = 0,
+            Sprite starIcon = null,
+            GameObject visualEffect = null,
+            List<string> allowed_creatures = null,
+            List<string> unallowed_creatures = null,
+            List<Heightmap.Biome> allowed_biomes = null) {
+            return (bool)AddNewModifierToSLS.Invoke(null, new object[] { modifierID, modifier_name, setupMethod, selectionWeight, basepower, perlevelpower, biomeConfig, namingStyle,
+                name_suffixes, name_prefixes, visualStyle, starIcon, visualEffect, allowed_creatures, unallowed_creatures, allowed_biomes });
         }
     }
 }

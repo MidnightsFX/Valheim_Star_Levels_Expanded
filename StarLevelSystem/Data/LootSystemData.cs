@@ -43,7 +43,7 @@ namespace StarLevelSystem.Data
                                 Prefab = "Resin",
                                 Min = 1,
                                 Max = 1,
-                                Chance = 0.25f
+                                Chance = 0.75f
                             },
                             AmountScaleFactor = 0.5f,
                         }
@@ -76,7 +76,7 @@ namespace StarLevelSystem.Data
                                 Prefab = "Resin",
                                 Min = 1,
                                 Max = 1,
-                                Chance = 0.25f
+                                Chance = 0.50f
                             },
                             AmountScaleFactor = 0.5f,
                         }

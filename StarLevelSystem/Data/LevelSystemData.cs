@@ -52,7 +52,7 @@ namespace StarLevelSystem.Data
             {
                 { Heightmap.Biome.All, new DataObjects.BiomeSpecificSetting()
                     {
-                        SpawnRateModifier = 1.5f,
+                        SpawnRateModifier = 1.1f,
                         DistanceScaleModifier = 1.5f,
                         DamageRecievedModifiers = new Dictionary<DataObjects.DamageType, float>() {
                             {DataObjects.DamageType.Poison, 1.5f } 

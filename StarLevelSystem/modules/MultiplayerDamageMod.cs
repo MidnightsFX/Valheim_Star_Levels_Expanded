@@ -12,8 +12,13 @@ namespace StarLevelSystem.modules
                     return false;
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
-                __result = 1f + (playerDifficulty - 1) * ValConfig.MultiplayerEnemyDamageModifier.Value;
-                Logger.LogDebug($"Player difficulty Damage scale: {__result}");
+                if (playerDifficulty >= ValConfig.MultiplayerScalingRequiredPlayersNearby.Value) {
+                    float dmgscaler = (1f + playerDifficulty) * ValConfig.MultiplayerEnemyDamageModifier.Value;
+                    __result = 1f + dmgscaler;
+                } else {
+                    __result = 1f;
+                }
+                Logger.LogDebug($"Multiplayer scaling Player recieves damage increase: {__result}");
                 return false;
             }
         }
@@ -28,9 +33,12 @@ namespace StarLevelSystem.modules
                     return false;
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
-                float healthscaler = 1f + ((playerDifficulty - 1) * ValConfig.MultiplayerEnemyHealthModifier.Value);
-                __result = 1f / healthscaler;
-                // Logger.LogDebug($"Player difficulty Enemy Health scale: {__result}");
+                if (playerDifficulty >= ValConfig.MultiplayerScalingRequiredPlayersNearby.Value) {
+                    __result = 1f - (playerDifficulty * ValConfig.MultiplayerEnemyHealthModifier.Value);
+                } else {
+                    __result = 1f;
+                }
+                Logger.LogDebug($"Multiplayer scaling, Enemy damage taken: {__result}");
                 return false;
             }
         }

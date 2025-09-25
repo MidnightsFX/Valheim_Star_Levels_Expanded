@@ -1,3 +1,11 @@
+**0.9.4**
+ ---
+ ```
+ - Improves configurability of local player damage and health scaling
+ - Fixes frost modifier effect for Linux
+ - Reduced default spawn rate config
+ ```
+
 **0.9.3**
  ---
  ```

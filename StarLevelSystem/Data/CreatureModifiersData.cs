@@ -173,7 +173,7 @@ namespace StarLevelSystem.Data
                     StarVisual = "flame",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.01f,
-                        BasePower = 1.3f
+                        BasePower = 0.3f
                         },
                     SetupMethodClass = "StarLevelSystem.Modifiers.Flame",
                     UnallowedCreatures = NonCombatCreatures
@@ -188,7 +188,7 @@ namespace StarLevelSystem.Data
                     StarVisual = "snowflake",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.01f,
-                        BasePower = 1.3f
+                        BasePower = 0.3f
                         },
                     SetupMethodClass = "StarLevelSystem.Modifiers.Frost",
                     UnallowedCreatures = NonCombatCreatures
@@ -203,7 +203,7 @@ namespace StarLevelSystem.Data
                     StarVisual = "poison",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.05f,
-                        BasePower = 2f
+                        BasePower = 1f
                         },
                     SetupMethodClass = "StarLevelSystem.Modifiers.Poison",
                     UnallowedCreatures = NonCombatCreatures
@@ -219,7 +219,7 @@ namespace StarLevelSystem.Data
                     StarVisual = "lightning",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.05f,
-                        BasePower = 2f
+                        BasePower = 0.3f
                         },
                     SetupMethodClass = "StarLevelSystem.Modifiers.Lightning",
                     UnallowedCreatures = NonCombatCreatures

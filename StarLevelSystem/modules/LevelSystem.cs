@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.InputSystem.HID;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -436,14 +437,16 @@ namespace StarLevelSystem.modules
         }
 
         [HarmonyPatch(typeof(Attack), nameof(Attack.GetLevelDamageFactor))]
-        public static class SetupMaxLevelDamagePatch
-        {
-            public static void Postfix(Attack __instance, float __result) {
-                if (__instance.m_character != null && __instance.m_character.IsBoss()) {
-                    __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.BossEnemyDamageMultiplier.Value;
-                } else {
-                    __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.EnemyDamageLevelMultiplier.Value;
+        public static class SetupMaxLevelDamagePatch {
+            public static bool Prefix(Attack __instance, ref float __result) {
+                // We do not want to skip to return 1 if the character is not leveled because this might need to apply base damage changes too
+                if (__instance.m_character == null || __instance.m_character.m_nview == null || __instance.m_character.m_nview.GetZDO() == null) {
+                    __result = 1f;
+                    return false;
                 }
+                __result = __instance.m_character.m_nview.GetZDO().GetFloat("SLE_DMod", 1);
+                Logger.LogDebug($"Damage Level Factor: {__result}");
+                return false;
             }
         }
 

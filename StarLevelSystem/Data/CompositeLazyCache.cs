@@ -155,7 +155,6 @@ namespace StarLevelSystem.Data
                 }
             }
 
-
             // Set or load creature modifiers
             if (setupModifiers)
             {

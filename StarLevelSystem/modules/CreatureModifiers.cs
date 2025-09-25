@@ -200,7 +200,7 @@ namespace StarLevelSystem.modules
             }
 
             if (isBoss) {
-                List<string> bossMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceBossMods, maxBossMods, cdc.Level, ModifierType.Boss);
+                List<string> bossMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceBossMods, maxBossMods, cdc.Level, 0, ModifierType.Boss);
                 foreach (var mod in bossMods) {
                     if (!savedMods.ContainsKey(mod)) { savedMods.Add(mod.ToString(), ModifierType.Boss); }
                 }
@@ -209,11 +209,11 @@ namespace StarLevelSystem.modules
             }
 
             // Select a major modifiers
-            List<string> majorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceMajorMods, maxMajorMods, cdc.Level, ModifierType.Major);
+            List<string> majorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceMajorMods, maxMajorMods, cdc.Level, 0, ModifierType.Major);
             foreach (var mod in majorMods) {
                 if (!savedMods.ContainsKey(mod)) { savedMods.Add(mod.ToString(), ModifierType.Major); }
             }
-            List<string> minorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceMinorMods, maxMinorMods, cdc.Level, ModifierType.Minor);
+            List<string> minorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceMinorMods, maxMinorMods, cdc.Level, majorMods.Count, ModifierType.Minor);
             foreach (var mod in minorMods)
             {
                 if (!savedMods.ContainsKey(mod)) { savedMods.Add(mod.ToString(), ModifierType.Minor); }
@@ -222,7 +222,7 @@ namespace StarLevelSystem.modules
             return savedMods;
         }
 
-        public static List<string> SelectCreatureModifiers(string creature, Heightmap.Biome biome, float chance, int num_mods, int level, ModifierType type = ModifierType.Major)
+        public static List<string> SelectCreatureModifiers(string creature, Heightmap.Biome biome, float chance, int num_mods, int level, int existingMods = 0, ModifierType type = ModifierType.Major)
         {
             List<string> selectedModifiers = new List<string>();
             List<ProbabilityEntry> probabilities = CreatureModifiersData.LazyCacheCreatureModifierSelect(creature, biome, type);
@@ -239,7 +239,7 @@ namespace StarLevelSystem.modules
             int mod_attemps = 0;
             //Logger.LogDebug($"Selecting {num_mods} modifiers, limited by level? {ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value} level:{level - 1}");
             while (num_mods > mod_attemps) {
-                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value == true && mod_attemps + 1 >= level) { break; }
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value == true && mod_attemps + 1 + existingMods >= level) { break; }
                 if (chance < 1) {
                     float roll = UnityEngine.Random.value;
                     //Logger.LogDebug($"Rolling Chance {roll} < {chance}");

@@ -2,6 +2,7 @@
 using PlayFab.EconomyModels;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -115,17 +116,20 @@ namespace StarLevelSystem.modules
                 ZDO atkr = ZDOMan.instance.GetZDO(hit.m_attacker);
                 if (atkr == null) { return; }
                 ZNetView zview = ZNetScene.instance.FindInstance(atkr);
-                Character atkrChar = hit.GetAttacker();
-                if (zview == null || atkrChar == null) { return; }
+                if (zview == null) { return; }
 
+                //Logger.LogDebug($"Original damage: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
 
                 // Modify damage types based on bonusees
                 DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty("SLE_DBon", zview, new Dictionary<DamageType, float>());
+                //Dictionary<DamageType, float> dbonus = DamageBonuses.Get();
+                //foreach (KeyValuePair<DamageType, float> kvp in dbonus) {
+                //    Logger.LogDebug($"Damage Bonus: {kvp.Key} {kvp.Value}");
+                //}
+
                 AddDamagesToHit(hit, DamageBonuses.Get());
-                // Modify damage totals
-                float damage_mod = atkr.GetFloat("SLE_DMod", 1);
-                hit.m_damage.Modify(damage_mod);
-                //Logger.LogDebug($"Applied dmg mod {damage_mod} new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+                //Logger.LogDebug($"Adding bonus damage, new totals: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+                // Damage Modifiers per level etc are all applied in the SetupMaxLevelDamagePatch patch
 
                 // Apply damage recieved Modifiers for the target
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
@@ -229,20 +233,27 @@ namespace StarLevelSystem.modules
         }
 
         internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {
-            float num = chara.m_health;
+            float chealth = chara.m_health;
             if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
-                num *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
+                chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
             }
-            if (chara.IsBoss()) {
-                num *= ValConfig.BossEnemyHealthMultiplier.Value;
+
+            if (cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] != 1 || cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] > 0) {
+                float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
+                float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * (cDetails.Level - 1));
+                float hp = (basehp + perlvlhp);
+                chara.SetMaxHealth(hp);
+                Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
             } else {
-                num *= ValConfig.EnemyHealthMultiplier.Value;
+                if (chara.IsBoss()) {
+                    chealth *= ValConfig.BossEnemyHealthMultiplier.Value;
+                    Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.BossEnemyHealthMultiplier.Value} = {chealth}");
+                } else {
+                    chealth *= ValConfig.EnemyHealthMultiplier.Value;
+                    Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.EnemyHealthMultiplier.Value} = {chealth}");
+                }
+                chara.SetMaxHealth(chealth);
             }
-            float basehp = num * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
-            float perlvlhp = (num * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * cDetails.Level);
-            float hp = (basehp + perlvlhp);
-            //Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {num}");
-            chara.SetMaxHealth(hp);
         }
 
         internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CreatureDetailCache cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
@@ -335,23 +346,34 @@ namespace StarLevelSystem.modules
         }
 
         internal static void ApplyDamageModification(Character creature, CreatureDetailCache cDetails, bool updateCache = false) {
-            Humanoid chumanoid = creature.GetComponent<Humanoid>();
-            if (chumanoid == null) { return; }
-
+            if (creature.m_nview == null || cDetails == null) { return; }
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
             float base_dmg_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];
 
             // No changes, do nothing
-            if (base_dmg_mod == 1 && per_level_mod == 1) { return; }
-            float dmgmod = base_dmg_mod + (per_level_mod * (creature.m_level - 1));
-            
+            if (base_dmg_mod == 1 && per_level_mod == 0) { return; }
+            float dmgmod = base_dmg_mod + (per_level_mod * (cDetails.Level - 1));
+
+            //// Debugging
+            //foreach (var entry in cDetails.CreatureBaseValueModifiers)
+            //{
+            //    Logger.LogDebug($"Base Modifier {entry.Key} : {entry.Value}");
+            //}
+            //foreach (var entry in cDetails.CreaturePerLevelValueModifiers)
+            //{
+            //    Logger.LogDebug($"Per Level Modifier {entry.Key} : {entry.Value}");
+            //}
+            //foreach(var entry in cDetails.CreatureDamageBonus) {
+            //    Logger.LogDebug($"Damage Bonus {entry.Key} : {entry.Value}");
+            //}
+
             DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty("SLE_DBon", creature.m_nview, new Dictionary<DamageType, float>());
             Dictionary<DamageType, float> dmgBonuses = DamageBonuses.Get();
             if (dmgBonuses.Count == 0 && cDetails.CreatureDamageBonus.Count > 0 || updateCache == true) {
                 DamageBonuses.Set(cDetails.CreatureDamageBonus);
             }
             creature.m_nview.GetZDO().Set("SLE_DMod", dmgmod);
-            //Logger.LogDebug($"Applying damage buffs {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)}  *{dmgmod}");
+            Logger.LogDebug($"Applying damage buffs {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)}  *{dmgmod}");
         }
 
     }

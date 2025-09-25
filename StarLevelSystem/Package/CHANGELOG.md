@@ -1,3 +1,12 @@
+**0.9.3**
+ ---
+ ```
+ - Limits the number of modifiers that can be applied due to star level for both modifier types, instead of individually
+ - Prevents global and per creature configuration from stacking health modifiers
+ - Per level damage modifications take the highest priority modifier only
+ - Retuned many of the damage modifers to be less aggressive in their damage increases
+ ```
+
 **0.9.2**
  ---
  ```

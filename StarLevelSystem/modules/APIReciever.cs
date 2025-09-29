@@ -21,7 +21,8 @@ namespace StarLevelSystem.modules
         public static bool UpdateCreatureColorization(Character chara, float value, float hue, float sat, bool emission = false) {
             CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
             if (cdc == null) { return false; }
-            cdc.Colorization = new ColorDef(value, hue, sat, emission);
+            cdc.Colorization = new ColorDef(hue, sat, value, emission);
+            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
             Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, cdc.Colorization);
             return true;
         }

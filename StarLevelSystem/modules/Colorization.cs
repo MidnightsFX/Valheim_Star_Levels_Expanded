@@ -111,6 +111,7 @@ namespace StarLevelSystem.modules
 
 
         internal static void ApplyColorizationWithoutLevelEffects(GameObject cgo, ColorDef colorization) {
+            if (ValConfig.EnableColorization.Value == false) { return; }
             LevelSetup genlvlup = colorization.toLevelEffect();
             // Material assignment changes must occur in a try block- they can quietly crash the game otherwise
             try {

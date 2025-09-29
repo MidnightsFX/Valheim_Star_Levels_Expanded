@@ -1,3 +1,10 @@
+**0.9.5**
+ ---
+ ```
+ - Colorization configuration (allow skipping colorization)
+ - API fix for colorization not applying correctly
+ ```
+
 **0.9.4**
  ---
  ```

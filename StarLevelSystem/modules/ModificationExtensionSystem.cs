@@ -196,9 +196,10 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, CreatureDetailCache cDetails, float delay = 1f) {
+        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, float delay = 1f) {
             yield return new WaitForSeconds(delay);
 
+            CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
             // Character is gone :shrug:
             if (__instance == null) { yield break; }
             // Modify the creatures stats by custom character/biome modifications
@@ -229,7 +230,7 @@ namespace StarLevelSystem.modules
                 return;
             }
 
-            ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, cDetails, delayedSetupTimer));
+            ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, delayedSetupTimer));
         }
 
         internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {

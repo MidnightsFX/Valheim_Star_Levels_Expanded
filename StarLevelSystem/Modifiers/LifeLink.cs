@@ -19,12 +19,11 @@ namespace StarLevelSystem.Modifiers
                     float damage_reduction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower* __instance.m_level));
                     if (damage_reduction < 0) { damage_reduction = 0f; }
 
-                    hit.m_damage.Modify(damage_reduction);
-
                     HitData transferHit = new HitData() { m_attacker = hit.m_attacker, m_damage = hit.m_damage };
                     transferHit.m_damage.Modify(1 - damage_reduction);
 
                     List<Character> CharactersNearby = Extensions.GetCharactersInRange(__instance.transform.position, 15f);
+                    bool transferred = false;
                     foreach (Character character in CharactersNearby) {
                         // No players, and not self
                         if (character.IsPlayer() || character == __instance) { continue; }
@@ -35,8 +34,13 @@ namespace StarLevelSystem.Modifiers
                         }
                         
                         character.Damage(transferHit);
+                        transferred = true;
                         break;
                     }
+
+                    if (transferred) {
+                        hit.m_damage.Modify(damage_reduction);
+                    }   
                 }
             }
         }

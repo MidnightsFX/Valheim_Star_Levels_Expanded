@@ -1,3 +1,10 @@
+**0.9.6**
+ ---
+ ```
+ - Fixes lifelink always applying a damage reduction, now only applies damage reduction if there is a target to redirect damage to
+ - Adds: BiomeMinLevelOverride and CreatureMinLevelOverride, which will ensure creatures spawn at least at the specified level
+ ```
+
 **0.9.5**
  ---
  ```

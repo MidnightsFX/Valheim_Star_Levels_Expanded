@@ -44,12 +44,13 @@ namespace StarLevelSystem.modules
             if (clevel <= 0) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value + 1;
-                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) {
-                    max_level = biome_settings.BiomeMaxLevelOverride;
-                }
-                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) {
-                    max_level = creature_settings.CreatureMaxLevelOverride;
-                }
+                int min_level = -1;
+                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
+                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
+                
+                if (biome_settings != null && biome_settings.BiomeMinLevelOverride != 0) { min_level = biome_settings.BiomeMinLevelOverride; }
+                if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
+                min_level += 1;
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 Vector3 p = character.transform.position;
@@ -64,6 +65,7 @@ namespace StarLevelSystem.modules
                     distance_levelup_bonuses = LevelSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
                 }
                 int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
+                if (min_level > 0 && level < min_level) { level = min_level; }
                 character.m_level = level;
                 cZDO.Set(ZDOVars.s_level, level);
                 character.SetupMaxHealth();

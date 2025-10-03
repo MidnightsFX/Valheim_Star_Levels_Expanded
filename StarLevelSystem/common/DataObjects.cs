@@ -149,6 +149,8 @@ namespace StarLevelSystem.common
 
         public class BiomeSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+            [DefaultValue(-1)]
+            public int BiomeMinLevelOverride { get; set; }
             public int BiomeMaxLevelOverride { get; set; }
             [DefaultValue(1f)]
             public float DistanceScaleModifier { get; set; } = 1f;
@@ -162,6 +164,8 @@ namespace StarLevelSystem.common
 
         public class CreatureSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+            [DefaultValue(-1)]
+            public int CreatureMinLevelOverride { get; set; } = -1;
             [DefaultValue(-1)]
             public int CreatureMaxLevelOverride { get; set; } = -1;
             [DefaultValue(-1)]

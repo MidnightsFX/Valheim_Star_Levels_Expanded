@@ -1,3 +1,14 @@
+**0.9.7**
+ ---
+ ```
+ - Adds night-time specific configuration which allows disabling spawns specifically during the night or increasing night spawn rates
+ - Fixes a bug where creature items would be twice as big as intended
+ - Adds configuration options to controll which spawners SLS controls (now defaults manual spawns to not be controlled)
+	- This improves support for mods which manually spawn creatures
+ - Updates default level scales to be more aggressive and increase weight further from center
+ - Disabled some optional debug logging
+ ```
+
 **0.9.6**
  ---
  ```

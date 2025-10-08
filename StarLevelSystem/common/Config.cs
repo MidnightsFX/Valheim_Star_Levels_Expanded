@@ -25,6 +25,10 @@ namespace StarLevelSystem
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
+        public static ConfigEntry<bool> ControlSpawnerLevels;
+        public static ConfigEntry<bool> ForceControlAllSpawns;
+        public static ConfigEntry<bool> ControlBossSpawns;
+        public static ConfigEntry<bool> ControlAbilitySpawnedCreatures;
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
@@ -122,7 +126,10 @@ namespace StarLevelSystem
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);
             EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Wether or not creatures gain more health when players are grouped up.");
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Wether or not creatures gain more damage when players are grouped up.");
-            
+            ControlSpawnerLevels = BindServerConfig("LevelSystem", "ControlSpawnerLevels", true, "Overrides spawner levels to be controlled by SLS (this impacts all naturally spawning creatures)");
+            ControlAbilitySpawnedCreatures = BindServerConfig("LevelSystem", "ControlAbilitySpawnedCreatures", true, "Forces creatures spawned from abilities to be controlled by SLS. This primarily impacts things such as the roots from Elder.");
+            ControlBossSpawns = BindServerConfig("LevelSystem", "ControlBossSpawns", true, "Forces boss creatures to be controlled by SLS. Bosses will not get star levels if this is disabled.");
+            ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);

@@ -50,13 +50,44 @@ namespace StarLevelSystem.Data
                 //Logger.LogWarning("ZDO null, skipping.");
                 return null;
             }
-
-
+            // Reset the done marker if this is a cache update
+            if (update == true) {
+                creatureZDO.Set(SLS_SETUP, false);
+            }
 
             // Get character based biome and creature configuration
-            Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
+            //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
             characterCacheEntry.CreatureName = creature_name;
+
+            // Check if night time
+            if (EnvMan.IsNight()) {
+                // Override spawn rate modifiers for night time
+                bool setupstatus = creatureZDO.GetBool(SLS_SETUP, false);
+                //Logger.LogDebug($"Checking night settings for {creature_name} setup? {setupstatus}");
+                if (biome_settings != null && biome_settings.NightSettings != null) {
+                    //Logger.LogDebug("Checking biome settings.");
+                    if (biome_settings.NightSettings.SpawnRateModifier != 1f) {
+                        biome_settings.SpawnRateModifier = biome_settings.NightSettings.SpawnRateModifier;
+                    }
+                    //Logger.LogDebug($"Biome has {biome_settings.NightSettings.creatureSpawnsDisabled.Count} disabled creatures: {string.Join(",", biome_settings.NightSettings.creatureSpawnsDisabled)}");
+                    if (setupstatus == false && biome_settings.NightSettings.creatureSpawnsDisabled != null && biome_settings.NightSettings.creatureSpawnsDisabled.Contains(creature_name)) {
+                        //Logger.LogDebug("Biome has spawn disabled.");
+                        characterCacheEntry.CreatureDisabledInBiome = true;
+                    }
+                }
+
+                if (creature_settings != null && creature_settings.NightSettings != null) {
+                   // Logger.LogDebug("Checking creature settings.");
+                    if (creature_settings.NightSettings.SpawnRateModifier != 1f) {
+                        creature_settings.SpawnRateModifier = creature_settings.NightSettings.SpawnRateModifier;
+                    }
+                    if (setupstatus == false && creature_settings.NightSettings.creatureSpawnsDisabled == true) {
+                        //Logger.LogDebug("Creature has spawn disabled.");
+                        characterCacheEntry.CreatureDisabledInBiome = true;
+                    }
+                }
+            }
 
             // Check creature spawn rate
             //Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
@@ -70,30 +101,32 @@ namespace StarLevelSystem.Data
             characterCacheEntry.Biome = biome;
 
             // Set if the creature spawn is disabled, and return the entry but do not cache it.
-            Logger.LogDebug("Checking Creature biome Disable spawn");
-            if (biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
+            //Logger.LogDebug("Checking Creature biome Disable spawn");
+            if (characterCacheEntry.CreatureDisabledInBiome == true || biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
                 characterCacheEntry.CreatureDisabledInBiome = true;
+                // Early add to cache, and return
+                if (!sessionCache.ContainsKey(character.GetZDOID().ID)) {
+                    sessionCache.Add(character.GetZDOID().ID, characterCacheEntry);
+                }
                 return characterCacheEntry;
             }
 
             // Set the creature
             characterCacheEntry.CreaturePrefab = PrefabManager.Instance.GetPrefab(creature_name);
 
-
-
             // Check for level or set it
-            Logger.LogDebug("Setting creature level");
-            characterCacheEntry.Level = LevelSystem.DetermineLevelSetAndRetrieve(character, creatureZDO, creature_settings, biome_settings, leveloverride);
-            Logger.LogDebug($"Creature level set {characterCacheEntry.Level}");
+            //Logger.LogDebug("Setting creature level");
+            characterCacheEntry.Level = LevelSystem.DetermineLevel(character, creatureZDO, creature_settings, biome_settings, leveloverride);
+            //Logger.LogDebug($"Creature level set {characterCacheEntry.Level}");
             if (characterCacheEntry.Level == 0) {return null; }
 
             // Set creature Colorization pallete
-            Logger.LogDebug("Selecting creature colorization");
+            //Logger.LogDebug("Selecting creature colorization");
             characterCacheEntry.Colorization = Colorization.DetermineCharacterColorization(character, characterCacheEntry.Level);
             if (characterCacheEntry.Colorization == null) { return null; }
 
             // Set the creatures damage recieved modifiers
-            Logger.LogDebug("Computing damage recieved modifiers");
+            //Logger.LogDebug("Computing damage recieved modifiers");
             if (biome_settings != null && biome_settings.DamageRecievedModifiers != null) {
                 foreach (var entry in biome_settings.DamageRecievedModifiers) {
                     if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
@@ -114,7 +147,7 @@ namespace StarLevelSystem.Data
             }
 
             // Set creature base settings
-            Logger.LogDebug("Computing base creature modifiers");
+            //Logger.LogDebug("Computing base creature modifiers");
             if (biome_settings != null && biome_settings.CreatureBaseValueModifiers != null) {
                 foreach (var entry in biome_settings.CreatureBaseValueModifiers) {
                     if (characterCacheEntry.CreatureBaseValueModifiers.ContainsKey(entry.Key)) {
@@ -135,7 +168,7 @@ namespace StarLevelSystem.Data
             }
 
             // Set creature per level settings
-            Logger.LogDebug("Computing perlevel creature modifiers");
+            //Logger.LogDebug("Computing perlevel creature modifiers");
             if (biome_settings != null && biome_settings.CreaturePerLevelValueModifiers != null) {
                 foreach (var entry in biome_settings.CreaturePerLevelValueModifiers) {
                     if (characterCacheEntry.CreaturePerLevelValueModifiers.ContainsKey(entry.Key)) {
@@ -182,14 +215,15 @@ namespace StarLevelSystem.Data
                 }
             }
 
+            creatureZDO.Set(SLS_SETUP, true);
 
             // Add it to the cache, and return it
             if (character == null) {return null; }
             if (!sessionCache.ContainsKey(character.GetZDOID().ID)) {
-                Logger.LogDebug("Adding creature to cache");
+                //Logger.LogDebug("Adding creature to cache");
                 sessionCache.Add(character.GetZDOID().ID, characterCacheEntry);
             } else if (update == true) {
-                Logger.LogDebug($"Adding Updating creature in cache {creature_name}-{characterCacheEntry.Level}");
+               //Logger.LogDebug($"Adding Updating creature in cache {creature_name}-{characterCacheEntry.Level}");
                 sessionCache[character.GetZDOID().ID] = characterCacheEntry;
             }
             return characterCacheEntry;

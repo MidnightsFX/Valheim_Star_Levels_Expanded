@@ -273,7 +273,7 @@ namespace StarLevelSystem.modules
         public static class DisplayCreatureNameChanges {
             public static bool Prefix(Character __instance, ref string __result) {
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails == null) { return true; }
+                if (cDetails == null || cDetails.CreatureDisabledInBiome) { return true; }
                 __result = CreatureModifiers.CheckOrBuildCreatureName(__instance, cDetails);
                 return false;
             }
@@ -299,7 +299,7 @@ namespace StarLevelSystem.modules
                 }
             } else {
                 CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(ehud.m_character);
-                Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
+                //Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
@@ -337,7 +337,7 @@ namespace StarLevelSystem.modules
                     star_index++;
                 }
 
-                Logger.LogDebug($"Assigning star level N");
+                //Logger.LogDebug($"Assigning star level N");
                 extended_hud.starlevel_N = ehud.m_gui.transform.Find("SLS_level_n").gameObject;
                 extended_hud.starlevelN_back_image = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
                 extended_hud.starlevelN_front_image = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();

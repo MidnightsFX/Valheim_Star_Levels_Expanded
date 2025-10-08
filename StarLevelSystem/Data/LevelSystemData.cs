@@ -57,18 +57,18 @@ namespace StarLevelSystem.Data
                         DamageRecievedModifiers = new Dictionary<DataObjects.DamageType, float>() {
                             {DataObjects.DamageType.Poison, 1.5f } 
                         },
-                        CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
-                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
-                            { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
-                            { DataObjects.CreatureBaseAttribute.Speed, 1f },
-                            { DataObjects.CreatureBaseAttribute.Size, 1f }
-                        },
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.4f },
-                            { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.1f },
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 0f },
-                            { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.10f }
-                        },
+                        //CreatureBaseValueModifiers = new Dictionary<DataObjects.CreatureBaseAttribute, float>() {
+                        //    { DataObjects.CreatureBaseAttribute.BaseHealth, 1f },
+                        //    { DataObjects.CreatureBaseAttribute.BaseDamage, 1f },
+                        //    { DataObjects.CreatureBaseAttribute.Speed, 1f },
+                        //    { DataObjects.CreatureBaseAttribute.Size, 1f }
+                        //},
+                        //CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
+                        //    { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.4f },
+                        //    { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.1f },
+                        //    { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 0f },
+                        //    { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.10f }
+                        //},
                         
                     }
                 },
@@ -131,7 +131,7 @@ namespace StarLevelSystem.Data
                 { "Lox", new DataObjects.CreatureSpecificSetting()
                     {
                         CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, 0.9f },
+                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, -0.01f },
                         }
                     }
                 },
@@ -234,64 +234,64 @@ namespace StarLevelSystem.Data
             DistanceLevelBonus = new SortedDictionary<int, SortedDictionary<int, float>>()
             {
                 { 1250, new SortedDictionary<int, float>() {
-                        { 1, 0.25f },
+                        { 1, 25f },
                     }
                 },
                 { 2500, new SortedDictionary<int, float>() {
-                        { 1, 0.5f },
-                        { 2, 0.25f },
+                        { 1, 50f },
+                        { 2, 25f },
                     }
                 },
                 { 3750, new SortedDictionary<int, float>() {
-                        { 1, 1f },
-                        { 2, 0.75f },
-                        { 3, 0.5f },
-                        { 4, 0.25f },
+                        { 1, 100f },
+                        { 2, 75f },
+                        { 3, 50f },
+                        { 4, 25f },
                     }
                 },
                 { 5000, new SortedDictionary<int, float>() {
-                        { 1, 1f },
-                        { 2, 1f },
-                        { 3, 0.75f },
-                        { 4, 0.5f },
-                        { 5, 0.25f },
-                        { 6, 0.15f },
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 75f },
+                        { 4, 50f },
+                        { 5, 25f },
+                        { 6, 15f },
                     }
                 },
                 { 6250, new SortedDictionary<int, float>() {
-                        { 1, 1f },
-                        { 2, 1f },
-                        { 3, 1f },
-                        { 4, 0.75f },
-                        { 5, 0.5f },
-                        { 6, 0.25f },
-                        { 7, 0.20f },
-                        { 8, 0.15f },
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 100f },
+                        { 4, 75f },
+                        { 5, 50f },
+                        { 6, 25f },
+                        { 7, 20f },
+                        { 8, 15f },
                     }
                 },
                 { 7500, new SortedDictionary<int, float>() {
-                        { 1, 1f },
-                        { 2, 1f },
-                        { 3, 1f },
-                        { 4, 1f },
-                        { 5, 0.75f },
-                        { 6, 0.5f },
-                        { 7, 0.25f },
-                        { 8, 0.20f },
-                        { 9, 0.15f },
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 100f },
+                        { 4, 100f },
+                        { 5, 75f },
+                        { 6, 50f },
+                        { 7, 25f },
+                        { 8, 20f },
+                        { 9, 15f },
                     }
                 },
                 { 8750, new SortedDictionary<int, float>() {
-                        { 1, 1f },
-                        { 2, 1f },
-                        { 3, 1f },
-                        { 4, 1f },
-                        { 5, 1f },
-                        { 6, 0.75f },
-                        { 7, 0.5f },
-                        { 8, 0.25f },
-                        { 9, 0.20f },
-                        { 10, 0.15f },
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 100f },
+                        { 4, 100f },
+                        { 5, 100f },
+                        { 6, 75f },
+                        { 7, 50f },
+                        { 8, 25f },
+                        { 9, 20f },
+                        { 10, 15f },
                     }
                 }
             }

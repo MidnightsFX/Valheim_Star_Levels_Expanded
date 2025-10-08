@@ -1,11 +1,11 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
-using UnityEngine.InputSystem.HID;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -18,12 +18,26 @@ namespace StarLevelSystem.modules
             if (character == null) { return; }
             character.m_level = level;
             character.SetupMaxHealth();
-            if (character.GetComponent<ZNetView>() != null && character.GetComponent<ZNetView>().GetZDO() != null) {
-                character.GetComponent<ZNetView>().GetZDO().Set(ZDOVars.s_level, level);
+            if (character.m_nview != null && character.m_nview.GetZDO() != null) {
+                character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
             }
         }
 
-        public static int DetermineLevelSetAndRetrieve(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
+        public static void SetCharacterLevelControl(Character chara, int providedLevel) {
+            if (ValConfig.ControlSpawnerLevels.Value) {
+                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                Logger.LogDebug($"Setting creature level from cache {cdc.Level}");
+                chara.SetLevel(cdc.Level);
+                //chara.m_level = cdc.Level;
+                //chara.m_nview.GetZDO().Set(ZDOVars.s_level, cdc.Level);
+                return;
+            }
+            // Fallback
+            Logger.LogDebug($"Setting creature level from provided {providedLevel}");
+            chara.SetLevel(providedLevel);
+        }
+
+        public static int DetermineLevel(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
         {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
@@ -34,14 +48,11 @@ namespace StarLevelSystem.modules
                 character.m_level = leveloverride;
                 return leveloverride;
             }
-            if (character.IsTamed() && ValConfig.RandomizeTameChildrenLevels.Value == false) {
-                // Tamed but does not have its level set yet, and we do not want to randomize it
-                
-            }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
-            // Logger.LogDebug($"Current level from ZDO: {clevel}");
-            if (clevel <= 0) {
+            bool setup = cZDO.GetBool(SLS_SETUP, false);
+            //Logger.LogDebug($"Current level from ZDO: {clevel} is-setup? {setup}");
+            if (clevel <= 0 && setup == false) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value + 1;
                 int min_level = -1;
@@ -66,9 +77,8 @@ namespace StarLevelSystem.modules
                 }
                 int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
                 if (min_level > 0 && level < min_level) { level = min_level; }
-                character.m_level = level;
-                cZDO.Set(ZDOVars.s_level, level);
-                character.SetupMaxHealth();
+                //Logger.LogDebug($"Determined level {level} min: {min_level} max {max_level}");
+                //character.m_level = level;
                 return level;
             }
             return clevel;
@@ -485,6 +495,213 @@ namespace StarLevelSystem.modules
                 bool creature_setting_check = LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig);
                 if (creature_setting_check) { creature_settings = creatureConfig; }
                 //Logger.LogDebug($"Set character specific configs");
+            }
+        }
+
+        [HarmonyPatch(typeof(CreatureSpawner))]
+        public static class CreatureSpawnerSpawn
+        {
+            //[HarmonyEmitIL(".dumps")]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(CreatureSpawner.Spawn))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+            {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                )
+                .RemoveInstructions(1)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                )
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(1)
+                .RemoveInstructions(1)
+                .Insert(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Stloc_S),
+                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(2)
+                .RemoveInstructions(1)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .ThrowIfNotMatch("Unable to patch CreatureSpawner.Spawn.");
+
+                return codeMatcher.Instructions();
+            }
+        }
+
+        [HarmonyPatch(typeof(SpawnArea))]
+        public static class SpawnAreaSpawnOnePatch
+        {
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(SpawnArea.SpawnOne))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+            {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                )
+                .RemoveInstructions(1)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                )
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(1)
+                .RemoveInstructions(1)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Ldloc_2),
+                    new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpawnArea.SpawnData), nameof(SpawnArea.SpawnData.m_maxLevel))),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(2)
+                .RemoveInstructions(1)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .ThrowIfNotMatch("Unable to patch SpawnArea.SpawnOne.");
+
+                return codeMatcher.Instructions();
+            }
+        }
+
+        [HarmonyPatch(typeof(SpawnSystem))]
+        public static class SpawnSystemSpawnPatch
+        {
+            //[HarmonyEmitIL(".dumps")]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(SpawnSystem.Spawn))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+            {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                )
+                .RemoveInstructions(1)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                )
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(1)
+                .RemoveInstructions(1)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .ThrowIfNotMatch("Unable to patch SpawnSystem Spawn set level.");
+
+                return codeMatcher.Instructions();
+            }
+        }
+
+        [HarmonyPatch(typeof(TriggerSpawner))]
+        public static class TriggerSpawnerSpawnPatch
+        {
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(TriggerSpawner.Spawn))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+            {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                )
+                .RemoveInstructions(1)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                )
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(1)
+                .RemoveInstructions(1)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .MatchStartBackwards(
+                    new CodeInstruction(OpCodes.Ldarg_0),
+                    new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(TriggerSpawner), nameof(TriggerSpawner.m_maxLevel))),
+                    new CodeMatch(OpCodes.Ldc_I4_1)
+                )
+                .Advance(2)
+                .RemoveInstructions(1)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .ThrowIfNotMatch("Unable to patch TriggerSpawner.Spawn.");
+
+                return codeMatcher.Instructions();
+            }
+        }
+
+        [HarmonyPatch(typeof(SpawnAbility))]
+        public static class SpawnAbilitySpawnPatch
+        {
+            // Note: This is an IEnumerator so we need to patch the MoveNext method inside the generated class
+
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(SpawnAbility.Spawn), MethodType.Enumerator)]
+            static IEnumerable<CodeInstruction> TranspileMoveNext(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                    ).RemoveInstructions(1).InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetSpawnAbilityLevelControl)
+                    ).ThrowIfNotMatch("Unable to patch TriggerSpawner Spawn set level.");
+
+                return codeMatcher.Instructions();
+            }
+
+            public static void SetSpawnAbilityLevelControl(Character chara, int providedLevel)
+            {
+                if (ValConfig.ControlAbilitySpawnedCreatures.Value)
+                {
+                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    chara.SetLevel(cdc.Level);
+                    return;
+                }
+                // Fallback
+                chara.SetLevel(providedLevel);
+            }
+        }
+
+        // Add support for Seeker egg hatches
+        [HarmonyPatch(typeof(EggHatch))]
+        public static class EggHatchSpawnPatch
+        {
+            // Skip original prefix that causes levelup to trigger for seeker broods
+            [HarmonyPatch(nameof(EggHatch.Hatch))]
+            static bool Prefix(EggHatch __instance) {
+                __instance.m_hatchEffect.Create(__instance.transform.position, __instance.transform.rotation, null, 1f, -1);
+                GameObject go = UnityEngine.Object.Instantiate(__instance.m_spawnPrefab, __instance.transform.TransformPoint(__instance.m_spawnOffset), Quaternion.Euler(0f, UnityEngine.Random.Range(0, 360), 0f));
+                Character chara = go.GetComponent<Character>();
+                if (chara != null) {
+                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    chara.SetLevel(cdc.Level);
+                    ModificationExtensionSystem.CreatureSetup(chara, delayedSetupTimer: 0);
+                }
+                __instance.m_nview.Destroy();
+                return false;
+            }
+        }
+
+        // Ensure creatures that are spawned as loot drops also get leveled
+        [HarmonyPatch(typeof(ItemDrop))]
+        public static class DropOnDestroyedSpawnPatch
+        {
+            [HarmonyPostfix]
+            [HarmonyPatch(nameof(ItemDrop.OnCreateNew), new Type[] { typeof(GameObject) } )]
+            static void Postfix(GameObject go) {
+                Character chara = go.GetComponent<Character>();
+                if (chara != null) {
+                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    chara.SetLevel(cdc.Level);
+                    ModificationExtensionSystem.CreatureSetup(chara, delayedSetupTimer: 0);
+                }
             }
         }
 

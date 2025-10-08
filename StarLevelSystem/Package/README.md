@@ -272,7 +272,6 @@ Compatibility is being worked on for the following mods:
 This mod is still in active development and is not considered complete yet.
 
 Planned Features
-- Comprehensive API
 - Refinement to the existing modifers
 - New modifiers!
 - Level scaling more things

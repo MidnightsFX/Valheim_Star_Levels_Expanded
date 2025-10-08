@@ -1,17 +1,21 @@
-﻿using StarLevelSystem.modules;
+﻿using HarmonyLib;
+using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Reflection.Emit;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
-using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.common
 {
     public static class Extensions
     {
+        public static CodeMatcher CreateLabelOffset(this CodeMatcher matcher, out Label label, int offset = 0)
+        {
+            return matcher.CreateLabelAt(matcher.Pos + offset, out label);
+        }
+
         public static void Times(this int count, Action action)
         {
             for (int i = 0; i < count; i++)
@@ -101,11 +105,18 @@ namespace StarLevelSystem.common
             }
             if (biomecfg.creatureSpawnsDisabled != null && prioritycfg.creatureSpawnsDisabled != null)
             {
-                biomecfg.creatureSpawnsDisabled.Union(prioritycfg.creatureSpawnsDisabled);
+                biomecfg.creatureSpawnsDisabled = biomecfg.creatureSpawnsDisabled.Union(prioritycfg.creatureSpawnsDisabled).ToList();
             }
             else if (prioritycfg.creatureSpawnsDisabled != null)
             {
                 biomecfg.creatureSpawnsDisabled = prioritycfg.creatureSpawnsDisabled;
+            }
+
+            if (prioritycfg.NightSettings != null) {
+                biomecfg.NightSettings.SpawnRateModifier = prioritycfg.NightSettings.SpawnRateModifier;
+                if (prioritycfg.NightSettings.creatureSpawnsDisabled != null) {
+                    biomecfg.NightSettings.creatureSpawnsDisabled = biomecfg.NightSettings.creatureSpawnsDisabled.Union(prioritycfg.NightSettings.creatureSpawnsDisabled).ToList();
+                }
             }
             return biomecfg;
         }

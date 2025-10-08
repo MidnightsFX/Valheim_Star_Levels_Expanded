@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -70,8 +71,11 @@ namespace StarLevelSystem.modules
             static void SetCreatureSpawnLevel(Character chara, int level) {
                 //Logger.LogWarning($"Setting creature level");
                 chara.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true); // prevent multispawn from these spawned creatures
-                chara.m_nview?.GetZDO()?.Set(ZDOVars.s_level, level);
-                ModificationExtensionSystem.CreatureSetup(chara, true, level, 0f, true);
+                chara.SetLevel(level);
+                // Rebuild the cache entry to ensure the creature gets the specified level effects
+                //Logger.LogDebug("Setting spawned creature details.");
+                CompositeLazyCache.GetAndSetDetailCache(chara, true, level);
+                //ModificationExtensionSystem.CreatureSetup(chara, true, level, 0f, true);
                 //chara.SetupMaxHealth();
             }
         }

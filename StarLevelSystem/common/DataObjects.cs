@@ -25,6 +25,8 @@ namespace StarLevelSystem.common
         public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
         //public static ISerializer yamlserializerNoRef = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).DisableAliases().Build();
 
+        public static readonly string SLS_SETUP = "SLS_SETUP";
+
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
             BaseDamage = 1,
@@ -147,6 +149,21 @@ namespace StarLevelSystem.common
             public SortedDictionary<int, SortedDictionary<int, float>> DistanceLevelBonus { get; set; }
         }
 
+        public class NightSettings
+        {
+            [DefaultValue(1f)]
+            public float SpawnRateModifier { get; set; } = 1f;
+            [DefaultValue(false)]
+            public bool creatureSpawnsDisabled { get; set; } = false;
+        }
+
+        public class BiomeNightSettings
+        {
+            [DefaultValue(1f)]
+            public float SpawnRateModifier { get; set; } = 1f;
+            public List<string> creatureSpawnsDisabled { get; set; }
+        }
+
         public class BiomeSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             [DefaultValue(-1)]
@@ -160,6 +177,7 @@ namespace StarLevelSystem.common
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
             public List<string> creatureSpawnsDisabled { get; set; }
+            public BiomeNightSettings NightSettings { get; set; }
         }
 
         public class CreatureSpecificSetting {
@@ -182,6 +200,7 @@ namespace StarLevelSystem.common
             public float ChanceForBossModifier { get; set; } = -1f;
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
+            public NightSettings NightSettings { get; set; } = new NightSettings();
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }

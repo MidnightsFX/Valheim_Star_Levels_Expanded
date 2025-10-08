@@ -1,5 +1,6 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.common;
+using StarLevelSystem.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -21,7 +22,7 @@ namespace StarLevelSystem.modules
         // Returns a bool based on whether or not the creature should be deleted, true = delete, false = do not delete
         internal static bool CheckSetApplySpawnrate(Character character, ZDO creatureZDO,  CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings) {
             if (character == null || creatureZDO == null) {
-                Logger.LogWarning($"Creature null or nview null, not running spawn multiplier.");
+                //Logger.LogWarning($"Creature null or nview null, not running spawn multiplier.");
                 return false;
             }
             if (creatureZDO.GetBool("SLS_DSpwnMlt", false) == true) { return false; }
@@ -54,12 +55,15 @@ namespace StarLevelSystem.modules
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
                         GameObject spawnedCreature = GameObject.Instantiate(PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(character.gameObject)), position, rotation);
+                        Character spawnedChara = spawnedCreature.GetComponent<Character>();
                         if (character.IsTamed()) {
-                            spawnedCreature.GetComponent<Character>()?.SetTamed(true);
+                            spawnedChara?.SetTamed(true);
                         }
                         // Logger.LogDebug($"Spawned {spawnedCreature.gameObject}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
-                        spawnedCreature.GetComponent<Character>()?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);
+                        spawnedChara?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);
+                        CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(character, false);
+                        spawnedChara.SetLevel(cdc.Level);
                     }
                     spawnrate -= 1f;
                 }

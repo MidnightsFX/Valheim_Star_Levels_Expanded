@@ -1,16 +1,11 @@
 ﻿using HarmonyLib;
-using PlayFab.EconomyModels;
-using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
-using System.Reflection.Emit;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -30,17 +25,17 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.GiveDefaultItems))]
-        public static class CreatureSizeSyncItems
-        {
-            public static void Postfix(Character __instance)
-            {
-                if (__instance.IsPlayer()) { return; }
-                // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
-            }
-        }
+        //[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.GiveDefaultItems))]
+        //public static class CreatureSizeSyncItems
+        //{
+        //    public static void Postfix(Character __instance)
+        //    {
+        //        if (__instance.IsPlayer()) { return; }
+        //        // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
+        //        CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
+        //        LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
+        //    }
+        //}
 
         [HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
         public static class VisualEquipmentScaleToFit
@@ -86,15 +81,23 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
-        public static class ModifyCharacterVisualsToLevel
-        {
-            public static bool Prefix(Character __instance)
-            {
-                //CreatureSetup(__instance);
-                return false;
-            }
-        }
+        //[HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
+        //public static class ModifyCharacterVisualsToLevel
+        //{
+        //    public static void Prefix(Character __instance, int level)
+        //    {
+        //        StackFrame frame = new StackFrame(1);
+        //        var method = frame.GetMethod();
+        //        CheckSetLevel(__instance, level, method);
+        //        //CreatureSetup(__instance);
+        //        //return false;
+        //    }
+
+        //    public static void CheckSetLevel(Character __instance, int level, MethodBase method) {
+        //        Logger.LogDebug($"Character SetLevel called for {__instance.name} with level {level} - {method.Name} {method.DeclaringType} {method.MemberType}");
+        //    }
+        //}
+
 
         [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
         public static class ModifyCharacterAnimationSpeed {
@@ -199,9 +202,24 @@ namespace StarLevelSystem.modules
         static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, float delay = 1f) {
             yield return new WaitForSeconds(delay);
 
+            // TODO: Consider a marker for "already setup" to avoid doing this multiple times
             CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
             // Character is gone :shrug:
             if (__instance == null) { yield break; }
+            
+            // Set boss levels
+            if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value) {
+                __instance.SetLevel(cDetails.Level);
+            }
+
+            // Logic about whether we should use the current level of the creature if it has been modified by something else?
+            if (__instance.m_level != cDetails.Level) {
+                Logger.LogDebug($"Creature {__instance.name} has level {__instance.m_level} but cache says {cDetails.Level}.");
+            }
+            if (ValConfig.ForceControlAllSpawns.Value == true) {
+                __instance.SetLevel(cDetails.Level);
+            }
+            
             // Modify the creatures stats by custom character/biome modifications
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
@@ -230,6 +248,11 @@ namespace StarLevelSystem.modules
                 return;
             }
 
+            // Bosses get setup right away
+            if (__instance.IsBoss()) {
+                delayedSetupTimer = 0f;
+            }
+
             ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, delayedSetupTimer));
         }
 
@@ -244,14 +267,14 @@ namespace StarLevelSystem.modules
                 float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * (cDetails.Level - 1));
                 float hp = (basehp + perlvlhp);
                 chara.SetMaxHealth(hp);
-                Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
+                //Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
             } else {
                 if (chara.IsBoss()) {
                     chealth *= ValConfig.BossEnemyHealthMultiplier.Value;
-                    Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.BossEnemyHealthMultiplier.Value} = {chealth}");
+                    //Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.BossEnemyHealthMultiplier.Value} = {chealth}");
                 } else {
                     chealth *= ValConfig.EnemyHealthMultiplier.Value;
-                    Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.EnemyHealthMultiplier.Value} = {chealth}");
+                    //Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.EnemyHealthMultiplier.Value} = {chealth}");
                 }
                 chara.SetMaxHealth(chealth);
             }

@@ -77,9 +77,9 @@ namespace StarLevelSystem.modules
 
                 GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
                 bool hasVFXAlready = character.transform.Find($"{effectPrefab.name}(Clone)");
-                Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
+                //Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {
-                    Logger.LogDebug($"Adding visual effects for {character.name}");
+                    //Logger.LogDebug($"Adding visual effects for {character.name}");
                     GameObject vfxadd = GameObject.Instantiate(effectPrefab, character.transform);
                     float height = character.GetHeight();
                     float scale = height / 5f;
@@ -144,7 +144,7 @@ namespace StarLevelSystem.modules
                     setName += $" $suffix_moniker {string.Join(" ", suffix_names)}";
                 }
                 chara.m_nview.GetZDO().Set("SLE_Name", setName);
-                Logger.LogDebug($"Setting creature name for {chara.name} to {setName}");
+                //Logger.LogDebug($"Setting creature name for {chara.name} to {setName}");
                 return Localization.instance.Localize(setName.Trim());
             }
             //Logger.LogDebug($"Loaded creature name for {chara.name} to {setName}");
@@ -233,7 +233,7 @@ namespace StarLevelSystem.modules
             //}
 
             if (probabilities.Count == 0) {
-                Logger.LogDebug($"No modifiers found for creature {creature} of type {type}");
+                //Logger.LogDebug($"No modifiers found for creature {creature} of type {type}");
                 return selectedModifiers;
             }
             int mod_attemps = 0;
@@ -251,7 +251,7 @@ namespace StarLevelSystem.modules
                 }
                 mod_attemps++;
             }
-            Logger.LogDebug($"Selected {selectedModifiers.Count} modifiers {string.Join(",", selectedModifiers)} for creature {creature} of type {type} with chance {chance} limited by star level? {ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value} level:{level - 1}");
+            //Logger.LogDebug($"Selected {selectedModifiers.Count} modifiers {string.Join(",", selectedModifiers)} for creature {creature} of type {type} with chance {chance} limited by star level? {ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value} level:{level - 1}");
             if (selectedModifiers.Count == 0) { selectedModifiers.Add(NoMods); }
             return selectedModifiers;
         }

@@ -68,7 +68,7 @@ namespace StarLevelSystem.modules
             public static void Postfix(Character __instance, Ragdoll ragdoll)
             {
                 if (__instance == null || __instance.IsPlayer()) { return; }
-                Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
+                //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (__instance.m_nview != null) {
                     ApplySizeModificationZRefOnly(ragdoll.gameObject, __instance.m_nview);
@@ -219,13 +219,17 @@ namespace StarLevelSystem.modules
             if (ValConfig.ForceControlAllSpawns.Value == true) {
                 __instance.SetLevel(cDetails.Level);
             }
-            
+
             // Modify the creatures stats by custom character/biome modifications
+            CreatureModifiers.SetupModifiers(__instance, cDetails);
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
             LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails, refresh_cache);
             ApplyHealthModifications(__instance, cDetails);
 
+            // Rebuild UI since it may have been created before these changes were applied
+            CreatureModifiers.CheckOrBuildCreatureName(__instance, cDetails, false);
+            LevelUI.InvalidateCacheEntry(__instance.GetZDOID());
 
             if (__instance.m_level <= 1) { yield break; }
             // Colorization and visual adjustments

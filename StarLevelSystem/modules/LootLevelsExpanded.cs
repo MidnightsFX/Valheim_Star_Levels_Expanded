@@ -78,7 +78,7 @@ namespace StarLevelSystem.modules
                 // Passthrough for things that are not managed by SLS or that do not have characters attached to their drops
                 if (__instance.m_character == null) { return true; }
                 string name = Utils.GetPrefabName(__instance.m_character.gameObject);
-                Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
+                // Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
                 if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot == null) { return true; }
                 if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.characterSpecificLoot.ContainsKey(name) != true) { return true; }
 
@@ -86,12 +86,12 @@ namespace StarLevelSystem.modules
                 int level = 1;
                 
                 SelectLootSettings(__instance.m_character, out DistanceLootModifier distance_bonus, out Heightmap.Biome biome);
-                Logger.LogDebug($"SLS Custom drop set for {name} - level {level}");
+                // Logger.LogDebug($"SLS Custom drop set for {name} - level {level}");
                 // Use modified loot drop settings
                 foreach(ExtendedDrop loot in LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name]) {
                     // Skip this loop drop if it doesn't drop for tamed creatures or only drops for tamed creatures
                     if (__instance.m_character != null) {
-                        Logger.LogDebug($"Checking if drop is tame only or non-tame only.");
+                        // Logger.LogDebug($"Checking if drop is tame only or non-tame only.");
                         if (loot.UntamedOnlyDrop && __instance.m_character.IsTamed()) { continue; }
                         if (loot.TamedOnlyDrop && __instance.m_character.IsTamed() != true) { continue; }
                     }
@@ -105,7 +105,7 @@ namespace StarLevelSystem.modules
                         if (loot.ChanceScaleFactor > 0f) { chance *= (scale_multiplier * level); }
                         // check the chance for this to be rolled
                         if (luck_roll > chance) {
-                            Logger.LogDebug($"Drop {loot.Drop.Prefab} failed random drop chance ({luck_roll} < {chance}).");
+                            // Logger.LogDebug($"Drop {loot.Drop.Prefab} failed random drop chance ({luck_roll} < {chance}).");
                             continue;
                         }
                     }
@@ -113,13 +113,13 @@ namespace StarLevelSystem.modules
                     // Set scale modifier for the loot drop, based on chance, if enabled
                     if (loot.UseChanceAsMultiplier) {
                         scale_multiplier = (loot.Drop.Chance * level);
-                        Logger.LogDebug($"Drop {loot.Drop.Prefab} modified by chance and creature level.");
+                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified by chance and creature level.");
                     }
 
                     // Modify the multiplier for how many this drops based on local players
                     if (loot.ScalePerNearbyPlayer) {
                         scale_multiplier += Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
-                        Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
+                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
                     }
 
                     int drop_min = loot.Drop.Min;
@@ -135,7 +135,7 @@ namespace StarLevelSystem.modules
 
                     if (loot.DoesNotScale == true) {
                         // Apply Random change, and the range of the loot drop
-                        Logger.LogDebug($"Drop {loot.Drop.Prefab} does not scale and will drop {drop_base_amount}");
+                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} does not scale and will drop {drop_base_amount}");
                         drop_results.Add(new KeyValuePair<GameObject, int>(loot.GameDrop.m_prefab, drop_base_amount));
                         continue;
                     }
@@ -157,10 +157,10 @@ namespace StarLevelSystem.modules
                         Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
                     }
 
-                    Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
+                    //Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
                     // Add the drop to the results
                     if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
-                        Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
+                        // Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
                         loot.SetupDrop();
                     }
 
@@ -353,7 +353,7 @@ namespace StarLevelSystem.modules
             creature_biome = biome;
             float distance_from_center = Vector2.Distance(p, LevelSystem.center);
             distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
-            Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
+            //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
         }
 
         private static DistanceLootModifier SelectDistanceFromCenterLootBonus(float distance_from_center)
@@ -366,7 +366,7 @@ namespace StarLevelSystem.modules
                 {
                     if (distance_from_center <= kvp.Key)
                     {
-                        Logger.LogDebug($"Distance Loot area: {kvp.Key}");
+                        // Logger.LogDebug($"Distance Loot area: {kvp.Key}");
                         distance_levelup_bonuses = kvp.Value;
                         break;
                     }

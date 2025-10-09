@@ -26,14 +26,14 @@ namespace StarLevelSystem.modules
         public static void SetCharacterLevelControl(Character chara, int providedLevel) {
             if (ValConfig.ControlSpawnerLevels.Value) {
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                Logger.LogDebug($"Setting creature level from cache {cdc.Level}");
+                // Logger.LogDebug($"Setting creature level from cache {cdc.Level}");
                 chara.SetLevel(cdc.Level);
                 //chara.m_level = cdc.Level;
                 //chara.m_nview.GetZDO().Set(ZDOVars.s_level, cdc.Level);
                 return;
             }
             // Fallback
-            Logger.LogDebug($"Setting creature level from provided {providedLevel}");
+            // Logger.LogDebug($"Setting creature level from provided {providedLevel}");
             chara.SetLevel(providedLevel);
         }
 
@@ -59,7 +59,7 @@ namespace StarLevelSystem.modules
                 if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
                 
-                if (biome_settings != null && biome_settings.BiomeMinLevelOverride != 0) { min_level = biome_settings.BiomeMinLevelOverride; }
+                if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
                 min_level += 1;
 
@@ -75,7 +75,15 @@ namespace StarLevelSystem.modules
                 {
                     distance_levelup_bonuses = LevelSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
                 }
-                int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
+                // Apply Night level scalers
+                float nightScaleBonus = 1f;
+                if (biome_settings != null && biome_settings.NightSettings != null && biome_settings.NightSettings.NightLevelUpChanceScaler != 1) {
+                    nightScaleBonus = biome_settings.NightSettings.NightLevelUpChanceScaler;
+                }
+                if (creature_settings != null && creature_settings.NightSettings != null && creature_settings.NightSettings.NightLevelUpChanceScaler != 1) {
+                    nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
+                }
+                int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
                 //Logger.LogDebug($"Determined level {level} min: {min_level} max {max_level}");
                 //character.m_level = level;
@@ -149,7 +157,7 @@ namespace StarLevelSystem.modules
         }
 
         // Consider decision tree for levelups to reduce iterations
-        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence) {
+        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f) {
             // Do we want to do a re-roll after certain points?
             int selected_level = 0;
             //Logger.LogDebug($"levelup distance bonus entries: {levelup_bonus.Count}");
@@ -160,16 +168,16 @@ namespace StarLevelSystem.modules
                 // Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
                 if (levelup_bonus.ContainsKey(kvp.Key)) {
                     float distance_bonus = ((1f + levelup_bonus[kvp.Key]) * distance_influence);
-                    float levelup_req = kvp.Value * distance_bonus;
+                    float levelup_req = kvp.Value * nightBonus * distance_bonus;
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        // Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {distance_bonus} | Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus} | Selected Level: {selected_level}");
                         break;
                     }
                 } else {
-                    if (roll >= kvp.Value || kvp.Key >= maxLevel) {
+                    if (roll >= (kvp.Value * nightBonus) || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} | Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {(kvp.Value * nightBonus)} | Selected Level: {selected_level}");
                         break;
                     }
                 }

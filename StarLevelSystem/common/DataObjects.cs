@@ -153,6 +153,8 @@ namespace StarLevelSystem.common
         {
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
+            [DefaultValue(1f)]
+            public float NightLevelUpChanceScaler { get; set; } = 1f;
             [DefaultValue(false)]
             public bool creatureSpawnsDisabled { get; set; } = false;
         }
@@ -161,12 +163,14 @@ namespace StarLevelSystem.common
         {
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
+            [DefaultValue(1f)]
+            public float NightLevelUpChanceScaler { get; set; } = 1f;
             public List<string> creatureSpawnsDisabled { get; set; }
         }
 
         public class BiomeSpecificSetting {
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
-            [DefaultValue(-1)]
+            [DefaultValue(0)]
             public int BiomeMinLevelOverride { get; set; }
             public int BiomeMaxLevelOverride { get; set; }
             [DefaultValue(1f)]
@@ -200,7 +204,7 @@ namespace StarLevelSystem.common
             public float ChanceForBossModifier { get; set; } = -1f;
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
-            public NightSettings NightSettings { get; set; } = new NightSettings();
+            public NightSettings NightSettings { get; set; }
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }

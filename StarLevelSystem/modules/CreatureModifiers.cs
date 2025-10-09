@@ -21,41 +21,40 @@ namespace StarLevelSystem.modules
             NameSelectionStyle.RandomBoth
         };
 
-        public static Dictionary<string, ModifierType> SetupModifiers(Character character, CreatureDetailCache cacheEntry, int num_major_mods = 0, int num_minor_mods = 0, int num_boss_mods = 0, float chanceMajor = 0f, float chanceMinor = 0f, float chanceBoss = 0f, bool isboss = false, bool rebuildMods = false) {
+        public static void SetupModifiers(Character character, CreatureDetailCache cacheEntry) {
             Dictionary<string, ModifierType> creatureMods = new Dictionary<string, ModifierType>();
-            
-            if (rebuildMods) {
-                cacheEntry.ModifierPrefixNames.Clear();
-                cacheEntry.ModifierSuffixNames.Clear();
-            }
-
-            foreach (KeyValuePair<string, ModifierType> kvp in SelectOrLoadModifiers(character, cacheEntry, num_major_mods, chanceMajor, num_minor_mods, chanceMinor, isboss, num_boss_mods, chanceBoss, rebuildCache: rebuildMods))
+            int appliedMods = 0;
+            cacheEntry.ModifierSuffixNames.Clear();
+            cacheEntry.ModifierPrefixNames.Clear();
+            foreach (KeyValuePair<string, ModifierType> kvp in cacheEntry.Modifiers)
             {
-                switch(kvp.Value)
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= character.m_level) { break; }
+                if (!creatureMods.ContainsKey(kvp.Key)) { creatureMods.Add(kvp.Key, kvp.Value); }
+                switch (kvp.Value)
                 {
                     case ModifierType.Boss:
-                        StartupModifier(kvp.Key, kvp.Value, character, cacheEntry, creatureMods, CreatureModifiersData.ActiveCreatureModifiers.BossModifiers);
+                        StartupModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.BossModifiers);
                         break;
                     case ModifierType.Major:
-                        StartupModifier(kvp.Key, kvp.Value, character, cacheEntry, creatureMods, CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers);
+                        StartupModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers);
                         break;
                     case ModifierType.Minor:
-                        StartupModifier(kvp.Key, kvp.Value, character, cacheEntry, creatureMods, CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers);
+                        StartupModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers);
                         break;
                 }
+                appliedMods += 1;
             }
-            return creatureMods;
+            // Reassign the modifiers which are used, skips ones which did not get applied
+            cacheEntry.Modifiers = creatureMods;
         }
 
-        private static void StartupModifier(string mod, ModifierType modtype, Character character, CreatureDetailCache cacheEntry, Dictionary<string, ModifierType> creaturesMods, Dictionary<string, CreatureModifier> availableMods) {
+        private static void StartupModifier(string mod, Character character, CreatureDetailCache cacheEntry, Dictionary<string, CreatureModifier> availableMods) {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod)) {
                 if (mod == NoMods) { return; }
                 Logger.LogWarning($"Modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
                 return;
             }
-            creaturesMods.Add(mod, modtype);
-            cacheEntry.Modifiers = creaturesMods;
             //Logger.LogDebug($"Checking {CreatureModifiersData.CreatureModifiers.MinorModifiers.Count} for {mod}");
             var selectedMod = availableMods[mod];
             //Logger.LogDebug($"Setting up mod");
@@ -160,6 +159,8 @@ namespace StarLevelSystem.modules
             if (rebuildCache == true) {
                 Logger.LogDebug($"Rebuilding creature modifiers for {cdc.CreatureName}");
                 savedMods.Clear();
+                cdc.ModifierPrefixNames.Clear();
+                cdc.ModifierSuffixNames.Clear();
             }
 
             // Logger.LogDebug($"Check if creature {cdc.CreatureName} is in the modifier ignored list [{string.Join(",", CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList)}].");
@@ -168,34 +169,6 @@ namespace StarLevelSystem.modules
                 Logger.LogDebug($"Creature {cdc.CreatureName} is in the global ignore prefab list, skipping modifier assignment.");
                 if (!savedMods.ContainsKey(NoMods)) { savedMods.Add(NoMods, ModifierType.Minor); }
                 updatedMods.Set(savedMods);
-                return savedMods;
-            }
-
-            // Select major and minor based on creature whole config
-            ListModifierZNetProperty old_majorMods = new ListModifierZNetProperty($"SLS_{ModifierType.Major}_MODS", character.m_nview, new List<ModifierNames>() { });
-            ListModifierZNetProperty old_minorMods = new ListModifierZNetProperty($"SLS_{ModifierType.Minor}_MODS", character.m_nview, new List<ModifierNames>() { });
-            ListModifierZNetProperty old_bossMods = new ListModifierZNetProperty($"SLS_{ModifierType.Boss}_MODS", character.m_nview, new List<ModifierNames>() { });
-            List<ModifierNames> oldMajorMods = old_majorMods.Get();
-            List<ModifierNames> oldMinorMods = old_minorMods.Get();
-            List<ModifierNames> oldBossMods = old_bossMods.Get();
-            if (oldMajorMods.Count > 0 || oldMinorMods.Count > 0 || oldBossMods.Count > 0) {
-                foreach (var mod in oldMajorMods) {
-                    if (!savedMods.ContainsKey(mod.ToString())) { savedMods.Add(mod.ToString(), ModifierType.Major); }
-                }
-                foreach (var mod in oldMinorMods) {
-                    if (!savedMods.ContainsKey(mod.ToString())) { savedMods.Add(mod.ToString(), ModifierType.Minor); }
-                }
-                foreach (var mod in oldBossMods) {
-                    if (!savedMods.ContainsKey(mod.ToString())) { savedMods.Add(mod.ToString(), ModifierType.Boss); }
-                }
-
-                old_majorMods.Set(new List<ModifierNames>() { });
-                old_minorMods.Set(new List<ModifierNames>() { });
-                old_bossMods.Set(new List<ModifierNames>() { });
-
-                updatedMods.Set(savedMods);
-
-                Logger.LogDebug($"Upgraded {savedMods.Count} for {cdc.CreatureName}");
                 return savedMods;
             }
 

@@ -229,6 +229,18 @@ namespace StarLevelSystem.modules
             return selectedModifiers;
         }
 
+        public static void RemoveCreatureModifier(Character character, string modifier) {
+            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(character);
+            if (cdc.Modifiers.Keys.Contains(modifier))
+            {
+                cdc.Modifiers.Remove(modifier);
+                if (cdc.ModifierPrefixNames.ContainsKey(modifier)) { cdc.ModifierPrefixNames.Remove(modifier); }
+                if (cdc.ModifierSuffixNames.ContainsKey(modifier)) { cdc.ModifierSuffixNames.Remove(modifier); }
+                CompositeLazyCache.UpdateCacheEntry(character, cdc);
+                ModificationExtensionSystem.CreatureSetup(character, delayedSetupTimer: 0);
+            }
+        }
+
         public static bool AddCreatureModifier(Character character, ModifierType modType, string newModifier, bool applyChanges = true)
         {
             // Select major and minor based on creature whole config

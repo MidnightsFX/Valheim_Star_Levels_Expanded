@@ -81,25 +81,21 @@ namespace StarLevelSystem.modules
             }
         }
 
-        //[HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
-        //public static class ModifyCharacterVisualsToLevel
-        //{
-        //    public static void Prefix(Character __instance, int level)
-        //    {
-        //        StackFrame frame = new StackFrame(1);
-        //        var method = frame.GetMethod();
-        //        CheckSetLevel(__instance, level, method);
-        //        //CreatureSetup(__instance);
-        //        //return false;
-        //    }
+        [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
+        public static class ModifyCharacterVisualsToLevel
+        {
+            public static void Prefix(Character __instance, ref int level) {
+                if (level <= 1) { level = 1; }
+            }
+        }
 
-        //    public static void CheckSetLevel(Character __instance, int level, MethodBase method) {
-        //        Logger.LogDebug($"Character SetLevel called for {__instance.name} with level {level} - {method.Name} {method.DeclaringType} {method.MemberType}");
-        //    }
-        //}
+            //    public static void CheckSetLevel(Character __instance, int level, MethodBase method) {
+            //        Logger.LogDebug($"Character SetLevel called for {__instance.name} with level {level} - {method.Name} {method.DeclaringType} {method.MemberType}");
+            //    }
+            //}
 
 
-        [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
+            [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
         public static class ModifyCharacterAnimationSpeed {
             public static void Postfix(CharacterAnimEvent __instance) {
                 if (__instance.m_character != null && __instance.m_character.InAttack()) {

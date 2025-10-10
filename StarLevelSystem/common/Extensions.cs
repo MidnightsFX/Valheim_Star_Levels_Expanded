@@ -114,7 +114,7 @@ namespace StarLevelSystem.common
 
             if (prioritycfg.NightSettings != null) {
                 biomecfg.NightSettings.SpawnRateModifier = prioritycfg.NightSettings.SpawnRateModifier;
-                if (prioritycfg.NightSettings.creatureSpawnsDisabled != null) {
+                if (prioritycfg.NightSettings.creatureSpawnsDisabled != null && biomecfg.NightSettings.creatureSpawnsDisabled != null) {
                     biomecfg.NightSettings.creatureSpawnsDisabled = biomecfg.NightSettings.creatureSpawnsDisabled.Union(prioritycfg.NightSettings.creatureSpawnsDisabled).ToList();
                 }
             }

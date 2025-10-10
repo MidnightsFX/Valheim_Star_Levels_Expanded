@@ -26,16 +26,24 @@ namespace StarLevelSystem.Modifiers
                         totalsplits -= 1f;
                         if (shouldTame) { sgo.GetComponent<Character>()?.SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
-                        if (sChar != null && ValConfig.SplittersInheritLevel.Value) {
-                            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(sChar);
-                            sChar.SetLevel(cDetails.Level);
-                            cdc.Level = cDetails.Level;
-                            ModificationExtensionSystem.CreatureSetup(sChar, delayedSetupTimer: 0);
-                        } else {
-                            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(sChar);
-                            sChar.SetLevel(cdc.Level);
-                            ModificationExtensionSystem.CreatureSetup(sChar, delayedSetupTimer: 0);
+                        if (sChar != null) {
+                            if (ValConfig.SplittersInheritLevel.Value) {
+                                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(sChar);
+                                
+                                sChar.SetLevel(cDetails.Level);
+                                sChar.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
+                                cdc.Level = cDetails.Level;
+                                CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
+                                //ModificationExtensionSystem.CreatureSetup(sChar, delayedSetupTimer: 0);
+                            } else {
+                                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(sChar);
+                                sChar.SetLevel(cdc.Level);
+                                sChar.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
+                                //ModificationExtensionSystem.CreatureSetup(sChar, delayedSetupTimer: 0);
+                                CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
+                            }
                         }
+                        
                     }
                 }
             }

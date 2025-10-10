@@ -79,8 +79,19 @@ namespace StarLevelSystem.Data
                                 Chance = 0.50f
                             },
                             AmountScaleFactor = 0.5f,
+                        },
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "GreydwarfEye",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.50f
+                            },
+                            AmountScaleFactor = 0.5f,
                         }
                     }
+
                 }
             },
             EnableDistanceLootModifier = true,

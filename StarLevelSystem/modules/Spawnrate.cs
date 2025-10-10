@@ -40,13 +40,13 @@ namespace StarLevelSystem.modules
                 return false;
             }
             // Chance to increase spawn, or decrease it
-            // Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
+            Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
             if (spawnrate > 1f) {
                 spawnrate -= 1f; // Normalize spawnrate to just the bonus
                 // For more than 100% spawn increases, 
                 while (spawnrate > 0) {
                     float randv = UnityEngine.Random.value;
-                    // Logger.LogDebug($"Spawn increase check {randv} <= {spawnrate} {randv <= spawnrate}");
+                    Logger.LogDebug($"Spawn increase check {randv} <= {spawnrate} {randv <= spawnrate}");
                     if (randv <= spawnrate) {
                         Vector3 position = character.transform.position;
                         if (character.transform.position.y < 3000f) {
@@ -59,7 +59,7 @@ namespace StarLevelSystem.modules
                         if (character.IsTamed()) {
                             spawnedChara?.SetTamed(true);
                         }
-                        // Logger.LogDebug($"Spawned {spawnedCreature.gameObject}");
+                        Logger.LogDebug($"Spawned {spawnedCreature.gameObject}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         spawnedChara?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);
                         CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(character, false);
@@ -67,12 +67,13 @@ namespace StarLevelSystem.modules
                     }
                     spawnrate -= 1f;
                 }
+                //return false;
             } else if (spawnrate < 1f) {
                 float randv = UnityEngine.Random.value;
-                // Logger.LogDebug($"Checking for spawn rate reduction {randv} >= {spawnrate}");
+                Logger.LogDebug($"Checking for spawn rate reduction {randv} >= {spawnrate}");
                 // Chance to reduce spawnrate, if triggered this creature will be queued for deletion
                 if (randv >= spawnrate) {
-                    // Logger.LogDebug($"Selecting {character.gameObject} for deletion.");
+                    Logger.LogDebug($"Selecting {character.gameObject} for deletion.");
                     return true;
                 }
             }

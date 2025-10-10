@@ -171,13 +171,13 @@ namespace StarLevelSystem.modules
                     float levelup_req = kvp.Value * nightBonus * distance_bonus;
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus} | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus} | Selected Level: {selected_level}");
                         break;
                     }
                 } else {
                     if (roll >= (kvp.Value * nightBonus) || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        Logger.LogDebug($"Level Roll: {roll} >= {(kvp.Value * nightBonus)} | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} >= {(kvp.Value * nightBonus)} | Selected Level: {selected_level}");
                         break;
                     }
                 }
@@ -308,7 +308,7 @@ namespace StarLevelSystem.modules
             [HarmonyPatch(nameof(TreeLog.Destroy))]
             [HarmonyPostfix]
             internal static void RemoveTreeLogInst(TreeLog __instance) {
-                Logger.LogDebug("Destroying Treelog");
+                //Logger.LogDebug("Destroying Treelog");
                 ZNetScene.instance.Destroy(__instance.gameObject);
             }
 
@@ -323,14 +323,14 @@ namespace StarLevelSystem.modules
                 // Logger.LogDebug($"Getting tree level");
                 int level = 1;
                 if (instance.m_nview.GetZDO() != null) {
-                    Logger.LogDebug("Checking stored Zvalue for tree level");
+                    //Logger.LogDebug("Checking stored Zvalue for tree level");
                     level = instance.m_nview.GetZDO().GetInt("SLE_Tree", 1);
                 }
-                Logger.LogDebug($"Got Tree level {level}");
+                //Logger.LogDebug($"Got Tree level {level}");
                 UpdateDrops(tchild, level);
                 tchild.m_health += (tchild.m_health * 0.1f * level);
                 go.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
-                Logger.LogDebug($"Setting tree level {level}");
+                //Logger.LogDebug($"Setting tree level {level}");
                 nview.GetZDO().Set("SLE_Tree", level);
                 // This is the last log point, destroy the parent
                 ZNetScene.instance.Destroy(instance.gameObject);
@@ -528,7 +528,7 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(1)
                 .RemoveInstructions(1)
-                .Insert(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .Insert(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Stloc_S),
                     new CodeInstruction(OpCodes.Ldloc_S),
@@ -536,10 +536,17 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(2)
                 .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .ThrowIfNotMatch("Unable to patch CreatureSpawner.Spawn.");
 
                 return codeMatcher.Instructions();
+            }
+
+            [HarmonyPatch(nameof(CreatureSpawner.Awake))]
+            [HarmonyPostfix]
+            public static void Postfix(CreatureSpawner __instance)
+            {
+                __instance.m_minLevel = 1;
             }
         }
 
@@ -564,7 +571,7 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(1)
                 .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Ldloc_2),
                     new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpawnArea.SpawnData), nameof(SpawnArea.SpawnData.m_maxLevel))),
@@ -572,10 +579,17 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(2)
                 .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .ThrowIfNotMatch("Unable to patch SpawnArea.SpawnOne.");
 
                 return codeMatcher.Instructions();
+            }
+
+            [HarmonyPatch(nameof(SpawnArea.SelectWeightedPrefab))]
+            [HarmonyPostfix]
+            public static void Prefix(ref SpawnArea.SpawnData __result)
+            {
+                __result.m_minLevel = 1;
             }
         }
 
@@ -601,10 +615,16 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(1)
                 .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .ThrowIfNotMatch("Unable to patch SpawnSystem Spawn set level.");
 
                 return codeMatcher.Instructions();
+            }
+
+            [HarmonyPatch(nameof(SpawnSystem.Spawn))]
+            [HarmonyPrefix]
+            public static void Prefix(ref SpawnSystem.SpawnData critter) {
+                critter.m_minLevel = 1;
             }
         }
 
@@ -629,7 +649,7 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(1)
                 .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Ldarg_0),
                     new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(TriggerSpawner), nameof(TriggerSpawner.m_maxLevel))),
@@ -637,10 +657,17 @@ namespace StarLevelSystem.modules
                 )
                 .Advance(2)
                 .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, -2))
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .ThrowIfNotMatch("Unable to patch TriggerSpawner.Spawn.");
 
                 return codeMatcher.Instructions();
+            }
+
+            [HarmonyPatch(nameof(TriggerSpawner.Awake))]
+            [HarmonyPostfix]
+            public static void Postfix(TriggerSpawner __instance)
+            {
+                __instance.m_minLevel = 1;
             }
         }
 

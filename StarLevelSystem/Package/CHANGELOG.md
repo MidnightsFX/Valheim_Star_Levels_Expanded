@@ -1,3 +1,13 @@
+**0.10.1**
+ ---
+ ```
+ - Fixed a bug (from 0.10.0) which prevented many of the random world spawns from happening
+ - Tuned level up table to have more staggered steps towards the higher levels
+ - Disabled a few more optional debug logs
+ - Added back in default loot table modifications for greydwarves to drop greydwarf eyes
+ - "Fixed" a feature where extremely high level creatures with many modifiers would always spawn with splitter, and multiply on kills
+ ```
+
 **0.10.0**
  ---
  ```

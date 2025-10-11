@@ -523,15 +523,15 @@ namespace StarLevelSystem.modules
                     Transpilers.EmitDelegate(CreatureSpawnerCharacterLevelControl)
                 )
                 .MatchStartBackwards(
-                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldloc_S),
                     new CodeMatch(OpCodes.Ldc_I4_1)
                 )
                 .Advance(1)
                 .RemoveInstructions(1)
                 .Insert(new CodeInstruction(OpCodes.Ldc_I4, 0))
                 .MatchStartBackwards(
-                    new CodeInstruction(OpCodes.Stloc_S),
-                    new CodeInstruction(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Stloc_S),
+                    new CodeMatch(OpCodes.Ldloc_S),
                     new CodeMatch(OpCodes.Ldc_I4_1)
                 )
                 .Advance(2)
@@ -544,7 +544,7 @@ namespace StarLevelSystem.modules
 
             private static void CreatureSpawnerCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 
@@ -593,7 +593,7 @@ namespace StarLevelSystem.modules
 
             private static void SpawnAreaSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 
@@ -615,6 +615,18 @@ namespace StarLevelSystem.modules
             {
                 var codeMatcher = new CodeMatcher(instructions, generator);
                 codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(SpawnSystem.SpawnData), nameof(SpawnSystem.SpawnData.m_prefab))),
+                    new CodeMatch(OpCodes.Ldarg_2),
+                    new CodeMatch(OpCodes.Call),
+                    new CodeMatch(OpCodes.Call),
+                    new CodeMatch(OpCodes.Stloc_0)
+                )
+                .Advance(5)
+                .InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc_0),
+                    Transpilers.EmitDelegate(SpawnSystemSetCharacterWithoutZoneLimits)
+                )
+                .MatchStartForward(
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
                 )
                 .RemoveInstructions(1)
@@ -633,9 +645,17 @@ namespace StarLevelSystem.modules
                 return codeMatcher.Instructions();
             }
 
+            private static void SpawnSystemSetCharacterWithoutZoneLimits(GameObject go)
+            {
+                Character chara = go.GetComponent<Character>();
+                if (chara == null) { return; }
+                //Logger.LogDebug($"SpawnSystem.Spawn setting without zone control {chara.m_name}");
+                SetCharacterLevelControl(chara, 1);
+            }
+
             private static void SpawnSystemSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 
@@ -683,7 +703,7 @@ namespace StarLevelSystem.modules
 
             private static void TriggerSpawnerSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 

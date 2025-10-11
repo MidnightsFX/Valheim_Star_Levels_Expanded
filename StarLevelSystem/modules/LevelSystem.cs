@@ -465,7 +465,7 @@ namespace StarLevelSystem.modules
                     return false;
                 }
                 __result = __instance.m_character.m_nview.GetZDO().GetFloat("SLE_DMod", 1);
-                Logger.LogDebug($"Damage Level Factor: {__result}");
+                //Logger.LogDebug($"Damage Level Factor: {__result}");
                 return false;
             }
         }
@@ -520,7 +520,7 @@ namespace StarLevelSystem.modules
                 )
                 .RemoveInstructions(1)
                 .InsertAndAdvance(
-                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                    Transpilers.EmitDelegate(CreatureSpawnerCharacterLevelControl)
                 )
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Ldloc_S),
@@ -540,6 +540,12 @@ namespace StarLevelSystem.modules
                 .ThrowIfNotMatch("Unable to patch CreatureSpawner.Spawn.");
 
                 return codeMatcher.Instructions();
+            }
+
+            private static void CreatureSpawnerCharacterLevelControl(Character chara, int providedLevel)
+            {
+                Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(CreatureSpawner.Awake))]
@@ -563,7 +569,7 @@ namespace StarLevelSystem.modules
                 )
                 .RemoveInstructions(1)
                 .InsertAndAdvance(
-                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                    Transpilers.EmitDelegate(SpawnAreaSetCharacterLevelControl)
                 )
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Ldloc_S),
@@ -583,6 +589,12 @@ namespace StarLevelSystem.modules
                 .ThrowIfNotMatch("Unable to patch SpawnArea.SpawnOne.");
 
                 return codeMatcher.Instructions();
+            }
+
+            private static void SpawnAreaSetCharacterLevelControl(Character chara, int providedLevel)
+            {
+                Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {providedLevel}");
+                SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(SpawnArea.SelectWeightedPrefab))]
@@ -607,7 +619,7 @@ namespace StarLevelSystem.modules
                 )
                 .RemoveInstructions(1)
                 .InsertAndAdvance(
-                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                    Transpilers.EmitDelegate(SpawnSystemSetCharacterLevelControl)
                 )
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Ldloc_S),
@@ -619,6 +631,12 @@ namespace StarLevelSystem.modules
                 .ThrowIfNotMatch("Unable to patch SpawnSystem Spawn set level.");
 
                 return codeMatcher.Instructions();
+            }
+
+            private static void SpawnSystemSetCharacterLevelControl(Character chara, int providedLevel)
+            {
+                Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
+                SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(SpawnSystem.Spawn))]
@@ -641,7 +659,7 @@ namespace StarLevelSystem.modules
                 )
                 .RemoveInstructions(1)
                 .InsertAndAdvance(
-                    Transpilers.EmitDelegate(SetCharacterLevelControl)
+                    Transpilers.EmitDelegate(TriggerSpawnerSetCharacterLevelControl)
                 )
                 .MatchStartBackwards(
                     new CodeInstruction(OpCodes.Ldloc_S),
@@ -661,6 +679,12 @@ namespace StarLevelSystem.modules
                 .ThrowIfNotMatch("Unable to patch TriggerSpawner.Spawn.");
 
                 return codeMatcher.Instructions();
+            }
+
+            private static void TriggerSpawnerSetCharacterLevelControl(Character chara, int providedLevel)
+            {
+                Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(TriggerSpawner.Awake))]

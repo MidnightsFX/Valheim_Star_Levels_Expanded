@@ -24,8 +24,10 @@ namespace StarLevelSystem.modules
         }
 
         public static void SetCharacterLevelControl(Character chara, int providedLevel) {
+            if (chara == null) { return; }
             if (ValConfig.ControlSpawnerLevels.Value) {
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                if (cdc == null) { chara.SetLevel(providedLevel); }
                 // Logger.LogDebug($"Setting creature level from cache {cdc.Level}");
                 chara.SetLevel(cdc.Level);
                 //chara.m_level = cdc.Level;
@@ -559,6 +561,7 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(SpawnArea))]
         public static class SpawnAreaSpawnOnePatch
         {
+            //[HarmonyEmitIL(".dumps")]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(SpawnArea.SpawnOne))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
@@ -566,26 +569,11 @@ namespace StarLevelSystem.modules
                 var codeMatcher = new CodeMatcher(instructions, generator);
                 codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
-                )
+                    )
                 .RemoveInstructions(1)
                 .InsertAndAdvance(
                     Transpilers.EmitDelegate(SpawnAreaSetCharacterLevelControl)
-                )
-                .MatchStartBackwards(
-                    new CodeInstruction(OpCodes.Ldloc_S),
-                    new CodeMatch(OpCodes.Ldc_I4_1)
-                )
-                .Advance(1)
-                .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
-                .MatchStartBackwards(
-                    new CodeInstruction(OpCodes.Ldloc_2),
-                    new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpawnArea.SpawnData), nameof(SpawnArea.SpawnData.m_maxLevel))),
-                    new CodeMatch(OpCodes.Ldc_I4_1)
-                )
-                .Advance(2)
-                .RemoveInstructions(1)
-                .InsertAndAdvance(new CodeInstruction(OpCodes.Ldc_I4, 0))
+                    )
                 .ThrowIfNotMatch("Unable to patch SpawnArea.SpawnOne.");
 
                 return codeMatcher.Instructions();

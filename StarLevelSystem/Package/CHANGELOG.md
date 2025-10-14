@@ -1,3 +1,10 @@
+**0.10.2**
+ ---
+ ```
+ - Compatibility improvements for spawner level control when the cache can't be built
+ - Improves compatibility for mods that break or remove spawner effects
+ ```
+
 **0.10.1**
  ---
  ```

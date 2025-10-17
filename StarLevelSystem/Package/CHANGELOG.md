@@ -1,3 +1,16 @@
+**0.11.0**
+ ---
+ ```
+ - Adds Ring drawing for spawn distance modifiers for visualization
+  - This is toggleable via config, and can be shown/hidden per player from the map itself
+  - Color configuration for all rings
+  - Rings are automatically redrawn when configuration changes
+  - Retuned all of the default distance modifiers to allow slightly more regular difficulty increases, along with much higher star levels
+	- Delete your config (LevelSettings.yaml) if you want the new default
+ - Fixes an error when trying to spawn null creatures
+ - Improves spawning not leveling up creatures from certain spawners
+ ```
+
 **0.10.2**
  ---
  ```

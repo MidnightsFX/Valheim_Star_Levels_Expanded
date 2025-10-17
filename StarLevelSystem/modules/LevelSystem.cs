@@ -1,7 +1,10 @@
 ﻿using HarmonyLib;
+using Jotunn.Extensions;
+using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
@@ -12,7 +15,8 @@ namespace StarLevelSystem.modules
 {
     public static class LevelSystem
     {
-        public static Vector2 center = new Vector2(0, 0);
+        public static Vector3 center = new Vector3(0, 0, 0);
+        private static bool buildingMapRings = false;
 
         public static void SetAndUpdateCharacterLevel(Character character, int level) {
             if (character == null) { return; }
@@ -35,7 +39,7 @@ namespace StarLevelSystem.modules
                 return;
             }
             // Fallback
-            // Logger.LogDebug($"Setting creature level from provided {providedLevel}");
+            Logger.LogDebug($"Setting creature level from fallback provided {providedLevel}");
             chara.SetLevel(providedLevel);
         }
 
@@ -43,7 +47,7 @@ namespace StarLevelSystem.modules
         {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
-                return 0;
+                return 1;
             }
             if (leveloverride > 0) {
                 cZDO.Set(ZDOVars.s_level, leveloverride);
@@ -67,7 +71,7 @@ namespace StarLevelSystem.modules
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 Vector3 p = character.transform.position;
-                float distance_from_center = Vector2.Distance(p, center);
+                float distance_from_center = Vector3.Distance(p, center);
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
                 SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
@@ -94,6 +98,7 @@ namespace StarLevelSystem.modules
             return clevel;
         }
 
+        // For non-character levelups
         public static int DetermineLevel(GameObject creature, string creature_name, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings) {
             if (creature == null) {
                 Logger.LogWarning($"Creature is null, cannot determine level, set 1.");
@@ -139,23 +144,31 @@ namespace StarLevelSystem.modules
             return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
         }
 
-        internal static SortedDictionary<int, float> SelectDistanceFromCenterLevelBonus(float distance_from_center)
-        {
-            SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
-            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null)
-            {
+        internal static SortedDictionary<int, float> SelectDistanceFromCenterLevelBonus(float distance_from_center) {
+
+            //Logger.LogDebug($"Checking distance level bonus for distance {distance_from_center}");
+            SortedDictionary<int, float> highest_selected_area = new SortedDictionary<int, float>() { };
+            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
                 // Check if we are in a distance level bonus area
-                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus)
-                {
-                    if (distance_from_center <= kvp.Key)
-                    {
-                        //Logger.LogDebug($"Distance Level area: {kvp.Key}");
-                        distance_levelup_bonuses = kvp.Value;
-                        break;
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus) {
+                    //Logger.LogDebug($"Checking distance level area: {distance_from_center} >= {kvp.Key}");
+                    if (distance_from_center >= kvp.Key) {
+                        highest_selected_area = kvp.Value;
+                    }
+                    // Early return if we arn't going to find a larger bonus area
+                    if (distance_from_center < kvp.Key) {
+                        //Logger.LogDebug($"Distance Level area: {kvp.Key} bonuses: {string.Join(",", kvp.Value.Select(x => x.Value).ToList())}");
+                        return highest_selected_area;
                     }
                 }
+                // This is the fallthrough for we are in the largest area available
+                if (highest_selected_area.Count > 0) {
+                    //Logger.LogDebug($"Distance Level area max: {string.Join(",", highest_selected_area.Select(x => x.Value).ToList())}");
+                    return highest_selected_area;
+                }
             }
-            return distance_levelup_bonuses;
+            // No bonuses distance found
+            return new SortedDictionary<int, float>() { };
         }
 
         // Consider decision tree for levelups to reduce iterations
@@ -167,10 +180,11 @@ namespace StarLevelSystem.modules
             //    Logger.LogDebug($"levelup bonus: {lb.Key} {lb.Value}");
             //}
             foreach (KeyValuePair<int, float> kvp in creature_levelup_chance) {
-                // Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
+                //Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
                 if (levelup_bonus.ContainsKey(kvp.Key)) {
                     float distance_bonus = ((1f + levelup_bonus[kvp.Key]) * distance_influence);
                     float levelup_req = kvp.Value * nightBonus * distance_bonus;
+                    //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus}");
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
                         //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus} | Selected Level: {selected_level}");
@@ -179,12 +193,117 @@ namespace StarLevelSystem.modules
                 } else {
                     if (roll >= (kvp.Value * nightBonus) || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} >= {(kvp.Value * nightBonus)} | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} >= {(kvp.Value * nightBonus)} || {kvp.Key} >= {maxLevel} | Selected Level: {selected_level}");
                         break;
                     }
                 }
             }
             return selected_level;
+        }
+
+        public static void CreateLevelBonusRingMapOverlays()
+        {
+            if (ZNetScene.instance == null) { return; }
+            if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
+            Logger.LogDebug("Creating Level Bonus Rings on Map");
+            if (buildingMapRings == false) {
+                ZNetScene.instance.StartCoroutine(BuildMapRinOverlay());
+            }
+            buildingMapRings = true;
+        }
+
+        public static void OnRingCenterChanged(object s, EventArgs e)
+        {
+            SetRingCenter();
+            CreateLevelBonusRingMapOverlays();
+        }
+
+        public static void SetRingCenter() {
+            if (ValConfig.DistanceBonusIsFromStarterTemple.Value) {
+                GameObject startTemple = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name == "StartTemple").FirstOrDefault();
+                if (startTemple != null) {
+                    center = startTemple.transform.position;
+                } else {
+                    Logger.LogWarning("Unable to find starter temple, bonus rings will use world center. (0,0,0)");
+                    center = new Vector3(0, 0, 0);
+                }
+            } else {
+                center = new Vector3(0, 0, 0);
+            }
+        }
+
+        public static void UpdateMapColorSettingsOnChange(object s, EventArgs e)
+        {
+            Colorization.UpdateMapColorSelection();
+            CreateLevelBonusRingMapOverlays();
+        }
+
+
+
+        public static IEnumerator BuildMapRinOverlay()
+        {
+            // Ensures that the previous ring overlay is removed first
+            //MinimapManager.Instance.RemoveMapOverlay("SLS-LevelBonus");
+            MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
+            
+            // Create a Color array with space for every pixel of the map
+            int mapSize = ringbonuses.TextureSize * ringbonuses.TextureSize;
+            Color[] mainPixels = new Color[mapSize];
+
+            // Clear the existing map?
+            ringbonuses.OverlayTex.SetPixels(mainPixels);
+            // Determine size of the world
+            //float worlddiameter = WorldGenerator.worldSize * 2; // - to + range, we need the diameter
+            // float meters_per_pixel = (Minimap.instance.m_textureSize / 2) + ValConfig.PixelMapOffsetRatio.Value; // ValConfig.PixelMapOffsetRatio.Value; // worlddiameter / ringbonuses.TextureSize; // 9.765625
+
+            Minimap.instance.WorldToPixel(center, out int world_x, out int world_y);
+            Logger.LogDebug($"Map centered: x:{world_x} y:{world_y}");
+
+            int updates = 0;
+            int levelring_color_index = 0;
+            foreach (int ringDistance in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {
+                if (levelring_color_index >= Colorization.mapRingColors.Count) {
+                    levelring_color_index = 0;
+                }
+                Color selectedColor = Colorization.mapRingColors[levelring_color_index];
+                levelring_color_index++;
+
+                int granularity = ringDistance * 10; // number of vertices per ring
+                
+                Vector3 radii = new Vector3(center.x + ringDistance, center.y, center.z);
+                Minimap.instance.WorldToPixel(radii, out int radii_x, out int raddi_y);
+                int map_radii = radii_x - world_x;
+                Logger.LogDebug($"Set Ringsize: {ringDistance} -PixelMap-> {radii_x} | {map_radii}");
+                //Vector2[] circle = new Vector2[granularity];
+                float delta = (2 * Mathf.PI) / granularity;
+
+                for (int i = 0; i < granularity; i++) {
+                    // Ensure we do not overwhelm the system and get the task killed
+                    updates++;
+                    if (updates % 3_000 == 0) {
+                        yield return new WaitForEndOfFrame();
+                    }
+
+                    float t = delta * i;
+                    int x = Mathf.RoundToInt(world_x + Mathf.Cos(t) * map_radii);
+                    int y = Mathf.RoundToInt(world_y + Mathf.Sin(t) * map_radii);
+                    //circle[i] = new Vector2(x, y);
+                    
+                    int index = (y * ringbonuses.TextureSize) + x;
+                    // Index must be less than pixels due to zero indexing
+                    if (index >= mainPixels.Length) {
+                        continue;
+                    }
+                    //Logger.LogDebug($"Drawing ring for distance {ringDistance} pixels idx:{index} x:{x} y:{y}");
+                    mainPixels[index] = selectedColor;
+                }
+            }
+
+            ringbonuses.OverlayTex.SetPixels(mainPixels);
+            ringbonuses.OverlayTex.Apply();
+            Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
+            buildingMapRings = false;
+            yield break;
         }
 
         [HarmonyPatch(typeof(Fish), nameof(Fish.Awake))]
@@ -546,7 +665,7 @@ namespace StarLevelSystem.modules
 
             private static void CreatureSpawnerCharacterLevelControl(Character chara, int providedLevel)
             {
-                //Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 
@@ -568,27 +687,38 @@ namespace StarLevelSystem.modules
             {
                 var codeMatcher = new CodeMatcher(instructions, generator);
                 codeMatcher.MatchStartForward(
-                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(GameObject), "GetComponent", null, new Type[] { typeof(Character) })),
+                    new CodeMatch(OpCodes.Stloc_S)
                     )
-                .RemoveInstructions(1)
+                .Advance(2)
                 .InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc_S, 5),
+                    new CodeInstruction(OpCodes.Ldloc_2),
                     Transpilers.EmitDelegate(SpawnAreaSetCharacterLevelControl)
+                    )
+                .CreateLabelOffset(out Label label, offset: 28)
+                .InsertAndAdvance(new CodeInstruction(OpCodes.Br, label))
+                .MatchStartForward(
+                    new CodeMatch(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), "GetCenterPoint")),
+                    new CodeMatch(OpCodes.Stloc_S)
                     )
                 .ThrowIfNotMatch("Unable to patch SpawnArea.SpawnOne.");
 
                 return codeMatcher.Instructions();
             }
 
-            private static void SpawnAreaSetCharacterLevelControl(Character chara, int providedLevel)
-            {
-                //Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {providedLevel}");
-                SetCharacterLevelControl(chara, providedLevel);
+            private static void SpawnAreaSetCharacterLevelControl(Character chara, SpawnArea.SpawnData spawndata) {
+                int fallback_level = spawndata != null ? spawndata.m_minLevel : 1;
+                Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {fallback_level}");
+                SetCharacterLevelControl(chara, fallback_level);
             }
 
             [HarmonyPatch(nameof(SpawnArea.SelectWeightedPrefab))]
             [HarmonyPostfix]
             public static void Prefix(ref SpawnArea.SpawnData __result)
             {
+                if (__result == null) { return; }
                 __result.m_minLevel = 1;
             }
         }
@@ -637,13 +767,13 @@ namespace StarLevelSystem.modules
             {
                 Character chara = go.GetComponent<Character>();
                 if (chara == null) { return; }
-                //Logger.LogDebug($"SpawnSystem.Spawn setting without zone control {chara.m_name}");
+                Logger.LogDebug($"SpawnSystem.Spawn setting without zone control {chara.m_name}");
                 SetCharacterLevelControl(chara, 1);
             }
 
             private static void SpawnSystemSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                //Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
+                Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 

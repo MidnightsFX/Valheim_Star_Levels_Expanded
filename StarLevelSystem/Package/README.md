@@ -275,6 +275,6 @@ Planned Features
 - Refinement to the existing modifers
 - New modifiers!
 - Level scaling more things
-- Draw rings based on distance scaling from center
 - Generic and biome specific loot multipliers
 - A Nemesis or mini-boss generation system
+- World leveling system based on boss kills

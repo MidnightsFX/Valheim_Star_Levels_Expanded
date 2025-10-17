@@ -181,23 +181,23 @@ namespace StarLevelSystem.Data
             EnableDistanceLevelBonus = true,
             DistanceLevelBonus = new SortedDictionary<int, SortedDictionary<int, float>>()
             {
-                { 1250, new SortedDictionary<int, float>() {
+                { 750, new SortedDictionary<int, float>() {
                         { 1, 25f },
                     }
                 },
-                { 2500, new SortedDictionary<int, float>() {
+                { 1200, new SortedDictionary<int, float>() {
                         { 1, 50f },
                         { 2, 25f },
                     }
                 },
-                { 3750, new SortedDictionary<int, float>() {
+                { 2000, new SortedDictionary<int, float>() {
                         { 1, 100f },
                         { 2, 75f },
                         { 3, 50f },
                         { 4, 25f },
                     }
                 },
-                { 5000, new SortedDictionary<int, float>() {
+                { 3000, new SortedDictionary<int, float>() {
                         { 1, 100f },
                         { 2, 100f },
                         { 3, 75f },
@@ -206,7 +206,7 @@ namespace StarLevelSystem.Data
                         { 6, 15f },
                     }
                 },
-                { 6250, new SortedDictionary<int, float>() {
+                { 4000, new SortedDictionary<int, float>() {
                         { 1, 100f },
                         { 2, 100f },
                         { 3, 100f },
@@ -217,7 +217,7 @@ namespace StarLevelSystem.Data
                         { 8, 15f },
                     }
                 },
-                { 7500, new SortedDictionary<int, float>() {
+                { 5000, new SortedDictionary<int, float>() {
                         { 1, 100f },
                         { 2, 100f },
                         { 3, 100f },
@@ -229,7 +229,7 @@ namespace StarLevelSystem.Data
                         { 9, 15f },
                     }
                 },
-                { 8750, new SortedDictionary<int, float>() {
+                { 6000, new SortedDictionary<int, float>() {
                         { 1, 100f },
                         { 2, 100f },
                         { 3, 100f },
@@ -241,6 +241,62 @@ namespace StarLevelSystem.Data
                         { 9, 20f },
                         { 10, 15f },
                     }
+                },
+                { 7000, new SortedDictionary<int, float>() {
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 100f },
+                        { 4, 100f },
+                        { 5, 100f },
+                        { 6, 100f },
+                        { 7, 75f },
+                        { 8, 50f },
+                        { 9, 25f },
+                        { 10, 20f },
+                        { 11, 15f },
+                        { 12, 10f },
+                        { 13, 5f },
+                        { 14, 2.5f },
+                    }
+                },
+                { 8000, new SortedDictionary<int, float>() {
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 100f },
+                        { 4, 100f },
+                        { 5, 100f },
+                        { 6, 100f },
+                        { 7, 100f },
+                        { 8, 75f },
+                        { 9, 50f },
+                        { 10, 25f },
+                        { 11, 20f },
+                        { 12, 15f },
+                        { 13, 10f },
+                        { 14, 5f },
+                        { 15, 2.5f },
+                    }
+                },
+                { 9100, new SortedDictionary<int, float>() {
+                        { 1, 100f },
+                        { 2, 100f },
+                        { 3, 100f },
+                        { 4, 100f },
+                        { 5, 100f },
+                        { 6, 100f },
+                        { 7, 100f },
+                        { 8, 100f },
+                        { 9, 75f },
+                        { 10, 50f },
+                        { 11, 25f },
+                        { 12, 20f },
+                        { 13, 15f },
+                        { 14, 10f },
+                        { 15, 5f },
+                        { 16, 2.5f },
+                        { 17, 1.2f },
+                        { 18, 0.6f },
+                    }
                 }
             }
         };  
@@ -249,6 +305,7 @@ namespace StarLevelSystem.Data
         internal static void Init() {
             // Load the default configuration
             SLE_Level_Settings = DefaultConfiguration;
+            Colorization.UpdateMapColorSelection();
             try {
                 UpdateYamlConfig(File.ReadAllText(ValConfig.levelsFilePath));
             }
@@ -262,6 +319,7 @@ namespace StarLevelSystem.Data
             try {
                 SLE_Level_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
                 Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
+                LevelSystem.CreateLevelBonusRingMapOverlays();
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
                     CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara, true);

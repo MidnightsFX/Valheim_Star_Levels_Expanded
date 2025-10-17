@@ -1,5 +1,6 @@
 ﻿using BepInEx;
 using HarmonyLib;
+using Jotunn.Extensions;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -22,6 +23,24 @@ namespace StarLevelSystem.modules
             defaultLevelColorization = ColorizationData.defaultColorizationData,
             characterColorGenerators = ColorizationData.defaultColorGenerators,
         };
+
+        public static List<Color> mapRingColors = new List<Color>();
+        public static readonly Dictionary<string, string> defaultColors = new Dictionary<string, string>()
+        {
+            { "Red",    "#ff1a1a" },
+            { "Orange", "#ff9933" },
+            { "Yellow", "#ffff1a" },
+            { "Green",  "#50f83a" },
+            { "Teal",   "#18e7a9" },
+            { "Blue",   "#00abff" },
+            { "Purple", "#c966ff" },
+            { "Pink",   "#ff4dcf" },
+            { "Gray",   "#999999" },
+            { "Brown",  "#b37700" },
+            { "Black",  "#333333" },
+            { "White",  "#f2f2f2" },
+        };
+
         public static ColorDef defaultColorization = new ColorDef()
         {
             hue = 0f,
@@ -234,6 +253,35 @@ namespace StarLevelSystem.modules
                 return creatureColorizationSettings.defaultLevelColorization[level];
             }  else {
                 return defaultColorization;
+            }
+        }
+
+        public static void UpdateMapColorSelection()
+        {
+            mapRingColors.Clear();
+            foreach (string colorstring in ValConfig.DistanceRingColorOptions.Value.Split(',').ToList())
+            {
+                if (colorstring.StartsWith("#"))
+                {
+                    if (ColorUtility.TryParseHtmlString(colorstring.Trim(), out Color parsedColor))
+                    {
+                        mapRingColors.Add(parsedColor);
+                        continue;
+                    }
+                    else
+                    {
+                        Logger.LogWarning($"Unable to parse color string {colorstring} for distance ring colors. It will be skipped");
+                        continue;
+                    }
+                }
+                string requestedColor = colorstring.Trim().CapitalizeFirstLetter();
+                if (defaultColors.TryGetValue(requestedColor, out string htmlcolor))
+                {
+                    if (ColorUtility.TryParseHtmlString(htmlcolor, out Color parsedColor))
+                    {
+                        mapRingColors.Add(parsedColor);
+                    }
+                }
             }
         }
     }

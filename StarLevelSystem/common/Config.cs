@@ -26,7 +26,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
-        public static ConfigEntry<bool> DistanceBonusMapsCanIncludeLowerLevels;
+        //public static ConfigEntry<bool> DistanceBonusMapsCanIncludeLowerLevels;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
         public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;

@@ -62,7 +62,7 @@ namespace StarLevelSystem.modules
         }
 
         public static bool UpdateYamlConfig(string yaml) {
-            //try {
+            try {
                 //Logger.LogInfo($"Updating ColorizationSettings from YAML:\n{yaml}");
                 creatureColorizationSettings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
@@ -89,10 +89,10 @@ namespace StarLevelSystem.modules
                     CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara, true);
                     ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                 }
-            //} catch (System.Exception ex) {
-                // StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
+            } catch (System.Exception ex) {
+                StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
                 return false;
-            //}
+            }
             return true;
         }
 

@@ -1,3 +1,9 @@
+**0.11.1**
+ ---
+ ```
+ - Fixes distance calculations for dungeons incorrectly accounting for height
+ ```
+
 **0.11.0**
  ---
  ```

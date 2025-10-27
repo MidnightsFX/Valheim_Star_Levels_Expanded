@@ -71,7 +71,7 @@ namespace StarLevelSystem.modules
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 Vector3 p = character.transform.position;
-                float distance_from_center = Vector3.Distance(p, center);
+                float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(center.x, center.z));
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
                 SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
@@ -114,7 +114,7 @@ namespace StarLevelSystem.modules
             // Determine creature location to check its biome
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
-            float distance_from_center = Vector2.Distance(p, center);
+            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
             SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() {};
             SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
 
@@ -821,7 +821,7 @@ namespace StarLevelSystem.modules
 
             private static void TriggerSpawnerSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                //Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 

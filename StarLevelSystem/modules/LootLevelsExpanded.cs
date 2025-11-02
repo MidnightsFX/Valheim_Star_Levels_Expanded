@@ -84,6 +84,9 @@ namespace StarLevelSystem.modules
 
                 List<KeyValuePair<GameObject, int>> drop_results = new List<KeyValuePair<GameObject, int>>();
                 int level = 1;
+                if (__instance.m_character != null) {
+                    level = __instance.m_character.m_level;
+                }
                 
                 SelectLootSettings(__instance.m_character, out DistanceLootModifier distance_bonus, out Heightmap.Biome biome);
                 // Logger.LogDebug($"SLS Custom drop set for {name} - level {level}");
@@ -145,11 +148,11 @@ namespace StarLevelSystem.modules
                     float scale_factor = loot.AmountScaleFactor * scale_multiplier;
                     if (scale_factor <= 0f) { scale_factor = 1f; }
                     if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop *= multiplyLootPerLevel(level, distance_bonus, scale_factor);
+                        drop *= MultiplyLootPerLevel(level, distance_bonus, scale_factor);
                     } else {
                         drop *= ExponentLootPerLevel(level, distance_bonus, scale_factor);
                     }
-                    Logger.LogDebug($"Drop {loot.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCalculationType.Value} = {drop}");
+                    Logger.LogDebug($"Drop {loot.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCalculationType.Value} ({scale_factor}) = {drop}");
 
                     // Enforce max drop cap
                     if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) { 
@@ -176,13 +179,13 @@ namespace StarLevelSystem.modules
             if (character != null) { char_level = character.GetLevel(); }
             SelectLootSettings(character, out DistanceLootModifier distance_bonus, out Heightmap.Biome biome);
             if (SelectedLootFactor == LootFactorType.PerLevel) {
-                return multiplyLootPerLevel(char_level, distance_bonus);
+                return MultiplyLootPerLevel(char_level, distance_bonus);
             } else {
                 return ExponentLootPerLevel(char_level, distance_bonus);
             }
         }
 
-        private static int multiplyLootPerLevel(int level, DistanceLootModifier dmod, float scale_factor = 1f)
+        private static int MultiplyLootPerLevel(int level, DistanceLootModifier dmod, float scale_factor = 1f)
         {
             if (level == 1) { return 1; } // no scaling for level 1, just return the base loot amount
             float dmod_max = dmod.MaxAmountScaleFactorBonus;
@@ -249,7 +252,7 @@ namespace StarLevelSystem.modules
                             }
 
                             // Drop in stacks if this is an item
-                            if ((object)component != null)
+                            if (component is not null)
                             {
                                 int remaining = (amount - i);
                                 if (remaining > 0)
@@ -266,6 +269,20 @@ namespace StarLevelSystem.modules
                                     }
                                 }
                                 component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
+                            }
+                            else
+                            {
+                                Character chara = droppedItem.GetComponent<Character>();
+                                if (chara == null)
+                                {
+                                    chara = droppedItem.GetComponent<Humanoid>();
+                                }
+                                if (chara != null)
+                                {
+                                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                                    chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
+                                    chara.SetLevel(cdc.Level);
+                                }
                             }
 
                             Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
@@ -298,7 +315,7 @@ namespace StarLevelSystem.modules
                 int max_stack_size = 0;
                 var item = drop.Key;
                 int amount = drop.Value;
-                Logger.LogDebug($"Dropping {item.name} {amount}");
+                Logger.LogDebug($"Dropping async {item.name} {amount}");
                 for (int i = 0; i < amount;) {
 
                     // Wait for a short duration to avoid dropping too many items at once
@@ -315,23 +332,41 @@ namespace StarLevelSystem.modules
                         set_stack_size = true;
                         if (component) { max_stack_size = component.m_itemData.m_shared.m_maxStackSize; }
                     }
-                    
+
                     // Drop in stacks if this is an item
-                    if ((object)component != null) {
+                    if (component is not null)
+                    {
                         int remaining = (amount - i);
-                        if (remaining > 0) {
-                            if (amount > max_stack_size) {
+                        if (remaining > 0)
+                        {
+                            if (amount > max_stack_size)
+                            {
                                 component.m_itemData.m_stack = max_stack_size;
                                 i += max_stack_size;
-                            } else {
+                            }
+                            else
+                            {
                                 component.m_itemData.m_stack = remaining;
                                 i += remaining;
                             }
                         }
                         component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
                     }
-
-                    Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
+                    else
+                    {
+                        Character chara = droppedItem.GetComponent<Character>();
+                        if (chara == null) {
+                            chara = droppedItem.GetComponent<Humanoid>();
+                        }
+                        
+                        if (chara != null) {
+                            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
+                            Logger.LogDebug($"Creature level set from cache: {chara != null} - lvl: {cdc.Level}");
+                            chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
+                            chara.SetLevel(cdc.Level);
+                        }
+                    }
+                        Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
                     if ((bool)component2) {
                         Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere;
                         if (insideUnitSphere.y < 0f) {

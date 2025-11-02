@@ -12,6 +12,49 @@ namespace StarLevelSystem.Data
         public static LootSettings DefaultDropConfiguration = new LootSettings()
         {
             characterSpecificLoot = new Dictionary<string, List<ExtendedDrop>>() {
+                { "BlobElite", new List<ExtendedDrop>() {
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "Ooze",
+                                Min = 2,
+                                Max = 3,
+                            },
+                            AmountScaleFactor = 0.5f,
+                        },
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "IronScrap",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.33f
+                            },
+                            AmountScaleFactor = 0.2f,
+                        },
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "TrophyBlob",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.1f
+                            },
+                            ChanceScaleFactor = 1.01f,
+                            MaxScaledAmount = 1,
+                        },
+                    new ExtendedDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "Blob",
+                                Min = 2,
+                                Max = 2,
+                            },
+                            AmountScaleFactor = 0.5f,
+                            MaxScaledAmount = 6,
+                        }
+                    }
+                },
                 { "Tick", new List<ExtendedDrop>() {
                     new ExtendedDrop{
                             Drop = new Drop

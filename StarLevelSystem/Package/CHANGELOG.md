@@ -1,3 +1,13 @@
+**0.11.2**
+ ---
+ ```
+ - Fixes spawn levels not being set for creatures created from loot table drops
+ - Fixed level not always being accounted for in loot table drop calculations
+ - Set default custom loot drops for Oozers (blobElite)
+	- No longer spawns 2 blobs per level, now spawns up to 6 blobs, moderately scaling by level
+	- Delete your CreatureLootSettings.yaml if you want the new default
+ ```
+
 **0.11.1**
  ---
  ```

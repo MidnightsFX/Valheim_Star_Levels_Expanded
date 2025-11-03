@@ -116,6 +116,12 @@ namespace StarLevelSystem.Data
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.05f },
                             { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.005f }
                         },
+                        CustomCreatureLevelUpChance = new SortedDictionary<int, float>()
+                        {
+                            {1, 100 },
+                            {2, 100 },
+                            {3, 0 },
+                        }
                     }
                 },
                 { "Lox", new DataObjects.CreatureSpecificSetting()

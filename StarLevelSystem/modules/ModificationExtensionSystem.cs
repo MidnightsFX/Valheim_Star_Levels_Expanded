@@ -10,8 +10,24 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
-    internal class ModificationExtensionSystem
+    internal static class ModificationExtensionSystem
     {
+
+        static List<string> ForceLeveledCreatures = new List<string>();
+
+        internal static void LeveledCreatureListChanged(object s, EventArgs e)
+        {
+            SetupForceLeveledCreatureList();
+        }
+
+        internal static void SetupForceLeveledCreatureList()
+        {
+            ForceLeveledCreatures.Clear();
+            foreach (var item in ValConfig.SpawnsAlwaysControlled.Value.Split(','))
+            {
+                ForceLeveledCreatures.Add(item);
+            }
+        }
 
         [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.EquipItem))]
         public static class CreatureSizeSyncEquipItems
@@ -24,18 +40,6 @@ namespace StarLevelSystem.modules
                 LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
             }
         }
-
-        //[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.GiveDefaultItems))]
-        //public static class CreatureSizeSyncItems
-        //{
-        //    public static void Postfix(Character __instance)
-        //    {
-        //        if (__instance.IsPlayer()) { return; }
-        //        // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-        //        CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-        //        LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
-        //    }
-        //}
 
         [HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
         public static class VisualEquipmentScaleToFit
@@ -208,12 +212,17 @@ namespace StarLevelSystem.modules
                 __instance.SetLevel(cDetails.Level);
             }
 
-            // Logic about whether we should use the current level of the creature if it has been modified by something else?
-            if (__instance.m_level != cDetails.Level) {
-                Logger.LogDebug($"Creature {__instance.name} has level {__instance.m_level} but cache says {cDetails.Level}.");
+            // These creatures are always leveled up, only applies level if its not set
+            if (ForceLeveledCreatures.Contains(cDetails.CreatureName) && __instance.m_level == 1) {
+                __instance.SetLevel(cDetails.Level);
             }
             if (ValConfig.ForceControlAllSpawns.Value == true) {
                 __instance.SetLevel(cDetails.Level);
+            }
+
+            // Logic about whether we should use the current level of the creature if it has been modified by something else?
+            if (__instance.m_level != cDetails.Level) {
+                Logger.LogDebug($"Creature {__instance.name} has level {__instance.m_level} but cache says {cDetails.Level}.");
             }
 
             // Modify the creatures stats by custom character/biome modifications

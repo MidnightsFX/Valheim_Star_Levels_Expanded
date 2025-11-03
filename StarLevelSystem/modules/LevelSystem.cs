@@ -75,7 +75,12 @@ namespace StarLevelSystem.modules
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
                 SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
-                if (biome_settings != null) { distance_level_modifier = biome_settings.DistanceScaleModifier; }
+                if (biome_settings != null) {
+                    distance_level_modifier = biome_settings.DistanceScaleModifier;
+                }
+                if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
+                    levelup_chances = creature_settings.CustomCreatureLevelUpChance;
+                }
                 // If we are using distance level bonuses | Check if we are in a distance level bonus area
                 if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null)
                 {

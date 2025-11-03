@@ -1,3 +1,13 @@
+**0.11.3**
+ ---
+ ```
+ - Fixes character specific level settings not always overriding default level settings
+ - Provides a way to set force level control for specific creatures
+	- Training dummy is default included in this
+ - Expanded caching of short term character entries to prevent constant recalculation
+ - Fixed tame level settings not being under the correct category
+ ```
+
 **0.11.2**
  ---
  ```

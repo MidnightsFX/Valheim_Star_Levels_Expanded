@@ -117,13 +117,11 @@ namespace StarLevelSystem.Data
             // Check for level or set it
             //Logger.LogDebug("Setting creature level");
             characterCacheEntry.Level = LevelSystem.DetermineLevel(character, creatureZDO, creature_settings, biome_settings, leveloverride);
-            //Logger.LogDebug($"Creature level set {characterCacheEntry.Level}");
-            if (characterCacheEntry.Level == 0) {return null; }
+            //Logger.LogDebug($"{creature_name} level set {characterCacheEntry.Level}");
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");
             characterCacheEntry.Colorization = Colorization.DetermineCharacterColorization(character, characterCacheEntry.Level);
-            if (characterCacheEntry.Colorization == null) { return null; }
 
             // Set the creatures damage recieved modifiers
             //Logger.LogDebug("Computing damage recieved modifiers");
@@ -223,7 +221,7 @@ namespace StarLevelSystem.Data
                 //Logger.LogDebug("Adding creature to cache");
                 sessionCache.Add(character.GetZDOID().ID, characterCacheEntry);
             } else if (update == true) {
-               //Logger.LogDebug($"Adding Updating creature in cache {creature_name}-{characterCacheEntry.Level}");
+                //Logger.LogDebug($"Adding Updating creature in cache {creature_name}-{characterCacheEntry.Level}");
                 sessionCache[character.GetZDOID().ID] = characterCacheEntry;
             }
             return characterCacheEntry;

@@ -32,6 +32,7 @@ namespace StarLevelSystem
         public static ConfigEntry<string> DistanceRingColorOptions;
         public static ConfigEntry<bool> ControlSpawnerLevels;
         public static ConfigEntry<bool> ForceControlAllSpawns;
+        public static ConfigEntry<string> SpawnsAlwaysControlled;
         public static ConfigEntry<bool> ControlBossSpawns;
         public static ConfigEntry<bool> ControlAbilitySpawnedCreatures;
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
@@ -124,8 +125,8 @@ namespace StarLevelSystem
             EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
             BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
-            RandomizeTameChildrenLevels = BindServerConfig("LevelSystems", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
-            SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystems", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
+            RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
+            SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
             EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
@@ -143,6 +144,9 @@ namespace StarLevelSystem
             ControlBossSpawns = BindServerConfig("LevelSystem", "ControlBossSpawns", true, "Forces boss creatures to be controlled by SLS. Bosses will not get star levels if this is disabled.");
             ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");
             //DistanceBonusMapsCanIncludeLowerLevels = BindServerConfig("LevelSystem", "DistanceBonusMapsCanIncludeLowerLevels", true, "When enabled makes the distance bonus configuration include the highest previously lower level defined keys, if they are not defined in the current level.");
+            SpawnsAlwaysControlled = BindServerConfig("LevelSystem", "SpawnsAlwaysControlled", "piece_TrainingDummy", "A list of creatures which always get their level set");
+            SpawnsAlwaysControlled.SettingChanged += ModificationExtensionSystem.LeveledCreatureListChanged;
+            ModificationExtensionSystem.SetupForceLeveledCreatureList();
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
@@ -210,7 +214,7 @@ namespace StarLevelSystem
                 using (StreamWriter writetext = new StreamWriter(creatureModifierFilePath))
                 {
                     String header = @"#################################################
-# Star Level System Expanded - Creature loot configuration
+# Star Level System Expanded - Creature Modifier Configuration
 #################################################
 ";
                     writetext.WriteLine(header);

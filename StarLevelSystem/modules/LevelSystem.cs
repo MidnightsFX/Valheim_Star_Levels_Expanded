@@ -130,6 +130,7 @@ namespace StarLevelSystem.modules
 
             float distance_level_modifier = 1;
             if (biome_settings != null) { distance_level_modifier = biome_settings.DistanceScaleModifier; }
+            if (creature_settings != null && creature_settings.DistanceScaleModifier != 1) { distance_level_modifier = creature_settings.DistanceScaleModifier; }
             // creature specific override
             if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.ContainsKey(creature_name)) {
                 //Logger.LogDebug($"Creature specific config found for {creature_name}");
@@ -192,13 +193,13 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus}");
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus} | Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value}(base) * {nightBonus}(Night) * {distance_bonus}(Distance) | Selected Level: {selected_level}");
                         break;
                     }
                 } else {
-                    if (roll >= (kvp.Value * nightBonus) || kvp.Key >= maxLevel) {
+                    if (roll >= (kvp.Value * nightBonus * distance_influence) || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} >= {(kvp.Value * nightBonus)} || {kvp.Key} >= {maxLevel} | Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {kvp.Value * nightBonus * distance_influence} = {kvp.Value}(base) * {nightBonus}(night) {distance_influence}(distance) || {kvp.Key} >= {maxLevel} | Selected Level: {selected_level}");
                         break;
                     }
                 }

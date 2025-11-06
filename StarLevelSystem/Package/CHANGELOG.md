@@ -1,3 +1,9 @@
+**0.11.4**
+ ---
+ ```
+ - Expands DistanceScaleModifier to also work when applied to specific creatures
+ ```
+
 **0.11.3**
  ---
  ```

@@ -185,6 +185,8 @@ namespace StarLevelSystem.common
         }
 
         public class CreatureSpecificSetting {
+            [DefaultValue(1f)]
+            public float DistanceScaleModifier { get; set; } = 1f;
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
             [DefaultValue(-1)]
             public int CreatureMinLevelOverride { get; set; } = -1;

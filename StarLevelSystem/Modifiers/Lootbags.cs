@@ -12,6 +12,10 @@ namespace StarLevelSystem.Modifiers
 {
     internal static class Lootbags
     {
+        internal static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(CreatureLootMultiplied));
+        }
+
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
             if (ccache == null) { return; }

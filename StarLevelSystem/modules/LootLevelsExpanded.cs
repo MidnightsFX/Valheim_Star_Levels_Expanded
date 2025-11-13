@@ -12,6 +12,27 @@ namespace StarLevelSystem.modules
 {
     public static class LootLevelsExpanded
     {
+        internal static void Init() {
+            LootSystemData.Init();
+
+            var harmony = new Harmony($"{StarLevelSystem.PluginGUID}.LootSystem");
+            if (ValConfig.EnableLootSystem.Value) {
+              Patch(harmony);
+            }
+            ValConfig.EnableLootSystem.SettingChanged += (s, e) => {
+              if (ValConfig.EnableLootSystem.Value) Patch(harmony);
+              else harmony.UnpatchSelf();
+            };
+        }
+
+        private static void Patch(Harmony harmony) {
+            harmony.PatchAll(typeof(CalculateLootPerLevelStyle));
+            harmony.PatchAll(typeof(DropItemsPerformancePatch));
+            harmony.PatchAll(typeof(DropItemsPerformancePatch));
+            harmony.PatchAll(typeof(ModifyLootPerLevelEffect));
+            harmony.PatchAll(typeof(RemoveDropLimit));
+        }
+
         public enum LootFactorType
         {
             PerLevel,

@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -14,6 +15,38 @@ namespace StarLevelSystem.modules
     {
 
         static List<string> ForceLeveledCreatures = new List<string>();
+
+        internal static void Init() {
+            CreatureModifiersData.Init();
+
+            var harmony = new Harmony($"{StarLevelSystem.PluginGUID}.ModificationSystem");
+            if (ValConfig.EnableModificationSystem.Value) {
+              Patch(harmony);
+            }
+            ValConfig.EnableModificationSystem.SettingChanged += (s, e) => {
+              if (ValConfig.EnableModificationSystem.Value) Patch(harmony);
+              else harmony.UnpatchSelf();
+            };
+        }
+
+        private static void Patch(Harmony harmony) {
+            // Configure modifiers that require patching.
+            DeathNova.Patch(harmony);
+            Drainers.Patch(harmony);
+            LifeLink.Patch(harmony);
+            Lootbags.Patch(harmony);
+            SoulEater.Patch(harmony);
+            Splitter.Patch(harmony);
+            // Setup hooks for overall modification module.
+            harmony.PatchAll(typeof(CharacterDamageModificationApply));
+            harmony.PatchAll(typeof(CreatureCharacterExtension));
+            harmony.PatchAll(typeof(CreatureSizeSyncEquipItems));
+            harmony.PatchAll(typeof(ModifyCharacterAnimationSpeed));
+            harmony.PatchAll(typeof(ModifyCharacterVisualsToLevel));
+            harmony.PatchAll(typeof(ModifyRagdollHumanoid));
+            harmony.PatchAll(typeof(PostfixSetupBosses));
+            harmony.PatchAll(typeof(VisualEquipmentScaleToFit));
+        }
 
         internal static void LeveledCreatureListChanged(object s, EventArgs e)
         {

@@ -11,6 +11,10 @@ namespace StarLevelSystem.modules
 {
     class SpawnLevelExtension
     {
+        internal static void Patch(Harmony harmony) {
+            harmony.PatchAll(typeof(SpawnCommandDelegate));
+        }
+
         [HarmonyPatch]
         static class SpawnCommandDelegate
         {

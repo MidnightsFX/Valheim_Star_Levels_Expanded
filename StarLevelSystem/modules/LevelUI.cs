@@ -27,6 +27,14 @@ namespace StarLevelSystem.modules
         public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>();
         private static GameObject star;
 
+        internal static void Patch(Harmony harmony) {
+            harmony.PatchAll(typeof(DestroyEnemyHud));
+            harmony.PatchAll(typeof(DisableVanillaStarsByDefault));
+            harmony.PatchAll(typeof(DisplayCreatureNameChanges));
+            harmony.PatchAll(typeof(EnableLevelDisplay));
+            harmony.PatchAll(typeof(SetupCreatureLevelDisplay));
+        }
+
         public static void InvalidateCacheEntry(ZDOID zdo)
         {
             if (characterExtendedHuds.ContainsKey(zdo)) { characterExtendedHuds.Remove(zdo); }

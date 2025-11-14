@@ -4,6 +4,10 @@ using UnityEngine;
 namespace StarLevelSystem.modules
 {
     public static class MultiplayerDamageMod {
+        internal static void Patch(Harmony harmony) {
+            harmony.PatchAll(typeof(PatchPerPlayerDamageScaling));
+        }
+        
         [HarmonyPatch(typeof(Game), nameof(Game.GetDifficultyDamageScalePlayer))]
         public static class PatchPerPlayerDamageScaling {
             public static bool Prefix(Game __instance, Vector3 pos, ref float __result) {
@@ -25,6 +29,10 @@ namespace StarLevelSystem.modules
     }
 
     public static class MultiplayerHealthMod {
+        internal static void Patch(Harmony harmony) {
+            harmony.PatchAll(typeof(PatchPerPlayerDamageScaling));
+        }
+
         [HarmonyPatch(typeof(Game), nameof(Game.GetDifficultyDamageScaleEnemy))]
         public static class PatchPerPlayerDamageScaling {
             public static bool Prefix(Game __instance, Vector3 pos, ref float __result) {

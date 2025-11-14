@@ -54,6 +54,19 @@ namespace StarLevelSystem.modules
             try {
                 UpdateYamlConfig(File.ReadAllText(ValConfig.colorsFilePath));
             } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Color Level values, defaults will be used. Exception: {e}"); }
+            
+            var harmony = new Harmony($"{StarLevelSystem.PluginGUID}.Colorization");
+            if (ValConfig.EnableColorization.Value) {
+              Patch(harmony);
+            }
+            ValConfig.EnableColorization.SettingChanged += (s, e) => {
+              if (ValConfig.EnableColorization.Value) Patch(harmony);
+              else harmony.UnpatchSelf();
+            };
+        }
+
+        private static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(PreventDefaultLevelSetup));
         }
 
         public static string YamlDefaultConfig() {

@@ -20,6 +20,8 @@ namespace StarLevelSystem.common
             CommandManager.Instance.AddConsoleCommand(new ResetZOIDModifiers());
             CommandManager.Instance.AddConsoleCommand(new GiveCreatureModifier());
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
+            CommandManager.Instance.AddConsoleCommand(new EnableLootSystemCommand());
+            CommandManager.Instance.AddConsoleCommand(new EnableColorizationCommand());
         }
 
         internal class GiveCreatureModifier : ConsoleCommand
@@ -136,6 +138,48 @@ namespace StarLevelSystem.common
                 {
                     writetext.WriteLine(yaml);
                 }
+            }
+        }
+
+        internal class EnableColorizationCommand : ConsoleCommand
+        {
+            public override string Name => "SLS-Enable-Colorization";
+
+            public override string Help => "Enables or disables the Colorization";
+
+            public override bool IsCheat => true;
+
+            public override void Run(string[] args) {
+                if (args.Length < 1) {
+                    Console.instance?.Print($"Colorization = {ValConfig.EnableLootSystem.Value}");
+                    return;
+                }
+                if (!bool.TryParse(args[0], out bool result)) {
+                    Console.instance?.Print("Invalid argument; must be true or false");
+                    return;
+                }
+                ValConfig.EnableColorization.Value = result;
+            }
+        }
+
+        internal class EnableLootSystemCommand : ConsoleCommand
+        {
+            public override string Name => "SLS-Enable-LootSystem";
+
+            public override string Help => "Enables or disables the LootSystem";
+
+            public override bool IsCheat => true;
+
+            public override void Run(string[] args) {
+                if (args.Length < 1) {
+                    Console.instance?.Print($"LootSystem = {ValConfig.EnableLootSystem.Value}");
+                    return;
+                }
+                if (!bool.TryParse(args[0], out bool result)) {
+                    Console.instance?.Print("Invalid argument; must be true or false");
+                    return;
+                }
+                ValConfig.EnableLootSystem.Value = result;
             }
         }
     }

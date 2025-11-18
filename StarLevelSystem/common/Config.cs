@@ -31,6 +31,7 @@ namespace StarLevelSystem
         public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;
         public static ConfigEntry<bool> ControlSpawnerLevels;
+        public static ConfigEntry<bool> EnableModificationSystem;
         public static ConfigEntry<bool> ForceControlAllSpawns;
         public static ConfigEntry<string> SpawnsAlwaysControlled;
         public static ConfigEntry<bool> ControlBossSpawns;
@@ -38,6 +39,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
+        public static ConfigEntry<bool> EnableLootSystem;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<string> LootDropCalculationType;
@@ -145,9 +147,11 @@ namespace StarLevelSystem
             ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");
             //DistanceBonusMapsCanIncludeLowerLevels = BindServerConfig("LevelSystem", "DistanceBonusMapsCanIncludeLowerLevels", true, "When enabled makes the distance bonus configuration include the highest previously lower level defined keys, if they are not defined in the current level.");
             SpawnsAlwaysControlled = BindServerConfig("LevelSystem", "SpawnsAlwaysControlled", "piece_TrainingDummy", "A list of creatures which always get their level set");
+            EnableModificationSystem = BindServerConfig("LevelSystem", "EnableModificationSystem", true, "Toggles the modification system on or off"); 
             SpawnsAlwaysControlled.SettingChanged += ModificationExtensionSystem.LeveledCreatureListChanged;
             ModificationExtensionSystem.SetupForceLeveledCreatureList();
 
+            EnableLootSystem = BindServerConfig("LootSystem", "EnableLootSystem", true, "Toggles the loot system off or on");
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
             LootDropCalculationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;

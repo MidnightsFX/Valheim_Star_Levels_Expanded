@@ -8,6 +8,10 @@ using static StarLevelSystem.Data.CreatureModifiersData;
 namespace StarLevelSystem.Modifiers
 {
     public static class Splitter {
+        internal static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(CharacterOnDeath));
+        }
+
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class CharacterOnDeath {
             public static void Prefix(Character __instance) {

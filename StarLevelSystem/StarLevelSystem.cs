@@ -6,6 +6,7 @@ using Jotunn.Managers;
 using Jotunn.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers;
 using StarLevelSystem.modules;
 using System.Reflection;
 using UnityEngine;
@@ -27,7 +28,6 @@ namespace StarLevelSystem
         // https://valheim-modding.github.io/Jotunn/tutorials/localization.html
         public static CustomLocalization Localization = LocalizationManager.Instance.GetLocalization();
         public static AssetBundle EmbeddedResourceBundle;
-        public static Harmony HarmonyInstance { get; private set; }
         public static ManualLogSource Log;
 
         public void Awake()
@@ -37,12 +37,11 @@ namespace StarLevelSystem
             cfg.SetupConfigRPCs();
             cfg.LoadYamlConfigs();
 
-            EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);
-            HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
+            EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);       
             Colorization.Init();
-            LevelSystemData.Init();
-            LootSystemData.Init();
-            CreatureModifiersData.Init();
+            LootLevelsExpanded.Init();
+            LevelSystem.Init();
+            ModificationExtensionSystem.Init();
             LocalizationLoader.AddLocalizations();
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
             PrefabManager.OnVanillaPrefabsAvailable += LevelSystem.UpdateMaxLevel;

@@ -10,6 +10,10 @@ namespace StarLevelSystem.Modifiers
 {
     public static class LifeLink
     {
+        internal static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(LifeLinkDamageDistributionPatch));
+        }
+
         [HarmonyPatch(typeof(Character), nameof(Character.RPC_Damage))]
         public static class LifeLinkDamageDistributionPatch {
             public static void Prefix(Character __instance, HitData hit) {

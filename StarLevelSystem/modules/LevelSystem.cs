@@ -1,5 +1,4 @@
 ﻿using HarmonyLib;
-using Jotunn.Extensions;
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
@@ -17,6 +16,34 @@ namespace StarLevelSystem.modules
     {
         public static Vector3 center = new Vector3(0, 0, 0);
         private static bool buildingMapRings = false;
+ 
+        internal static void Init() {
+          LevelSystemData.Init();
+          var harmony = new Harmony($"{StarLevelSystem.PluginGUID}.levelSystem");
+          Patch(harmony);
+        }
+
+        private static void Patch(Harmony harmony) {
+            harmony.PatchAll(typeof(CreatureSpawnerSpawn));
+            harmony.PatchAll(typeof(DropOnDestroyedSpawnPatch));
+            harmony.PatchAll(typeof(EggHatchSpawnPatch));
+            harmony.PatchAll(typeof(RandomFishLevelExtension));
+            harmony.PatchAll(typeof(RandomFlyingBirdExtension));
+            harmony.PatchAll(typeof(RandomTreeLevelExtension));
+            harmony.PatchAll(typeof(SetChildLevel));
+            harmony.PatchAll(typeof(SetGrowUpLevel));
+            harmony.PatchAll(typeof(SetTreeLogPassLevel));
+            harmony.PatchAll(typeof(SetupMaxLevelDamagePatch));
+            harmony.PatchAll(typeof(SpawnAbilitySpawnPatch));
+            harmony.PatchAll(typeof(SpawnAreaSpawnOnePatch));
+            harmony.PatchAll(typeof(SpawnSystemSpawnPatch));
+            harmony.PatchAll(typeof(TriggerSpawnerSpawnPatch));
+
+            LevelUI.Patch(harmony);
+            MultiplayerDamageMod.Patch(harmony);
+            MultiplayerHealthMod.Patch(harmony);
+            SpawnLevelExtension.Patch(harmony);
+        }
 
         public static void SetAndUpdateCharacterLevel(Character character, int level) {
             if (character == null) { return; }

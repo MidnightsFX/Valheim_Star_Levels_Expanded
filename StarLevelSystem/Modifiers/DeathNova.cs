@@ -15,6 +15,10 @@ namespace StarLevelSystem.Modifiers
 {
     internal static class DeathNova
     {
+        internal static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(DeathNovaOnDeathPatch));
+        }
+
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class DeathNovaOnDeathPatch
         {

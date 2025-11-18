@@ -13,6 +13,9 @@ namespace StarLevelSystem.Modifiers
 {
     internal static class SoulEater
     {
+        internal static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(SoulEaterOnDeath));
+        }
 
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class SoulEaterOnDeath

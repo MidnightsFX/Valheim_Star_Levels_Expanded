@@ -8,6 +8,10 @@ namespace StarLevelSystem.Modifiers
 {
     internal static class Drainers
     {
+        internal static void Patch(Harmony harmony) {
+          harmony.PatchAll(typeof(ModifierDrain));
+        }
+
         [HarmonyPatch(typeof(Character), nameof(Character.Damage))]
         public static class ModifierDrain
         {

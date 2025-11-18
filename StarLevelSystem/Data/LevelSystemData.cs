@@ -14,7 +14,7 @@ namespace StarLevelSystem.Data
 
         public static DataObjects.CreatureLevelSettings SLE_Level_Settings = DefaultConfiguration;
 
-        public static DataObjects.CreatureLevelSettings DefaultConfiguration = new DataObjects.CreatureLevelSettings()
+        public static readonly DataObjects.CreatureLevelSettings DefaultConfiguration = new DataObjects.CreatureLevelSettings()
         {
             DefaultCreatureLevelUpChance = new SortedDictionary<int, float>() {
                 { 1, 20f },

@@ -78,9 +78,6 @@ namespace StarLevelSystem.modules
                 if (biome_settings != null) {
                     distance_level_modifier = biome_settings.DistanceScaleModifier;
                 }
-                if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
-                    levelup_chances = creature_settings.CustomCreatureLevelUpChance;
-                }
                 // If we are using distance level bonuses | Check if we are in a distance level bonus area
                 if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null)
                 {
@@ -122,6 +119,7 @@ namespace StarLevelSystem.modules
             float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
             SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() {};
             SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
+            if (levelup_chances == null) { levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance; }
 
             // If we are using distance level bonuses | Check if we are in a distance level bonus area
             if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
@@ -132,7 +130,7 @@ namespace StarLevelSystem.modules
             if (biome_settings != null) { distance_level_modifier = biome_settings.DistanceScaleModifier; }
             if (creature_settings != null && creature_settings.DistanceScaleModifier != 1) { distance_level_modifier = creature_settings.DistanceScaleModifier; }
             // creature specific override
-            if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.ContainsKey(creature_name)) {
+            if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null && LevelSystemData.SLE_Level_Settings.CreatureConfiguration.ContainsKey(creature_name)) {
                 //Logger.LogDebug($"Creature specific config found for {creature_name}");
                 if (creature_settings.CustomCreatureLevelUpChance != null) {
                     if (creature_settings.CreatureMaxLevelOverride > -1) { maxLevel = creature_settings.CreatureMaxLevelOverride; }
@@ -181,13 +179,15 @@ namespace StarLevelSystem.modules
         public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f) {
             // Do we want to do a re-roll after certain points?
             int selected_level = 0;
-            //Logger.LogDebug($"levelup distance bonus entries: {levelup_bonus.Count}");
+            //Logger.LogDebug($"Determine with: roll:{roll} maxlevel:{maxLevel} levelupchance:{creature_levelup_chance} levelup_bonus:{levelup_bonus} distance_influence:{distance_influence} nightbonus:{nightBonus}");
+            creature_levelup_chance ??= LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
+
             //foreach (var lb in levelup_bonus) {
             //    Logger.LogDebug($"levelup bonus: {lb.Key} {lb.Value}");
             //}
             foreach (KeyValuePair<int, float> kvp in creature_levelup_chance) {
                 //Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
-                if (levelup_bonus.ContainsKey(kvp.Key)) {
+                if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) {
                     float distance_bonus = ((1f + levelup_bonus[kvp.Key]) * distance_influence);
                     float levelup_req = kvp.Value * nightBonus * distance_bonus;
                     //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus}");
@@ -213,7 +213,7 @@ namespace StarLevelSystem.modules
             if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
             Logger.LogDebug("Creating Level Bonus Rings on Map");
             if (buildingMapRings == false) {
-                ZNetScene.instance.StartCoroutine(BuildMapRinOverlay());
+                ZNetScene.instance.StartCoroutine(BuildMapRingOverlay());
             }
             buildingMapRings = true;
         }
@@ -246,8 +246,12 @@ namespace StarLevelSystem.modules
 
 
 
-        public static IEnumerator BuildMapRinOverlay()
+        public static IEnumerator BuildMapRingOverlay()
         {
+            // Skip if distances are not defined.
+            if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
+                yield break;
+            }
             // Ensures that the previous ring overlay is removed first
             //MinimapManager.Instance.RemoveMapOverlay("SLS-LevelBonus");
             MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
@@ -569,14 +573,22 @@ namespace StarLevelSystem.modules
             internal static void SetupChildCharacter(Character chara, Procreation proc)
             {
                 Logger.LogDebug($"Setting child level for {chara.m_name}");
-                if (!ValConfig.RandomizeTameChildrenLevels.Value)
+                chara.SetTamed(true);
+
+                int inheritedLevel = proc.m_character ? proc.m_character.GetLevel(): proc.m_minOffspringLevel;
+                if (ValConfig.RandomizeTameChildrenLevels.Value == true)
                 {
-                    int level = Mathf.Max(proc.m_character.GetLevel(), proc.m_minOffspringLevel);
-                    Logger.LogDebug($"character specific level {level} being used for child.");
+                    int level = UnityEngine.Random.Range(1, inheritedLevel);
+                    Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
+                    chara.SetLevel(level);
                     ModificationExtensionSystem.CreatureSetup(chara, true, level);
-                    chara.SetTamed(true);
+                } else {
+                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child.");
+                    chara.SetLevel(inheritedLevel);
+                    ModificationExtensionSystem.CreatureSetup(chara, true, inheritedLevel);
                 }
-                if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null) {
+                if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null)
+                {
                     Logger.LogDebug("Disabling spawn multiplier for tamed child.");
                     chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
                 }

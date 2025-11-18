@@ -1,3 +1,15 @@
+**0.11.6**
+ ---
+ ```
+ - Fixes baby creatures not inheriting level when not using randomized baby levels
+ ```
+
+**0.11.5**
+ ---
+ ```
+ - Adds safety checks when removing all level definitions
+ ```
+
 **0.11.4**
  ---
  ```

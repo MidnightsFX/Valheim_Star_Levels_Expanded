@@ -199,7 +199,7 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, float delay = 1f) {
+        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, float delay = 1f, int level_override = 0) {
             yield return new WaitForSeconds(delay);
 
             // TODO: Consider a marker for "already setup" to avoid doing this multiple times
@@ -218,6 +218,11 @@ namespace StarLevelSystem.modules
             }
             if (ValConfig.ForceControlAllSpawns.Value == true) {
                 __instance.SetLevel(cDetails.Level);
+            }
+            if (level_override != 0)
+            {
+                Logger.LogDebug($"Character level override enabled. Setting level {level_override}");
+                __instance.SetLevel(level_override);
             }
 
             // Logic about whether we should use the current level of the creature if it has been modified by something else?
@@ -262,7 +267,7 @@ namespace StarLevelSystem.modules
                 delayedSetupTimer = 0f;
             }
 
-            ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, delayedSetupTimer));
+            ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, delayedSetupTimer, leveloverride));
         }
 
         internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {

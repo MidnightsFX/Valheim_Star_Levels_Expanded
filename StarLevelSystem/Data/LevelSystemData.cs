@@ -1,4 +1,6 @@
-﻿using StarLevelSystem.common;
+﻿using Jotunn;
+using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.modules;
 using System;
 using System.Collections;
@@ -111,6 +113,13 @@ namespace StarLevelSystem.Data
                     {
                         CreatureMaxLevelOverride = 11,
                         SpawnRateModifier = 1f,
+                        CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                            { DataObjects.CreatureBaseAttribute.BaseHealth, 1.05f },
+                            { DataObjects.CreatureBaseAttribute.BaseDamage, 0.95f },
+                            { DataObjects.CreatureBaseAttribute.Speed, 1.05f },
+                            { DataObjects.CreatureBaseAttribute.Size, 1.05f },
+                            { DataObjects.CreatureBaseAttribute.AttackSpeed, 1.05f },
+                        },
                         CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
                             { DataObjects.CreaturePerLevelAttribute.HealthPerLevel, 0.3f },
                             { DataObjects.CreaturePerLevelAttribute.DamagePerLevel, 0.05f },
@@ -147,41 +156,6 @@ namespace StarLevelSystem.Data
                         }
                     }
                 },
-                { "Eikthyr", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 4,
-                    }
-                },
-                { "gd_king", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 6,
-                    }
-                },
-                { "Bonemass", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 8,
-                    }
-                },
-                { "Dragon", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 10,
-                    }
-                },
-                { "GoblinKing", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 12,
-                    }
-                },
-                { "SeekerQueen", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 14,
-                    }
-                },
-                { "Fader", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreatureMaxLevelOverride = 16,
-                    }
-                }
             },
 
             EnableDistanceLevelBonus = true,

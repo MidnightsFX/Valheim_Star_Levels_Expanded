@@ -140,7 +140,7 @@ namespace StarLevelSystem.Data
                     StarVisual = "brutal",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.0f,
-                        BasePower = 1.03f
+                        BasePower = 1.02f
                         },
                     SetupMethodClass = "StarLevelSystem.Modifiers.Brutal",
                     UnallowedCreatures = NonCombatCreatures
@@ -157,7 +157,7 @@ namespace StarLevelSystem.Data
                     StarVisual = "brutal",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.0f,
-                        BasePower = 1.15f
+                        BasePower = 1.07f
                         },
                     SetupMethodClass = "StarLevelSystem.Modifiers.Brutal",
                     UnallowedCreatures = NonCombatCreatures

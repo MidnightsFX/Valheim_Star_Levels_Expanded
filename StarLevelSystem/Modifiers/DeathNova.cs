@@ -1,12 +1,7 @@
 ﻿using HarmonyLib;
-using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -23,10 +18,11 @@ namespace StarLevelSystem.Modifiers
                     return;
                 }
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails == null) { return; }
+                if (cDetails == null || cDetails.Modifiers == null) { return; }
                 if (cDetails.Modifiers.Keys.Contains(ModifierNames.FireNova.ToString())) {
                     Logger.LogDebug("Activating FireNova");
                     CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), cDetails.Modifiers[ModifierNames.FireNova.ToString()]);
+                    if (cmdef == null) { return; }
                     GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
                     go.SetActive(false);
                     Aoe aoe = go.GetComponent<Aoe>();

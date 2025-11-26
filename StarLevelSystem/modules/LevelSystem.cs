@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using Jotunn;
 using Jotunn.Extensions;
 using Jotunn.Managers;
 using StarLevelSystem.common;
@@ -193,13 +194,13 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus}");
                     if (roll >= levelup_req || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value}(base) * {nightBonus}(Night) * {distance_bonus}(Distance) | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value}(base) * {nightBonus}(Night) * {distance_bonus}(Distance) | Selected Level: {selected_level}");
                         break;
                     }
                 } else {
                     if (roll >= (kvp.Value * nightBonus * distance_influence) || kvp.Key >= maxLevel) {
                         selected_level = kvp.Key;
-                        Logger.LogDebug($"Level Roll: {roll} >= {kvp.Value * nightBonus * distance_influence} = {kvp.Value}(base) * {nightBonus}(night) {distance_influence}(distance) || {kvp.Key} >= {maxLevel} | Selected Level: {selected_level}");
+                        //Logger.LogDebug($"Level Roll: {roll} >= {kvp.Value * nightBonus * distance_influence} = {kvp.Value}(base) * {nightBonus}(night) {distance_influence}(distance) || {kvp.Key} >= {maxLevel} | Selected Level: {selected_level}");
                         break;
                     }
                 }
@@ -250,6 +251,10 @@ namespace StarLevelSystem.modules
         {
             // Skip if distances are not defined.
             if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
+                yield break;
+            }
+            if (ZNet.instance.IsDedicated()) {
+                Logger.LogDebug("Server is headless, skipping minimap generation");
                 yield break;
             }
             // Ensures that the previous ring overlay is removed first
@@ -531,20 +536,26 @@ namespace StarLevelSystem.modules
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
             {
                 var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchForward(true,
+                codeMatcher.MatchForward(false,
                     //new CodeMatch(OpCodes.Ldloc_1),
-                    //new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.GetLevel))),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.GetLevel))),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetLevel)))
-                    ).RemoveInstructions(1).InsertAndAdvance(
+                    ).RemoveInstructions(2).InsertAndAdvance(
                     Transpilers.EmitDelegate(SetupGrownUp)
                     ).ThrowIfNotMatch("Unable to patch child grow up level set.");
 
                 return codeMatcher.Instructions();
             }
 
-            internal static void SetupGrownUp(Character grownup, int level)
+            internal static void SetupGrownUp(Character grownup, Character childChar)
             {
-                ModificationExtensionSystem.CreatureSetup(grownup, true, level);
+                CreatureDetailCache cdc_child = CompositeLazyCache.GetAndSetDetailCache(childChar);
+                CreatureDetailCache cdc_grownup = CompositeLazyCache.GetAndSetDetailCache(grownup);
+                cdc_grownup.Modifiers = cdc_child.Modifiers;
+                cdc_grownup.ModifierPrefixNames = cdc_child.ModifierPrefixNames;
+                cdc_grownup.ModifierSuffixNames = cdc_child.ModifierSuffixNames;
+                CompositeLazyCache.UpdateCacheEntry(grownup, cdc_grownup);
+                ModificationExtensionSystem.ImmediateSetup(grownup, false, cdc_child.Level);
             }
         }
 
@@ -575,17 +586,26 @@ namespace StarLevelSystem.modules
                 Logger.LogDebug($"Setting child level for {chara.m_name}");
                 chara.SetTamed(true);
 
+                if (ValConfig.RandomizeTameChildrenModifiers.Value == false && proc.m_character != null) {
+                    CreatureDetailCache cdc_parent = CompositeLazyCache.GetAndSetDetailCache(proc.m_character);
+                    CreatureDetailCache cdc_child = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    cdc_child.Modifiers = cdc_parent.Modifiers;
+                    cdc_child.ModifierPrefixNames = cdc_parent.ModifierPrefixNames;
+                    cdc_child.ModifierSuffixNames = cdc_parent.ModifierSuffixNames;
+                    CompositeLazyCache.UpdateCacheEntry(chara, cdc_child);
+                }
+
                 int inheritedLevel = proc.m_character ? proc.m_character.GetLevel(): proc.m_minOffspringLevel;
                 if (ValConfig.RandomizeTameChildrenLevels.Value == true)
                 {
                     int level = UnityEngine.Random.Range(1, inheritedLevel);
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
                     chara.SetLevel(level);
-                    ModificationExtensionSystem.CreatureSetup(chara, true, level);
+                    ModificationExtensionSystem.CreatureSetup(chara, true, level, 0);
                 } else {
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child.");
                     chara.SetLevel(inheritedLevel);
-                    ModificationExtensionSystem.CreatureSetup(chara, true, inheritedLevel);
+                    ModificationExtensionSystem.CreatureSetup(chara, true, inheritedLevel, 0);
                 }
                 if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null)
                 {
@@ -683,7 +703,7 @@ namespace StarLevelSystem.modules
 
             private static void CreatureSpawnerCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 
@@ -728,7 +748,7 @@ namespace StarLevelSystem.modules
 
             private static void SpawnAreaSetCharacterLevelControl(Character chara, SpawnArea.SpawnData spawndata) {
                 int fallback_level = spawndata != null ? spawndata.m_minLevel : 1;
-                Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {fallback_level}");
+                //Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {fallback_level}");
                 SetCharacterLevelControl(chara, fallback_level);
             }
 
@@ -785,13 +805,13 @@ namespace StarLevelSystem.modules
             {
                 Character chara = go.GetComponent<Character>();
                 if (chara == null) { return; }
-                Logger.LogDebug($"SpawnSystem.Spawn setting without zone control {chara.m_name}");
+                //Logger.LogDebug($"SpawnSystem.Spawn setting without zone control {chara.m_name}");
                 SetCharacterLevelControl(chara, 1);
             }
 
             private static void SpawnSystemSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 
@@ -839,7 +859,7 @@ namespace StarLevelSystem.modules
 
             private static void TriggerSpawnerSetCharacterLevelControl(Character chara, int providedLevel)
             {
-                Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
+                //Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
                 SetCharacterLevelControl(chara, providedLevel);
             }
 

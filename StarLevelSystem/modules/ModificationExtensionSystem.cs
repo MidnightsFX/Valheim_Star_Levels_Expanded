@@ -6,7 +6,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using UnityEngine;
+using static HitData;
 using static StarLevelSystem.common.DataObjects;
+using DamageType = StarLevelSystem.common.DataObjects.DamageType;
 
 namespace StarLevelSystem.modules
 {
@@ -151,6 +153,28 @@ namespace StarLevelSystem.modules
             }
         }
 
+        // For debugging full details on damage calculations
+
+        //[HarmonyPatch(typeof(Character), nameof(Character.ApplyDamage))]
+        //public static class CharacterApplyDamage
+        //{
+        //    private static void Prefix(HitData hit, Character __instance)
+        //    {
+        //        Logger.LogDebug($"Applying Damage: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+        //    }
+        //}
+
+        //[HarmonyPatch(typeof(HitData), nameof(HitData.ApplyResistance))]
+        //public static class ApplyResistance
+        //{
+        //    private static void Postfix(HitData __instance, DamageModifiers modifiers)
+        //    {
+        //        Logger.LogDebug($"Applying {modifiers} Modifiers: D:{__instance.m_damage.m_damage} fi:{__instance.m_damage.m_fire} fr:{__instance.m_damage.m_frost} s:{__instance.m_damage.m_spirit} po:{__instance.m_damage.m_poison} b:{__instance.m_damage.m_blunt} p:{__instance.m_damage.m_pierce} s:{__instance.m_damage.m_slash}");
+        //    }
+        //}
+
+        
+
         internal static void AddDamagesToHit(HitData hit, Dictionary<DamageType, float> damageBonuses) {
             float hitdamage = hit.GetTotalDamage();
             foreach (var dmg in damageBonuses) {
@@ -199,26 +223,41 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, float delay = 1f, int level_override = 0) {
+        static IEnumerator DelayedSetup(Character __instance, bool refresh_cache, int level_override = 0, float delay = 1f) {
             yield return new WaitForSeconds(delay);
+
+            CharacterSetupLevelChecked(__instance, refresh_cache, level_override);
+            yield break;
+        }
+
+        internal static void ImmediateSetup(Character __instance, bool refresh_cache, int level_override = 0)
+        {
+            CharacterSetupLevelChecked(__instance,refresh_cache, level_override);
+        }
+
+        internal static bool CharacterSetupLevelChecked(Character __instance, bool refresh_cache, int level_override = 0)
+        {
+            // Character is gone :shrug:
+            if (__instance == null) { return false; }
 
             // TODO: Consider a marker for "already setup" to avoid doing this multiple times
             CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-            // Character is gone :shrug:
-            if (__instance == null) { yield break; }
-            
+
             // Set boss levels
-            if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value) {
+            if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value)
+            {
+                __instance.SetLevel(cDetails.Level);
+            }
+            if (ValConfig.ForceControlAllSpawns.Value == true)
+            {
+                __instance.SetLevel(cDetails.Level);
+            }
+            // These creatures are always leveled up, only applies level if its not set
+            if (__instance.m_level == 1 && ForceLeveledCreatures.Contains(cDetails.CreatureName))
+            {
                 __instance.SetLevel(cDetails.Level);
             }
 
-            // These creatures are always leveled up, only applies level if its not set
-            if (ForceLeveledCreatures.Contains(cDetails.CreatureName) && __instance.m_level == 1) {
-                __instance.SetLevel(cDetails.Level);
-            }
-            if (ValConfig.ForceControlAllSpawns.Value == true) {
-                __instance.SetLevel(cDetails.Level);
-            }
             if (level_override != 0)
             {
                 Logger.LogDebug($"Character level override enabled. Setting level {level_override}");
@@ -226,8 +265,10 @@ namespace StarLevelSystem.modules
             }
 
             // Logic about whether we should use the current level of the creature if it has been modified by something else?
-            if (__instance.m_level != cDetails.Level) {
+            if (__instance.m_level != cDetails.Level)
+            {
                 Logger.LogDebug($"Creature {__instance.name} has level {__instance.m_level} but cache says {cDetails.Level}.");
+                //cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, true);
             }
 
             // Modify the creatures stats by custom character/biome modifications
@@ -241,10 +282,12 @@ namespace StarLevelSystem.modules
             CreatureModifiers.CheckOrBuildCreatureName(__instance, cDetails, false);
             LevelUI.InvalidateCacheEntry(__instance.GetZDOID());
 
-            if (__instance.m_level <= 1) { yield break; }
+            if (__instance.m_level <= 1) { return true; }
             // Colorization and visual adjustments
             Colorization.ApplyColorizationWithoutLevelEffects(__instance.gameObject, cDetails.Colorization);
             Colorization.ApplyLevelVisual(__instance);
+
+            return true;
         }
 
         internal static void CreatureSetup(Character __instance, bool refresh_cache = false, int leveloverride = 0, float delayedSetupTimer = 1f, bool rebuildMods = false) {
@@ -267,7 +310,11 @@ namespace StarLevelSystem.modules
                 delayedSetupTimer = 0f;
             }
 
-            ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, delayedSetupTimer, leveloverride));
+            if (ZNetScene.instance != null) {
+                ZNetScene.instance.StartCoroutine(DelayedSetup(__instance, refresh_cache, leveloverride, delayedSetupTimer));
+            } else {
+                ImmediateSetup(__instance, refresh_cache, leveloverride);
+            }
         }
 
         internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {

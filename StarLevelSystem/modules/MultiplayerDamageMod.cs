@@ -18,7 +18,7 @@ namespace StarLevelSystem.modules
                 } else {
                     __result = 1f;
                 }
-                Logger.LogDebug($"Multiplayer scaling Player recieves damage increase: {__result}");
+                //Logger.LogDebug($"Multiplayer scaling Player recieves damage increase: {__result}");
                 return false;
             }
         }
@@ -38,7 +38,7 @@ namespace StarLevelSystem.modules
                 } else {
                     __result = 1f;
                 }
-                Logger.LogDebug($"Multiplayer scaling, Enemy damage taken: {__result}");
+                //Logger.LogDebug($"Multiplayer scaling, Enemy damage taken: {__result}");
                 return false;
             }
         }

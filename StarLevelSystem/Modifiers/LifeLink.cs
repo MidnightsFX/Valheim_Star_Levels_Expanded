@@ -15,6 +15,7 @@ namespace StarLevelSystem.Modifiers
             public static void Prefix(Character __instance, HitData hit) {
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (cdc != null && cdc.Modifiers.ContainsKey(ModifierNames.LifeLink.ToString())) {
+                    //Logger.LogDebug($"Lifelink triggered for {__instance.name}");
                     CreatureModifier cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink.ToString(), cdc.Modifiers[ModifierNames.LifeLink.ToString()]);
                     float damage_reduction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower* __instance.m_level));
                     if (damage_reduction < 0) { damage_reduction = 0f; }

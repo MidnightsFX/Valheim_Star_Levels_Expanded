@@ -53,6 +53,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableTreeScaling;
         public static ConfigEntry<float> TreeSizeScalePerLevel;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
+        public static ConfigEntry<bool> RandomizeTameChildrenModifiers;
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
         public static ConfigEntry<bool> EnableColorization;
@@ -126,6 +127,7 @@ namespace StarLevelSystem
             BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
             RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
+            RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
             EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");

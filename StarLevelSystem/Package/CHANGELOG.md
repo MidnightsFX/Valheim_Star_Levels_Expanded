@@ -1,3 +1,19 @@
+**0.11.8**
+ ---
+ ```
+ - Improves cache consistency between clients
+ - Provides configuration to allow tames to pass modifiers to child creatures
+ - Allows configuring tame modifier inheritence
+ - Ensures children maintain their modifiers when growing up
+ ```
+
+**0.11.7**
+ ---
+ ```
+ - Asynchronous creature checks and fallback for creature setup
+ - Fixes server error when attempting to build minimap rings
+ ```
+
 **0.11.6**
  ---
  ```

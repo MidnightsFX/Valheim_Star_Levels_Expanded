@@ -32,11 +32,12 @@ namespace StarLevelSystem.modules
             if (chara == null) { return; }
             if (ValConfig.ControlSpawnerLevels.Value) {
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                if (cdc == null) { chara.SetLevel(providedLevel); }
-                // Logger.LogDebug($"Setting creature level from cache {cdc.Level}");
-                chara.SetLevel(cdc.Level);
-                //chara.m_level = cdc.Level;
-                //chara.m_nview.GetZDO().Set(ZDOVars.s_level, cdc.Level);
+
+                if (cdc == null) { 
+                    chara.SetLevel(providedLevel);
+                } else {
+                    ModificationExtensionSystem.ImmediateSetup(chara, false, cdc.Level);
+                }
                 return;
             }
             // Fallback

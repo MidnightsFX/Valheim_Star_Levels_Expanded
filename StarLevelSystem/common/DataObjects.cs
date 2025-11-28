@@ -330,13 +330,44 @@ namespace StarLevelSystem.common
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
+        public class StoredCreatureDetails
+        {
+            public string Name { get; set; } = null;
+            public Dictionary<string, ModifierType> Modifiers { get; set; }
+            public ColorDef Colorization { get; set; }
+            public Heightmap.Biome Biome { get; set; }
+            public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
+                { DamageType.Blunt, 1f },
+                { DamageType.Pierce, 1f },
+                { DamageType.Slash, 1f },
+                { DamageType.Fire, 1f },
+                { DamageType.Frost, 1f },
+                { DamageType.Lightning, 1f },
+                { DamageType.Poison, 1f },
+                { DamageType.Spirit, 1f },
+            };
+            public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; } = new Dictionary<CreatureBaseAttribute, float>() {
+                { CreatureBaseAttribute.BaseDamage, 1f },
+                { CreatureBaseAttribute.BaseHealth, 1f },
+                { CreatureBaseAttribute.Size, 1f },
+                { CreatureBaseAttribute.Speed, 1f },
+                { CreatureBaseAttribute.AttackSpeed, 1f },
+            };
+            public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; } = new Dictionary<CreaturePerLevelAttribute, float>() {
+                { CreaturePerLevelAttribute.DamagePerLevel, 0f },
+                { CreaturePerLevelAttribute.HealthPerLevel, ValConfig.EnemyHealthMultiplier.Value },
+                { CreaturePerLevelAttribute.SizePerLevel, ValConfig.PerLevelScaleBonus.Value },
+                { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
+                { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
+            };
+            public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
+        }
+
         public class CreatureDetailCache {
             public bool CreatureDisabledInBiome { get; set; } = false;
             public bool CreatureCheckedSpawnMult { get; set; } = false;
             public int Level { get; set; }
             public Dictionary<string, ModifierType> Modifiers { get; set; }
-            public Dictionary<string, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<string, List<string>>();
-            public Dictionary<string, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<string, List<string>>();
             public ColorDef Colorization { get; set; }
             public Heightmap.Biome Biome { get; set; }
             public GameObject CreaturePrefab { get; set; }
@@ -632,6 +663,32 @@ namespace StarLevelSystem.common
             }
 
             protected override void SetValue(Dictionary<DamageType, float> value)
+            {
+                var mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
+
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class CreatureDetailsZNetProperty : ZNetProperty<StoredCreatureDetails>
+        {
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            public CreatureDetailsZNetProperty(string key, ZNetView zNetView, StoredCreatureDetails defaultValue) : base(key, zNetView, defaultValue)
+            {
+            }
+
+            public override StoredCreatureDetails Get()
+            {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return new StoredCreatureDetails(); }
+                var mStream = new MemoryStream(stored);
+                var deserializedDictionary = (StoredCreatureDetails)binFormatter.Deserialize(mStream);
+                return deserializedDictionary;
+            }
+
+            protected override void SetValue(StoredCreatureDetails value)
             {
                 var mStream = new MemoryStream();
                 binFormatter.Serialize(mStream, value);

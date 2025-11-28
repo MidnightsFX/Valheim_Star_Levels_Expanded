@@ -139,7 +139,7 @@ namespace StarLevelSystem.modules
                 // Apply damage recieved Modifiers for the target
                 CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (cdc == null) { return; }
-                //Logger.LogDebug($"Damage recieved mods: Fire:{cdc.DamageRecievedModifiers[DamageType.Fire]} Frost:{cdc.DamageRecievedModifiers[DamageType.Frost]} Lightning:{cdc.DamageRecievedModifiers[DamageType.Lightning]} Poison:{cdc.DamageRecievedModifiers[DamageType.Poison]} Spirit:{cdc.DamageRecievedModifiers[DamageType.Spirit]} Blunt:{cdc.DamageRecievedModifiers[DamageType.Blunt]} Slash:{cdc.DamageRecievedModifiers[DamageType.Slash]} Pierce:{cdc.DamageRecievedModifiers[DamageType.Pierce]}");
+                Logger.LogDebug($"Damage recieved mods: Fire:{cdc.DamageRecievedModifiers[DamageType.Fire]} Frost:{cdc.DamageRecievedModifiers[DamageType.Frost]} Lightning:{cdc.DamageRecievedModifiers[DamageType.Lightning]} Poison:{cdc.DamageRecievedModifiers[DamageType.Poison]} Spirit:{cdc.DamageRecievedModifiers[DamageType.Spirit]} Blunt:{cdc.DamageRecievedModifiers[DamageType.Blunt]} Slash:{cdc.DamageRecievedModifiers[DamageType.Slash]} Pierce:{cdc.DamageRecievedModifiers[DamageType.Pierce]}");
                 hit.m_damage.m_fire *= cdc.DamageRecievedModifiers[DamageType.Fire];
                 hit.m_damage.m_frost *= cdc.DamageRecievedModifiers[DamageType.Frost];
                 hit.m_damage.m_lightning *= cdc.DamageRecievedModifiers[DamageType.Lightning];
@@ -148,7 +148,7 @@ namespace StarLevelSystem.modules
                 hit.m_damage.m_blunt *= cdc.DamageRecievedModifiers[DamageType.Blunt];
                 hit.m_damage.m_slash *= cdc.DamageRecievedModifiers[DamageType.Slash];
                 hit.m_damage.m_pierce *= cdc.DamageRecievedModifiers[DamageType.Pierce];
-                //Logger.LogDebug($"Applied dmg recieved mods new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
+                Logger.LogDebug($"Applied dmg recieved mods new damages: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
 
             }
         }

@@ -1,8 +1,10 @@
 ﻿using Jotunn.Managers;
+using PlayFab.EconomyModels;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.PlayerLoop;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Data
@@ -225,6 +227,105 @@ namespace StarLevelSystem.Data
                 sessionCache[character.GetZDOID().ID] = characterCacheEntry;
             }
             return characterCacheEntry;
+        }
+
+        public static bool CreatureDetailsCacheAvailable(Character character)
+        {
+            if (character == null || character.m_nview == null || character.IsPlayer()) { return false; }
+
+            ZDO creatureZDO = character.m_nview?.GetZDO();
+            if (creatureZDO == null)
+            {
+                Logger.LogWarning("ZDO null, skipping.");
+                return false;
+            }
+            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty("SLS_CREATURE", character.m_nview, new StoredCreatureDetails());
+            StoredCreatureDetails storedcdetailZ = cZDO.Get();
+            if (storedcdetailZ.Name == null)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        public static void SetupAndSetCreature(Character character, int leveloverride, Dictionary<string, ModifierType> requiredModifiers)
+        {
+            if (character == null || character.m_nview == null || character.IsPlayer())
+            {
+                //Logger.LogDebug("Tried to setup an invalid character(no ZView) or is player.");
+                return;
+            }
+
+            ZDO creatureZDO = character.m_nview?.GetZDO();
+            if (creatureZDO == null)
+            {
+                Logger.LogWarning("ZDO null, skipping.");
+                return;
+            }
+            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty("SLS_CREATURE", character.m_nview, new StoredCreatureDetails());
+            StoredCreatureDetails storedcdetailZ = cZDO.Get();
+            GetAndSetDetailCache(character, false, leveloverride, false, true, true);
+        }
+
+        public static void SetupAndSetCreature(Character character, int leveloverride = 0)
+        {
+            if (character == null || character.m_nview == null || character.IsPlayer()) {
+                //Logger.LogDebug("Tried to setup an invalid character(no ZView) or is player.");
+                return;
+            }
+
+            ZDO creatureZDO = character.m_nview?.GetZDO();
+            if (creatureZDO == null)
+            {
+                Logger.LogWarning("ZDO null, skipping.");
+                return;
+            }
+            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty("SLS_CREATURE", character.m_nview, new StoredCreatureDetails());
+            StoredCreatureDetails storedcdetailZ = cZDO.Get();
+            GetAndSetDetailCache(character, false, leveloverride, false, true, true);
+        }
+
+        public static CreatureDetailCache CacheFromZDO(Character character)
+        {
+            if (CreatureDetailsCacheAvailable(character) == false) { return null; }
+
+            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty("SLS_CREATURE", character.m_nview, new StoredCreatureDetails());
+            StoredCreatureDetails storedcdetailZ = cZDO.Get();
+            return DetailEntryFromStoredDetails(character, storedcdetailZ);
+        }
+
+        private static StoredCreatureDetails ZStoredCreatureValuesFromCreatureDetailCache(CreatureDetailCache cdc)
+        {
+            return new StoredCreatureDetails()
+            {
+                Biome = cdc.Biome,
+                Colorization = cdc.Colorization,
+                CreatureBaseValueModifiers = cdc.CreatureBaseValueModifiers,
+                CreatureDamageBonus = cdc.CreatureDamageBonus,
+                CreaturePerLevelValueModifiers = cdc.CreaturePerLevelValueModifiers,
+                DamageRecievedModifiers = cdc.DamageRecievedModifiers,
+                Modifiers = cdc.Modifiers,
+                Name = cdc.CreatureName
+            };
+        }
+
+        private static CreatureDetailCache DetailEntryFromStoredDetails(Character chara, StoredCreatureDetails storedData)
+        {
+            return new CreatureDetailCache()
+            {
+                Biome = storedData.Biome,
+                Colorization = storedData.Colorization,
+                CreatureBaseValueModifiers = storedData.CreatureBaseValueModifiers,
+                CreaturePerLevelValueModifiers = storedData.CreaturePerLevelValueModifiers,
+                DamageRecievedModifiers = storedData.DamageRecievedModifiers,
+                CreatureDamageBonus = storedData.CreatureDamageBonus,
+                Level = chara.GetLevel(),
+                CreatureName = storedData.Name,
+                CreatureCheckedSpawnMult = true,
+                CreatureDisabledInBiome = false,
+                CreaturePrefab = PrefabManager.Instance.GetPrefab(chara.name),
+                Modifiers = storedData.Modifiers
+            };
         }
 
         public static void RecalculateModifiers(Character chara)

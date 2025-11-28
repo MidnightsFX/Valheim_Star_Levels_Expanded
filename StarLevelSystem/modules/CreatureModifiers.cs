@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using static Mono.Security.X509.X520;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
 
@@ -102,97 +103,124 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static string CheckOrBuildCreatureName(Character chara, CreatureDetailCache cacheEntry, bool useChache = true) {
-            // Skip if the creature is getting deleted
-            if (cacheEntry.CreatureDisabledInBiome == true || cacheEntry == null) { return Localization.instance.Localize(chara.m_name); }
-            string setName = chara.m_nview.GetZDO().GetString("SLE_Name");
-            if (setName == "" || useChache == false) {
-                List<string> prefix_names = new List<string>();
-                List<string> suffix_names = new List<string>();
-                int nameEntries = 0;
-                List<string> remainingNameSegments = cacheEntry.Modifiers.Keys.ToList();
-                while (nameEntries < cacheEntry.Modifiers.Count) {
-                    if (remainingNameSegments.Count == 0) { break; }
-                    // Try selecting a prefix name
-                    if (cacheEntry.ModifierPrefixNames != null && cacheEntry.ModifierPrefixNames.Count > 0) {
-                        KeyValuePair<string, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
-                        // Remove this modifier from future selection lists
-                        remainingNameSegments.Remove(selected.Key);
-                        cacheEntry.ModifierPrefixNames.Remove(selected.Key);
-                        cacheEntry.ModifierSuffixNames.Remove(selected.Key);
-                        // Randomly select one of the prefix entries for this modifier
-                        prefix_names.Add(selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)]);
-                    }
-                    if (cacheEntry.ModifierSuffixNames != null && cacheEntry.ModifierSuffixNames.Count > 0) {
-                        KeyValuePair<string, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames);
-                        remainingNameSegments.Remove(selected.Key);
-                        cacheEntry.ModifierPrefixNames.Remove(selected.Key);
-                        cacheEntry.ModifierSuffixNames.Remove(selected.Key);
-                        suffix_names.Add(selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)]);
-                    }
-                    nameEntries++;
-                }
+        internal static string BuildCreatureLocalizableName(Character chara, Dictionary<string, ModifierType> modifiers) {
+            string creatureName = "";
+            List<string> prefix_names = new List<string>();
+            List<string> suffix_names = new List<string>();
+            int nameEntries = 0;
+            int selectedPrefixes = 0;
+            List<string> remainingNameSegments = cacheEntry.Modifiers.Keys.ToList();
+            foreach(string modifierName in remainingNameSegments.shuffleList())
+            {
+                if (remainingNameSegments.Count == 0) { break; }
+                ModifierType modtype = modifiers[modifierName];
+                
+                CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers[modifierName]
+                // Try selecting a prefix name
+                if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value)
+                {
+                    // look up modifier names
+                    CreatureModifiersData.
 
-                Tameable component = chara.GetComponent<Tameable>();
-                string cname = chara.m_name;
-                if ((bool)component) {
-                    cname = component.GetHoverName();
+                    KeyValuePair<string, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierPrefixNames);
+                    // Remove this modifier from future selection lists
+                    remainingNameSegments.Remove(selected.Key);
+                    cacheEntry.ModifierPrefixNames.Remove(selected.Key);
+                    cacheEntry.ModifierSuffixNames.Remove(selected.Key);
+                    // Randomly select one of the prefix entries for this modifier
+                    prefix_names.Add(selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)]);
                 }
-                setName = $"{string.Join(" ", prefix_names)} {cname}";
-                if (suffix_names.Count > 0) {
-                    setName += $" $suffix_moniker {string.Join(" ", suffix_names)}";
+                if (cacheEntry.ModifierSuffixNames != null && cacheEntry.ModifierSuffixNames.Count > 0)
+                {
+                    KeyValuePair<string, List<string>> selected = Extensions.RandomEntry(cacheEntry.ModifierSuffixNames);
+                    remainingNameSegments.Remove(selected.Key);
+                    cacheEntry.ModifierPrefixNames.Remove(selected.Key);
+                    cacheEntry.ModifierSuffixNames.Remove(selected.Key);
+                    suffix_names.Add(selected.Value[UnityEngine.Random.Range(0, selected.Value.Count - 1)]);
                 }
-                chara.m_nview.GetZDO().Set("SLE_Name", setName);
-                //Logger.LogDebug($"Setting creature name for {chara.name} to {setName}");
-                return Localization.instance.Localize(setName.Trim());
+                nameEntries++;
             }
-            //Logger.LogDebug($"Loaded creature name for {chara.name} to {setName}");
-            return Localization.instance.Localize(setName);
+
+            Tameable component = chara.GetComponent<Tameable>();
+            string cname = chara.m_name;
+            if ((bool)component)
+            {
+                cname = component.GetHoverName();
+            }
+            setName = $"{string.Join(" ", prefix_names)} {cname}";
+            if (suffix_names.Count > 0)
+            {
+                setName += $" $suffix_moniker {string.Join(" ", suffix_names)}";
+            }
+            chara.m_nview.GetZDO().Set("SLE_Name", setName);
+            //Logger.LogDebug($"Setting creature name for {chara.name} to {setName}");
+            return Localization.instance.Localize(setName.Trim());
+
         }
 
+        public static Dictionary<string, ModifierType> SelectModifiersForCreature(Character character, CreatureSpecificSetting creature_settings, Heightmap.Biome biome, int level)
+        {
+            Dictionary<string, ModifierType> creatureModifiers = new Dictionary<string, ModifierType>();
 
-        public static Dictionary<string, ModifierType> SelectOrLoadModifiers(Character character, CreatureDetailCache cdc, int maxMajorMods = 0, float chanceMajorMods = 1f, int maxMinorMods = 0, float chanceMinorMods = 1f, bool isBoss = false, int maxBossMods = 0, float chanceBossMods = 1f, bool rebuildCache = false) {
-            CreatureModifiersZNetProperty updatedMods = new CreatureModifiersZNetProperty($"SLS_MODS", character.m_nview, new Dictionary<string, ModifierType>() { });
-            Dictionary<string, ModifierType> savedMods = updatedMods.Get();
-            if (savedMods.Count > 0 && rebuildCache == false) { return savedMods; }
-
-            if (rebuildCache == true) {
-                Logger.LogDebug($"Rebuilding creature modifiers for {cdc.CreatureName}");
-                savedMods.Clear();
-                cdc.ModifierPrefixNames.Clear();
-                cdc.ModifierSuffixNames.Clear();
+            if (!character.IsPlayer())
+            {
+                if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true)
+                {
+                    int numBossMods = ValConfig.MaxMajorModifiersPerCreature.Value;
+                    if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
+                    float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
+                    if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
+                    creatureModifiers = CreatureModifiers.SelectOrLoadModifiers(character, biome, level, isBoss: true, maxBossMods: numBossMods, chanceBossMods: chanceForBossMod, rebuildCache: rebuildModifiers);
+                }
+                else
+                {
+                    //Logger.LogDebug("Setting up creature modifiers");
+                    int majorMods = ValConfig.MaxMajorModifiersPerCreature.Value;
+                    if (creature_settings != null && creature_settings.MaxMajorModifiers > -1) { majorMods = creature_settings.MaxMajorModifiers; }
+                    int minorMods = ValConfig.MaxMinorModifiersPerCreature.Value;
+                    if (creature_settings != null && creature_settings.MaxMinorModifiers > -1) { minorMods = creature_settings.MaxMinorModifiers; }
+                    float chanceMajorMod = ValConfig.ChanceMajorModifier.Value;
+                    if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceMajorMod = creature_settings.ChanceForMajorModifier; }
+                    float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
+                    if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
+                    // Logger.LogDebug($"Setting up to {majorMods} major at chance {chanceMajorMod} and {minorMods} minor modifiers with chances {chanceMinorMod}");
+                    creatureModifiers = CreatureModifiers.SelectOrLoadModifiers(character, biome, level, maxMajorMods: majorMods, maxMinorMods: minorMods, chanceMajorMods: chanceMajorMod, chanceMinorMods: chanceMinorMod, rebuildCache: rebuildModifiers);
+                }
             }
 
+            return creatureModifiers;
+        }
+
+        public static Dictionary<string, ModifierType> SelectOrLoadModifiers(Character character, Heightmap.Biome biome, int level, int maxMajorMods = 0, float chanceMajorMods = 1f, int maxMinorMods = 0, float chanceMinorMods = 1f, bool isBoss = false, int maxBossMods = 0, float chanceBossMods = 1f, bool rebuildCache = false) {
+            Dictionary<string, ModifierType> selectedMods = new Dictionary<string, ModifierType>();
+
             // Logger.LogDebug($"Check if creature {cdc.CreatureName} is in the modifier ignored list [{string.Join(",", CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList)}].");
-            if (cdc.CreatureName != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList.Contains(cdc.CreatureName))
+            if (character.name != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList.Contains(character.name))
             {
-                Logger.LogDebug($"Creature {cdc.CreatureName} is in the global ignore prefab list, skipping modifier assignment.");
-                if (!savedMods.ContainsKey(NoMods)) { savedMods.Add(NoMods, ModifierType.Minor); }
-                updatedMods.Set(savedMods);
-                return savedMods;
+                Logger.LogDebug($"Creature {character.name} is in the global ignore prefab list, skipping modifier assignment.");
+                if (!selectedMods.ContainsKey(NoMods)) { selectedMods.Add(NoMods, ModifierType.Minor); }
+                return selectedMods;
             }
 
             if (isBoss) {
-                List<string> bossMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceBossMods, maxBossMods, cdc.Level, 0, ModifierType.Boss);
+                List<string> bossMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), biome, chanceBossMods, maxBossMods, level, 0, ModifierType.Boss);
                 foreach (var mod in bossMods) {
-                    if (!savedMods.ContainsKey(mod)) { savedMods.Add(mod.ToString(), ModifierType.Boss); }
+                    if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Boss); }
                 }
-                updatedMods.Set(savedMods);
-                return savedMods;
+                return selectedMods;
             }
 
             // Select a major modifiers
-            List<string> majorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceMajorMods, maxMajorMods, cdc.Level, 0, ModifierType.Major);
+            List<string> majorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), biome, chanceMajorMods, maxMajorMods, level, 0, ModifierType.Major);
             foreach (var mod in majorMods) {
-                if (!savedMods.ContainsKey(mod)) { savedMods.Add(mod.ToString(), ModifierType.Major); }
+                if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Major); }
             }
-            List<string> minorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), cdc.Biome, chanceMinorMods, maxMinorMods, cdc.Level, majorMods.Count, ModifierType.Minor);
+            List<string> minorMods = SelectCreatureModifiers(Utils.GetPrefabName(character.gameObject), biome, chanceMinorMods, maxMinorMods, level, majorMods.Count, ModifierType.Minor);
             foreach (var mod in minorMods)
             {
-                if (!savedMods.ContainsKey(mod)) { savedMods.Add(mod.ToString(), ModifierType.Minor); }
+                if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Minor); }
             }
-            updatedMods.Set(savedMods);
-            return savedMods;
+            return selectedMods;
         }
 
         public static List<string> SelectCreatureModifiers(string creature, Heightmap.Biome biome, float chance, int num_mods, int level, int existingMods = 0, ModifierType type = ModifierType.Major)
@@ -234,8 +262,6 @@ namespace StarLevelSystem.modules
             if (cdc.Modifiers.Keys.Contains(modifier))
             {
                 cdc.Modifiers.Remove(modifier);
-                if (cdc.ModifierPrefixNames.ContainsKey(modifier)) { cdc.ModifierPrefixNames.Remove(modifier); }
-                if (cdc.ModifierSuffixNames.ContainsKey(modifier)) { cdc.ModifierSuffixNames.Remove(modifier); }
                 CompositeLazyCache.UpdateCacheEntry(character, cdc);
                 ModificationExtensionSystem.CreatureSetup(character, delayedSetupTimer: 0);
             }
@@ -262,20 +288,8 @@ namespace StarLevelSystem.modules
             selectedMod.SetupMethodCall(character, selectedMod.Config, cdc);
             SetupCreatureVFX(character, selectedMod);
 
-            // Name monikers
-            // Logger.LogDebug($"Updating naming monikers.");
-            if (selectedMod.NamePrefixes != null && prefixSelectors.Contains(selectedMod.namingConvention)) {
-                //Logger.LogDebug($"Adding prefix names.");
-                if (!cdc.ModifierPrefixNames.ContainsKey(newModifier)) {
-                    cdc.ModifierPrefixNames.Add(newModifier, selectedMod.NamePrefixes);
-                }
-            }
-            if (selectedMod.NameSuffixes != null && suffixSelectors.Contains(selectedMod.namingConvention)) {
-                //Logger.LogDebug($"Adding suffix names.");
-                if (!cdc.ModifierSuffixNames.ContainsKey(newModifier)) {
-                    cdc.ModifierSuffixNames.Add(newModifier, selectedMod.NameSuffixes);
-                }
-            }
+            // Note the character name needs to be rerolled
+
             //Logger.LogDebug($"Updating character cache entry.");
             cdc.Modifiers.Add(newModifier, modType);
             // Update the existing cache entry with our new modifier for the creature

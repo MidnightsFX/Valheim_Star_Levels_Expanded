@@ -125,68 +125,9 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug("Selecting creature colorization");
             characterCacheEntry.Colorization = Colorization.DetermineCharacterColorization(character, characterCacheEntry.Level);
 
-            // Set the creatures damage recieved modifiers
-            //Logger.LogDebug("Computing damage recieved modifiers");
-            if (biome_settings != null && biome_settings.DamageRecievedModifiers != null) {
-                foreach (var entry in biome_settings.DamageRecievedModifiers) {
-                    if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.DamageRecievedModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.DamageRecievedModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-            if (creature_settings != null && creature_settings.DamageRecievedModifiers != null) {
-                foreach (var entry in creature_settings.DamageRecievedModifiers) {
-                    if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.DamageRecievedModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.DamageRecievedModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-
-            // Set creature base settings
-            //Logger.LogDebug("Computing base creature modifiers");
-            if (biome_settings != null && biome_settings.CreatureBaseValueModifiers != null) {
-                foreach (var entry in biome_settings.CreatureBaseValueModifiers) {
-                    if (characterCacheEntry.CreatureBaseValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreatureBaseValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreatureBaseValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-            if (creature_settings != null && creature_settings.CreatureBaseValueModifiers != null) {
-                foreach (var entry in creature_settings.CreatureBaseValueModifiers) {
-                    if (characterCacheEntry.CreatureBaseValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreatureBaseValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreatureBaseValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-
-            // Set creature per level settings
-            //Logger.LogDebug("Computing perlevel creature modifiers");
-            if (biome_settings != null && biome_settings.CreaturePerLevelValueModifiers != null) {
-                foreach (var entry in biome_settings.CreaturePerLevelValueModifiers) {
-                    if (characterCacheEntry.CreaturePerLevelValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreaturePerLevelValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreaturePerLevelValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-            if (creature_settings != null && creature_settings.CreaturePerLevelValueModifiers != null) {
-                foreach (var entry in creature_settings.CreaturePerLevelValueModifiers) {
-                    if (characterCacheEntry.CreaturePerLevelValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreaturePerLevelValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreaturePerLevelValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
+            characterCacheEntry.DamageRecievedModifiers = ModificationExtensionSystem.DetermineCreatureDamageRecievedModifiers(biome_settings, creature_settings);
+            characterCacheEntry.CreaturePerLevelValueModifiers = ModificationExtensionSystem.DetermineCharacterPerLevelStats(biome_settings, creature_settings);
+            characterCacheEntry.CreatureBaseValueModifiers = ModificationExtensionSystem.DetermineCreatureBaseStats(biome_settings, creature_settings);
 
             // Set or load creature modifiers
             if (setupModifiers)

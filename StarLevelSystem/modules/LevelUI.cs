@@ -274,7 +274,7 @@ namespace StarLevelSystem.modules
             public static bool Prefix(Character __instance, ref string __result) {
                 CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
                 if (cDetails == null || cDetails.CreatureDisabledInBiome) { return true; }
-                __result = CreatureModifiers.CheckOrBuildCreatureName(__instance, cDetails);
+                __result = CreatureModifiers.BuildCreatureLocalizableName(__instance, cDetails);
                 return false;
             }
         }

@@ -461,5 +461,91 @@ namespace StarLevelSystem.modules
             Logger.LogDebug($"Applying damage buffs {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)}  *{dmgmod}");
         }
 
+        internal static Dictionary<CreaturePerLevelAttribute, float> DetermineCharacterPerLevelStats(BiomeSpecificSetting biome_settings, CreatureSpecificSetting creature_settings)
+        {
+            Dictionary<CreaturePerLevelAttribute, float> creaturePerLevelSettings = new Dictionary<CreaturePerLevelAttribute, float>()
+            {
+                { CreaturePerLevelAttribute.DamagePerLevel, 0f },
+                { CreaturePerLevelAttribute.HealthPerLevel, ValConfig.EnemyHealthMultiplier.Value },
+                { CreaturePerLevelAttribute.SizePerLevel, ValConfig.PerLevelScaleBonus.Value },
+                { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
+                { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
+            };
+            // Set creature per level settings
+            //Logger.LogDebug("Computing perlevel creature modifiers");
+            if (biome_settings != null && biome_settings.CreaturePerLevelValueModifiers != null)
+            {
+                foreach (var entry in biome_settings.CreaturePerLevelValueModifiers)
+                {
+                    creaturePerLevelSettings[entry.Key] = entry.Value;
+                }
+            }
+            if (creature_settings != null && creature_settings.CreaturePerLevelValueModifiers != null)
+            {
+                foreach (var entry in creature_settings.CreaturePerLevelValueModifiers)
+                {
+                    creaturePerLevelSettings[entry.Key] = entry.Value;
+                }
+            }
+            return creaturePerLevelSettings;
+        }
+
+        internal static Dictionary<CreatureBaseAttribute, float> DetermineCreatureBaseStats(BiomeSpecificSetting biome_settings, CreatureSpecificSetting creature_settings)
+        {
+            Dictionary<CreatureBaseAttribute, float> creatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                { CreatureBaseAttribute.BaseDamage, 1f },
+                { CreatureBaseAttribute.BaseHealth, 1f },
+                { CreatureBaseAttribute.Size, 1f },
+                { CreatureBaseAttribute.Speed, 1f },
+                { CreatureBaseAttribute.AttackSpeed, 1f },
+            };
+
+            if (biome_settings != null && biome_settings.CreatureBaseValueModifiers != null)
+            {
+                foreach (var entry in biome_settings.CreatureBaseValueModifiers)
+                {
+                    creatureBaseValueModifiers[entry.Key] = entry.Value;
+                }
+            }
+            if (creature_settings != null && creature_settings.CreatureBaseValueModifiers != null)
+            {
+                foreach (var entry in creature_settings.CreatureBaseValueModifiers)
+                {
+                    creatureBaseValueModifiers[entry.Key] = entry.Value;
+                }
+            }
+            return creatureBaseValueModifiers;
+        }
+
+        internal static Dictionary<DamageType, float> DetermineCreatureDamageRecievedModifiers(BiomeSpecificSetting biome_settings, CreatureSpecificSetting creature_settings)
+        {
+            Dictionary<DamageType, float> damageRecievedModifiers = new Dictionary<DamageType, float>() {
+                { DamageType.Blunt, 1f },
+                { DamageType.Pierce, 1f },
+                { DamageType.Slash, 1f },
+                { DamageType.Fire, 1f },
+                { DamageType.Frost, 1f },
+                { DamageType.Lightning, 1f },
+                { DamageType.Poison, 1f },
+                { DamageType.Spirit, 1f },
+            };
+
+            if (biome_settings != null && biome_settings.DamageRecievedModifiers != null)
+            {
+                foreach (var entry in biome_settings.DamageRecievedModifiers)
+                {
+                    damageRecievedModifiers[entry.Key] = entry.Value;
+                }
+            }
+            if (creature_settings != null && creature_settings.DamageRecievedModifiers != null)
+            {
+                foreach (var entry in creature_settings.DamageRecievedModifiers)
+                {
+                    damageRecievedModifiers[entry.Key] = entry.Value;
+                }
+            }
+            return damageRecievedModifiers;
+        }
+
     }
 }

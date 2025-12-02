@@ -1,3 +1,20 @@
+**0.12.0**
+ ---
+ ```
+ - Fixes an issue where resistant creatures would be immune to damage (does not apply to creatures that have already rolled this modifier)
+ - Improves modifier and level consistency across players with variable connection speeds and latencies
+ - Provides more information for damage recieved and dealt modifiers, can be enabled/disabled seperately in the config (per client)
+ - Changed a number of base values in the modifiers configuration, it is recommended you delete your configuration
+ - Some modifiers no longer run regularly and instead are setup once, again required that you regenerate your configuration (delete Modifiers.yaml)
+ - Tuning
+	- Nerfed the boss modifier for resist pierce to be 25% resistance plus 2% per level
+	- Buffed Lootbags to provide more loot, also makes the creature slightly higher health and move faster
+	- Capped resistance modifiers at 80% resistance, nerfed default resistance values
+	- Increased the delay for the boss affix summoner
+	- Significantly reduced brutal speed modifiers (some old configs had these at 100%+ increases)
+	- Improved fallback logic for Splitter
+ ```
+
 **0.11.8**
  ---
  ```

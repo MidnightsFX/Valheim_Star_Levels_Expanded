@@ -69,9 +69,9 @@ namespace StarLevelSystem.common
                     Logger.LogInfo($"Removed Cached modifiers {id}");
                 }
                 // Set damage modifier to 1
-                Player.m_localPlayer.m_nview.GetZDO().Set("SLE_DMod", 1f);
+                Player.m_localPlayer.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, 1f);
                 // Set base attribute modifers to 1
-                DictionaryDmgNetProperty existingDmgMods = new DictionaryDmgNetProperty("SLE_DBon", Player.m_localPlayer.m_nview, new Dictionary<DamageType, float>());
+                DictionaryDmgNetProperty existingDmgMods = new DictionaryDmgNetProperty(SLS_DAMAGE_BONUSES, Player.m_localPlayer.m_nview, new Dictionary<DamageType, float>());
                 Dictionary<DamageType, float> dmgBonuses = new Dictionary<DamageType, float>() {
                     { DamageType.Blunt, 0f },
                     { DamageType.Slash, 0f },

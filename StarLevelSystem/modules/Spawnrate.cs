@@ -25,9 +25,9 @@ namespace StarLevelSystem.modules
                 //Logger.LogWarning($"Creature null or nview null, not running spawn multiplier.");
                 return false;
             }
-            if (creatureZDO.GetBool("SLS_DSpwnMlt", false) == true) { return false; }
+            if (creatureZDO.GetBool(SLS_SPAWN_MULT, false) == true) { return false; }
             if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && character.IsBoss()) {
-                creatureZDO.Set("SLS_DSpwnMlt", true);
+                creatureZDO.Set(SLS_SPAWN_MULT, true);
                 return false;
             }
 
@@ -35,7 +35,7 @@ namespace StarLevelSystem.modules
             if (biomeSettings != null) { spawnrate = biomeSettings.SpawnRateModifier; }
             if (creature_settings != null) { spawnrate = creature_settings.SpawnRateModifier; }
 
-            creatureZDO.Set("SLS_DSpwnMlt", true);
+            creatureZDO.Set(SLS_SPAWN_MULT, true);
             if (character.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
                 return false;
             }
@@ -61,9 +61,7 @@ namespace StarLevelSystem.modules
                         }
                         Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
-                        spawnedChara?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);
-                        CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(character, false);
-                        spawnedChara.SetLevel(cdc.Level);
+                        ModificationExtensionSystem.CreatureSetup(character);
                     }
                     spawnrate -= 1f;
                 }

@@ -31,13 +31,7 @@ namespace StarLevelSystem.modules
         public static void SetCharacterLevelControl(Character chara, int providedLevel) {
             if (chara == null) { return; }
             if (ValConfig.ControlSpawnerLevels.Value) {
-                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-
-                if (cdc == null) { 
-                    chara.SetLevel(providedLevel);
-                } else {
-                    ModificationExtensionSystem.ImmediateSetup(chara, false, cdc.Level);
-                }
+                ModificationExtensionSystem.CreatureSetup(chara, providedLevel, force: true);
                 return;
             }
             // Fallback
@@ -52,15 +46,13 @@ namespace StarLevelSystem.modules
                 return 1;
             }
             if (leveloverride > 0) {
-                cZDO.Set(ZDOVars.s_level, leveloverride);
                 character.m_level = leveloverride;
                 return leveloverride;
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
-            bool setup = cZDO.GetBool(SLS_SETUP, false);
             //Logger.LogDebug($"Current level from ZDO: {clevel} is-setup? {setup}");
-            if (clevel <= 0 && setup == false) {
+            if (clevel <= 0) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value + 1;
                 int min_level = -1;
@@ -550,13 +542,12 @@ namespace StarLevelSystem.modules
 
             internal static void SetupGrownUp(Character grownup, Character childChar)
             {
-                CreatureDetailCache cdc_child = CompositeLazyCache.GetAndSetDetailCache(childChar);
-                CreatureDetailCache cdc_grownup = CompositeLazyCache.GetAndSetDetailCache(grownup);
-                cdc_grownup.Modifiers = cdc_child.Modifiers;
-                cdc_grownup.ModifierPrefixNames = cdc_child.ModifierPrefixNames;
-                cdc_grownup.ModifierSuffixNames = cdc_child.ModifierSuffixNames;
-                CompositeLazyCache.UpdateCacheEntry(grownup, cdc_grownup);
-                ModificationExtensionSystem.ImmediateSetup(grownup, false, cdc_child.Level);
+                CreatureDetailCache cdc_child = CompositeLazyCache.GetCacheOrZDOOnly(childChar);
+                if (cdc_child == null) {
+                    grownup.SetLevel(childChar.m_level);
+                    return;
+                }
+                ModificationExtensionSystem.CreatureSetup(grownup, cdc_child.Level, false, requiredModifiers: cdc_child.Modifiers, force: true);
             }
         }
 
@@ -588,12 +579,14 @@ namespace StarLevelSystem.modules
                 chara.SetTamed(true);
 
                 if (ValConfig.RandomizeTameChildrenModifiers.Value == false && proc.m_character != null) {
-                    CreatureDetailCache cdc_parent = CompositeLazyCache.GetAndSetDetailCache(proc.m_character);
-                    CreatureDetailCache cdc_child = CompositeLazyCache.GetAndSetDetailCache(chara);
-                    cdc_child.Modifiers = cdc_parent.Modifiers;
-                    cdc_child.ModifierPrefixNames = cdc_parent.ModifierPrefixNames;
-                    cdc_child.ModifierSuffixNames = cdc_parent.ModifierSuffixNames;
-                    CompositeLazyCache.UpdateCacheEntry(chara, cdc_child);
+                    CreatureDetailCache cdc_parent = CompositeLazyCache.GetCacheOrZDOOnly(proc.m_character);
+                    if (cdc_parent == null)
+                    {
+                        chara.SetLevel(proc.m_character.m_level);
+                        return;
+                    }
+                    // TODO: Add randomization, limits and variations to children
+                    ModificationExtensionSystem.CreatureSetup(chara, force: true);
                 }
 
                 int inheritedLevel = proc.m_character ? proc.m_character.GetLevel(): proc.m_minOffspringLevel;
@@ -601,17 +594,15 @@ namespace StarLevelSystem.modules
                 {
                     int level = UnityEngine.Random.Range(1, inheritedLevel);
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
-                    chara.SetLevel(level);
-                    ModificationExtensionSystem.CreatureSetup(chara, true, level, 0);
+                    ModificationExtensionSystem.CreatureSetup(chara, level, force: true);
                 } else {
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child.");
-                    chara.SetLevel(inheritedLevel);
-                    ModificationExtensionSystem.CreatureSetup(chara, true, inheritedLevel, 0);
+                    ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel, force: true);
                 }
                 if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null)
                 {
                     Logger.LogDebug("Disabling spawn multiplier for tamed child.");
-                    chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
+                    chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
                 }
             }
         }
@@ -624,7 +615,7 @@ namespace StarLevelSystem.modules
                     __result = 1f;
                     return false;
                 }
-                __result = __instance.m_character.m_nview.GetZDO().GetFloat("SLE_DMod", 1);
+                __result = __instance.m_character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
                 //Logger.LogDebug($"Damage Level Factor: {__result}");
                 return false;
             }
@@ -637,7 +628,7 @@ namespace StarLevelSystem.modules
             Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            // Logger.LogDebug($"{creature_name} {biome} {p}");
+            //Logger.LogDebug($"{creature_name} {biome} {p}");
 
             if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
                 bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
@@ -896,8 +887,7 @@ namespace StarLevelSystem.modules
             {
                 if (ValConfig.ControlAbilitySpawnedCreatures.Value)
                 {
-                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                    chara.SetLevel(cdc.Level);
+                    ModificationExtensionSystem.CreatureSetup(chara, providedLevel, force: true);
                     return;
                 }
                 // Fallback
@@ -916,9 +906,7 @@ namespace StarLevelSystem.modules
                 GameObject go = UnityEngine.Object.Instantiate(__instance.m_spawnPrefab, __instance.transform.TransformPoint(__instance.m_spawnOffset), Quaternion.Euler(0f, UnityEngine.Random.Range(0, 360), 0f));
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
-                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                    chara.SetLevel(cdc.Level);
-                    ModificationExtensionSystem.CreatureSetup(chara, delayedSetupTimer: 0);
+                    ModificationExtensionSystem.CreatureSetup(chara, force: true);
                 }
                 __instance.m_nview.Destroy();
                 return false;
@@ -934,9 +922,7 @@ namespace StarLevelSystem.modules
             static void Postfix(GameObject go) {
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
-                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                    chara.SetLevel(cdc.Level);
-                    ModificationExtensionSystem.CreatureSetup(chara, delayedSetupTimer: 0);
+                    ModificationExtensionSystem.CreatureSetup(chara, force: true);
                 }
             }
         }

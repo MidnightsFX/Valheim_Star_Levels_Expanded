@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -6,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
+using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
@@ -22,7 +24,7 @@ namespace StarLevelSystem.modules
                   .FirstOrDefault();
             }
 
-            //[HarmonyDebug]
+            //[HarmonyEmitIL(".dumps")]
             [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> SpawnCommandDelegateTranspiler(
                 IEnumerable<CodeInstruction> instructions, ILGenerator generator)
@@ -51,7 +53,8 @@ namespace StarLevelSystem.modules
                     .InsertAndAdvance(
                         new CodeInstruction(
                             OpCodes.Call, AccessTools.Method(typeof(SpawnCommandDelegate), nameof(SetCreatureSpawnLevel)))
-                    ).ThrowIfInvalid($"Could not patch terminal.SpawnCommandDelegate()! (SetCreatureSpawnLevel)")
+                    )
+                    .ThrowIfInvalid($"Could not patch terminal.SpawnCommandDelegate()! (SetCreatureSpawnLevel)")
                     .MatchStartForward(
                         new CodeMatch(OpCodes.Ldarg_1),
                         new CodeMatch(OpCodes.Ldc_I4_4),
@@ -69,14 +72,13 @@ namespace StarLevelSystem.modules
             }
 
             static void SetCreatureSpawnLevel(Character chara, int level) {
-                //Logger.LogWarning($"Setting creature level");
-                chara.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true); // prevent multispawn from these spawned creatures
-                chara.SetLevel(level);
-                // Rebuild the cache entry to ensure the creature gets the specified level effects
-                //Logger.LogDebug("Setting spawned creature details.");
-                CompositeLazyCache.GetAndSetDetailCache(chara, true, level);
-                //ModificationExtensionSystem.CreatureSetup(chara, true, level, 0f, true);
-                //chara.SetupMaxHealth();
+                CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, chara.m_nview, new StoredCreatureDetails());
+                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara, level, spawnMultiplyCheck: false);
+                cZDO.Set(CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(cdc));
+                chara.SetLevel(cdc.Level);
+                //chara.SetLevel(level);
+                //ModificationExtensionSystem.DelayedSetupValidateZnet(chara, level, 0.5f, spawnMultiply: false);
+                //ModificationExtensionSystem.CreatureSetup(chara, level, multiply: false, force: true, delay: 0);
             }
         }
     }

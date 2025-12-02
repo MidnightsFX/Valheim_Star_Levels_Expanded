@@ -6,7 +6,7 @@ namespace StarLevelSystem.Modifiers
     internal static class Frost
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+        public static void RunOnce(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
             if (ccache == null) { return; }
             if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Frost)) {
                 ccache.CreatureDamageBonus[DamageType.Frost] += config.BasePower + (config.PerlevelPower * ccache.Level);

@@ -126,9 +126,9 @@ namespace StarLevelSystem.Data
                     StarVisual = "pierceresist",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.02f,
-                        BasePower = 0.5f
+                        BasePower = 0.25f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistPierce"
                     }
                 },
                 {ModifierNames.Brutal.ToString(), new CreatureModifier() {
@@ -140,9 +140,9 @@ namespace StarLevelSystem.Data
                     StarVisual = "brutal",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.0f,
-                        BasePower = 1.02f
+                        BasePower = 0.05f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Brutal",
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Brutal",
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
@@ -157,9 +157,9 @@ namespace StarLevelSystem.Data
                     StarVisual = "brutal",
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.0f,
-                        BasePower = 1.07f
+                        BasePower = 0.07f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Brutal",
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Brutal",
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
@@ -175,7 +175,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.01f,
                         BasePower = 0.3f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Flame",
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Flame",
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
@@ -190,7 +190,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.01f,
                         BasePower = 0.3f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Frost",
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Frost",
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
@@ -205,7 +205,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.05f,
                         BasePower = 1f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Poison",
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Poison",
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
@@ -221,7 +221,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.05f,
                         BasePower = 0.3f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Lightning",
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Lightning",
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
@@ -262,7 +262,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.02f,
                         BasePower = 0.5f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistPierce"
                     }
                 },
                 {ModifierNames.ResistSlash.ToString(), new CreatureModifier() {
@@ -276,7 +276,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.02f,
                         BasePower = 0.5f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistSlash"
                     }
                 },
                 {ModifierNames.ResistBlunt.ToString(), new CreatureModifier() {
@@ -290,7 +290,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.02f,
                         BasePower = 0.5f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Resistance"
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistBlunt"
                     }
                 },
             },
@@ -318,8 +318,9 @@ namespace StarLevelSystem.Data
                     StarVisual = "lootbag",
                     Config = new CreatureModConfig() {
                         BasePower = 2.0f,
-                        PerlevelPower = 0.1f,
+                        PerlevelPower = 0.2f,
                         },
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Lootbags"
                     }
                 },
                 {ModifierNames.Alert.ToString(), new CreatureModifier() {
@@ -345,7 +346,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.00f,
                         BasePower = 0.3f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Big"
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Big"
                     }
                 },
                 {ModifierNames.Fast.ToString(), new CreatureModifier() {
@@ -357,7 +358,7 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.00f,
                         BasePower = 0.2f
                         },
-                    SetupMethodClass = "StarLevelSystem.Modifiers.Fast"
+                    RunOnceMethodClass = "StarLevelSystem.Modifiers.Fast"
                     }
                 },
                 {ModifierNames.StaminaDrain.ToString(), new CreatureModifier() {

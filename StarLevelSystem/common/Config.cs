@@ -57,6 +57,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
         public static ConfigEntry<bool> EnableColorization;
+        
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
@@ -78,6 +79,8 @@ namespace StarLevelSystem
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
         public static ConfigEntry<bool> OutputColorizationGeneratorsData;
+        public static ConfigEntry<int> DelayBeforeCreatureSetup;
+        public static ConfigEntry<bool> EnableDebugOutputForDamage;
 
         public ValConfig(ConfigFile cf)
         {
@@ -107,10 +110,15 @@ namespace StarLevelSystem
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             EnableDebugMode.SettingChanged += Logger.enableDebugLogging;
             Logger.CheckEnableDebugLogging();
+            EnableDebugOutputForDamage = Config.Bind("Client config", "EnableDebugOutputForDamage", false,
+                new ConfigDescription("Enables Detailed logging for damage calculations, warning, lots of logging.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 100);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 200);
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
+
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
             DistanceBonusIsFromStarterTemple = BindServerConfig("LevelSystem", "DistanceBonusIsFromStarterTemple", false, "When enabled the distance bonus is calculated from the starter temple instead of world center, typically this makes little difference. But can help ensure your starting area is more correctly calculated.");
@@ -172,6 +180,8 @@ namespace StarLevelSystem
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
+            DelayBeforeCreatureSetup = BindServerConfig("Misc", "DelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. Increase this is you have slow clients.");
+            
         }
 
         internal void LoadYamlConfigs()

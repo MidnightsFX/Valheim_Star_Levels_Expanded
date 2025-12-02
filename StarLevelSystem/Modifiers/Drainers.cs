@@ -17,7 +17,7 @@ namespace StarLevelSystem.Modifiers
                 if (hit == null || hit.m_attacker == null || __instance == null) { return; }
                 Character attacker = hit.GetAttacker();
                 if (attacker == null || attacker.IsPlayer()) { return; }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(attacker);
+                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(attacker);
                 if (cDetails == null || cDetails.Modifiers == null) { return; }
                 if (cDetails.Modifiers.Keys.Contains(ModifierNames.StaminaDrain.ToString())) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), cDetails.Modifiers[ModifierNames.StaminaDrain.ToString()]);

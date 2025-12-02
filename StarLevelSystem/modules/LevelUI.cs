@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
@@ -32,6 +33,18 @@ namespace StarLevelSystem.modules
             if (characterExtendedHuds.ContainsKey(zdo)) { characterExtendedHuds.Remove(zdo); }
         }
 
+        [HarmonyPatch(typeof(Tameable), nameof(Tameable.SetName))]
+        public static class UpdateTamedName
+        {
+            public static void Postfix(Tameable __instance)
+            {
+                CreatureDetailCache cdc = CompositeLazyCache.CacheFromZDO(__instance.m_character);
+                cdc.CreatureName = __instance.GetHoverName();
+                CompositeLazyCache.UpdateCreatureZDOfromCDC(__instance.m_character, cdc);
+                LevelUI.InvalidateCacheEntry(__instance.m_character.GetZDOID());
+            }
+        }
+
         [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.Awake))]
         public static class EnableLevelDisplay
         {
@@ -60,12 +73,12 @@ namespace StarLevelSystem.modules
                 // Star N | this position is set as the same 
                 GameObject star_7 = new GameObject(name: "SLS_level_n");
                 star_7.transform.SetParent(basehud);
-                GameObject star7 = Object.Instantiate(star, star_7.transform);
+                GameObject star7 = UnityEngine.Object.Instantiate(star, star_7.transform);
                 // star7.transform.SetParent(star_7.transform);
                 star_7.transform.localPosition = new Vector3(x: -42, y: 19, z: 0);
                 star7.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GameObject s7Name = new GameObject(name: "level_n_name");
-                GameObject star7Name = Object.Instantiate(s7Name, star_7.transform);
+                GameObject star7Name = UnityEngine.Object.Instantiate(s7Name, star_7.transform);
                 star7Name.transform.SetParent(star_7.transform);
                 star7Name.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GUIManager.Instance.CreateText(
@@ -93,7 +106,7 @@ namespace StarLevelSystem.modules
                 // Star N | this position is set as the same 
                 GameObject star_7_boss = new GameObject(name: "SLS_level_n");
                 star_7_boss.transform.SetParent(bosshud);
-                GameObject star7_boss = Object.Instantiate(star, star_7_boss.transform);
+                GameObject star7_boss = UnityEngine.Object.Instantiate(star, star_7_boss.transform);
                 // Size increase boss stars
                 star7_boss.GetComponent<RectTransform>().sizeDelta = new Vector2(20, 20);
                 star7_boss.transform.Find("star (1)").gameObject.GetComponent<RectTransform>().sizeDelta = new Vector2(16, 16);
@@ -101,7 +114,7 @@ namespace StarLevelSystem.modules
                 star_7_boss.transform.localPosition = new Vector3(x: -17, y: -6, z: 0);
                 star7_boss.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GameObject s7Name_boss = new GameObject(name: "level_n_name");
-                GameObject star7Name_boss = Object.Instantiate(s7Name_boss, star_7_boss.transform);
+                GameObject star7Name_boss = UnityEngine.Object.Instantiate(s7Name_boss, star_7_boss.transform);
                 star7Name_boss.transform.SetParent(star_7_boss.transform);
                 star7Name_boss.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GUIManager.Instance.CreateText(
@@ -125,7 +138,7 @@ namespace StarLevelSystem.modules
             {
                 GameObject new_star_holder = new GameObject(name: $"SLS_level_{level}");
                 new_star_holder.transform.SetParent(parent_t);
-                GameObject new_star = Object.Instantiate(star, new_star_holder.transform);
+                GameObject new_star = UnityEngine.Object.Instantiate(star, new_star_holder.transform);
 
                 // Make boss stars a little bigger
                 if (boss) {
@@ -272,9 +285,9 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Character), nameof(Character.GetHoverName))]
         public static class DisplayCreatureNameChanges {
             public static bool Prefix(Character __instance, ref string __result) {
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails == null || cDetails.CreatureDisabledInBiome) { return true; }
-                __result = CreatureModifiers.BuildCreatureLocalizableName(__instance, cDetails);
+                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
+                if (cDetails == null) { return true; }
+                __result = Localization.instance.Localize(cDetails.CreatureName);
                 return false;
             }
         }
@@ -298,7 +311,8 @@ namespace StarLevelSystem.modules
                     return;
                 }
             } else {
-                CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(ehud.m_character);
+                CreatureDetailCache ccd = CompositeLazyCache.GetCacheOrZDOOnly(ehud.m_character);
+                if (ccd == null) { return; }
                 //Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;

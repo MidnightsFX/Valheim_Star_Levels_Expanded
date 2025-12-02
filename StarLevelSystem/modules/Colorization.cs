@@ -86,7 +86,11 @@ namespace StarLevelSystem.modules
                 // This might need to be async
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
-                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara, true);
+
+
+                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    ccd.Colorization = Colorization.DetermineCharacterColorization(chara, chara.m_level);
+                    CompositeLazyCache.UpdateCreatureZDO(chara, CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(ccd));
                     ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                 }
             } catch (System.Exception ex) {
@@ -131,6 +135,7 @@ namespace StarLevelSystem.modules
 
         internal static void ApplyColorizationWithoutLevelEffects(GameObject cgo, ColorDef colorization) {
             if (ValConfig.EnableColorization.Value == false) { return; }
+            if (colorization == null) { return; }
             LevelSetup genlvlup = colorization.toLevelEffect();
             // Material assignment changes must occur in a try block- they can quietly crash the game otherwise
             try {

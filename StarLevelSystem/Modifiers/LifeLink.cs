@@ -13,7 +13,7 @@ namespace StarLevelSystem.Modifiers
         [HarmonyPatch(typeof(Character), nameof(Character.RPC_Damage))]
         public static class LifeLinkDamageDistributionPatch {
             public static void Prefix(Character __instance, HitData hit) {
-                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance);
+                CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
                 if (cdc != null && cdc.Modifiers.ContainsKey(ModifierNames.LifeLink.ToString())) {
                     //Logger.LogDebug($"Lifelink triggered for {__instance.name}");
                     CreatureModifier cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink.ToString(), cdc.Modifiers[ModifierNames.LifeLink.ToString()]);

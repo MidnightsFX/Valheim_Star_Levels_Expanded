@@ -10,20 +10,19 @@ namespace StarLevelSystem.modules
     public static class APIReciever
     {
         public static bool UpdateCreatureLevel(Character chara, int level) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-            if (cdc == null) { return false; }
-            cdc.Level = level;
-            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
-            LevelSystem.SetAndUpdateCharacterLevel(chara, cdc.Level);
+            CompositeLazyCache.RemoveFromCache(chara);
+            LevelSystem.SetAndUpdateCharacterLevel(chara, level);
             return true;
         }
 
         public static bool UpdateCreatureColorization(Character chara, float value, float hue, float sat, bool emission = false) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-            if (cdc == null) { return false; }
-            cdc.Colorization = new ColorDef(hue, sat, value, emission);
-            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
-            Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, cdc.Colorization);
+            StoredCreatureDetails scd = CompositeLazyCache.StoredFromZDO(chara);
+            if (scd == null) {
+                return false;
+            }
+            scd.Colorization = new ColorDef(value, hue, sat, emission);
+            CompositeLazyCache.UpdateCreatureZDO(chara, scd);
+            Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, scd.Colorization);
             return true;
         }
 
@@ -52,12 +51,14 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllBaseAttributes(Character chara, Dictionary<int, float> attributes) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-            if (cdc == null) { return false; }
+            StoredCreatureDetails scd = CompositeLazyCache.StoredFromZDO(chara);
+            if (scd == null) { return false; }
             foreach (var kvp in attributes) {
-                cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
+                scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
+            CompositeLazyCache.UpdateCreatureZDO(chara, scd);
+            CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(chara);
+
             ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
             ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, cdc, true);
@@ -91,12 +92,14 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllPerLevelAttributes(Character chara, Dictionary<int, float> attributes) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-            if (cdc == null) { return false; }
-            foreach (var kvp in attributes) {
-                cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)kvp.Key] = kvp.Value;
+            StoredCreatureDetails scd = CompositeLazyCache.StoredFromZDO(chara);
+            if (scd == null) { return false; }
+            foreach (var kvp in attributes)
+            {
+                scd.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
+            CompositeLazyCache.UpdateCreatureZDO(chara, scd);
+            CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(chara);
             ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
             ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, cdc, true);
@@ -129,12 +132,14 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllDamageRecievedModifiers(Character chara, Dictionary<int, float> attributes) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-            if (cdc == null) { return false; }
-            foreach (var kvp in attributes) {
-                cdc.DamageRecievedModifiers[(DamageType)kvp.Key] = kvp.Value;
+            StoredCreatureDetails scd = CompositeLazyCache.StoredFromZDO(chara);
+            if (scd == null) { return false; }
+            foreach (var kvp in attributes)
+            {
+                scd.DamageRecievedModifiers[(DamageType)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
+            CompositeLazyCache.UpdateCreatureZDO(chara, scd);
+            CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(chara);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
             return true;
         }
@@ -172,16 +177,14 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllDamageBonus(Character chara, Dictionary<int, float> attributes) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-            if (cdc == null) { return false; }
-            foreach (var kvp in attributes) {
-                if (!cdc.CreatureDamageBonus.ContainsKey((DamageType)kvp.Key)) {
-                    cdc.CreatureDamageBonus[(DamageType)kvp.Key] = kvp.Value;
-                } else {
-                    cdc.CreatureDamageBonus.Add((DamageType)kvp.Key, kvp.Value);
-                }
+            StoredCreatureDetails scd = CompositeLazyCache.StoredFromZDO(chara);
+            if (scd == null) { return false; }
+            foreach (var kvp in attributes)
+            {
+                scd.CreatureDamageBonus[(DamageType)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.UpdateCacheEntry(chara, cdc);
+            CompositeLazyCache.UpdateCreatureZDO(chara, scd);
+            CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(chara);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
             return true;
         }

@@ -20,11 +20,11 @@ namespace StarLevelSystem.modules
             NameSelectionStyle.RandomBoth
         };
 
-        public static void RunOnceModifierSetup(Character character, CreatureDetailCache cacheEntry)
+        public static void RunOnceModifierSetup(Character character, StoredCreatureDetails cacheEntry, Dictionary<string, ModifierType> selectedMods)
         {
-            if (cacheEntry.Modifiers == null) { return; }
+            if (selectedMods == null) { return; }
             int appliedMods = 0;
-            foreach (KeyValuePair<string, ModifierType> kvp in cacheEntry.Modifiers)
+            foreach (KeyValuePair<string, ModifierType> kvp in selectedMods)
             {
                 if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= character.m_level) { break; }
                 if (kvp.Key == NoMods || kvp.Key == string.Empty) { continue; }
@@ -45,10 +45,10 @@ namespace StarLevelSystem.modules
             }
         }
 
-        public static void SetupModifiers(Character character, CreatureDetailCache cacheEntry) {
-            if (cacheEntry.Modifiers == null) { return; }
+        public static void SetupModifiers(Character character, StoredCreatureDetails cacheEntry, Dictionary<string, ModifierType> selectedMods) {
+            if (selectedMods == null) { return; }
             int appliedMods = 0;
-            foreach (KeyValuePair<string, ModifierType> kvp in cacheEntry.Modifiers)
+            foreach (KeyValuePair<string, ModifierType> kvp in selectedMods)
             {
                 if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= character.m_level) { break; }
                 if (kvp.Key == NoMods || kvp.Key == string.Empty) { continue; }
@@ -69,7 +69,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        private static void RunOnceModifier(string mod, Character character, CreatureDetailCache cacheEntry, Dictionary<string, CreatureModifier> availableMods)
+        private static void RunOnceModifier(string mod, Character character, StoredCreatureDetails cacheEntry, Dictionary<string, CreatureModifier> availableMods)
         {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod))
@@ -83,7 +83,7 @@ namespace StarLevelSystem.modules
             selectedMod.RunOnceMethodCall(character, selectedMod.Config, cacheEntry);
         }
 
-        private static void StartupModifier(string mod, Character character, CreatureDetailCache cacheEntry, Dictionary<string, CreatureModifier> availableMods) {
+        private static void StartupModifier(string mod, Character character, StoredCreatureDetails cacheEntry, Dictionary<string, CreatureModifier> availableMods) {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod)) {
                 if (mod == NoMods) { return; }
@@ -296,14 +296,15 @@ namespace StarLevelSystem.modules
         }
 
         public static void RemoveCreatureModifier(Character character, string modifier) {
-            CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(character);
-            if (cdc.Modifiers.Keys.Contains(modifier))
+            CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, new Dictionary<string, ModifierType>() { });
+            Dictionary<string, ModifierType> characterMods = StoredMods.Get();
+            if (characterMods.Keys.Contains(modifier))
             {
-                cdc.Modifiers.Remove(modifier);
-                CompositeLazyCache.UpdateCreatureZDO(character, CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(cdc));
-                CompositeLazyCache.UpdateCachedEntry(character, cdc);
-                LevelUI.InvalidateCacheEntry(character.GetZDOID());
-                ModificationExtensionSystem.CreatureSetup(character);
+                Logger.LogDebug($"{character.name} has {modifier}, removing.");
+                if (characterMods.Remove(modifier)) {
+                    StoredMods.Set(characterMods);
+                }
+                CompositeLazyCache.RebuildCreatureName(character);
             }
         }
 
@@ -321,29 +322,23 @@ namespace StarLevelSystem.modules
             savedMods.Add(newModifier, modType);
             updatedMods.Set(savedMods);
             //Logger.LogDebug($"Adding Modifier to ZDO.");
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(character);
+            StoredCreatureDetails scd = CompositeLazyCache.GetZDONoCreate(character);
 
             var selectedMod = CreatureModifiersData.GetModifierDef(newModifier, modType);
             //Logger.LogDebug($"Setting up modifier.");
-            selectedMod.SetupMethodCall(character, selectedMod.Config, cdc);
-            selectedMod.RunOnceMethodCall(character, selectedMod.Config, cdc);
+            selectedMod.SetupMethodCall(character, selectedMod.Config, scd);
+            selectedMod.RunOnceMethodCall(character, selectedMod.Config, scd);
             SetupCreatureVFX(character, selectedMod);
 
             // Note the character name needs to be rerolled
-
-            //Logger.LogDebug($"Updating character cache entry.");
-            cdc.Modifiers.Add(newModifier, modType);
-            // Update the existing cache entry with our new modifier for the creature
-            CompositeLazyCache.UpdateCreatureZDO(character, CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(cdc));
-            // Forces a rebuild of this characters UI to include possible new star icons or name changes
-            LevelUI.InvalidateCacheEntry(character.GetZDOID());
+            CompositeLazyCache.RebuildCreatureName(character);
 
             // Not applying the update immediately
             if (applyChanges == false) {
-                ModificationExtensionSystem.ApplySpeedModifications(character, cdc);
-                ModificationExtensionSystem.ApplyDamageModification(character, cdc);
-                ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, cdc, true);
-                ModificationExtensionSystem.ApplyHealthModifications(character, cdc);
+                ModificationExtensionSystem.ApplySpeedModifications(character, scd);
+                ModificationExtensionSystem.ApplyDamageModification(character, scd);
+                ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, scd, true);
+                ModificationExtensionSystem.ApplyHealthModifications(character, scd);
                 return true;
             }
 

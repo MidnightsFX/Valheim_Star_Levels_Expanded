@@ -303,7 +303,8 @@ namespace StarLevelSystem.Data
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
 
-                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara);
+                    StoredCreatureDetails ccd = CompositeLazyCache.GetZDONoCreate(chara);
+                    if (ccd == null) { continue; }
                     // Modify the creatures stats by custom character/biome modifications
                     ModificationExtensionSystem.ApplySpeedModifications(chara, ccd);
                     ModificationExtensionSystem.ApplyDamageModification(chara, ccd, true);
@@ -329,7 +330,8 @@ namespace StarLevelSystem.Data
                     i = 0;
                 }
                 if (character.m_level <= 1) { continue; }
-                CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(character);
+                StoredCreatureDetails ccd = CompositeLazyCache.GetZDONoCreate(character);
+                if (ccd == null) { continue; }
                 // Modify the creatures stats by custom character/biome modifications
                 ModificationExtensionSystem.ApplySpeedModifications(character, ccd);
                 ModificationExtensionSystem.ApplyDamageModification(character, ccd, true);

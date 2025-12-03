@@ -1,5 +1,6 @@
 ﻿using JetBrains.Annotations;
 using StarLevelSystem.Data;
+using System.Collections.Generic;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Modifiers
@@ -8,22 +9,23 @@ namespace StarLevelSystem.Modifiers
     internal static class Resistance
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache)
+        public static void Setup(Character creature, CreatureModConfig config, StoredCreatureDetails ccache)
         {
-            if (ccache == null) { return; }
-            if (ccache.Modifiers.ContainsKey(CreatureModifiersData.ModifierNames.ResistBlunt.ToString()))
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(creature);
+            if (ccache == null || mods == null) { return; }
+            if (mods.ContainsKey(CreatureModifiersData.ModifierNames.ResistBlunt.ToString()))
             {
-                ccache.DamageRecievedModifiers[DamageType.Blunt] -= config.BasePower + (config.PerlevelPower * ccache.Level);
+                ccache.DamageRecievedModifiers[DamageType.Blunt] -= config.BasePower + (config.PerlevelPower * creature.m_level);
                 if (ccache.DamageRecievedModifiers[DamageType.Blunt] < 0.20f) { ccache.DamageRecievedModifiers[DamageType.Blunt] = 0.20f; }
             }
-            if (ccache.Modifiers.ContainsKey(CreatureModifiersData.ModifierNames.ResistPierce.ToString()))
+            if (mods.ContainsKey(CreatureModifiersData.ModifierNames.ResistPierce.ToString()))
             {
-                ccache.DamageRecievedModifiers[DamageType.Pierce] -= config.BasePower + (config.PerlevelPower * ccache.Level);
+                ccache.DamageRecievedModifiers[DamageType.Pierce] -= config.BasePower + (config.PerlevelPower * creature.m_level);
                 if (ccache.DamageRecievedModifiers[DamageType.Pierce] < 0.20f) { ccache.DamageRecievedModifiers[DamageType.Pierce] = 0.20f; }
             }
-            if (ccache.Modifiers.ContainsKey(CreatureModifiersData.ModifierNames.ResistSlash.ToString()))
+            if (mods.ContainsKey(CreatureModifiersData.ModifierNames.ResistSlash.ToString()))
             {
-                ccache.DamageRecievedModifiers[DamageType.Slash] -= config.BasePower + (config.PerlevelPower * ccache.Level);
+                ccache.DamageRecievedModifiers[DamageType.Slash] -= config.BasePower + (config.PerlevelPower * creature.m_level);
                 if (ccache.DamageRecievedModifiers[DamageType.Slash] < 0.20f) { ccache.DamageRecievedModifiers[DamageType.Slash] = 0.20f; }
             }
         }

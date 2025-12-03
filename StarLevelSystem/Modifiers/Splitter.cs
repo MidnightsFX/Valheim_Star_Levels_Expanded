@@ -16,29 +16,30 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
-                if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Splitter.ToString())) {
-                    Logger.LogDebug("Checking splitter multiplication");
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter.ToString(), cDetails.Modifiers[ModifierNames.Splitter.ToString()]);
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
+                if (mods != null && mods.ContainsKey(ModifierNames.Splitter.ToString())) {
+                    
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter.ToString(), mods[ModifierNames.Splitter.ToString()]);
                     float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
                     bool shouldTame = __instance.IsTamed();
+                    Logger.LogDebug($"Splitter on {__instance.name} total split potential:{totalsplits}");
                     while (totalsplits >= 1) {
-                        GameObject creatureToCreate = cDetails.CreaturePrefab;
-                        if (cDetails.CreaturePrefab == null) {
-                            creatureToCreate = PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(__instance.gameObject));
-                        }
-                        if (creatureToCreate != null) { break; }
+                        GameObject creatureToCreate = PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(__instance.gameObject));
+                        if (creatureToCreate == null) { break; }
                         GameObject sgo = GameObject.Instantiate(creatureToCreate, __instance.transform.position, __instance.transform.rotation);
                         totalsplits -= 1f;
-                        if (shouldTame) { sgo.GetComponent<Character>()?.SetTamed(true); }
+                        if (shouldTame) { sgo.GetComponent<Character>().SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
-                            if (ValConfig.SplittersInheritLevel.Value) {
-                                ModificationExtensionSystem.CreatureSetup(sChar, cDetails.Level, false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
-                            } else {
-                                ModificationExtensionSystem.CreatureSetup(sChar, cDetails.Level - 1, false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, sChar.m_nview, new StoredCreatureDetails());
+                            int level = Mathf.RoundToInt(__instance.m_level / totalsplits);
+                            if (level <= 0) { level = 1; }
+                            if (ValConfig.SplittersInheritLevel.Value == false) {
+                                level = UnityEngine.Random.Range(1, level);
                             }
+                            CompositeLazyCache.GetAndSetZDO(sChar, level, spawnMultiplyCheck: false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }
                         
                     }

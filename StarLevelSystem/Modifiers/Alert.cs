@@ -11,8 +11,8 @@ namespace StarLevelSystem.Modifiers
     internal static class Alert
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
-            creature.m_baseAI.m_hearRange *= config.BasePower + (config.PerlevelPower * ccache.Level);
+        public static void Setup(Character creature, CreatureModConfig config, StoredCreatureDetails ccache) {
+            creature.m_baseAI.m_hearRange *= config.BasePower + (config.PerlevelPower * creature.m_level);
         }
     }
 }

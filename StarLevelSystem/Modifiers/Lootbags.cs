@@ -12,7 +12,7 @@ namespace StarLevelSystem.Modifiers
     internal static class Lootbags
     {
         [UsedImplicitly]
-        public static void RunOnce(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+        public static void RunOnce(Character creature, CreatureModConfig config, StoredCreatureDetails ccache) {
             if (ccache == null) { return; }
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed] += 0.15f;
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] += 0.3f;
@@ -24,11 +24,11 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.m_character == null || __instance.m_character.IsPlayer()) {
                     return;
                 }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance.m_character);
-                if (cDetails != null && cDetails.Modifiers != null && cDetails.Modifiers.ContainsKey(ModifierNames.Lootbags.ToString())) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), cDetails.Modifiers[ModifierNames.Lootbags.ToString()]);
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
+                if (mods != null && mods.ContainsKey(ModifierNames.Lootbags.ToString())) {
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), mods[ModifierNames.Lootbags.ToString()]);
                     List <KeyValuePair<GameObject, int>> ExtraLoot = new List <KeyValuePair<GameObject, int>>();
-                    float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * cDetails.Level;
+                    float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
                     foreach (var kvp in __result) {
                         ExtraLoot.Add(new KeyValuePair<GameObject, int>(key: kvp.Key, value: Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier)));
                     }

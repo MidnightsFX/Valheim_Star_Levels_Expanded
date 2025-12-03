@@ -1,10 +1,13 @@
 ﻿using HarmonyLib;
+using Jotunn.Managers;
+using PlayFab.EconomyModels;
 using StarLevelSystem.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using UnityEngine;
 using static HitData;
 using static StarLevelSystem.common.DataObjects;
@@ -38,7 +41,7 @@ namespace StarLevelSystem.modules
             {
                 if (__instance.IsPlayer()) { return; }
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
+                StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
                 LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
             }
         }
@@ -48,7 +51,7 @@ namespace StarLevelSystem.modules
         {
             public static void Postfix(VisEquipment __instance, GameObject __result) {
                 if (__instance.m_isPlayer == true) { return; }
-                ApplySizeModificationZRefOnly(__result, __instance.m_nview);
+                ApplySizeModificationToObjWhenZReady(__result, __instance.m_nview);
             }
         }
 
@@ -56,15 +59,22 @@ namespace StarLevelSystem.modules
         public static class CreatureCharacterExtension
         {
             public static void Postfix(Character __instance) {
-                // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-                CreatureSetup(__instance, delay: 2f);
+                bool setlevel = false;
+                if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
+                    setlevel = true;
+                }
+                CreatureSetup(__instance, delay: 2f, setLevel: setlevel);
             }
         }
 
         [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Awake))]
         public static class PostfixSetupBosses {
             public static void Postfix(Humanoid __instance) {
-                CreatureSetup(__instance, delay: 2f);
+                bool setlevel = false;
+                if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
+                    setlevel = true;
+                }
+                CreatureSetup(__instance, delay: 2f, setLevel: setlevel);
             }
         }
 
@@ -75,7 +85,7 @@ namespace StarLevelSystem.modules
             {
                 if (__instance == null || __instance.IsPlayer()) { return; }
                 //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
-                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
+                StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
                 if (__instance.m_nview != null) {
                     ApplySizeModificationZRefOnly(ragdoll.gameObject, __instance.m_nview);
                 }
@@ -83,7 +93,6 @@ namespace StarLevelSystem.modules
                 if (__instance.m_level > 1 && cDetails != null && cDetails.Colorization != null) {
                     Colorization.ApplyColorizationWithoutLevelEffects(ragdoll.gameObject, cDetails.Colorization);
                 }
-                CompositeLazyCache.RemoveFromCache(__instance);
             }
         }
 
@@ -95,51 +104,55 @@ namespace StarLevelSystem.modules
             }
         }
 
-
+        // TODO: Add caching for animation speed adjustments
         [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
         public static class ModifyCharacterAnimationSpeed {
             public static void Postfix(CharacterAnimEvent __instance) {
                 if (__instance.m_character != null && __instance.m_character.InAttack()) {
-                    CreatureDetailCache cdc = CompositeLazyCache.GetCacheOrZDOOnly(__instance.m_character);
+                    StoredCreatureDetails cdc = CompositeLazyCache.GetZDONoCreate(__instance.m_character);
                     if (cdc != null && cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] != 1 || cdc != null && cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] != 0f) {
-                        __instance.m_animator.speed = cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] + (cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] * cdc.Level);
+                        __instance.m_animator.speed = cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] + (cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] * __instance.m_character.m_level);
                     }
                 }
             }
         }
 
+        [HarmonyPatch(typeof(Attack), nameof(Attack.GetLevelDamageFactor))]
+        public static class ModifyDamagePerLevel
+        {
+            public static bool Prefix(Attack __instance, ref float __result)
+            {
+                if (__instance.m_character.IsBoss())
+                {
+                    __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.BossEnemyDamageMultiplier.Value;
+                } else {
+                    __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.EnemyDamageLevelMultiplier.Value;
+                }
+                if (ValConfig.EnableDebugOutputForDamage.Value) {
+                    Logger.LogDebug($"Setting {__instance.m_character.name} lvl {__instance.m_character.GetLevel() - 1} dmg factor to {__result}");
+                }
+                return false;
+            }
+        }
+
+        
+
         [HarmonyPatch(typeof(Character), nameof(Character.Damage))]
         public static class CharacterDamageModificationApply {
             private static void Prefix(HitData hit, Character __instance) {
-                CreatureDetailCache attackerCharacter = CompositeLazyCache.GetCacheOrZDOOnly(hit.GetAttacker());
-                CreatureDetailCache damagedCharacter = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
+                StoredCreatureDetails attackerCharacter = CompositeLazyCache.GetZDONoCreate(hit.GetAttacker());
+                StoredCreatureDetails damagedCharacter = CompositeLazyCache.GetZDONoCreate(__instance);
 
-                //Logger.LogDebug($"Original damage: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
                 if (attackerCharacter != null && attackerCharacter.CreatureDamageBonus != null && attackerCharacter.CreatureDamageBonus.Count > 0) {
                     if (ValConfig.EnableDebugOutputForDamage.Value) {
-                        Logger.LogDebug($"{attackerCharacter.CreatureName} Hit:{hit.GetTotalDamage()} Adding {attackerCharacter.GetDamageBonusDescription()}");
+                        Logger.LogDebug($"{__instance.name} Hit:{hit.GetTotalDamage()} Adding {attackerCharacter.GetDamageBonusDescription()}");
                     }
-                    
                     AddDamagesToHit(hit, attackerCharacter.CreatureDamageBonus);
                 }
 
                 // Apply damage recieved Modifiers for the target
                 if (damagedCharacter != null) {
-                    if (ValConfig.EnableDebugOutputForDamage.Value) {
-                        Logger.LogDebug($"Applying Recieved Dmg Mod: Fi:{damagedCharacter.DamageRecievedModifiers[DamageType.Fire]} Fr:{damagedCharacter.DamageRecievedModifiers[DamageType.Frost]} Li:{damagedCharacter.DamageRecievedModifiers[DamageType.Lightning]} Po:{damagedCharacter.DamageRecievedModifiers[DamageType.Poison]} Sp:{damagedCharacter.DamageRecievedModifiers[DamageType.Spirit]} Bl:{damagedCharacter.DamageRecievedModifiers[DamageType.Blunt]} Sl:{damagedCharacter.DamageRecievedModifiers[DamageType.Slash]} Pi:{damagedCharacter.DamageRecievedModifiers[DamageType.Pierce]}");
-                    }
-                    hit.m_damage.m_fire *= damagedCharacter.DamageRecievedModifiers[DamageType.Fire];
-                    hit.m_damage.m_frost *= damagedCharacter.DamageRecievedModifiers[DamageType.Frost];
-                    hit.m_damage.m_lightning *= damagedCharacter.DamageRecievedModifiers[DamageType.Lightning];
-                    hit.m_damage.m_poison *= damagedCharacter.DamageRecievedModifiers[DamageType.Poison];
-                    hit.m_damage.m_spirit *= damagedCharacter.DamageRecievedModifiers[DamageType.Spirit];
-                    hit.m_damage.m_blunt *= damagedCharacter.DamageRecievedModifiers[DamageType.Blunt];
-                    hit.m_damage.m_slash *= damagedCharacter.DamageRecievedModifiers[DamageType.Slash];
-                    hit.m_damage.m_pierce *= damagedCharacter.DamageRecievedModifiers[DamageType.Pierce];
-                    if (ValConfig.EnableDebugOutputForDamage.Value)
-                    {
-                        Logger.LogDebug($"New damages totals will hit {damagedCharacter.CreatureName}: fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
-                    }
+                    ApplyDamageModifiers(hit, __instance, damagedCharacter.DamageRecievedModifiers);
                 }
             }
         }
@@ -164,7 +177,64 @@ namespace StarLevelSystem.modules
         //    }
         //}
 
-        
+        internal static void ApplyDamageModifiers(HitData hit, Character chara, Dictionary<DamageType, float> damageMods)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"Applying damage recieved mods for {chara.m_name}");
+            if (hit.m_damage.m_blunt > 0 && damageMods.ContainsKey(DamageType.Blunt)) {
+                sb.Append($"  {DamageType.Blunt}: {hit.m_damage.m_blunt} * {damageMods[DamageType.Blunt]}");
+                hit.m_damage.m_blunt *= damageMods[DamageType.Blunt];
+                sb.Append($" = {hit.m_damage.m_blunt}\n");
+            }
+            if (hit.m_damage.m_pierce > 0 && damageMods.ContainsKey(DamageType.Pierce)) {
+                sb.Append($"  {DamageType.Pierce}: {hit.m_damage.m_pierce} * {damageMods[DamageType.Pierce]}");
+                hit.m_damage.m_pierce *= damageMods[DamageType.Pierce];
+                sb.Append($" = {hit.m_damage.m_pierce}\n");
+            }
+            if (hit.m_damage.m_slash > 0 && damageMods.ContainsKey(DamageType.Slash)) {
+                sb.Append($"  {DamageType.Slash}: {hit.m_damage.m_slash} * {damageMods[DamageType.Slash]}");
+                hit.m_damage.m_slash *= damageMods[DamageType.Slash];
+                sb.Append($" = {hit.m_damage.m_slash}\n");
+            }
+            if (hit.m_damage.m_fire > 0 && damageMods.ContainsKey(DamageType.Fire)) {
+                sb.Append($"  {DamageType.Fire}: {hit.m_damage.m_fire} * {damageMods[DamageType.Fire]}");
+                hit.m_damage.m_fire *= damageMods[DamageType.Fire];
+                sb.Append($" = {hit.m_damage.m_fire}\n");
+            }
+            if (hit.m_damage.m_frost > 0 && damageMods.ContainsKey(DamageType.Frost)) {
+                sb.Append($"  {DamageType.Fire}: {hit.m_damage.m_frost} * {damageMods[DamageType.Frost]}");
+                hit.m_damage.m_frost *= damageMods[DamageType.Frost];
+                sb.Append($" = {hit.m_damage.m_frost}\n");
+            }
+            if (hit.m_damage.m_lightning > 0 && damageMods.ContainsKey(DamageType.Lightning)) {
+                sb.Append($"  {DamageType.Lightning}: {hit.m_damage.m_lightning} * {damageMods[DamageType.Lightning]}");
+                hit.m_damage.m_lightning *= damageMods[DamageType.Lightning];
+                sb.Append($" = {hit.m_damage.m_lightning}\n");
+            }
+            if (hit.m_damage.m_poison > 0 && damageMods.ContainsKey(DamageType.Poison)) {
+                sb.Append($"  {DamageType.Poison}: {hit.m_damage.m_poison} * {damageMods[DamageType.Poison]}");
+                hit.m_damage.m_poison *= damageMods[DamageType.Poison];
+                sb.Append($" = {hit.m_damage.m_poison}\n");
+            }
+            if (hit.m_damage.m_spirit > 0 && damageMods.ContainsKey(DamageType.Spirit)) {
+                sb.Append($"  {DamageType.Spirit}: {hit.m_damage.m_spirit} * {damageMods[DamageType.Spirit]}");
+                hit.m_damage.m_spirit *= damageMods[DamageType.Spirit];
+                sb.Append($" = {hit.m_damage.m_spirit}\n");
+            }
+            if (hit.m_damage.m_chop > 0 && damageMods.ContainsKey(DamageType.Chop)) {
+                sb.Append($"  {DamageType.Spirit}: {hit.m_damage.m_chop} * {damageMods[DamageType.Chop]}");
+                hit.m_damage.m_chop *= damageMods[DamageType.Chop];
+                sb.Append($" = {hit.m_damage.m_chop}\n");
+            }
+            if (hit.m_damage.m_pickaxe > 0 && damageMods.ContainsKey(DamageType.Pickaxe)) {
+                sb.Append($"  {DamageType.Pickaxe}: {hit.m_damage.m_pickaxe} * {damageMods[DamageType.Pickaxe]}");
+                hit.m_damage.m_pickaxe *= damageMods[DamageType.Pickaxe];
+                sb.Append($" = {hit.m_damage.m_pickaxe}\n");
+            }
+            if (ValConfig.EnableDebugOutputForDamage.Value) {
+                Logger.LogInfo(sb.ToString());
+            }
+        }
 
         internal static void AddDamagesToHit(HitData hit, Dictionary<DamageType, float> damageBonuses) {
             float hitdamage = hit.GetTotalDamage();
@@ -214,16 +284,13 @@ namespace StarLevelSystem.modules
             ZNetScene.instance.Destroy(go);
         }
 
-        static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null) {
+        static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, bool setLevel = true) {
             if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { return; }
             //Logger.LogDebug("Setting up creature cache as Z-owner");
-            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, __instance.m_nview, new StoredCreatureDetails());
-            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply);
-            cZDO.Set(CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(cdc));
-            __instance.SetLevel(cdc.Level);
+            CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
         }
 
-        static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, bool force = false, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)
+        static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, bool force = false, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool setLevel = true)
         {
             int times = 0;
             bool status = false;
@@ -234,7 +301,7 @@ namespace StarLevelSystem.modules
                 // Try to ensure that the Zowner gets the creature setup
                 //Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} force:{force}");
                 if (__instance.m_nview.IsOwner() || force == true) {
-                    SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
+                    SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers, setLevel: setLevel);
                 }
 
                 status = CharacterSetupLevelChecked(__instance, level_override);
@@ -242,10 +309,7 @@ namespace StarLevelSystem.modules
                 // We've failed to get the creature setup and we don't have data for it, its not getting setup
                 if (times == ValConfig.DelayBeforeCreatureSetup.Value - 1) {
                     Logger.LogDebug("Creature Details not set, settings creature as non-zowner is the owners network slow?");
-                    CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, __instance.m_nview, new StoredCreatureDetails());
-                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply);
-                    cZDO.Set(CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(cdc));
-                    __instance.SetLevel(cdc.Level);
+                    CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
                 }
                 if (times >= ValConfig.DelayBeforeCreatureSetup.Value) { break; }
             }
@@ -259,46 +323,17 @@ namespace StarLevelSystem.modules
             if (__instance == null) { return false; }
 
             // Do not run setup, only use saved ZDO data/cached
-            CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
+            StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
             //Logger.LogDebug($"Checking Cache {cDetails}");
 
             if (ValConfig.ForceControlAllSpawns.Value == true)
             {
-                cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, level_override);
-                __instance.SetLevel(cDetails.Level);
+                cDetails = CompositeLazyCache.GetAndSetZDO(__instance, level_override);
             }
             if (cDetails == null) { return false; }
-            if (cDetails.Modifiers != null) {
-                //Logger.LogDebug($"{cDetails.CreatureName}-{cDetails.Level} b{cDetails.Biome} m:{cDetails.Modifiers.Count}");
-            }
-
-            // Set boss levels
-            if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value)
-            {
-                __instance.SetLevel(cDetails.Level);
-            }
-
-            // These creatures are always leveled up, only applies level if its not set
-            if (ForceLeveledCreatures.Contains(__instance.name))
-            {
-                __instance.SetLevel(cDetails.Level);
-            }
-
-            if (level_override != 0)
-            {
-                //Logger.LogDebug($"Character level override enabled. Setting level {level_override}");
-                __instance.SetLevel(level_override);
-            }
-
-            // Logic about whether we should use the current level of the creature if it has been modified by something else?
-            if (__instance.m_level != cDetails.Level)
-            {
-                Logger.LogDebug($"Creature {__instance.name} has level {__instance.m_level} but cache says {cDetails.Level}.");
-                //cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, true);
-            }
 
             // Modify the creatures stats by custom character/biome modifications
-            CreatureModifiers.SetupModifiers(__instance, cDetails);
+            CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
             LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
@@ -315,7 +350,7 @@ namespace StarLevelSystem.modules
             return true;
         }
 
-        internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool force = false) {
+        internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool force = false, bool setLevel = true) {
             if (__instance.IsPlayer()) { return; }
 
             //// Select the creature data
@@ -325,17 +360,14 @@ namespace StarLevelSystem.modules
 
             // Generally a bad idea to run setup immediately if this is a networked player and the owner hasn't setup the creature
             if (ZNetScene.instance != null) {
-                ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, force: force, spawnMultiply: multiply, requiredModifiers: requiredModifiers));
+                ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, force: force, spawnMultiply: multiply, requiredModifiers: requiredModifiers, setLevel: setLevel));
             } else {
                 Logger.LogDebug("FALLBACK setup of creature, does this client have network issues?");
-                CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, __instance.m_nview, new StoredCreatureDetails());
-                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(__instance, leveloverride, requiredModifiers, spawnMultiplyCheck: multiply);
-                cZDO.Set(CompositeLazyCache.ZStoredCreatureValuesFromCreatureDetailCache(cdc));
-                __instance.SetLevel(cdc.Level);
+                CompositeLazyCache.GetAndSetZDO(__instance, leveloverride, requiredModifiers, spawnMultiplyCheck: multiply, setLevel: setLevel);
             }
         }
 
-        internal static void ApplyHealthModifications(Character chara, CreatureDetailCache cDetails) {
+        internal static void ApplyHealthModifications(Character chara, StoredCreatureDetails cDetails) {
             float chealth = chara.m_health;
             if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
                 chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
@@ -343,7 +375,7 @@ namespace StarLevelSystem.modules
 
             if (cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] != 1 || cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] > 0) {
                 float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
-                float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * (cDetails.Level - 1));
+                float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * (chara.GetLevel() - 1));
                 float hp = (basehp + perlvlhp);
                 chara.SetMaxHealth(hp);
                 //Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
@@ -359,16 +391,18 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CreatureDetailCache cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
+        internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, StoredCreatureDetails cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
             // Don't scale in dungeons
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false || cDetails == null) {
                 return;
             }
-
             float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
+
+            GameObject creatureref = PrefabManager.Instance.GetPrefab(cDetails.RefCreatureName);
+
             if (current_size > 0f && force_update == false) {
-                if (cDetails.CreaturePrefab) {
-                    Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * current_size;
+                if (creatureref) {
+                    Vector3 sizeEstimate = creatureref.transform.localScale * current_size;
                     // Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
                     creature.transform.localScale = sizeEstimate;
                     Physics.SyncTransforms();
@@ -377,8 +411,8 @@ namespace StarLevelSystem.modules
             }
             if (include_existing && current_size > 0) {
                 zview.GetZDO().Set(SLS_SIZE, current_size + bonus);
-                if (cDetails.CreaturePrefab) {
-                    Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * current_size;
+                if (creatureref) {
+                    Vector3 sizeEstimate = creatureref.transform.localScale * current_size;
                     creature.transform.localScale = sizeEstimate;
                     Logger.LogDebug($"Increasing character size from existing {current_size} + {bonus}.");
                 }
@@ -389,16 +423,41 @@ namespace StarLevelSystem.modules
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
             float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
 
-            float creature_level_size = (per_level_mod * cDetails.Level);
+            float creature_level_size = (per_level_mod * creature.GetComponent<Character>().GetLevel());
             float scale = base_size_mod + creature_level_size;
 
-            if (cDetails.CreaturePrefab) {
-                Vector3 sizeEstimate = cDetails.CreaturePrefab.transform.localScale * scale;
+            if (creatureref) {
+                Vector3 sizeEstimate = creatureref.transform.localScale * scale;
                 creature.transform.localScale = sizeEstimate;
                 // Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
             }
             zview.GetZDO().Set(SLS_SIZE, scale);
             Physics.SyncTransforms();
+        }
+
+        public static void ApplySizeModificationToObjWhenZReady(GameObject obj, ZNetView zview)
+        {
+            ZNet.instance.StartCoroutine(WaitForZReadyAndApplySize(obj, zview));
+        }
+
+        public static IEnumerator WaitForZReadyAndApplySize(GameObject obj, ZNetView zview, int max = 10)
+        {
+            int attemps = 0;
+            while(attemps < max)
+            {
+                yield return new WaitForSeconds(0.5f);
+                attemps++;
+                // no new sizes for dead things
+                if (obj == null || zview == null || zview.GetZDO() == null) { yield break; }
+                float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
+                // Don't scale in dungeons
+                if (obj.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) { yield break; }
+                if (current_size == 0f) { continue; }
+                obj.transform.localScale *= current_size;
+                Physics.SyncTransforms();
+                break;
+            }
+            yield break;
         }
 
         private static void ApplySizeModificationZRefOnly(GameObject obj, ZNetView zview) {
@@ -409,37 +468,41 @@ namespace StarLevelSystem.modules
                 return;
             }
             float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
+            if (current_size == 0f) { return; }
             obj.transform.localScale *= current_size;
             Physics.SyncTransforms();
         }
 
-        internal static void ApplySpeedModifications(Character creature, CreatureDetailCache cDetails) {
+        internal static void ApplySpeedModifications(Character creature, StoredCreatureDetails cDetails) {
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel];
             float base_speed = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed];
             float perlevelmod = per_level_mod * (creature.m_level - 1);
             // Modify the creature's speed attributes based on the base speed and per level modifier
             float speedmod = (base_speed + perlevelmod);
 
-            if (cDetails.CreaturePrefab)
+            GameObject creatureRef = PrefabManager.Instance.GetPrefab(creature.name);
+            if (creatureRef == null)
             {
-                Character refChar = cDetails.CreaturePrefab.GetComponent<Character>();
-                if (refChar == null) {
-                    Logger.LogWarning($"Creature reference {cDetails.CreaturePrefab.name} does not have a Character component, cannot apply speed modifications.");
-                    return;
-                }
-                creature.m_speed = refChar.m_speed * speedmod;
-                creature.m_walkSpeed = refChar.m_walkSpeed * speedmod;
-                creature.m_runSpeed = refChar.m_runSpeed * speedmod;
-                creature.m_turnSpeed = refChar.m_turnSpeed * speedmod;
-                creature.m_flyFastSpeed = refChar.m_flyFastSpeed * speedmod;
-                creature.m_flySlowSpeed = refChar.m_flySlowSpeed * speedmod;
-                creature.m_flyTurnSpeed = refChar.m_flyTurnSpeed * speedmod;
-                creature.m_swimSpeed = refChar.m_swimSpeed * speedmod;
-                creature.m_crouchSpeed = refChar.m_crouchSpeed * speedmod;
-                // Logger.LogDebug($"Applying speed modifications for {creature.name}-{creature.m_level} speed modified by: {speedmod}, b{base_speed} + p{perlevelmod}");
-            } else {
-                Logger.LogWarning("Creature reference not set, can't apply speed modifiers.");
+                Logger.LogWarning($"Unable to find reference object for {creature.name}, not applying speed modifications");
+                return;
             }
+
+            Character refChar = creatureRef.GetComponent<Character>();
+
+            if (refChar == null) {
+                Logger.LogWarning($"Unable to find reference character for {creature.name}, not applying speed modifications");
+                return;
+            }
+
+            creature.m_speed = refChar.m_speed * speedmod;
+            creature.m_walkSpeed = refChar.m_walkSpeed * speedmod;
+            creature.m_runSpeed = refChar.m_runSpeed * speedmod;
+            creature.m_turnSpeed = refChar.m_turnSpeed * speedmod;
+            creature.m_flyFastSpeed = refChar.m_flyFastSpeed * speedmod;
+            creature.m_flySlowSpeed = refChar.m_flySlowSpeed * speedmod;
+            creature.m_flyTurnSpeed = refChar.m_flyTurnSpeed * speedmod;
+            creature.m_swimSpeed = refChar.m_swimSpeed * speedmod;
+            creature.m_crouchSpeed = refChar.m_crouchSpeed * speedmod;
         }
 
         public static void ForceUpdateDamageMod(Character creature, float increase_dmg_by)
@@ -448,14 +511,14 @@ namespace StarLevelSystem.modules
             creature.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, current_dmg_bonus + increase_dmg_by);
         }
 
-        internal static void ApplyDamageModification(Character creature, CreatureDetailCache cDetails, bool updateCache = false) {
+        internal static void ApplyDamageModification(Character creature, StoredCreatureDetails cDetails, bool updateCache = false) {
             if (creature.m_nview == null || cDetails == null) { return; }
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
             float base_dmg_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];
 
             // No changes, do nothing
             if (base_dmg_mod == 1 && per_level_mod == 0) { return; }
-            float dmgmod = base_dmg_mod + (per_level_mod * (cDetails.Level - 1));
+            float dmgmod = base_dmg_mod + (per_level_mod * (creature.GetLevel() - 1));
 
             //// Debugging
             //foreach (var entry in cDetails.CreatureBaseValueModifiers)

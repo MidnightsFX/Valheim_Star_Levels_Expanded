@@ -57,6 +57,10 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
         public static ConfigEntry<bool> EnableColorization;
+
+        public static ConfigEntry<int> FishMaxLevel;
+        public static ConfigEntry<int> BirdMaxLevel;
+        public static ConfigEntry<int> TreeMaxLevel;
         
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
@@ -91,10 +95,10 @@ namespace StarLevelSystem
         }
 
         public void SetupConfigRPCs() {
-            LevelSettingsRPC = NetworkManager.Instance.AddRPC("LSE_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
-            ColorSettingsRPC = NetworkManager.Instance.AddRPC("LSE_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
-            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("LSE_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
-            ModifiersRPC = NetworkManager.Instance.AddRPC("LSE_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
+            LevelSettingsRPC = NetworkManager.Instance.AddRPC("SLS_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
+            ColorSettingsRPC = NetworkManager.Instance.AddRPC("SLS_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
+            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
+            ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
 
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
@@ -142,6 +146,9 @@ namespace StarLevelSystem
             EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
             EnableScalingFish = BindServerConfig("LevelSystem", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
+            FishMaxLevel = BindServerConfig("LevelSystem", "FishMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            BirdMaxLevel = BindServerConfig("LevelSystem", "BirdMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            TreeMaxLevel = BindServerConfig("LevelSystem", "TreeMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
             FishSizeScalePerLevel = BindServerConfig("LevelSystem", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
             EnableTreeScaling = BindServerConfig("LevelSystem", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
             TreeSizeScalePerLevel = BindServerConfig("LevelSystem", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");

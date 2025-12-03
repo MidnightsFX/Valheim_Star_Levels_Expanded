@@ -64,10 +64,6 @@ namespace StarLevelSystem.common
             public override void Run(string[] args)
             {
                 var id = Player.m_localPlayer.GetZDOID().ID;
-                if (CompositeLazyCache.sessionCache.ContainsKey(id)) {
-                    CompositeLazyCache.sessionCache.Remove(id);
-                    Logger.LogInfo($"Removed Cached modifiers {id}");
-                }
                 // Set damage modifier to 1
                 Player.m_localPlayer.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, 1f);
                 // Set base attribute modifers to 1

@@ -1,3 +1,12 @@
+**0.12.1**
+ ---
+ ```
+ - Logged detailed scaling changes for damage per level
+ - Fix splitter not splitting when using fallbacks
+ - More cache invalidation for UI related and setup changes
+ - Fix size scale setting weapon sizes to zero before a creature has scale data
+ ```
+
 **0.12.0**
  ---
  ```

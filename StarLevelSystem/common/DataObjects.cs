@@ -32,6 +32,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
         public static readonly string SLS_SPAWN_MULT = "SLS_MULT";
         public static readonly string SLS_MODIFIERS = "SLS_MODS";
+        public static readonly string SLS_CHARNAME = "SLS_CHARNAME";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -306,7 +307,7 @@ namespace StarLevelSystem.common
                 }
             }
 
-            public void RunOnceMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc)
+            public void RunOnceMethodCall(Character chara, CreatureModConfig cfg, StoredCreatureDetails scd)
             {
                 if (RunOnceMethodClass == null || RunOnceMethodClass == "") { return; }
                 Type methodClass = Type.GetType(RunOnceMethodClass);
@@ -317,11 +318,11 @@ namespace StarLevelSystem.common
                     return;
                 }
                 try {
-                    theMethod.Invoke(this, new object[] { chara, cfg, cdc });
+                    theMethod.Invoke(this, new object[] { chara, cfg, scd });
                 } catch {  return; }
             }
 
-            public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
+            public void SetupMethodCall(Character chara, CreatureModConfig cfg, StoredCreatureDetails scd) {
                 if (SetupMethodClass == null || SetupMethodClass == "") { return; }
                 Type methodClass = Type.GetType(SetupMethodClass);
                 //Logger.LogDebug($"Setting up modifier {SetupMethodClass} with signature {methodClass}");
@@ -331,7 +332,7 @@ namespace StarLevelSystem.common
                     return;
                 }
                 try {
-                    theMethod.Invoke(this, new object[] { chara, cfg, cdc });
+                    theMethod.Invoke(this, new object[] { chara, cfg, scd });
                 } catch {  return; }
             }
         }
@@ -358,8 +359,8 @@ namespace StarLevelSystem.common
         [Serializable]
         public class StoredCreatureDetails
         {
-            public string Name { get; set; } = null;
-            public ColorDef Colorization { get; set; }
+            public string RefCreatureName { get; set; } = null;
+            public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
                 { DamageType.Blunt, 1f },
@@ -370,6 +371,8 @@ namespace StarLevelSystem.common
                 { DamageType.Lightning, 1f },
                 { DamageType.Poison, 1f },
                 { DamageType.Spirit, 1f },
+                { DamageType.Chop, 1f },
+                { DamageType.Pickaxe, 1f },
             };
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; } = new Dictionary<CreatureBaseAttribute, float>() {
                 { CreatureBaseAttribute.BaseDamage, 1f },
@@ -386,47 +389,11 @@ namespace StarLevelSystem.common
                 { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
-        }
-
-        public class CreatureDetailCache {
-            public int Level { get; set; }
-            public float Size { get; set; } = 1f;
-            public Dictionary<string, ModifierType> Modifiers { get; set; }
-            public ColorDef Colorization { get; set; }
-            public Heightmap.Biome Biome { get; set; }
-            public GameObject CreaturePrefab { get; set; }
-            public string CreatureName { get; set; }
-            public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
-                { DamageType.Blunt, 1f },
-                { DamageType.Pierce, 1f },
-                { DamageType.Slash, 1f },
-                { DamageType.Fire, 1f },
-                { DamageType.Frost, 1f },
-                { DamageType.Lightning, 1f },
-                { DamageType.Poison, 1f },
-                { DamageType.Spirit, 1f },
-            };
-            public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; } = new Dictionary<CreatureBaseAttribute, float>() {
-                { CreatureBaseAttribute.BaseDamage, 1f },
-                { CreatureBaseAttribute.BaseHealth, 1f },
-                { CreatureBaseAttribute.Size, 1f },
-                { CreatureBaseAttribute.Speed, 1f },
-                { CreatureBaseAttribute.AttackSpeed, 1f },
-            };
-            public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; } = new Dictionary<CreaturePerLevelAttribute, float>() {
-                { CreaturePerLevelAttribute.DamagePerLevel, 0f },
-                { CreaturePerLevelAttribute.HealthPerLevel, ValConfig.EnemyHealthMultiplier.Value },
-                { CreaturePerLevelAttribute.SizePerLevel, ValConfig.PerLevelScaleBonus.Value },
-                { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
-                { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
-            };
-            public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() {};
-            public float CreatureDamageModifier { get; set; } = 1f;
 
             public string GetDamageBonusDescription()
             {
                 StringBuilder sb = new StringBuilder();
-                foreach(KeyValuePair<DamageType, float> bonusD in CreatureDamageBonus)
+                foreach (KeyValuePair<DamageType, float> bonusD in CreatureDamageBonus)
                 {
                     if (bonusD.Value > 0f) { sb.Append($"|{bonusD.Key}-{bonusD.Value}"); }
                 }

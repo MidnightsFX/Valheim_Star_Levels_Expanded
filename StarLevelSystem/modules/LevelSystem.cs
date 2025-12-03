@@ -95,7 +95,7 @@ namespace StarLevelSystem.modules
         }
 
         // For non-character levelups
-        public static int DetermineLevel(GameObject creature, string creature_name, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings) {
+        public static int DetermineLevel(GameObject creature, string creature_name, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int maxLevel) {
             if (creature == null) {
                 Logger.LogWarning($"Creature is null, cannot determine level, set 1.");
                 return 1;
@@ -105,8 +105,8 @@ namespace StarLevelSystem.modules
             // Logger.LogDebug($"levelroll: {levelup_roll}");
             // Check if the creature has an override level
             // Use the default non-biom based levelup chances
-            int maxLevel = ValConfig.MaxLevel.Value + 1;
             // Logger.LogDebug($"maxlevel default: {maxLevel}");
+            maxLevel += 1;
             // Determine creature location to check its biome
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
@@ -323,7 +323,7 @@ namespace StarLevelSystem.modules
                 int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Fish", 0);
                 if (storedLevel == 0) {
                     LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
+                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.FishMaxLevel.Value);
                     __instance.m_nview.GetZDO().Set("SLE_Fish", storedLevel);
                     __instance.GetComponent<ItemDrop>().SetQuality(storedLevel);
                     __instance.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = storedLevel + 1;
@@ -361,7 +361,7 @@ namespace StarLevelSystem.modules
                 if (storedLevel == 0)
                 {
                     LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
+                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.TreeMaxLevel.Value);
                     __instance.m_nview.GetZDO().Set("SLE_Tree", storedLevel);
                 }
                 if (storedLevel > 1)
@@ -494,7 +494,7 @@ namespace StarLevelSystem.modules
                 if (storedLevel == 0)
                 {
                     LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings);
+                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.BirdMaxLevel.Value);
                     __instance.m_nview.GetZDO().Set("SLE_Bird", storedLevel);
                 }
                 if (storedLevel > 1)
@@ -542,12 +542,15 @@ namespace StarLevelSystem.modules
 
             internal static void SetupGrownUp(Character grownup, Character childChar)
             {
-                CreatureDetailCache cdc_child = CompositeLazyCache.GetCacheOrZDOOnly(childChar);
-                if (cdc_child == null) {
+                StoredCreatureDetails cdc_child = CompositeLazyCache.GetZDONoCreate(childChar);
+                if (cdc_child == null)
+                {
                     grownup.SetLevel(childChar.m_level);
                     return;
+                } else {
+                    CompositeLazyCache.OverwriteZDOForCreature(grownup, cdc_child);
                 }
-                ModificationExtensionSystem.CreatureSetup(grownup, cdc_child.Level, false, requiredModifiers: cdc_child.Modifiers, force: true);
+                ModificationExtensionSystem.CreatureSetup(grownup, multiply: false);
             }
         }
 
@@ -579,7 +582,7 @@ namespace StarLevelSystem.modules
                 chara.SetTamed(true);
 
                 if (ValConfig.RandomizeTameChildrenModifiers.Value == false && proc.m_character != null) {
-                    CreatureDetailCache cdc_parent = CompositeLazyCache.GetCacheOrZDOOnly(proc.m_character);
+                    StoredCreatureDetails cdc_parent = CompositeLazyCache.GetZDONoCreate(proc.m_character);
                     if (cdc_parent == null)
                     {
                         chara.SetLevel(proc.m_character.m_level);
@@ -628,7 +631,7 @@ namespace StarLevelSystem.modules
             Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            //Logger.LogDebug($"{creature_name} {biome} {p}");
+            Logger.LogDebug($"{creature_name} {biome} {p}");
 
             if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
                 bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
@@ -636,7 +639,7 @@ namespace StarLevelSystem.modules
                 {
                     biome_settings = allBiomeConfig;
                 }
-                //Logger.LogDebug($"Biome all config checked");
+                Logger.LogDebug($"Biome all config checked");
                 bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
                 if (biome_setting_check && biome_all_setting_check)
                 {
@@ -646,14 +649,13 @@ namespace StarLevelSystem.modules
                 {
                     biome_settings = biomeConfig;
                 }
-                //Logger.LogDebug($"Merged biome configs");
+                Logger.LogDebug($"Merged biome configs");
             }
 
             creature_settings = null;
             if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null) {
-                bool creature_setting_check = LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig);
-                if (creature_setting_check) { creature_settings = creatureConfig; }
-                //Logger.LogDebug($"Set character specific configs");
+                if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
+                Logger.LogDebug($"Set character specific configs");
             }
         }
 

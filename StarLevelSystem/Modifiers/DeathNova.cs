@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -17,10 +18,10 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetCacheOrZDOOnly(__instance);
-                if (cDetails == null || cDetails.Modifiers == null) { return; }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.FireNova.ToString())) {
-                    CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), cDetails.Modifiers[ModifierNames.FireNova.ToString()]);
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
+                if (mods == null) { return; }
+                if (mods.Keys.Contains(ModifierNames.FireNova.ToString())) {
+                    CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), mods[ModifierNames.FireNova.ToString()]);
                     if (cmdef == null) { return; }
                     GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
                     go.SetActive(false);

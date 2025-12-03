@@ -30,7 +30,7 @@ Features:
 
 Got a bug to report or just want to chat about the mod? Drop by the discord or github.
 
-[![discord logo](https://i.imgur.com/uE6umQE.png)](https://discord.gg/Dmr9PQTy9m) [![github logo](https://i.imgur.com/lvbP5OF.png)](https://github.com/MidnightsFX/Valheim_Armory)
+[![discord logo](https://i.imgur.com/uE6umQE.png)](https://discord.gg/Dmr9PQTy9m) [![github logo](https://i.imgur.com/lvbP5OF.png)](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded)
 
 Below are a few examples of what you might see, and what the mod can do.
 

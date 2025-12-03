@@ -279,9 +279,7 @@ namespace StarLevelSystem.modules
                                 }
                                 if (chara != null)
                                 {
-                                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                                    chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
-                                    chara.SetLevel(cdc.Level);
+                                    CompositeLazyCache.GetAndSetZDO(chara, spawnMultiplyCheck: false);
                                 }
                             }
 

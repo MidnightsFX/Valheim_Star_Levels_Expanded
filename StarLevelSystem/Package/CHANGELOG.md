@@ -5,6 +5,7 @@
  - Fix splitter not splitting when using fallbacks
  - More cache invalidation for UI related and setup changes
  - Fix size scale setting weapon sizes to zero before a creature has scale data
+ - Fixed Character specific level tables not being used if a biome table was available
  ```
 
 **0.12.0**

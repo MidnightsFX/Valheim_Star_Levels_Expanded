@@ -51,17 +51,18 @@ namespace StarLevelSystem.modules
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
-            //Logger.LogDebug($"Current level from ZDO: {clevel} is-setup? {setup}");
+            //Logger.LogDebug($"Current level from ZDO: {clevel}");
             if (clevel <= 0) {
                 // Determine max level
-                int max_level = ValConfig.MaxLevel.Value + 1;
-                int min_level = -1;
+                int max_level = ValConfig.MaxLevel.Value;
+                int min_level = 0;
                 if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
                 
                 if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
                 min_level += 1;
+                max_level += 1;
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 Vector3 p = character.transform.position;
@@ -84,6 +85,15 @@ namespace StarLevelSystem.modules
                 }
                 if (creature_settings != null && creature_settings.NightSettings != null && creature_settings.NightSettings.NightLevelUpChanceScaler != 1) {
                     nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
+                }
+
+                // Ensure we use character / biome specific levelup chances if those are set
+                if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null)
+                {
+                    levelup_chances = biome_settings.CustomCreatureLevelUpChance;
+                }
+                if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
+                    levelup_chances = creature_settings.CustomCreatureLevelUpChance;
                 }
                 int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
@@ -631,7 +641,7 @@ namespace StarLevelSystem.modules
             Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            //Logger.LogDebug($"{creature_name} {biome} {p}");
+            Logger.LogDebug($"{creature_name} {biome} {p}");
 
             if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
                 bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);

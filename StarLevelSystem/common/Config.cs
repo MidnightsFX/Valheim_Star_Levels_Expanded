@@ -83,7 +83,8 @@ namespace StarLevelSystem
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
         public static ConfigEntry<bool> OutputColorizationGeneratorsData;
-        public static ConfigEntry<int> DelayBeforeCreatureSetup;
+        public static ConfigEntry<int> FallbackDelayBeforeCreatureSetup;
+        public static ConfigEntry<float> InitialDelayBeforeSetup;
         public static ConfigEntry<bool> EnableDebugOutputForDamage;
 
         public ValConfig(ConfigFile cf)
@@ -187,7 +188,8 @@ namespace StarLevelSystem
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
-            DelayBeforeCreatureSetup = BindServerConfig("Misc", "DelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. Increase this is you have slow clients.");
+            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
+            FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
             
         }
 

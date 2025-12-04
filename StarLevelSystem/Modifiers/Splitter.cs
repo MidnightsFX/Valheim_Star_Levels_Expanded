@@ -23,7 +23,12 @@ namespace StarLevelSystem.Modifiers
                     float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
                     bool shouldTame = __instance.IsTamed();
-                    Logger.LogDebug($"Splitter on {__instance.name} total split potential:{totalsplits}");
+                    int level = Mathf.RoundToInt(__instance.m_level / totalsplits);
+                    if (level <= 0) { level = 1; }
+                    if (ValConfig.SplittersInheritLevel.Value == false) {
+                        level = UnityEngine.Random.Range(1, level);
+                    }
+                    Logger.LogDebug($"Splitter on {__instance.name} total split potential:{totalsplits} split creature level: {level}");
                     while (totalsplits >= 1) {
                         GameObject creatureToCreate = PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(__instance.gameObject));
                         if (creatureToCreate == null) { break; }
@@ -32,12 +37,6 @@ namespace StarLevelSystem.Modifiers
                         if (shouldTame) { sgo.GetComponent<Character>().SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
-                            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, sChar.m_nview, new StoredCreatureDetails());
-                            int level = Mathf.RoundToInt(__instance.m_level / totalsplits);
-                            if (level <= 0) { level = 1; }
-                            if (ValConfig.SplittersInheritLevel.Value == false) {
-                                level = UnityEngine.Random.Range(1, level);
-                            }
                             CompositeLazyCache.GetAndSetZDO(sChar, level, spawnMultiplyCheck: false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
                             CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }

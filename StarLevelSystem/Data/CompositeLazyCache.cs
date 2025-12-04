@@ -19,29 +19,26 @@ namespace StarLevelSystem.Data
 
         public static StoredCreatureDetails GetZDONoCreate(Character character)
         {
-            if (character == null) { return null; }
-            if (character.IsPlayer()) { return null; }
             // Check for stored Z Data
             StoredCreatureDetails characterCacheEntry = CacheFromZDO(character);
             return characterCacheEntry;
         }
 
         public static StoredCreatureDetails GetAndSetZDO(Character character, int leveloverride = 0, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool spawnMultiplyCheck = true, bool setLevel = true) {
-            if (character == null || character.IsPlayer() || character.m_nview == null) { return null; }
+            
+            // Check for stored Z Data
+            StoredCreatureDetails characterEntry = CacheFromZDO(character);
+            if (characterEntry != null) {
+                //Logger.LogDebug($"{character.name} Creature Data Object Available");
+                return characterEntry;
+            }
 
             ZDO creatureZDO = character.m_nview.GetZDO();
-            if (creatureZDO == null) {
-                return null;
-            }
-            // Check for stored Z Data
-            //Logger.LogDebug("Checking for already setZDO");
-            StoredCreatureDetails characterEntry = CacheFromZDO(character);
-            if (characterEntry != null) { return characterEntry; }
 
             if (characterEntry == null) { characterEntry = new StoredCreatureDetails(); }
 
             // Get character based biome and creature configuration
-            //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
+            Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
 
             // Set biome | used to deletion check
@@ -101,15 +98,15 @@ namespace StarLevelSystem.Data
             // Check for level or set it
             //Logger.LogDebug("Setting creature level");
             int level = LevelSystem.DetermineLevel(character, creatureZDO, creature_settings, biome_settings, leveloverride);
+            characterEntry.Level = level;
+            Logger.LogDebug($"Determined {creatureName} level {level}");
             if (setLevel) {
-                Logger.LogDebug($"Setting {creatureName} level {level}");
                 character.SetLevel(level);
             }
-            //Logger.LogDebug($"{creature_name} level set {characterCacheEntry.Level}");
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");
-            characterEntry.Colorization = Colorization.DetermineCharacterColorization(character, character.m_level);
+            characterEntry.Colorization = Colorization.DetermineCharacterColorization(character, level);
 
             //Logger.LogDebug("Selecting creature Damage Recieved, Per Level and base values.");
             characterEntry.DamageRecievedModifiers = ModificationExtensionSystem.DetermineCreatureDamageRecievedModifiers(biome_settings, creature_settings);
@@ -119,7 +116,7 @@ namespace StarLevelSystem.Data
             // Set or load creature modifiers
             //Logger.LogDebug("Selecting creature modifiers.");
             CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, new Dictionary<string, ModifierType>() { });
-            Dictionary<string, ModifierType> selectedMods = CreatureModifiers.SelectModifiersForCreature(character, creatureName, creature_settings, biome, character.m_level, requiredModifiers, notAllowedModifiers);
+            Dictionary<string, ModifierType> selectedMods = CreatureModifiers.SelectModifiersForCreature(character, creatureName, creature_settings, biome, level, requiredModifiers, notAllowedModifiers);
             StoredMods.Set(selectedMods);
             // Run once modifier setup to modify stats on creatures
             CreatureModifiers.RunOnceModifierSetup(character, characterEntry, selectedMods);
@@ -129,7 +126,7 @@ namespace StarLevelSystem.Data
             creatureZDO.Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(character, selectedMods));
 
             // Set the creatures modifiers and stored ZData to reflect
-            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, character.m_nview, new StoredCreatureDetails());
+            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, character.m_nview, null);
             cZDO.Set(characterEntry);
 
             return characterEntry;
@@ -137,9 +134,10 @@ namespace StarLevelSystem.Data
 
         public static StoredCreatureDetails CacheFromZDO(Character character)
         {
-            if (character == null || character.m_nview) { return null; }
-            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, character.m_nview, null);
+            if (character == null || character.m_nview == null || character.IsPlayer() || character.m_nview.GetZDO() == null) { return null; }
+            CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, character.m_nview, new StoredCreatureDetails());
             StoredCreatureDetails scd = cZDO.Get();
+            if (scd.Level == 0) { return null; }
             return scd;
         }
 

@@ -59,12 +59,12 @@ namespace StarLevelSystem.modules
         public static class CreatureCharacterExtension
         {
             public static void Postfix(Character __instance) {
-                Logger.LogDebug($"Character awake {__instance.m_name}");
+                //Logger.LogDebug($"Character awake {__instance.m_name}");
                 bool setlevel = false;
                 if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
                     setlevel = true;
                 }
-                CreatureSetup(__instance, delay: 2f, setLevel: setlevel);
+                CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value, setLevel: setlevel);
             }
         }
 
@@ -73,10 +73,11 @@ namespace StarLevelSystem.modules
         //    public static void Postfix(Humanoid __instance) {
         //        Logger.LogDebug($"Humanoid awake {__instance.m_name}");
         //        bool setlevel = false;
-        //        if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
+        //        if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name))
+        //        {
         //            setlevel = true;
         //        }
-        //        CreatureSetup(__instance, delay: 2f, setLevel: setlevel);
+        //        CreatureSetup(__instance, delay: 1f, setLevel: setlevel);
         //    }
         //}
 
@@ -301,41 +302,39 @@ namespace StarLevelSystem.modules
                 yield return new WaitForSeconds(delay);
                 if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { continue; }
                 // Try to ensure that the Zowner gets the creature setup
-                Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
+                // Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
                 if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
                 if (__instance.m_nview.IsOwner() || force == true) {
                     SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers, setLevel: setLevel);
                 }
 
-                status = CharacterSetupLevelChecked(__instance, level_override);
-                Logger.LogDebug($"Setup status: {status}");
+                status = CharacterSetup(__instance, level_override);
+                //Logger.LogDebug($"Setup status: {status}");
                 times += 1;
                 // We've failed to get the creature setup and we don't have data for it, its not getting setup
-                if (times == ValConfig.DelayBeforeCreatureSetup.Value - 1) {
-                    
+                if (times == ValConfig.FallbackDelayBeforeCreatureSetup.Value - 1) {
                     StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
-                    Logger.LogDebug($"{scd.RefCreatureName} not setup yet, setting up.");
+                    CharacterSetup(__instance);
+                    Logger.LogDebug($"{scd.RefCreatureName} running delayed setup.");
                 }
-                if (times >= ValConfig.DelayBeforeCreatureSetup.Value) { break; }
+                if (times >= ValConfig.FallbackDelayBeforeCreatureSetup.Value) { break; }
             }
 
             yield break;
         }
 
-        internal static bool CharacterSetupLevelChecked(Character __instance, int level_override = 0)
+        internal static bool CharacterSetup(Character __instance, int level_override = 0)
         {
-            // Character is gone :shrug:
             if (__instance == null) { return false; }
 
             // Do not run setup, only use saved ZDO data/cached
             StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
-            //Logger.LogDebug($"Checking Cache {cDetails}");
-
-            if (ValConfig.ForceControlAllSpawns.Value == true)
-            {
-                cDetails = CompositeLazyCache.GetAndSetZDO(__instance, level_override);
-            }
             if (cDetails == null) { return false; }
+
+
+            if (ValConfig.ForceControlAllSpawns.Value == true) {
+                __instance.SetLevel(cDetails.Level);
+            }
 
             // Modify the creatures stats by custom character/biome modifications
             CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
@@ -403,7 +402,9 @@ namespace StarLevelSystem.modules
             }
             float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
 
-            GameObject creatureref = PrefabManager.Instance.GetPrefab(cDetails.RefCreatureName);
+            string creaturename = cDetails.RefCreatureName;
+            creaturename ??= Utils.GetPrefabName(creature.gameObject);
+            GameObject creatureref = PrefabManager.Instance.GetPrefab(creaturename);
 
             if (current_size > 0f && force_update == false) {
                 if (creatureref) {
@@ -485,7 +486,9 @@ namespace StarLevelSystem.modules
             // Modify the creature's speed attributes based on the base speed and per level modifier
             float speedmod = (base_speed + perlevelmod);
 
-            GameObject creatureRef = PrefabManager.Instance.GetPrefab(creature.name);
+            string creaturename = cDetails.RefCreatureName;
+            creaturename ??= Utils.GetPrefabName(creature.gameObject);
+            GameObject creatureRef = PrefabManager.Instance.GetPrefab(creaturename);
             if (creatureRef == null)
             {
                 Logger.LogWarning($"Unable to find reference object for {creature.name}, not applying speed modifications");

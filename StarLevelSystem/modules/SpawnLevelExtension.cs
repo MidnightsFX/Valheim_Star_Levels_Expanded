@@ -72,7 +72,9 @@ namespace StarLevelSystem.modules
             }
 
             static void SetCreatureSpawnLevel(Character chara, int level) {
+                //Logger.LogDebug($"Setting {chara.name} to lvl: {level}");
                 CompositeLazyCache.GetAndSetZDO(chara, level, spawnMultiplyCheck: false);
+                ModificationExtensionSystem.CreatureSetup(chara, force: true, leveloverride: level);
             }
         }
     }

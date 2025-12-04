@@ -36,6 +36,8 @@ namespace StarLevelSystem.Data
             // Check for stored Z Data
             //Logger.LogDebug("Checking for already setZDO");
             StoredCreatureDetails characterEntry = CacheFromZDO(character);
+            if (characterEntry != null) { return characterEntry; }
+
             if (characterEntry == null) { characterEntry = new StoredCreatureDetails(); }
 
             // Get character based biome and creature configuration
@@ -99,7 +101,10 @@ namespace StarLevelSystem.Data
             // Check for level or set it
             //Logger.LogDebug("Setting creature level");
             int level = LevelSystem.DetermineLevel(character, creatureZDO, creature_settings, biome_settings, leveloverride);
-            if (setLevel) { character.SetLevel(level); }
+            if (setLevel) {
+                Logger.LogDebug($"Setting {creatureName} level {level}");
+                character.SetLevel(level);
+            }
             //Logger.LogDebug($"{creature_name} level set {characterCacheEntry.Level}");
 
             // Set creature Colorization pallete
@@ -140,6 +145,7 @@ namespace StarLevelSystem.Data
 
         public static void OverwriteZDOForCreature(Character character, StoredCreatureDetails scd)
         {
+            if (character == null || character.m_nview == null) { return; }
             CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, character.m_nview, null);
             cZDO.Set(scd);
         }
@@ -148,7 +154,6 @@ namespace StarLevelSystem.Data
         {
             CreatureModifiersZNetProperty storedModifiers = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
             character.m_nview.GetZDO().Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(character, storedModifiers.Get()));
-
         }
 
         public static string GetCreatureName(Character character)
@@ -159,7 +164,7 @@ namespace StarLevelSystem.Data
 
         public static Dictionary<string, ModifierType> GetCreatureModifiers(Character character)
         {
-            if (character == null) { return null; }
+            if (character == null || character.m_nview == null) { return null; }
             CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
             return StoredMods.Get();
         }

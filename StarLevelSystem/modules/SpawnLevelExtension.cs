@@ -72,9 +72,7 @@ namespace StarLevelSystem.modules
             }
 
             static void SetCreatureSpawnLevel(Character chara, int level) {
-                CreatureDetailsZNetProperty cZDO = new CreatureDetailsZNetProperty(SLS_CREATURE, chara.m_nview, new StoredCreatureDetails());
                 CompositeLazyCache.GetAndSetZDO(chara, level, spawnMultiplyCheck: false);
-                chara.SetLevel(level);
             }
         }
     }

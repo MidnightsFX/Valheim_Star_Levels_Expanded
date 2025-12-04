@@ -359,6 +359,7 @@ namespace StarLevelSystem.common
         [Serializable]
         public class StoredCreatureDetails
         {
+            public int Level { get; set; } = 0;
             public string RefCreatureName { get; set; } = null;
             public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }

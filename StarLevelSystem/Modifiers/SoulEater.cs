@@ -17,7 +17,7 @@ namespace StarLevelSystem.Modifiers
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class SoulEaterOnDeath
         {
-            private static void Postfix(Character __instance) {
+            private static void Prefix(Character __instance) {
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }

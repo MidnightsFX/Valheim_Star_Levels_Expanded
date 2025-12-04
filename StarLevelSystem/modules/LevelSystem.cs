@@ -631,7 +631,7 @@ namespace StarLevelSystem.modules
             Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            Logger.LogDebug($"{creature_name} {biome} {p}");
+            //Logger.LogDebug($"{creature_name} {biome} {p}");
 
             if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
                 bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
@@ -639,7 +639,7 @@ namespace StarLevelSystem.modules
                 {
                     biome_settings = allBiomeConfig;
                 }
-                Logger.LogDebug($"Biome all config checked");
+                //Logger.LogDebug($"Biome all config checked");
                 bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
                 if (biome_setting_check && biome_all_setting_check)
                 {
@@ -649,13 +649,13 @@ namespace StarLevelSystem.modules
                 {
                     biome_settings = biomeConfig;
                 }
-                Logger.LogDebug($"Merged biome configs");
+                //Logger.LogDebug($"Merged biome configs");
             }
 
             creature_settings = null;
             if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null) {
                 if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
-                Logger.LogDebug($"Set character specific configs");
+                //Logger.LogDebug($"Set character specific configs");
             }
         }
 

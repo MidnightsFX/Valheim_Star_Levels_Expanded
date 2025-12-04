@@ -59,6 +59,7 @@ namespace StarLevelSystem.modules
         public static class CreatureCharacterExtension
         {
             public static void Postfix(Character __instance) {
+                Logger.LogDebug($"Character awake {__instance.m_name}");
                 bool setlevel = false;
                 if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
                     setlevel = true;
@@ -67,16 +68,17 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Awake))]
-        public static class PostfixSetupBosses {
-            public static void Postfix(Humanoid __instance) {
-                bool setlevel = false;
-                if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
-                    setlevel = true;
-                }
-                CreatureSetup(__instance, delay: 2f, setLevel: setlevel);
-            }
-        }
+        //[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Awake))]
+        //public static class PostfixSetupBosses {
+        //    public static void Postfix(Humanoid __instance) {
+        //        Logger.LogDebug($"Humanoid awake {__instance.m_name}");
+        //        bool setlevel = false;
+        //        if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
+        //            setlevel = true;
+        //        }
+        //        CreatureSetup(__instance, delay: 2f, setLevel: setlevel);
+        //    }
+        //}
 
         [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.OnRagdollCreated))]
         public static class ModifyRagdollHumanoid
@@ -299,17 +301,20 @@ namespace StarLevelSystem.modules
                 yield return new WaitForSeconds(delay);
                 if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { continue; }
                 // Try to ensure that the Zowner gets the creature setup
-                //Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} force:{force}");
+                Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
+                if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
                 if (__instance.m_nview.IsOwner() || force == true) {
                     SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers, setLevel: setLevel);
                 }
 
                 status = CharacterSetupLevelChecked(__instance, level_override);
+                Logger.LogDebug($"Setup status: {status}");
                 times += 1;
                 // We've failed to get the creature setup and we don't have data for it, its not getting setup
                 if (times == ValConfig.DelayBeforeCreatureSetup.Value - 1) {
-                    Logger.LogDebug("Creature Details not set, settings creature as non-zowner is the owners network slow?");
-                    CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
+                    
+                    StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
+                    Logger.LogDebug($"{scd.RefCreatureName} not setup yet, setting up.");
                 }
                 if (times >= ValConfig.DelayBeforeCreatureSetup.Value) { break; }
             }

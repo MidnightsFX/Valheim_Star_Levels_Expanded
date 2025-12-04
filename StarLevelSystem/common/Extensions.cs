@@ -81,21 +81,19 @@ namespace StarLevelSystem.common
             if (noid == null) return 0;
             float dmg = 0;
             ItemDrop.ItemData item = noid.GetCurrentWeapon();
-            if (highest && noid.m_defaultItems != null) {
-                Logger.LogDebug("Checking for highest damage");
+            if (highest && noid.m_defaultItems != null) { 
                 foreach(var defweapon in noid.m_defaultItems) {
-                    float? wepdmg = defweapon.GetComponent<ItemDrop>()?.m_itemData?.GetDamage().GetTotalDamage();
-                    if (wepdmg != null) { if (wepdmg > dmg) { dmg = (float)wepdmg; } }
+                    float wepdmg = defweapon.GetComponent<ItemDrop>().m_itemData.m_shared.m_damages.GetTotalDamage();
+                    if (wepdmg > dmg) { dmg = wepdmg; }
                 }
             } else {
                 if (item != null) {
-                    Logger.LogDebug("Checking for current weapon damage");
                     HitData.DamageTypes dmgs = item.GetDamage();
                     // Spirit and Poison get reduced weights here because they are dmg over time primarily and taking into account the whole value immediately results in a dmg spike
                     dmg = dmgs.m_fire + dmgs.m_frost + dmgs.m_lightning + (dmgs.m_spirit / 2) + (dmgs.m_poison / 6) + dmgs.m_blunt + dmgs.m_pierce + dmgs.m_slash;
                 }
             }
-
+            Logger.LogDebug($"Estimated {chara.m_name} damage as: {dmg}");
             return dmg;
         }
 

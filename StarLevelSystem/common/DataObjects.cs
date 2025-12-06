@@ -250,8 +250,8 @@ namespace StarLevelSystem.common
         public class CreatureModifier
         {
             public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
-            public List<string> NamePrefixes { get; set; }
-            public List<string> NameSuffixes { get; set; }
+            public string NamePrefix { get; set; }
+            public string NameSuffix { get; set; }
             [DefaultValue(1f)]
             public float SelectionWeight { get; set; } = 1f;
             public CreatureModConfig Config { get; set; } = new CreatureModConfig();
@@ -307,7 +307,7 @@ namespace StarLevelSystem.common
                 }
             }
 
-            public void RunOnceMethodCall(Character chara, CreatureModConfig cfg, StoredCreatureDetails scd)
+            public void RunOnceMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd)
             {
                 if (RunOnceMethodClass == null || RunOnceMethodClass == "") { return; }
                 Type methodClass = Type.GetType(RunOnceMethodClass);
@@ -322,7 +322,7 @@ namespace StarLevelSystem.common
                 } catch {  return; }
             }
 
-            public void SetupMethodCall(Character chara, CreatureModConfig cfg, StoredCreatureDetails scd) {
+            public void SetupMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd) {
                 if (SetupMethodClass == null || SetupMethodClass == "") { return; }
                 Type methodClass = Type.GetType(SetupMethodClass);
                 //Logger.LogDebug($"Setting up modifier {SetupMethodClass} with signature {methodClass}");
@@ -357,12 +357,19 @@ namespace StarLevelSystem.common
 
         [DataContract]
         [Serializable]
-        public class StoredCreatureDetails
+        public class CharacterCacheEntry
         {
             public int Level { get; set; } = 0;
+            public bool ShouldDelete { get; set; } = false;
+            public string CreatureNameLocalizable { get; set; } = null;
             public string RefCreatureName { get; set; } = null;
             public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }
+            public float SpawnRateModifier { get; set; } = 1f;
+            public Character ControlledCharacter { get; set; } = null;
+            public Dictionary<string, ModifierType> CreatureModifiers { get; set; } = new Dictionary<string, ModifierType>();
+            public Dictionary<string, ModifierType> ModifiersRequired { get; set; } = null;
+            public List<string> ModifiersNotAllowed { get; set; } = null;
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
                 { DamageType.Blunt, 1f },
                 { DamageType.Pierce, 1f },
@@ -390,6 +397,8 @@ namespace StarLevelSystem.common
                 { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
+            public CreatureSpecificSetting CreatureSettings { get; set; } = null;
+            public BiomeSpecificSetting BiomeSettings { get; set; } = null;
 
             public string GetDamageBonusDescription()
             {
@@ -669,23 +678,23 @@ namespace StarLevelSystem.common
             }
         }
 
-        public class CreatureDetailsZNetProperty : ZNetProperty<StoredCreatureDetails>
+        public class CreatureDetailsZNetProperty : ZNetProperty<CharacterCacheEntry>
         {
             BinaryFormatter binFormatter = new BinaryFormatter();
-            public CreatureDetailsZNetProperty(string key, ZNetView zNetView, StoredCreatureDetails defaultValue) : base(key, zNetView, defaultValue)
+            public CreatureDetailsZNetProperty(string key, ZNetView zNetView, CharacterCacheEntry defaultValue) : base(key, zNetView, defaultValue)
             {
             }
 
-            public override StoredCreatureDetails Get()
+            public override CharacterCacheEntry Get()
             {
                 var stored = zNetView.GetZDO().GetByteArray(Key);
                 // we can't deserialize a null buffer
-                if (stored == null) { return new StoredCreatureDetails(); }
+                if (stored == null) { return new CharacterCacheEntry(); }
                 MemoryStream mStream = new MemoryStream(stored);
-                return (StoredCreatureDetails)binFormatter.Deserialize(mStream);
+                return (CharacterCacheEntry)binFormatter.Deserialize(mStream);
             }
 
-            protected override void SetValue(StoredCreatureDetails value)
+            protected override void SetValue(CharacterCacheEntry value)
             {
                 MemoryStream mStream = new MemoryStream();
                 binFormatter.Serialize(mStream, value);

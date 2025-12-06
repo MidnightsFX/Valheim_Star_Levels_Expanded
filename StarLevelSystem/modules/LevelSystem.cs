@@ -248,6 +248,16 @@ namespace StarLevelSystem.modules
             CreateLevelBonusRingMapOverlays();
         }
 
+        public static void UpdateMapRingEnableSettingOnChange(object s, EventArgs e)
+        {
+            if (ValConfig.EnableMapRingsForDistanceBonus.Value)
+            {
+                ZNetScene.instance.StartCoroutine(BuildMapRingOverlay());
+            } else {
+                MinimapManager.Instance.RemoveMapDrawing("SLS-LevelBonus");
+            }
+        }
+
 
 
         public static IEnumerator BuildMapRingOverlay()
@@ -552,13 +562,13 @@ namespace StarLevelSystem.modules
 
             internal static void SetupGrownUp(Character grownup, Character childChar)
             {
-                StoredCreatureDetails cdc_child = CompositeLazyCache.GetZDONoCreate(childChar);
+                CharacterCacheEntry cdc_child = CompositeLazyCache.GetCacheEntry(childChar);
                 if (cdc_child == null)
                 {
                     grownup.SetLevel(childChar.m_level);
                     return;
                 } else {
-                    CompositeLazyCache.OverwriteZDOForCreature(grownup, cdc_child);
+                    CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
                 }
                 ModificationExtensionSystem.CreatureSetup(grownup, multiply: false);
             }
@@ -592,7 +602,7 @@ namespace StarLevelSystem.modules
                 chara.SetTamed(true);
 
                 if (ValConfig.RandomizeTameChildrenModifiers.Value == false && proc.m_character != null) {
-                    StoredCreatureDetails cdc_parent = CompositeLazyCache.GetZDONoCreate(proc.m_character);
+                    CharacterCacheEntry cdc_parent = CompositeLazyCache.GetCacheEntry(proc.m_character);
                     if (cdc_parent == null)
                     {
                         chara.SetLevel(proc.m_character.m_level);

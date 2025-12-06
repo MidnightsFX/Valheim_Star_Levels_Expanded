@@ -279,7 +279,7 @@ namespace StarLevelSystem.modules
                                 }
                                 if (chara != null)
                                 {
-                                    CompositeLazyCache.GetAndSetZDO(chara, spawnMultiplyCheck: false);
+                                    CompositeLazyCache.GetAndSetLocalCache(chara, spawnMultiplyCheck: false);
                                 }
                             }
 

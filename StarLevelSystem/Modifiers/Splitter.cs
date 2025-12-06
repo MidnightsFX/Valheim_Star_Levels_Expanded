@@ -37,7 +37,7 @@ namespace StarLevelSystem.Modifiers
                         if (shouldTame) { sgo.GetComponent<Character>().SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
-                            CompositeLazyCache.GetAndSetZDO(sChar, level, spawnMultiplyCheck: false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            CompositeLazyCache.GetAndSetLocalCache(sChar, level, spawnMultiplyCheck: false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
                             CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }
                         

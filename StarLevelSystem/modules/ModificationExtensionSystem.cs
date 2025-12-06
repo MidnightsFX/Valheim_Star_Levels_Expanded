@@ -41,7 +41,7 @@ namespace StarLevelSystem.modules
             {
                 if (__instance.IsPlayer()) { return; }
                 // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-                StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
+                CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
                 LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
             }
         }
@@ -88,7 +88,7 @@ namespace StarLevelSystem.modules
             {
                 if (__instance == null || __instance.IsPlayer()) { return; }
                 //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
-                StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
+                CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
                 if (__instance.m_nview != null) {
                     ApplySizeModificationZRefOnly(ragdoll.gameObject, __instance.m_nview);
                 }
@@ -112,7 +112,7 @@ namespace StarLevelSystem.modules
         public static class ModifyCharacterAnimationSpeed {
             public static void Postfix(CharacterAnimEvent __instance) {
                 if (__instance.m_character != null && __instance.m_character.InAttack()) {
-                    StoredCreatureDetails cdc = CompositeLazyCache.GetZDONoCreate(__instance.m_character);
+                    CharacterCacheEntry cdc = CompositeLazyCache.GetCacheEntry(__instance.m_character);
                     if (cdc != null && cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] != 1 || cdc != null && cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] != 0f) {
                         __instance.m_animator.speed = cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] + (cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] * __instance.m_character.m_level);
                     }
@@ -143,8 +143,8 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Character), nameof(Character.Damage))]
         public static class CharacterDamageModificationApply {
             private static void Prefix(HitData hit, Character __instance) {
-                StoredCreatureDetails attackerCharacter = CompositeLazyCache.GetZDONoCreate(hit.GetAttacker());
-                StoredCreatureDetails damagedCharacter = CompositeLazyCache.GetZDONoCreate(__instance);
+                CharacterCacheEntry attackerCharacter = CompositeLazyCache.GetCacheEntry(hit.GetAttacker());
+                CharacterCacheEntry damagedCharacter = CompositeLazyCache.GetCacheEntry(__instance);
 
                 if (attackerCharacter != null && attackerCharacter.CreatureDamageBonus != null && attackerCharacter.CreatureDamageBonus.Count > 0) {
                     if (ValConfig.EnableDebugOutputForDamage.Value) {
@@ -284,13 +284,17 @@ namespace StarLevelSystem.modules
         // Since apparently instanciating and destroying something in the same frame breaks vanilla assumptions :sigh:
         internal static IEnumerator DestroyCoroutine(GameObject go, float delay = 0.2f) {
             yield return new WaitForSeconds(delay);
-            ZNetScene.instance.Destroy(go);
+            if (go != null) {
+                ZNetScene.instance.Destroy(go);
+            }
         }
 
-        static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, bool setLevel = true) {
+        static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null) {
             if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { return; }
             //Logger.LogDebug("Setting up creature cache as Z-owner");
-            CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
+            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply);
+            CompositeLazyCache.StartZOwnerCreatureRoutines(cce);
+            CompositeLazyCache.PostZDOSetup(cce);
         }
 
         static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, bool force = false, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool setLevel = true)
@@ -305,7 +309,7 @@ namespace StarLevelSystem.modules
                 // Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
                 if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
                 if (__instance.m_nview.IsOwner() || force == true) {
-                    SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers, setLevel: setLevel);
+                    SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
                 }
 
                 status = CharacterSetup(__instance, level_override);
@@ -313,7 +317,7 @@ namespace StarLevelSystem.modules
                 times += 1;
                 // We've failed to get the creature setup and we don't have data for it, its not getting setup
                 if (times == ValConfig.FallbackDelayBeforeCreatureSetup.Value - 1) {
-                    StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply, setLevel: setLevel);
+                    CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply);
                     CharacterSetup(__instance);
                     Logger.LogDebug($"{scd.RefCreatureName} running delayed setup.");
                 }
@@ -323,17 +327,19 @@ namespace StarLevelSystem.modules
             yield break;
         }
 
-        internal static bool CharacterSetup(Character __instance, int level_override = 0)
+        // This is the main entry point for setting up a character
+        private static bool CharacterSetup(Character __instance, int level_override = 0)
         {
             if (__instance == null) { return false; }
 
             // Do not run setup, only use saved ZDO data/cached
-            StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(__instance);
+            CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
             if (cDetails == null) { return false; }
 
 
             if (ValConfig.ForceControlAllSpawns.Value == true) {
-                __instance.SetLevel(cDetails.Level);
+                CompositeLazyCache.StartZOwnerCreatureRoutines(cDetails);
+                CompositeLazyCache.PostZDOSetup(cDetails);
             }
 
             // Modify the creatures stats by custom character/biome modifications
@@ -354,6 +360,7 @@ namespace StarLevelSystem.modules
             return true;
         }
 
+        // This is the primary flow setup for setting up a character
         internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool force = false, bool setLevel = true) {
             if (__instance.IsPlayer()) { return; }
 
@@ -367,11 +374,12 @@ namespace StarLevelSystem.modules
                 ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, force: force, spawnMultiply: multiply, requiredModifiers: requiredModifiers, setLevel: setLevel));
             } else {
                 Logger.LogDebug("FALLBACK setup of creature, does this client have network issues?");
-                CompositeLazyCache.GetAndSetZDO(__instance, leveloverride, requiredModifiers, spawnMultiplyCheck: multiply, setLevel: setLevel);
+                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, leveloverride, requiredModifiers, spawnMultiplyCheck: multiply);
+                CompositeLazyCache.StartZOwnerCreatureRoutines(cce);
             }
         }
 
-        internal static void ApplyHealthModifications(Character chara, StoredCreatureDetails cDetails) {
+        internal static void ApplyHealthModifications(Character chara, CharacterCacheEntry cDetails) {
             float chealth = chara.m_health;
             if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
                 chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
@@ -395,7 +403,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, StoredCreatureDetails cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
+        internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
             // Don't scale in dungeons
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false || cDetails == null) {
                 return;
@@ -479,7 +487,7 @@ namespace StarLevelSystem.modules
             Physics.SyncTransforms();
         }
 
-        internal static void ApplySpeedModifications(Character creature, StoredCreatureDetails cDetails) {
+        internal static void ApplySpeedModifications(Character creature, CharacterCacheEntry cDetails) {
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel];
             float base_speed = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed];
             float perlevelmod = per_level_mod * (creature.m_level - 1);
@@ -519,7 +527,7 @@ namespace StarLevelSystem.modules
             creature.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, current_dmg_bonus + increase_dmg_by);
         }
 
-        internal static void ApplyDamageModification(Character creature, StoredCreatureDetails cDetails, bool updateCache = false) {
+        internal static void ApplyDamageModification(Character creature, CharacterCacheEntry cDetails, bool updateCache = false) {
             if (creature.m_nview == null || cDetails == null) { return; }
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
             float base_dmg_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];

@@ -15,30 +15,30 @@ namespace StarLevelSystem.modules
         }
 
         public static bool UpdateCreatureColorization(Character chara, float value, float hue, float sat, bool emission = false) {
-            StoredCreatureDetails ccd = CompositeLazyCache.GetZDONoCreate(chara);
+            CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(chara);
             if (ccd == null) { return false; }
             ccd.Colorization = Colorization.DetermineCharacterColorization(chara, chara.m_level);
-            CompositeLazyCache.OverwriteZDOForCreature(chara, ccd);
+            CompositeLazyCache.UpdateCharacterCacheEntry(chara, ccd);
             Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
             return true;
         }
 
         // Base value attributes
         public static float GetBaseAttributeValue(Character chara, int attribute) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return -1f; }
             return cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute];
         }
 
         public static bool UpdateCreatureBaseAttributes(Character chara, int attribute, float value) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute] = value;
             return true;
         }
 
         public static Dictionary<int, float> GetAllBaseAttributes(Character chara) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return null; }
             Dictionary<int, float> ret = new Dictionary<int, float>();
             foreach (var kvp in cdc.CreatureBaseValueModifiers) {
@@ -48,12 +48,12 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllBaseAttributes(Character chara, Dictionary<int, float> attributes) {
-            StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (scd == null) { return false; }
             foreach (var kvp in attributes) {
                 scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.OverwriteZDOForCreature(chara, scd);
+            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
 
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
@@ -64,20 +64,20 @@ namespace StarLevelSystem.modules
 
         // Per level attributes
         public static float GetPerLevelAttributeValue(Character chara, int attribute) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return -1f; }
             return cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute];
         }
 
         public static bool UpdateCreaturePerLevelAttributes(Character chara, int attribute, float value) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute] = value;
             return true;
         }
 
         public static Dictionary<int, float> GetAllPerLevelAttributes(Character chara) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return null; }
             Dictionary<int, float> ret = new Dictionary<int, float>();
             foreach (var kvp in cdc.CreaturePerLevelValueModifiers)
@@ -88,13 +88,13 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllPerLevelAttributes(Character chara, Dictionary<int, float> attributes) {
-            StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (scd == null) { return false; }
             foreach (var kvp in attributes)
             {
                 scd.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.OverwriteZDOForCreature(chara, scd);
+            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
             ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, scd, true);
@@ -104,20 +104,20 @@ namespace StarLevelSystem.modules
 
         // Creature damage recived modifiers
         public static float GetCreatureDamageRecievedModifier(Character chara, int attribute) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return -1f; }
             return cdc.DamageRecievedModifiers[(DamageType)attribute];
         }
 
         public static bool UpdateCreatureDamageRecievedModifier(Character chara, int attribute, float value) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             cdc.DamageRecievedModifiers[(DamageType)attribute] = value;
             return true;
         }
 
         public static Dictionary<int, float> GetAllDamageRecievedModifiers(Character chara) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return null; }
             Dictionary<int, float> ret = new Dictionary<int, float>();
             foreach (var kvp in cdc.DamageRecievedModifiers) {
@@ -127,13 +127,13 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllDamageRecievedModifiers(Character chara, Dictionary<int, float> attributes) {
-            StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (scd == null) { return false; }
             foreach (var kvp in attributes)
             {
                 scd.DamageRecievedModifiers[(DamageType)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.OverwriteZDOForCreature(chara, scd);
+            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
             return true;
         }
@@ -141,7 +141,7 @@ namespace StarLevelSystem.modules
         // Creature bonus damage modifiers
 
         public static float GetCreatureDamageBonus(Character chara, int attribute) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return -1f; }
             if (cdc.CreatureDamageBonus.ContainsKey((DamageType)attribute)) {
                 return cdc.CreatureDamageBonus[(DamageType)attribute];
@@ -150,7 +150,7 @@ namespace StarLevelSystem.modules
         }
 
         public static bool UpdateCreatureDamageBonus(Character chara, int attribute, float value) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             if (!cdc.CreatureDamageBonus.ContainsKey((DamageType)attribute)) {
                 cdc.CreatureDamageBonus[(DamageType)attribute] = value;
@@ -161,7 +161,7 @@ namespace StarLevelSystem.modules
         }
 
         public static Dictionary<int, float> GetAllDamageBonus(Character chara) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return null; }
             Dictionary<int, float> ret = new Dictionary<int, float>();
             foreach (var kvp in cdc.CreatureDamageBonus) {
@@ -171,13 +171,13 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllDamageBonus(Character chara, Dictionary<int, float> attributes) {
-            StoredCreatureDetails scd = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (scd == null) { return false; }
             foreach (var kvp in attributes)
             {
                 scd.CreatureDamageBonus[(DamageType)kvp.Key] = kvp.Value;
             }
-            CompositeLazyCache.OverwriteZDOForCreature(chara, scd);
+            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
             return true;
         }
@@ -185,7 +185,7 @@ namespace StarLevelSystem.modules
         // Applies all changes made to attributes to the creature
 
         public static bool ApplyUpdatesToCreature(Character chara) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
@@ -237,7 +237,7 @@ namespace StarLevelSystem.modules
         }
 
         public static bool AddModifierToCreature(Character chara, string modifierName, int modifierType, bool update = true) {
-            StoredCreatureDetails cdc = CompositeLazyCache.GetAndSetZDO(chara);
+            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             return CreatureModifiers.AddCreatureModifier(chara, (ModifierType)modifierType, modifierName, update);
         }
@@ -295,11 +295,11 @@ namespace StarLevelSystem.modules
             newMod.namingConvention = (NameSelectionStyle)namingStyle;
 
             if (name_suffixes != null) {
-                newMod.NameSuffixes = name_suffixes;
+                newMod.NameSuffix = name_suffixes;
             }
 
             if (name_prefixes != null) {
-                newMod.NamePrefixes = name_prefixes;
+                newMod.NamePrefix = name_prefixes;
             }
 
             if (visualStyle > 3 || visualStyle < 0) { visualStyle = 0; }

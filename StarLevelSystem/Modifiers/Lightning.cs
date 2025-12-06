@@ -11,7 +11,7 @@ namespace StarLevelSystem.Modifiers
     internal static class Lightning
     {
         [UsedImplicitly]
-        public static void RunOnce(Character creature, CreatureModConfig config, StoredCreatureDetails ccache) {
+        public static void RunOnce(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
             if (ccache == null) { return; }
             if (ccache.CreatureDamageBonus.ContainsKey(DamageType.Lightning)) {
                 ccache.CreatureDamageBonus[DamageType.Lightning] += config.BasePower + (config.PerlevelPower * creature.m_level);

@@ -88,10 +88,10 @@ namespace StarLevelSystem.modules
                     if (chara.m_level <= 1) { continue; }
 
 
-                    StoredCreatureDetails ccd = CompositeLazyCache.GetZDONoCreate(chara);
+                    CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(chara);
                     if (ccd == null) { continue; }
                     ccd.Colorization = Colorization.DetermineCharacterColorization(chara, chara.m_level);
-                    CompositeLazyCache.OverwriteZDOForCreature(chara, ccd);
+                    CompositeLazyCache.UpdateCharacterCacheEntry(chara, ccd);
                     ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                 }
             } catch (System.Exception ex) {

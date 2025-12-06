@@ -9,7 +9,7 @@ namespace StarLevelSystem.Modifiers
     internal class Summoner
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, StoredCreatureDetails ccache) {
+        public static void Setup(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
             if (ccache == null) { return; }
             SLSSummoner summoningScript = creature.GetComponent<SLSSummoner>();
             Logger.LogDebug($"Setting up Summoner for {creature.name} summon script {summoningScript}");

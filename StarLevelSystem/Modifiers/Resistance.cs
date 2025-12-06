@@ -9,7 +9,7 @@ namespace StarLevelSystem.Modifiers
     internal static class Resistance
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, StoredCreatureDetails ccache)
+        public static void Setup(Character creature, CreatureModConfig config, CharacterCacheEntry ccache)
         {
             Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(creature);
             if (ccache == null || mods == null) { return; }

@@ -6,7 +6,7 @@ namespace StarLevelSystem.Modifiers
     internal class Big
     {
         [UsedImplicitly]
-        public static void RunOnce(Character creature, CreatureModConfig config, StoredCreatureDetails ccache) {
+        public static void RunOnce(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
             if (ccache == null) { return; }
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] += config.BasePower + (config.PerlevelPower * creature.m_level);
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] += config.BasePower + (config.PerlevelPower * creature.m_level);

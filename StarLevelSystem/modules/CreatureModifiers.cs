@@ -20,7 +20,7 @@ namespace StarLevelSystem.modules
             NameSelectionStyle.RandomBoth
         };
 
-        public static void RunOnceModifierSetup(Character character, StoredCreatureDetails cacheEntry, Dictionary<string, ModifierType> selectedMods)
+        public static void RunOnceModifierSetup(Character character, CharacterCacheEntry cacheEntry, Dictionary<string, ModifierType> selectedMods)
         {
             if (selectedMods == null) { return; }
             int appliedMods = 0;
@@ -45,7 +45,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        public static void SetupModifiers(Character character, StoredCreatureDetails cacheEntry, Dictionary<string, ModifierType> selectedMods) {
+        public static void SetupModifiers(Character character, CharacterCacheEntry cacheEntry, Dictionary<string, ModifierType> selectedMods) {
             if (selectedMods == null) { return; }
             int appliedMods = 0;
             foreach (KeyValuePair<string, ModifierType> kvp in selectedMods)
@@ -69,7 +69,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        private static void RunOnceModifier(string mod, Character character, StoredCreatureDetails cacheEntry, Dictionary<string, CreatureModifier> availableMods)
+        private static void RunOnceModifier(string mod, Character character, CharacterCacheEntry cacheEntry, Dictionary<string, CreatureModifier> availableMods)
         {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod))
@@ -83,7 +83,7 @@ namespace StarLevelSystem.modules
             selectedMod.RunOnceMethodCall(character, selectedMod.Config, cacheEntry);
         }
 
-        private static void StartupModifier(string mod, Character character, StoredCreatureDetails cacheEntry, Dictionary<string, CreatureModifier> availableMods) {
+        private static void StartupModifier(string mod, Character character, CharacterCacheEntry cacheEntry, Dictionary<string, CreatureModifier> availableMods) {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod)) {
                 if (mod == NoMods) { return; }
@@ -135,7 +135,7 @@ namespace StarLevelSystem.modules
             int nameEntries = 0;
             int selectedPrefixes = 0;
             List<string> remainingNameSegments = modifiers.Keys.ToList();
-            foreach (string modifierName in remainingNameSegments.shuffleList())
+            foreach (string modifierName in remainingNameSegments)
             {
                 //Logger.LogDebug($"Setting name segment for: {modifierName}");
                 if (remainingNameSegments.Count <= 0 || nameEntries >= remainingNameSegments.Count) { break; }
@@ -148,17 +148,15 @@ namespace StarLevelSystem.modules
                 }
                 CreatureModifier creaturemod = CreatureModifiersData.GetModifierDef(modifierName, modtype);
                 if (creaturemod == null) { continue; }
-                // Try selecting a prefix name
-                //Logger.LogDebug($"checking to add prefix {selectedPrefixes} <= {ValConfig.LimitCreatureModifierPrefixes.Value} && {creaturemod.namingConvention} && {creaturemod.NamePrefixes}");
-                if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value && prefixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NamePrefixes != null && creaturemod.NamePrefixes.Count > 0)
+                if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value && prefixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NamePrefix != null && creaturemod.NamePrefix.Length > 0)
                 {
-                    prefix_names.Add(creaturemod.NamePrefixes[UnityEngine.Random.Range(0, creaturemod.NamePrefixes.Count - 1)]);
+                    prefix_names.Add(creaturemod.NamePrefix);
                     continue;
                 }
                 //Logger.LogDebug($"checking to add suffix");
-                if (suffixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NameSuffixes != null && creaturemod.NameSuffixes.Count > 0)
+                if (suffixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NameSuffix != null && creaturemod.NameSuffix.Length > 0)
                 {
-                    suffix_names.Add(creaturemod.NameSuffixes[UnityEngine.Random.Range(0, creaturemod.NameSuffixes.Count - 1)]);
+                    suffix_names.Add(creaturemod.NameSuffix);
                 }
             }
 
@@ -322,7 +320,7 @@ namespace StarLevelSystem.modules
             savedMods.Add(newModifier, modType);
             updatedMods.Set(savedMods);
             //Logger.LogDebug($"Adding Modifier to ZDO.");
-            StoredCreatureDetails scd = CompositeLazyCache.GetZDONoCreate(character);
+            CharacterCacheEntry scd = CompositeLazyCache.GetCacheEntry(character);
 
             var selectedMod = CreatureModifiersData.GetModifierDef(newModifier, modType);
             //Logger.LogDebug($"Setting up modifier.");

@@ -1,3 +1,12 @@
+**0.13.0**
+ ---
+ ```
+ - Enables Map Ring redraw/removal when setting is changed
+ - Re-implements character cache
+ - Modifiers Updated (please delete your Modifiers.yaml)
+	- Changes Modifier name generation to be deterministic, removes multiple prefix and postfix options
+ ```
+
 **0.12.1**
  ---
  ```

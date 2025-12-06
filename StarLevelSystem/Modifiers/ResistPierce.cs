@@ -6,7 +6,7 @@ namespace StarLevelSystem.Modifiers
     internal static class ResistPierce
     {
         [UsedImplicitly]
-        public static void RunOnce(Character creature, CreatureModConfig config, StoredCreatureDetails ccache)
+        public static void RunOnce(Character creature, CreatureModConfig config, CharacterCacheEntry ccache)
         {
             if (ccache == null) { return; }
             ccache.DamageRecievedModifiers[DamageType.Pierce] -= config.BasePower + (config.PerlevelPower * creature.m_level);

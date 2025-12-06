@@ -27,7 +27,7 @@ namespace StarLevelSystem.Modifiers
                 foreach (Character character in characters) {
                     // Logger.LogDebug($"Checking SoulEater on {character.name}");
                     if (character == null || character.IsPlayer()) { continue; }
-                    StoredCreatureDetails cDetails = CompositeLazyCache.GetZDONoCreate(character);
+                    CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(character);
                     Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                     if (cDetails != null && mods != null && mods.Keys.Contains(ModifierNames.SoulEater.ToString())) {
                         CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater.ToString(), mods[ModifierNames.SoulEater.ToString()]);

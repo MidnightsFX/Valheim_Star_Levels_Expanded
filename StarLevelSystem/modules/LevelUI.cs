@@ -41,7 +41,7 @@ namespace StarLevelSystem.modules
             public static void Postfix(Tameable __instance)
             {
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
-                __instance.m_character.m_nview.GetZDO().Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(__instance.m_character, mods)); 
+                //__instance.m_character.m_nview.GetZDO().Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(__instance.m_character, mods)); 
                 LevelUI.InvalidateCacheEntry(__instance.m_character.GetZDOID());
             }
         }
@@ -286,7 +286,9 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Character), nameof(Character.GetHoverName))]
         public static class DisplayCreatureNameChanges {
             public static bool Prefix(Character __instance, ref string __result) {
-                __result = Localization.instance.Localize(CompositeLazyCache.GetCreatureName(__instance));
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
+                if (cce == null || cce.CreatureNameLocalizable == null) { return true; }
+                __result = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 return false;
             }
         }

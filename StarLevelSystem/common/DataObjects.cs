@@ -22,9 +22,10 @@ namespace StarLevelSystem.common
     {
 
         public static IDeserializer yamldeserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
-        //public static IDeserializer yamldeserializerNoRef = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
-        //public static ISerializer yamlserializerNoRef = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).DisableAliases().Build();
+
+        //public static IDeserializer yamldeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
+        public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).JsonCompatible().Build();
 
         public static readonly string SLS_CREATURE = "SLS_CREATURE";
         public static readonly string SLS_SIZE = "SLS_SIZE";
@@ -32,6 +33,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
         public static readonly string SLS_SPAWN_MULT = "SLS_MULT";
         public static readonly string SLS_MODIFIERS = "SLS_MODS";
+        public static readonly string SLS_MODSV2 = "SLS_MODV2";
         public static readonly string SLS_CHARNAME = "SLS_CHARNAME";
 
         public enum CreatureBaseAttribute {

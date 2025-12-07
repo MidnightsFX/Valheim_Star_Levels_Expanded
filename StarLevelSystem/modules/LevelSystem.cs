@@ -31,7 +31,7 @@ namespace StarLevelSystem.modules
         public static void SetCharacterLevelControl(Character chara, int providedLevel) {
             if (chara == null) { return; }
             if (ValConfig.ControlSpawnerLevels.Value) {
-                ModificationExtensionSystem.CreatureSetup(chara, providedLevel, force: true);
+                ModificationExtensionSystem.CreatureSetup(chara, providedLevel);
                 return;
             }
             // Fallback
@@ -46,13 +46,14 @@ namespace StarLevelSystem.modules
                 return 1;
             }
             if (leveloverride > 0) {
-                character.m_level = leveloverride;
+                //character.m_level = leveloverride;
+                //character.SetLevel(leveloverride);
                 return leveloverride;
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             //Logger.LogDebug($"Current level from ZDO: {clevel}");
-            if (clevel <= 0) {
+            if (clevel <= 0 || clevel > ValConfig.MaxLevel.Value) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value;
                 int min_level = 0;
@@ -609,7 +610,7 @@ namespace StarLevelSystem.modules
                         return;
                     }
                     // TODO: Add randomization, limits and variations to children
-                    ModificationExtensionSystem.CreatureSetup(chara, force: true);
+                    ModificationExtensionSystem.CreatureSetup(chara, proc.m_character.GetLevel());
                 }
 
                 int inheritedLevel = proc.m_character ? proc.m_character.GetLevel(): proc.m_minOffspringLevel;
@@ -617,10 +618,10 @@ namespace StarLevelSystem.modules
                 {
                     int level = UnityEngine.Random.Range(1, inheritedLevel);
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
-                    ModificationExtensionSystem.CreatureSetup(chara, level, force: true);
+                    ModificationExtensionSystem.CreatureSetup(chara, level);
                 } else {
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child.");
-                    ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel, force: true);
+                    ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel);
                 }
                 if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null)
                 {
@@ -909,7 +910,7 @@ namespace StarLevelSystem.modules
             {
                 if (ValConfig.ControlAbilitySpawnedCreatures.Value)
                 {
-                    ModificationExtensionSystem.CreatureSetup(chara, providedLevel, force: true);
+                    ModificationExtensionSystem.CreatureSetup(chara, providedLevel);
                     return;
                 }
                 // Fallback
@@ -928,7 +929,7 @@ namespace StarLevelSystem.modules
                 GameObject go = UnityEngine.Object.Instantiate(__instance.m_spawnPrefab, __instance.transform.TransformPoint(__instance.m_spawnOffset), Quaternion.Euler(0f, UnityEngine.Random.Range(0, 360), 0f));
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
-                    ModificationExtensionSystem.CreatureSetup(chara, force: true);
+                    ModificationExtensionSystem.CreatureSetup(chara);
                 }
                 __instance.m_nview.Destroy();
                 return false;
@@ -944,7 +945,7 @@ namespace StarLevelSystem.modules
             static void Postfix(GameObject go) {
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
-                    ModificationExtensionSystem.CreatureSetup(chara, force: true);
+                    ModificationExtensionSystem.CreatureSetup(chara);
                 }
             }
         }

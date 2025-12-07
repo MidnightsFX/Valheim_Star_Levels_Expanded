@@ -18,7 +18,7 @@ namespace StarLevelSystem.modules
     internal static class ModificationExtensionSystem
     {
 
-        static List<string> ForceLeveledCreatures = new List<string>();
+        public static List<string> ForceLeveledCreatures = new List<string>();
 
         internal static void LeveledCreatureListChanged(object s, EventArgs e)
         {
@@ -59,12 +59,7 @@ namespace StarLevelSystem.modules
         public static class CreatureCharacterExtension
         {
             public static void Postfix(Character __instance) {
-                //Logger.LogDebug($"Character awake {__instance.m_name}");
-                bool setlevel = false;
-                if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name)) {
-                    setlevel = true;
-                }
-                CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value, setLevel: setlevel);
+                CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value);
             }
         }
 
@@ -297,7 +292,7 @@ namespace StarLevelSystem.modules
             CompositeLazyCache.PostZDOSetup(cce);
         }
 
-        static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, bool force = false, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool setLevel = true)
+        static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)
         {
             int times = 0;
             bool status = false;
@@ -308,7 +303,7 @@ namespace StarLevelSystem.modules
                 // Try to ensure that the Zowner gets the creature setup
                 // Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
                 if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
-                if (__instance.m_nview.IsOwner() || force == true) {
+                if (__instance.m_nview.IsOwner()) {
                     SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
                 }
 
@@ -361,17 +356,17 @@ namespace StarLevelSystem.modules
         }
 
         // This is the primary flow setup for setting up a character
-        internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool force = false, bool setLevel = true) {
+        internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
             if (__instance.IsPlayer()) { return; }
 
             //// Select the creature data
             //CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, leveloverride);
             //if (cDetails == null) { return; } // For invalid things, skip. This happens when placing TWIG etc (not a valid or awake character)
-            
+
 
             // Generally a bad idea to run setup immediately if this is a networked player and the owner hasn't setup the creature
             if (ZNetScene.instance != null) {
-                ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, force: force, spawnMultiply: multiply, requiredModifiers: requiredModifiers, setLevel: setLevel));
+                ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, spawnMultiply: multiply, requiredModifiers: requiredModifiers));
             } else {
                 Logger.LogDebug("FALLBACK setup of creature, does this client have network issues?");
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, leveloverride, requiredModifiers, spawnMultiplyCheck: multiply);

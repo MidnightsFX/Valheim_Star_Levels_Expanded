@@ -1,5 +1,6 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.modules;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -129,12 +130,16 @@ namespace StarLevelSystem.Data
             if (characterEntry.ControlledCharacter.GetLevel() <= 1 && characterEntry.Level != characterEntry.ControlledCharacter.GetLevel()) {
                 characterEntry.ControlledCharacter.SetLevel(characterEntry.Level);
             }
+            // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
+            if (characterEntry.ControlledCharacter.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
+            {
+                characterEntry.ControlledCharacter.SetLevel(characterEntry.Level);
+            }
 
             // Set or load creature modifiers
             //Logger.LogDebug("Selecting creature modifiers.");
-            CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, characterEntry.ControlledCharacter.m_nview, null);
-            characterEntry.CreatureModifiers = StoredMods.Get();
-            if (StoredMods == null) {
+            characterEntry.CreatureModifiers = GetCreatureModifiers(characterEntry.ControlledCharacter);
+            if (characterEntry.CreatureModifiers == null) {
                 characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(characterEntry.ControlledCharacter, characterEntry.RefCreatureName, characterEntry.CreatureSettings, characterEntry.Biome, characterEntry.Level, characterEntry.ModifiersRequired, characterEntry.ModifiersNotAllowed);
             }
 
@@ -174,14 +179,19 @@ namespace StarLevelSystem.Data
         public static Dictionary<string, ModifierType> GetCreatureModifiers(Character character)
         {
             if (character == null || character.m_nview == null) { return null; }
+            string mods = character.m_nview.GetZDO().GetString(SLS_MODSV2, "");
+            // Priority storage of V2 Mod format
+            if (mods != "") {
+                return DataObjects.yamldeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+            }
+
             CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
             return StoredMods.Get();
         }
 
-        public static void SetCreatureModifiers(Character character, Dictionary<string, ModifierType> modifiers)
+        public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
-            CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
-            StoredMods.Set(modifiers);
+            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlserializerJsonCompat.Serialize(modifiers));
         }
     }
 }

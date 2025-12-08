@@ -2,8 +2,10 @@
 using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
+using static UnityEngine.EventSystems.EventTrigger;
 
 namespace StarLevelSystem.Data
 {
@@ -22,12 +24,12 @@ namespace StarLevelSystem.Data
             return characterCacheEntry;
         }
 
-        public static CharacterCacheEntry GetAndSetLocalCache(Character character, int leveloverride = 0, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool spawnMultiplyCheck = true, bool updateCache = false) {
+        public static CharacterCacheEntry GetAndSetLocalCache(Character character, int leveloverride = 0, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool updateCache = false) {
 
             // Check for cached creature data
             CharacterCacheEntry characterEntry = RetrieveStoredCreatureFromCache(character);
             if (characterEntry != null) {
-                Logger.LogDebug($"{character.name} Creature Data Object Cache available.");
+                //Logger.LogDebug($"{character.name} Creature Data Object Cache available.");
                 return characterEntry;
             }
 
@@ -35,7 +37,6 @@ namespace StarLevelSystem.Data
 
             characterEntry ??= new CharacterCacheEntry();
 
-            characterEntry.ControlledCharacter = character;
             // Get character based biome and creature configuration
             //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
@@ -90,7 +91,7 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug("Setting creature level");
             int level = LevelSystem.DetermineLevel(character, creatureZDO, creatureSettings, biomeSettings, leveloverride);
             characterEntry.Level = level;
-            Logger.LogDebug($"Determined {creatureName} level {level}");
+            //Logger.LogDebug($"Determined {creatureName} level {level}");
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");
@@ -117,44 +118,55 @@ namespace StarLevelSystem.Data
         }
 
         // SAFE to re-run
-        public static void StartZOwnerCreatureRoutines(CharacterCacheEntry characterEntry) {
-            if (characterEntry == null) { return; }
+        public static void StartZOwnerCreatureRoutines(Character chara, CharacterCacheEntry characterEntry, bool spawnratecheck = true) {
+            if (characterEntry == null || chara == null) { return; }
+
+            // Logger.LogDebug($"Activating ZOwner setup routines {characterEntry.RefCreatureName}");
 
             // Destroy character if its selected for deletion
-            if (characterEntry.ShouldDelete && characterEntry.ControlledCharacter.m_tamed == false) {
-                ZNetScene.instance.StartCoroutine(ModificationExtensionSystem.DestroyCoroutine(characterEntry.ControlledCharacter.gameObject));
+            if (characterEntry.ShouldDelete && chara.m_tamed == false) {
+                ZNetScene.instance.StartCoroutine(ModificationExtensionSystem.DestroyCoroutine(chara.gameObject));
                 return;
             }
 
             // Set level ZDO, only if its not been set, and only if its not what the cache is expecting
-            if (characterEntry.ControlledCharacter.GetLevel() <= 1 && characterEntry.Level != characterEntry.ControlledCharacter.GetLevel()) {
-                characterEntry.ControlledCharacter.SetLevel(characterEntry.Level);
+            if (chara.GetLevel() <= 1 && characterEntry.Level != chara.GetLevel()) {
+                chara.SetLevel(characterEntry.Level);
+                LevelUI.InvalidateCacheEntry(chara);
             }
+            //Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
-            if (characterEntry.ControlledCharacter.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
             {
-                characterEntry.ControlledCharacter.SetLevel(characterEntry.Level);
+                chara.SetLevel(characterEntry.Level);
             }
 
             // Set or load creature modifiers
-            //Logger.LogDebug("Selecting creature modifiers.");
-            characterEntry.CreatureModifiers = GetCreatureModifiers(characterEntry.ControlledCharacter);
-            if (characterEntry.CreatureModifiers == null) {
-                characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(characterEntry.ControlledCharacter, characterEntry.RefCreatureName, characterEntry.CreatureSettings, characterEntry.Biome, characterEntry.Level, characterEntry.ModifiersRequired, characterEntry.ModifiersNotAllowed);
+            characterEntry.CreatureModifiers = GetCreatureModifiers(chara);
+            //Logger.LogDebug($"Checking stored mods {characterEntry.CreatureModifiers.Count}");
+            //if (characterEntry.CreatureModifiers.Count > 0) {
+            //    Logger.LogDebug($"  Stored mods {characterEntry.CreatureModifiers.Keys}");
+            //}
+            if (characterEntry.CreatureModifiers == null || characterEntry.CreatureModifiers.Count == 0) {
+                characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(chara, characterEntry.RefCreatureName, characterEntry.CreatureSettings, characterEntry.Biome, characterEntry.Level, characterEntry.ModifiersRequired, characterEntry.ModifiersNotAllowed);
+                SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
             }
-
-            // Determine creature name
-            //Logger.LogDebug("Setting creature name.");
-            characterEntry.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterEntry.ControlledCharacter, characterEntry.CreatureModifiers);
+            // 
+            //if (characterEntry.CreatureModifiers != null) {
+            //    StringBuilder sb = new StringBuilder();
+            //    sb.AppendLine($"Selecting {characterEntry.RefCreatureName} modifiers:");
+            //    foreach (var modifier in characterEntry.CreatureModifiers) {
+            //        sb.AppendLine($"{modifier.Key}-{modifier.Value}");
+            //    }
+            //    Logger.LogDebug(sb.ToString());
+            //}
 
             // Get/set check SLS_SPAWN_MULT - applies spawn if not already applied
-            Spawnrate.CheckSetApplySpawnrate(characterEntry);
-        }
-
-        public static void PostZDOSetup(CharacterCacheEntry characterEntry)
-        {
-            // Run once modifier setup to modify stats on creatures
-            CreatureModifiers.RunOnceModifierSetup(characterEntry.ControlledCharacter, characterEntry, characterEntry.CreatureModifiers);
+            if (spawnratecheck == false) {
+                chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+            } else {
+                Spawnrate.CheckSetApplySpawnrate(chara, characterEntry);
+            }
         }
 
         public static CharacterCacheEntry RetrieveStoredCreatureFromCache(Character character)
@@ -179,10 +191,13 @@ namespace StarLevelSystem.Data
         public static Dictionary<string, ModifierType> GetCreatureModifiers(Character character)
         {
             if (character == null || character.m_nview == null) { return null; }
-            string mods = character.m_nview.GetZDO().GetString(SLS_MODSV2, "");
+            string mods = character.m_nview.GetZDO().GetString(SLS_MODSV2, null);
             // Priority storage of V2 Mod format
-            if (mods != "") {
-                return DataObjects.yamldeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+            if (mods != null) {
+                try {
+                    return DataObjects.yamldeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+                }
+                catch {  return null; }
             }
 
             CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);

@@ -251,8 +251,8 @@ namespace StarLevelSystem.modules
             float perlevelpower = 0f,
             Dictionary<Heightmap.Biome, List<string>> biomeConfig = null,
             int namingStyle = 2,
-            List<string> name_suffixes = null,
-            List<string> name_prefixes = null,
+            string name_suffixes = null,
+            string name_prefixes = null,
             int visualStyle = 0,
             Sprite starIcon = null,
             GameObject visualEffect = null,
@@ -267,9 +267,7 @@ namespace StarLevelSystem.modules
 
             CreatureModifiersData.ModifierNamesLookupTable.AddValue(modifier_name, modifierID);
 
-            CreatureModifier newMod = new CreatureModifier();
-
-            newMod.SelectionWeight = selectionWeight;
+            CreatureModifierDefinition newMod = new CreatureModifierDefinition();
 
             if (starIcon != null) {
                 newMod.StarVisualAPI = starIcon;
@@ -285,34 +283,41 @@ namespace StarLevelSystem.modules
                 newMod.SetupMethodClass = setupMethod;
             }
 
-            newMod.Config = new CreatureModConfig() {
+            if (name_suffixes != null)
+            {
+                newMod.NameSuffix = name_suffixes;
+            }
+
+            if (name_prefixes != null)
+            {
+                newMod.NamePrefix = name_prefixes;
+            }
+
+            if (namingStyle > 2 || namingStyle < 0) { namingStyle = 2; }
+            newMod.namingConvention = (NameSelectionStyle)namingStyle;
+
+            if (visualStyle > 3 || visualStyle < 0) { visualStyle = 0; }
+            newMod.VisualEffectStyle = (VisualEffectStyle)visualStyle;
+
+            CreatureModifierConfiguration clientConfig = new CreatureModifierConfiguration();
+
+            clientConfig.Config = new CreatureModConfig()
+            {
                 BasePower = basepower,
                 PerlevelPower = perlevelpower,
                 BiomeObjects = biomeConfig
             };
 
-            if (namingStyle > 2 || namingStyle < 0) { namingStyle = 2; }
-            newMod.namingConvention = (NameSelectionStyle)namingStyle;
-
-            if (name_suffixes != null) {
-                newMod.NameSuffix = name_suffixes;
-            }
-
-            if (name_prefixes != null) {
-                newMod.NamePrefix = name_prefixes;
-            }
-
-            if (visualStyle > 3 || visualStyle < 0) { visualStyle = 0; }
-            newMod.VisualEffectStyle = (VisualEffectStyle)visualStyle;
+            clientConfig.SelectionWeight = selectionWeight;
 
             if (allowed_creatures != null) {
-                newMod.AllowedCreatures = allowed_creatures;
+                clientConfig.AllowedCreatures = allowed_creatures;
             }
             if (unallowed_creatures != null) {
-                newMod.UnallowedCreatures = unallowed_creatures;
+                clientConfig.UnallowedCreatures = unallowed_creatures;
             }
             if (allowed_biomes != null) {
-                newMod.AllowedBiomes = allowed_biomes;
+                clientConfig.AllowedBiomes = allowed_biomes;
             }
 
             ClearProbabilityCaches();

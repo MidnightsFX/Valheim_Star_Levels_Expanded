@@ -25,8 +25,8 @@ namespace StarLevelSystem
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
+        public static ConfigEntry<bool> OverlevedCreaturesGetRerolledOnLoad;
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
-        //public static ConfigEntry<bool> DistanceBonusMapsCanIncludeLowerLevels;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
         public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;
@@ -122,6 +122,7 @@ namespace StarLevelSystem
 
 
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 200);
+            OverlevedCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up overleveled creatures if you reduce the max level.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
 
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");

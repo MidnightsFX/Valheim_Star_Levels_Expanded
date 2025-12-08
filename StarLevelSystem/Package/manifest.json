@@ -1,7 +1,7 @@
 ﻿{
   "name": "StarLevelSystem",
   "description": "We have two levels yes, but why not... MORE?",
-  "version_number": "0.12.1",
+  "version_number": "0.13.0",
   "website_url": "https://discord.gg/Dmr9PQTy9m",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2333",

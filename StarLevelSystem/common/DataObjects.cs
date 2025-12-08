@@ -249,21 +249,25 @@ namespace StarLevelSystem.common
             public float SelectionWeight { get; set; } = 1f;
         }
 
-        public class CreatureModifier
+        public class CreatureModifierConfiguration
+        {
+            [DefaultValue(1f)]
+            public float SelectionWeight { get; set; } = 1f;
+            public CreatureModConfig Config { get; set; } = new CreatureModConfig();
+            public List<string> AllowedCreatures { get; set; }
+            public List<string> UnallowedCreatures { get; set; }
+            public List<Heightmap.Biome> AllowedBiomes { get; set; }
+        }
+
+        public class CreatureModifierDefinition
         {
             public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
             public string NamePrefix { get; set; }
             public string NameSuffix { get; set; }
-            [DefaultValue(1f)]
-            public float SelectionWeight { get; set; } = 1f;
-            public CreatureModConfig Config { get; set; } = new CreatureModConfig();
             public string StarVisual { get; set; }
             public string VisualEffect { get; set; }
             public string SecondaryEffect { get; set; }
             public VisualEffectStyle VisualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
-            public List<string> AllowedCreatures { get; set; }
-            public List<string> UnallowedCreatures { get; set; }
-            public List<Heightmap.Biome> AllowedBiomes { get; set; }
             public string SetupMethodClass { get; set; }
             public string RunOnceMethodClass { get; set; }
             public bool FromAPI { get; set; } = false;
@@ -348,9 +352,9 @@ namespace StarLevelSystem.common
         public class CreatureModifierCollection
         {
             public GlobalModifierSettings ModifierGlobalSettings { get; set; } = new GlobalModifierSettings();
-            public Dictionary<string, CreatureModifier> MajorModifiers { get; set; }
-            public Dictionary<string, CreatureModifier> MinorModifiers { get; set; }
-            public Dictionary<string, CreatureModifier> BossModifiers { get; set; }
+            public Dictionary<string, CreatureModifierConfiguration> MajorModifiers { get; set; }
+            public Dictionary<string, CreatureModifierConfiguration> MinorModifiers { get; set; }
+            public Dictionary<string, CreatureModifierConfiguration> BossModifiers { get; set; }
         }
 
         public class GlobalModifierSettings {
@@ -368,7 +372,8 @@ namespace StarLevelSystem.common
             public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }
             public float SpawnRateModifier { get; set; } = 1f;
-            public Character ControlledCharacter { get; set; } = null;
+            public bool runOnceDone { get; set; } = false;
+            public Vector3 defaultSize { get; set; } = Vector3.zero;
             public Dictionary<string, ModifierType> CreatureModifiers { get; set; } = new Dictionary<string, ModifierType>();
             public Dictionary<string, ModifierType> ModifiersRequired { get; set; } = null;
             public List<string> ModifiersNotAllowed { get; set; } = null;

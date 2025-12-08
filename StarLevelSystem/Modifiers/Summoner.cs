@@ -57,7 +57,8 @@ namespace StarLevelSystem.Modifiers
                 }
                 // Skip spawning for the requested cooldown time
                 if (spawntimestamp + timeBetweenSummons < ZNet.instance.GetTimeSeconds()) { return; }
-                
+                if (summonableCreatures.Count == 0) { return; }
+                if (bossCharacter  == null) { return; }
 
                 GameObject toSummon = summonableCreatures[UnityEngine.Random.Range(0, summonableCreatures.Count)];
                 Vector3 spawnPosition = bossCharacter.transform.position + new Vector3(UnityEngine.Random.Range(-10, 10), 0, UnityEngine.Random.Range(-10, 10));

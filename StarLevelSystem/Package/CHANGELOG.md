@@ -1,10 +1,14 @@
 **0.13.0**
  ---
  ```
+ - Added a configuration option to force-reroll creatures that are over the specified max level when loaded
  - Enables Map Ring redraw/removal when setting is changed
- - Re-implements character cache
+ - Added more safety checks to BossSummoner
+ - Fixes an issue where characters would not get size increases
+ - Re-implements character client side cache
  - Modifiers Updated (please delete your Modifiers.yaml)
 	- Changes Modifier name generation to be deterministic, removes multiple prefix and postfix options
+	- Updated Modifier configuration with user important details being centric
  ```
 
 **0.12.1**

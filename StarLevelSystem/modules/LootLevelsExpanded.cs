@@ -279,7 +279,8 @@ namespace StarLevelSystem.modules
                                 }
                                 if (chara != null)
                                 {
-                                    CompositeLazyCache.GetAndSetLocalCache(chara, spawnMultiplyCheck: false);
+                                    CompositeLazyCache.GetAndSetLocalCache(chara);
+                                    ModificationExtensionSystem.CreatureSetup(chara, multiply: false);
                                 }
                             }
 
@@ -358,7 +359,7 @@ namespace StarLevelSystem.modules
                         }
                         
                         if (chara != null) {
-                            ModificationExtensionSystem.CreatureSetup(chara, force: true);
+                            ModificationExtensionSystem.CreatureSetup(chara, delay: 0.5f);
                         }
                     }
                         Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();

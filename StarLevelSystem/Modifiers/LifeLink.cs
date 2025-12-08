@@ -16,7 +16,7 @@ namespace StarLevelSystem.Modifiers
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                 if (mods != null && mods.ContainsKey(ModifierNames.LifeLink.ToString())) {
                     //Logger.LogDebug($"Lifelink triggered for {__instance.name}");
-                    CreatureModifier cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink.ToString(), mods[ModifierNames.LifeLink.ToString()]);
+                    CreatureModifierConfiguration cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink.ToString(), mods[ModifierNames.LifeLink.ToString()]);
                     float damage_reduction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower* __instance.m_level));
                     if (damage_reduction < 0) { damage_reduction = 0f; }
 
@@ -29,9 +29,9 @@ namespace StarLevelSystem.Modifiers
                         // No players, and not self
                         if (character.IsPlayer() || character == __instance) { continue; }
                         Logger.LogDebug($"Distributing Damage to {character.m_name}");
-                        if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(cm.SecondaryEffect)) {
+                        if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(CreatureModifiersData.ModifierDefinitions[ModifierNames.LifeLink.ToString()].SecondaryEffect)) {
                             Vector3 targetTravel = __instance.transform.position - character.transform.position;
-                            GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cm.SecondaryEffect], targetTravel, Quaternion.identity);
+                            GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[CreatureModifiersData.ModifierDefinitions[ModifierNames.LifeLink.ToString()].SecondaryEffect], targetTravel, Quaternion.identity);
                         }
                         
                         character.Damage(transferHit);

@@ -21,9 +21,9 @@ namespace StarLevelSystem.Modifiers
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                 if (mods == null) { return; }
                 if (mods.Keys.Contains(ModifierNames.FireNova.ToString())) {
-                    CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), mods[ModifierNames.FireNova.ToString()]);
+                    CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), mods[ModifierNames.FireNova.ToString()]);
                     if (cmdef == null) { return; }
-                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
+                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[ModifierDefinitions[ModifierNames.FireNova.ToString()].SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
                     go.SetActive(false);
                     Aoe aoe = go.GetComponent<Aoe>();
                     // Configure damage

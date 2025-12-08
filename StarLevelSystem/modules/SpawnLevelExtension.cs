@@ -73,8 +73,8 @@ namespace StarLevelSystem.modules
 
             static void SetCreatureSpawnLevel(Character chara, int level) {
                 //Logger.LogDebug($"Setting {chara.name} to lvl: {level}");
-                CompositeLazyCache.GetAndSetLocalCache(chara, level, spawnMultiplyCheck: false);
-                ModificationExtensionSystem.CreatureSetup(chara, force: true, leveloverride: level);
+                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, level);
+                ModificationExtensionSystem.CreatureSetup(chara, leveloverride: level, multiply: false, delay: 0);
             }
         }
     }

@@ -2,6 +2,7 @@
 using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -37,7 +38,8 @@ namespace StarLevelSystem.Modifiers
                         if (shouldTame) { sgo.GetComponent<Character>().SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
-                            CompositeLazyCache.GetAndSetLocalCache(sChar, level, spawnMultiplyCheck: false, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            CompositeLazyCache.GetAndSetLocalCache(sChar, level, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            ModificationExtensionSystem.CreatureSetup(sChar, multiply: false);
                             CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }
                         

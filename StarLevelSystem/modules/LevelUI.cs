@@ -35,6 +35,12 @@ namespace StarLevelSystem.modules
             if (characterExtendedHuds.ContainsKey(zdo)) { characterExtendedHuds.Remove(zdo); }
         }
 
+        public static void InvalidateCacheEntry(Character chara)
+        {
+            ZDOID zdoid = chara.GetZDOID();
+            if (characterExtendedHuds.ContainsKey(zdoid)) { characterExtendedHuds.Remove(zdoid); }
+        }
+
         [HarmonyPatch(typeof(Tameable), nameof(Tameable.SetName))]
         public static class UpdateTamedName
         {
@@ -323,9 +329,10 @@ namespace StarLevelSystem.modules
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
-                foreach (var entry in mods) {
+                foreach (KeyValuePair<string, ModifierType> entry in mods) {
+                    if (entry.Key == CreatureModifiers.NoMods) { continue; }
                     //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
-                    CreatureModifier cmd = CreatureModifiersData.GetModifierDef(entry.Key, entry.Value);
+                    CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
                     if (cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
                         Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
                         starReplacements.Add(star, starsprite);

@@ -46,14 +46,15 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
-        public static class VisualEquipmentScaleToFit
-        {
-            public static void Postfix(VisEquipment __instance, GameObject __result) {
-                if (__instance.m_isPlayer == true) { return; }
-                ApplySizeModificationToObjWhenZReady(__result, __instance.m_nview);
-            }
-        }
+        // TODO: Address scaling issues
+        //[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
+        //public static class VisualEquipmentScaleToFit
+        //{
+        //    public static void Postfix(VisEquipment __instance, GameObject __result) {
+        //        if (__instance.m_isPlayer == true) { return; }
+        //        ApplySizeModificationToObjWhenZReady(__result, __instance.m_nview);
+        //    }
+        //}
 
         [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
         public static class CreatureCharacterExtension
@@ -287,32 +288,33 @@ namespace StarLevelSystem.modules
         static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null) {
             if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { return; }
             //Logger.LogDebug("Setting up creature cache as Z-owner");
-            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply);
-            CompositeLazyCache.StartZOwnerCreatureRoutines(cce);
-            CompositeLazyCache.PostZDOSetup(cce);
+            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
+            CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce, spawnMultiply);
         }
 
         static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)
         {
             int times = 0;
             bool status = false;
-            while (status == false)
-            {
+            while (status == false) {
+                // have to wait while we check the ZValid state- otherwise this results in an almost instant loop which will kill the client
                 yield return new WaitForSeconds(delay);
                 if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { continue; }
+                
                 // Try to ensure that the Zowner gets the creature setup
                 // Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
                 if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
-                if (__instance.m_nview.IsOwner()) {
+                // Only the owner should setup a creature, OR if someone is controlling it and it was just spawned it is setup immediately
+                if (__instance.m_nview.IsOwner() || delay == 0) {
                     SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
                 }
-
-                status = CharacterSetup(__instance, level_override);
+                status = CharacterSetup(__instance);
                 //Logger.LogDebug($"Setup status: {status}");
                 times += 1;
                 // We've failed to get the creature setup and we don't have data for it, its not getting setup
                 if (times == ValConfig.FallbackDelayBeforeCreatureSetup.Value - 1) {
-                    CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers, spawnMultiplyCheck: spawnMultiply);
+                    CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
+                    CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, scd, spawnMultiply);
                     CharacterSetup(__instance);
                     Logger.LogDebug($"{scd.RefCreatureName} running delayed setup.");
                 }
@@ -323,7 +325,7 @@ namespace StarLevelSystem.modules
         }
 
         // This is the main entry point for setting up a character
-        private static bool CharacterSetup(Character __instance, int level_override = 0)
+        private static bool CharacterSetup(Character __instance)
         {
             if (__instance == null) { return false; }
 
@@ -331,11 +333,17 @@ namespace StarLevelSystem.modules
             CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
             if (cDetails == null) { return false; }
 
-
             if (ValConfig.ForceControlAllSpawns.Value == true) {
-                CompositeLazyCache.StartZOwnerCreatureRoutines(cDetails);
-                CompositeLazyCache.PostZDOSetup(cDetails);
+                CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cDetails);
+                cDetails = CompositeLazyCache.GetCacheEntry(__instance); // refresh after running zsetup
             }
+
+            // Determine creature name
+            //Logger.LogDebug("Setting creature name.");
+            cDetails.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(__instance, cDetails.CreatureModifiers);
+
+            // Run once modifier setup to modify stats on creatures
+            CreatureModifiers.RunOnceModifierSetup(__instance, cDetails);
 
             // Modify the creatures stats by custom character/biome modifications
             CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
@@ -369,8 +377,9 @@ namespace StarLevelSystem.modules
                 ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, spawnMultiply: multiply, requiredModifiers: requiredModifiers));
             } else {
                 Logger.LogDebug("FALLBACK setup of creature, does this client have network issues?");
-                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, leveloverride, requiredModifiers, spawnMultiplyCheck: multiply);
-                CompositeLazyCache.StartZOwnerCreatureRoutines(cce);
+                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, leveloverride, requiredModifiers);
+                CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce);
+                CharacterSetup(__instance);
             }
         }
 
@@ -405,14 +414,12 @@ namespace StarLevelSystem.modules
             }
             float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
 
-            string creaturename = cDetails.RefCreatureName;
-            creaturename ??= Utils.GetPrefabName(creature.gameObject);
-            GameObject creatureref = PrefabManager.Instance.GetPrefab(creaturename);
+            GameObject creatureref = PrefabManager.Instance.GetPrefab(cDetails.RefCreatureName);
 
             if (current_size > 0f && force_update == false) {
                 if (creatureref) {
                     Vector3 sizeEstimate = creatureref.transform.localScale * current_size;
-                    // Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
+                    //Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
                     creature.transform.localScale = sizeEstimate;
                     Physics.SyncTransforms();
                 }
@@ -432,13 +439,13 @@ namespace StarLevelSystem.modules
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
             float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
 
-            float creature_level_size = (per_level_mod * creature.GetComponent<Character>().GetLevel());
+            float creature_level_size = (per_level_mod * cDetails.Level);
             float scale = base_size_mod + creature_level_size;
 
             if (creatureref) {
                 Vector3 sizeEstimate = creatureref.transform.localScale * scale;
                 creature.transform.localScale = sizeEstimate;
-                // Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+                Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
             }
             zview.GetZDO().Set(SLS_SIZE, scale);
             Physics.SyncTransforms();

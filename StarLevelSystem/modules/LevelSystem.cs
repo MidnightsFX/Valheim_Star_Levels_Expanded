@@ -53,7 +53,7 @@ namespace StarLevelSystem.modules
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             //Logger.LogDebug($"Current level from ZDO: {clevel}");
-            if (clevel <= 0 || clevel > ValConfig.MaxLevel.Value) {
+            if (clevel <= 0 || ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value;
                 int min_level = 0;
@@ -255,7 +255,8 @@ namespace StarLevelSystem.modules
             {
                 ZNetScene.instance.StartCoroutine(BuildMapRingOverlay());
             } else {
-                MinimapManager.Instance.RemoveMapDrawing("SLS-LevelBonus");
+                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
+                ringbonuses.Enabled = false;
             }
         }
 
@@ -274,7 +275,8 @@ namespace StarLevelSystem.modules
             // Ensures that the previous ring overlay is removed first
             //MinimapManager.Instance.RemoveMapOverlay("SLS-LevelBonus");
             MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
-            
+            ringbonuses.Enabled = true;
+
             // Create a Color array with space for every pixel of the map
             int mapSize = ringbonuses.TextureSize * ringbonuses.TextureSize;
             Color[] mainPixels = new Color[mapSize];
@@ -317,7 +319,8 @@ namespace StarLevelSystem.modules
                     int x = Mathf.RoundToInt(world_x + Mathf.Cos(t) * map_radii);
                     int y = Mathf.RoundToInt(world_y + Mathf.Sin(t) * map_radii);
                     //circle[i] = new Vector2(x, y);
-                    
+                    if (ringbonuses == null) { yield break; }
+
                     int index = (y * ringbonuses.TextureSize) + x;
                     // Index must be less than pixels due to zero indexing
                     if (index >= mainPixels.Length) {
@@ -328,6 +331,7 @@ namespace StarLevelSystem.modules
                 }
             }
 
+            if (ringbonuses == null) { yield break; }
             ringbonuses.OverlayTex.SetPixels(mainPixels);
             ringbonuses.OverlayTex.Apply();
             Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
@@ -652,7 +656,8 @@ namespace StarLevelSystem.modules
             Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            Logger.LogDebug($"{creature_name} {biome} {p}");
+            // TODO: Make trees less complex
+            //Logger.LogDebug($"{creature_name} {biome} {p}");
 
             if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
                 bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);

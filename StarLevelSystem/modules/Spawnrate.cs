@@ -13,15 +13,15 @@ namespace StarLevelSystem.modules
     internal class Spawnrate
     {
         // Returns a bool based on whether or not the creature should be deleted, true = delete, false = do not delete
-        internal static bool CheckSetApplySpawnrate(CharacterCacheEntry ccEntry) {
-            if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && ccEntry.ControlledCharacter.IsBoss()) {
+        internal static bool CheckSetApplySpawnrate(Character chara, CharacterCacheEntry ccEntry) {
+            if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && chara.IsBoss()) {
                 return false;
             }
-            if (ccEntry.ControlledCharacter.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
+            if (chara.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
                 return false;
             }
-            if (ccEntry.ControlledCharacter.m_nview.GetZDO().GetBool(SLS_SPAWN_MULT, false) == true) { return false; }
-
+            if (chara.m_nview.GetZDO().GetBool(SLS_SPAWN_MULT, false) == true) { return false; }
+            chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
             float spawnrate = ccEntry.SpawnRateModifier;
             // Chance to increase spawn, or decrease it
             //Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
@@ -32,15 +32,16 @@ namespace StarLevelSystem.modules
                     float randv = UnityEngine.Random.value;
                     //Logger.LogDebug($"Spawn increase check {randv} <= {spawnrate} {randv <= spawnrate}");
                     if (randv <= spawnrate) {
-                        Vector3 position = ccEntry.ControlledCharacter.transform.position;
-                        if (ccEntry.ControlledCharacter.transform.position.y < 3000f) {
+                        Vector3 position = chara.transform.position;
+                        if (chara.transform.position.y < 3000f) {
                             // Randomize position a little
                             position = DetermineOffsetPosition(position, 15f);
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
-                        GameObject spawnedCreature = GameObject.Instantiate(PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(ccEntry.RefCreatureName)), position, rotation);
+                        GameObject targetclone = PrefabManager.Instance.GetPrefab(ccEntry.RefCreatureName);
+                        GameObject spawnedCreature = GameObject.Instantiate(targetclone, position, rotation);
                         Character spawnedChara = spawnedCreature.GetComponent<Character>();
-                        if (ccEntry.ControlledCharacter.IsTamed()) {
+                        if (chara.IsTamed()) {
                             spawnedChara?.SetTamed(true);
                         }
                         Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject}");

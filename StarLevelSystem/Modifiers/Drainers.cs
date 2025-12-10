@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.Data;
+using System.Collections.Generic;
 using System.Linq;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -17,15 +18,15 @@ namespace StarLevelSystem.Modifiers
                 if (hit == null || hit.m_attacker == null || __instance == null) { return; }
                 Character attacker = hit.GetAttacker();
                 if (attacker == null || attacker.IsPlayer()) { return; }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(attacker);
-                if (cDetails == null || cDetails.Modifiers == null) { return; }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.StaminaDrain.ToString())) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), cDetails.Modifiers[ModifierNames.StaminaDrain.ToString()]);
-                    __instance.UseStamina(cmcfg.BasePower + (cmcfg.PerlevelPower * cDetails.Level));
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(attacker);
+                if ( mods == null) { return; }
+                if (mods.Keys.Contains(ModifierNames.StaminaDrain.ToString())) {
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), mods[ModifierNames.StaminaDrain.ToString()]);
+                    __instance.UseStamina(cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));
                 }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.EitrDrain.ToString())) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.EitrDrain.ToString(), cDetails.Modifiers[ModifierNames.EitrDrain.ToString()]);
-                    __instance.UseEitr(cmcfg.BasePower + (cmcfg.PerlevelPower * cDetails.Level));
+                if (mods.Keys.Contains(ModifierNames.EitrDrain.ToString())) {
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.EitrDrain.ToString(), mods[ModifierNames.EitrDrain.ToString()]);
+                    __instance.UseEitr(cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));
                 }
             }
         }

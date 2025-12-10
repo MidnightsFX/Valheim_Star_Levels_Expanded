@@ -10,6 +10,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Text;
 using UnityEngine;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -21,11 +22,21 @@ namespace StarLevelSystem.common
     {
 
         public static IDeserializer yamldeserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
-        //public static IDeserializer yamldeserializerNoRef = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
-        //public static ISerializer yamlserializerNoRef = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).DisableAliases().Build();
 
-        public static readonly string SLS_SETUP = "SLS_SETUP";
+        //public static IDeserializer yamldeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
+        public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).JsonCompatible().Build();
+
+        public static readonly string SLS_CREATURE = "SLS_CREATURE";
+        public static readonly string SLS_SIZE = "SLS_SIZE";
+        public static readonly string SLS_DAMAGE_MODIFIER = "SLS_DMOD";
+        public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
+        public static readonly string SLS_SPAWN_MULT = "SLS_MULT";
+        public static readonly string SLS_MODIFIERS = "SLS_MODS";
+        public static readonly string SLS_MODSV2 = "SLS_MODV2";
+        public static readonly string SLS_CHARNAME = "SLS_CHARNAME";
+        public static readonly string SLS_TREE = "SLE_Tree";
+        public static readonly string SLS_FISH = "SLE_Fish";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -240,22 +251,27 @@ namespace StarLevelSystem.common
             public float SelectionWeight { get; set; } = 1f;
         }
 
-        public class CreatureModifier
+        public class CreatureModifierConfiguration
         {
-            public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
-            public List<string> NamePrefixes { get; set; }
-            public List<string> NameSuffixes { get; set; }
             [DefaultValue(1f)]
             public float SelectionWeight { get; set; } = 1f;
             public CreatureModConfig Config { get; set; } = new CreatureModConfig();
+            public List<string> AllowedCreatures { get; set; }
+            public List<string> UnallowedCreatures { get; set; }
+            public List<Heightmap.Biome> AllowedBiomes { get; set; }
+        }
+
+        public class CreatureModifierDefinition
+        {
+            public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
+            public string NamePrefix { get; set; }
+            public string NameSuffix { get; set; }
             public string StarVisual { get; set; }
             public string VisualEffect { get; set; }
             public string SecondaryEffect { get; set; }
             public VisualEffectStyle VisualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
-            public List<string> AllowedCreatures { get; set; }
-            public List<string> UnallowedCreatures { get; set; }
-            public List<Heightmap.Biome> AllowedBiomes { get; set; }
             public string SetupMethodClass { get; set; }
+            public string RunOnceMethodClass { get; set; }
             public bool FromAPI { get; set; } = false;
             public Sprite StarVisualAPI { get; set; }
             public GameObject VisualEffectAPI { get; set; }
@@ -299,16 +315,33 @@ namespace StarLevelSystem.common
                 }
             }
 
-            public void SetupMethodCall(Character chara, CreatureModConfig cfg, CreatureDetailCache cdc) {
-                if (SetupMethodClass == null || SetupMethodClass == "") { return; }
-                Type methodClass = Type.GetType(SetupMethodClass);
-                //Logger.LogDebug($"Setting up modifier {setupMethodClass} with signature {methodClass}");
-                MethodInfo theMethod = methodClass.GetMethod("Setup");
+            public void RunOnceMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd)
+            {
+                if (RunOnceMethodClass == null || RunOnceMethodClass == "") { return; }
+                Type methodClass = Type.GetType(RunOnceMethodClass);
+                //Logger.LogDebug($"Setting up modifier {RunOnceMethodClass} with signature {methodClass}");
+                MethodInfo theMethod = methodClass.GetMethod("RunOnce");
                 if (theMethod == null) {
-                    Logger.LogWarning($"Could not find setup method, skipping setup.");
+                    Logger.LogInfo($"Modifier: Could not find RunOnce method, skipping setup. Recreate your Modifiers.yaml");
                     return;
                 }
-                theMethod.Invoke(this, new object[] { chara, cfg, cdc });
+                try {
+                    theMethod.Invoke(this, new object[] { chara, cfg, scd });
+                } catch {  return; }
+            }
+
+            public void SetupMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd) {
+                if (SetupMethodClass == null || SetupMethodClass == "") { return; }
+                Type methodClass = Type.GetType(SetupMethodClass);
+                //Logger.LogDebug($"Setting up modifier {SetupMethodClass} with signature {methodClass}");
+                MethodInfo theMethod = methodClass.GetMethod("Setup");
+                if (theMethod == null) {
+                    Logger.LogInfo($"Modifier: Could not find Setup method, skipping setup. Recreate your Modifiers.yaml");
+                    return;
+                }
+                try {
+                    theMethod.Invoke(this, new object[] { chara, cfg, scd });
+                } catch {  return; }
             }
         }
 
@@ -321,26 +354,31 @@ namespace StarLevelSystem.common
         public class CreatureModifierCollection
         {
             public GlobalModifierSettings ModifierGlobalSettings { get; set; } = new GlobalModifierSettings();
-            public Dictionary<string, CreatureModifier> MajorModifiers { get; set; }
-            public Dictionary<string, CreatureModifier> MinorModifiers { get; set; }
-            public Dictionary<string, CreatureModifier> BossModifiers { get; set; }
+            public Dictionary<string, CreatureModifierConfiguration> MajorModifiers { get; set; }
+            public Dictionary<string, CreatureModifierConfiguration> MinorModifiers { get; set; }
+            public Dictionary<string, CreatureModifierConfiguration> BossModifiers { get; set; }
         }
 
         public class GlobalModifierSettings {
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
-        public class CreatureDetailCache {
-            public bool CreatureDisabledInBiome { get; set; } = false;
-            public bool CreatureCheckedSpawnMult { get; set; } = false;
-            public int Level { get; set; }
-            public Dictionary<string, ModifierType> Modifiers { get; set; }
-            public Dictionary<string, List<string>> ModifierPrefixNames { get; set; } = new Dictionary<string, List<string>>();
-            public Dictionary<string, List<string>> ModifierSuffixNames { get; set; } = new Dictionary<string, List<string>>();
-            public ColorDef Colorization { get; set; }
+        [DataContract]
+        [Serializable]
+        public class CharacterCacheEntry
+        {
+            public int Level { get; set; } = 0;
+            public bool ShouldDelete { get; set; } = false;
+            public string CreatureNameLocalizable { get; set; } = null;
+            public string RefCreatureName { get; set; } = null;
+            public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }
-            public GameObject CreaturePrefab { get; set; }
-            public string CreatureName { get; set; }
+            public float SpawnRateModifier { get; set; } = 1f;
+            public bool runOnceDone { get; set; } = false;
+            public Vector3 defaultSize { get; set; } = Vector3.zero;
+            public Dictionary<string, ModifierType> CreatureModifiers { get; set; } = new Dictionary<string, ModifierType>();
+            public Dictionary<string, ModifierType> ModifiersRequired { get; set; } = null;
+            public List<string> ModifiersNotAllowed { get; set; } = null;
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; } = new Dictionary<DamageType, float>() {
                 { DamageType.Blunt, 1f },
                 { DamageType.Pierce, 1f },
@@ -350,6 +388,8 @@ namespace StarLevelSystem.common
                 { DamageType.Lightning, 1f },
                 { DamageType.Poison, 1f },
                 { DamageType.Spirit, 1f },
+                { DamageType.Chop, 1f },
+                { DamageType.Pickaxe, 1f },
             };
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; } = new Dictionary<CreatureBaseAttribute, float>() {
                 { CreatureBaseAttribute.BaseDamage, 1f },
@@ -360,12 +400,24 @@ namespace StarLevelSystem.common
             };
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; } = new Dictionary<CreaturePerLevelAttribute, float>() {
                 { CreaturePerLevelAttribute.DamagePerLevel, 0f },
-                { CreaturePerLevelAttribute.HealthPerLevel, ValConfig.EnemyHealthMultiplier.Value },
-                { CreaturePerLevelAttribute.SizePerLevel, ValConfig.PerLevelScaleBonus.Value },
+                { CreaturePerLevelAttribute.HealthPerLevel, 0f },
+                { CreaturePerLevelAttribute.SizePerLevel, 0f },
                 { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
                 { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
-            public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() {};
+            public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
+            public CreatureSpecificSetting CreatureSettings { get; set; } = null;
+            public BiomeSpecificSetting BiomeSettings { get; set; } = null;
+
+            public string GetDamageBonusDescription()
+            {
+                StringBuilder sb = new StringBuilder();
+                foreach (KeyValuePair<DamageType, float> bonusD in CreatureDamageBonus)
+                {
+                    if (bonusD.Value > 0f) { sb.Append($"|{bonusD.Key}-{bonusD.Value}"); }
+                }
+                return sb.ToString();
+            }
         }
 
         [DataContract]
@@ -423,6 +475,7 @@ namespace StarLevelSystem.common
         }
 
         [DataContract]
+        [Serializable]
         public class ColorDef
         {
             public float hue { get; set; } = 0f;
@@ -517,15 +570,13 @@ namespace StarLevelSystem.common
                 // we can't deserialize a null buffer
                 if (stored == null) { return new List<string>(); }
                 var mStream = new MemoryStream(stored);
-                var deserializedDictionary = (List<String>)binFormatter.Deserialize(mStream);
-                return deserializedDictionary;
+                return (List<String>)binFormatter.Deserialize(mStream);
             }
 
             protected override void SetValue(List<string> value)
             {
                 var mStream = new MemoryStream();
                 binFormatter.Serialize(mStream, value);
-
                 zNetView.GetZDO().Set(Key, mStream.ToArray());
             }
         }
@@ -576,9 +627,8 @@ namespace StarLevelSystem.common
                 var stored = zNetView.GetZDO().GetByteArray(Key);
                 // we can't deserialize a null buffer
                 if (stored == null) { return new List<int>(); }
-                var mStream = new MemoryStream(stored);
-                var deserializedDictionary = (List<int>)binFormatter.Deserialize(mStream);
-                return deserializedDictionary;
+                MemoryStream mStream = new MemoryStream(stored);
+                return (List<int>)binFormatter.Deserialize(mStream);
             }
             protected override void SetValue(List<int> value)
             {
@@ -601,8 +651,7 @@ namespace StarLevelSystem.common
                 // we can't deserialize a null buffer
                 if (stored == null) { return new List<ModifierNames>(); }
                 var mStream = new MemoryStream(stored);
-                var deserializedDictionary = (List<ModifierNames>)binFormatter.Deserialize(mStream);
-                return deserializedDictionary;
+                return (List<ModifierNames>)binFormatter.Deserialize(mStream);
             }
 
             protected override void SetValue(List<ModifierNames> value)
@@ -627,13 +676,36 @@ namespace StarLevelSystem.common
                 // we can't deserialize a null buffer
                 if (stored == null) { return new Dictionary<DamageType, float>(); }
                 var mStream = new MemoryStream(stored);
-                var deserializedDictionary = (Dictionary<DamageType, float>)binFormatter.Deserialize(mStream);
-                return deserializedDictionary;
+                return (Dictionary<DamageType, float>)binFormatter.Deserialize(mStream);
             }
 
             protected override void SetValue(Dictionary<DamageType, float> value)
             {
                 var mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class CreatureDetailsZNetProperty : ZNetProperty<CharacterCacheEntry>
+        {
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            public CreatureDetailsZNetProperty(string key, ZNetView zNetView, CharacterCacheEntry defaultValue) : base(key, zNetView, defaultValue)
+            {
+            }
+
+            public override CharacterCacheEntry Get()
+            {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return new CharacterCacheEntry(); }
+                MemoryStream mStream = new MemoryStream(stored);
+                return (CharacterCacheEntry)binFormatter.Deserialize(mStream);
+            }
+
+            protected override void SetValue(CharacterCacheEntry value)
+            {
+                MemoryStream mStream = new MemoryStream();
                 binFormatter.Serialize(mStream, value);
 
                 zNetView.GetZDO().Set(Key, mStream.ToArray());

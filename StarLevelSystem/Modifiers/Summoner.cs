@@ -9,7 +9,7 @@ namespace StarLevelSystem.Modifiers
     internal class Summoner
     {
         [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CreatureDetailCache ccache) {
+        public static void Setup(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
             if (ccache == null) { return; }
             SLSSummoner summoningScript = creature.GetComponent<SLSSummoner>();
             Logger.LogDebug($"Setting up Summoner for {creature.name} summon script {summoningScript}");
@@ -23,6 +23,7 @@ namespace StarLevelSystem.Modifiers
 
         public class SLSSummoner : MonoBehaviour {
             List<GameObject> summonableCreatures = new List<GameObject>();
+            ZNetView creature_znet = null;
             static List<ZDOID> spawned = new List<ZDOID>();
             static int maxSummoned = 10;
             static int summonBatchSize = 2;
@@ -30,10 +31,12 @@ namespace StarLevelSystem.Modifiers
             static Character bossCharacter;
             static bool setup = false;
             static bool started = false;
+            static double spawntimestamp = 0;
 
             public void Update()
             {
                 if (!setup) return;
+                if (!creature_znet.IsOwner()) return;
 
                 if (started == false) {
                     InvokeRepeating("SpawnCreaturesBatch", timeBetweenSummons, timeBetweenSummons);
@@ -52,6 +55,10 @@ namespace StarLevelSystem.Modifiers
                     spawned.RemoveAll(x => ZDOMan.instance.GetZDO(x) == null);
                     if (spawned.Count >= maxSummoned) return;
                 }
+                // Skip spawning for the requested cooldown time
+                if (spawntimestamp + timeBetweenSummons < ZNet.instance.GetTimeSeconds()) { return; }
+                if (summonableCreatures.Count == 0) { return; }
+                if (bossCharacter  == null) { return; }
 
                 GameObject toSummon = summonableCreatures[UnityEngine.Random.Range(0, summonableCreatures.Count)];
                 Vector3 spawnPosition = bossCharacter.transform.position + new Vector3(UnityEngine.Random.Range(-10, 10), 0, UnityEngine.Random.Range(-10, 10));
@@ -61,13 +68,14 @@ namespace StarLevelSystem.Modifiers
                 if (character != null) {
                     spawned.Add(character.GetZDOID());
                 }
+                spawntimestamp = ZNet.instance.GetTimeSeconds();
             }
 
             public void SetupSummoner(Character character, List<string> summonPrefabs, int max_summoned = 10, float time_between_summons = 120) {
                 bossCharacter = character;
                 timeBetweenSummons = time_between_summons;
                 maxSummoned = max_summoned;
-
+                creature_znet = character.m_nview;
                 foreach (var prefabname in summonPrefabs) {
                     GameObject prefab = Jotunn.Managers.PrefabManager.Instance.GetPrefab(prefabname);
                     if (prefab != null) {

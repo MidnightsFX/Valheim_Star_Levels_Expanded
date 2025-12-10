@@ -302,7 +302,9 @@ namespace StarLevelSystem.Data
                 LevelSystem.CreateLevelBonusRingMapOverlays();
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
-                    CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(chara, true);
+
+                    CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(chara);
+                    if (ccd == null) { continue; }
                     // Modify the creatures stats by custom character/biome modifications
                     ModificationExtensionSystem.ApplySpeedModifications(chara, ccd);
                     ModificationExtensionSystem.ApplyDamageModification(chara, ccd, true);
@@ -328,7 +330,8 @@ namespace StarLevelSystem.Data
                     i = 0;
                 }
                 if (character.m_level <= 1) { continue; }
-                CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(character, true);
+                CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(character);
+                if (ccd == null) { continue; }
                 // Modify the creatures stats by custom character/biome modifications
                 ModificationExtensionSystem.ApplySpeedModifications(character, ccd);
                 ModificationExtensionSystem.ApplyDamageModification(character, ccd, true);

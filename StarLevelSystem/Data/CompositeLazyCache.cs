@@ -1,6 +1,6 @@
-﻿using Jotunn.Managers;
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.modules;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -9,251 +9,241 @@ namespace StarLevelSystem.Data
 {
     internal static class CompositeLazyCache
     {
-        public static Dictionary<uint, CreatureDetailCache> sessionCache = new Dictionary<uint, CreatureDetailCache>();
-
         public static readonly Vector2 center = new Vector2(0, 0);
-        // Add entry on creature awake
+
+
         // Add check to delete creature from Znet that removes the creature from the cache
+        public static Dictionary<uint, CharacterCacheEntry> SessionCache = new Dictionary<uint, CharacterCacheEntry>();
 
-        public static void RemoveFromCache(Character character) {
-            uint czoid = character.GetZDOID().ID;
-            if (sessionCache.ContainsKey(czoid)) {
-                sessionCache.Remove(czoid);
-                //Logger.LogDebug($"Removed creature from cache {character.name}-{czoid}");
+        // Session tree cache, to avoid recalculating tree levels multiple times
+        public static Dictionary<uint, int> TreeSessionCache = new Dictionary<uint, int>();
+
+        public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
+            if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
+            uint cid = zgo.GetZDO().m_uid.ID;
+            if (TreeSessionCache.ContainsKey(cid)) { return TreeSessionCache[cid]; }
+            TreeSessionCache.Add(cid, LevelSystem.DeterministicDetermineTreeLevel(zgo.gameObject));
+            return TreeSessionCache[cid];
+        }
+
+        public static void RemoveTreeCacheEntry(uint id) {
+            if (TreeSessionCache.ContainsKey(id)) {
+                TreeSessionCache.Remove(id);
             }
         }
 
-        public static bool UpdateCacheEntry(Character character, CreatureDetailCache cacheEntry) {
-            uint czoid = character.GetZDOID().ID;
-            if (sessionCache.ContainsKey(czoid)) {
-                Logger.LogDebug($"Updated creature from cache {character.name}-{czoid}");
-                sessionCache[czoid] = cacheEntry;
-                return true;
-            }
-            return false;
-        }
-
-        public static CreatureDetailCache GetAndSetDetailCache(Character character, bool update = false, int leveloverride = 0, bool onlycache = false, bool setupModifiers = true, bool rebuildModifiers = false) {
-            if (character == null) { return null; }
-            if (character.IsPlayer()) { return null; }
-            //Logger.LogDebug("Checking CreatureDetailCache");
-            uint czoid = character.GetZDOID().ID;
-            if (sessionCache.ContainsKey(czoid) && update == false) {
-                return sessionCache[czoid];
-            }
-            if (onlycache) { return null; }
-            // Setup cache
-            CreatureDetailCache characterCacheEntry = new CreatureDetailCache() { };
-
-            ZDO creatureZDO = character.m_nview?.GetZDO();
-            if (creatureZDO == null) {
-                //Logger.LogWarning("ZDO null, skipping.");
-                return null;
-            }
-            // Reset the done marker if this is a cache update
-            if (update == true) {
-                creatureZDO.Set(SLS_SETUP, false);
-            }
-
-            // Get character based biome and creature configuration
-            //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
-            LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-            characterCacheEntry.CreatureName = creature_name;
-
-            // Check if night time
-            if (EnvMan.IsNight()) {
-                // Override spawn rate modifiers for night time
-                bool setupstatus = creatureZDO.GetBool(SLS_SETUP, false);
-                //Logger.LogDebug($"Checking night settings for {creature_name} setup? {setupstatus}");
-                if (biome_settings != null && biome_settings.NightSettings != null) {
-                    //Logger.LogDebug("Checking biome settings.");
-                    if (biome_settings.NightSettings.SpawnRateModifier != 1f) {
-                        biome_settings.SpawnRateModifier = biome_settings.NightSettings.SpawnRateModifier;
-                    }
-                    //Logger.LogDebug($"Biome has {biome_settings.NightSettings.creatureSpawnsDisabled.Count} disabled creatures: {string.Join(",", biome_settings.NightSettings.creatureSpawnsDisabled)}");
-                    if (setupstatus == false && biome_settings.NightSettings.creatureSpawnsDisabled != null && biome_settings.NightSettings.creatureSpawnsDisabled.Contains(creature_name)) {
-                        //Logger.LogDebug("Biome has spawn disabled.");
-                        characterCacheEntry.CreatureDisabledInBiome = true;
-                    }
-                }
-
-                if (creature_settings != null && creature_settings.NightSettings != null) {
-                   // Logger.LogDebug("Checking creature settings.");
-                    if (creature_settings.NightSettings.SpawnRateModifier != 1f) {
-                        creature_settings.SpawnRateModifier = creature_settings.NightSettings.SpawnRateModifier;
-                    }
-                    if (setupstatus == false && creature_settings.NightSettings.creatureSpawnsDisabled == true) {
-                        //Logger.LogDebug("Creature has spawn disabled.");
-                        characterCacheEntry.CreatureDisabledInBiome = true;
-                    }
-                }
-            }
-
-            // Check creature spawn rate
-            //Spawnrate.CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biome_settings);
-            if (characterCacheEntry.CreatureCheckedSpawnMult == false && character.m_nview?.IsOwner() == true) {
-                ZNetScene.instance.StartCoroutine(Spawnrate.CheckSpawnRate(character, creatureZDO, creature_settings, biome_settings));
-                characterCacheEntry.CreatureCheckedSpawnMult = true;
-            }
-            
-
-            // Set biome | used to deletion check
-            characterCacheEntry.Biome = biome;
-
-            // Set if the creature spawn is disabled, and return the entry but do not cache it.
-            //Logger.LogDebug("Checking Creature biome Disable spawn");
-            if (characterCacheEntry.CreatureDisabledInBiome == true || biome_settings != null && biome_settings.creatureSpawnsDisabled != null && biome_settings.creatureSpawnsDisabled.Contains(creature_name)) {
-                characterCacheEntry.CreatureDisabledInBiome = true;
-                // Early add to cache, and return
-                if (!sessionCache.ContainsKey(character.GetZDOID().ID)) {
-                    sessionCache.Add(character.GetZDOID().ID, characterCacheEntry);
-                }
-                return characterCacheEntry;
-            }
-
-            // Set the creature
-            characterCacheEntry.CreaturePrefab = PrefabManager.Instance.GetPrefab(creature_name);
-
-            // Check for level or set it
-            //Logger.LogDebug("Setting creature level");
-            characterCacheEntry.Level = LevelSystem.DetermineLevel(character, creatureZDO, creature_settings, biome_settings, leveloverride);
-            //Logger.LogDebug($"{creature_name} level set {characterCacheEntry.Level}");
-
-            // Set creature Colorization pallete
-            //Logger.LogDebug("Selecting creature colorization");
-            characterCacheEntry.Colorization = Colorization.DetermineCharacterColorization(character, characterCacheEntry.Level);
-
-            // Set the creatures damage recieved modifiers
-            //Logger.LogDebug("Computing damage recieved modifiers");
-            if (biome_settings != null && biome_settings.DamageRecievedModifiers != null) {
-                foreach (var entry in biome_settings.DamageRecievedModifiers) {
-                    if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.DamageRecievedModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.DamageRecievedModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-            if (creature_settings != null && creature_settings.DamageRecievedModifiers != null) {
-                foreach (var entry in creature_settings.DamageRecievedModifiers) {
-                    if (characterCacheEntry.DamageRecievedModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.DamageRecievedModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.DamageRecievedModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-
-            // Set creature base settings
-            //Logger.LogDebug("Computing base creature modifiers");
-            if (biome_settings != null && biome_settings.CreatureBaseValueModifiers != null) {
-                foreach (var entry in biome_settings.CreatureBaseValueModifiers) {
-                    if (characterCacheEntry.CreatureBaseValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreatureBaseValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreatureBaseValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-            if (creature_settings != null && creature_settings.CreatureBaseValueModifiers != null) {
-                foreach (var entry in creature_settings.CreatureBaseValueModifiers) {
-                    if (characterCacheEntry.CreatureBaseValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreatureBaseValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreatureBaseValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-
-            // Set creature per level settings
-            //Logger.LogDebug("Computing perlevel creature modifiers");
-            if (biome_settings != null && biome_settings.CreaturePerLevelValueModifiers != null) {
-                foreach (var entry in biome_settings.CreaturePerLevelValueModifiers) {
-                    if (characterCacheEntry.CreaturePerLevelValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreaturePerLevelValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreaturePerLevelValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-            if (creature_settings != null && creature_settings.CreaturePerLevelValueModifiers != null) {
-                foreach (var entry in creature_settings.CreaturePerLevelValueModifiers) {
-                    if (characterCacheEntry.CreaturePerLevelValueModifiers.ContainsKey(entry.Key)) {
-                        characterCacheEntry.CreaturePerLevelValueModifiers[entry.Key] = entry.Value;
-                    } else {
-                        characterCacheEntry.CreaturePerLevelValueModifiers.Add(entry.Key, entry.Value);
-                    }
-                }
-            }
-
-            // Set or load creature modifiers
-            if (setupModifiers)
+        public static CharacterCacheEntry GetCacheEntry(uint cid)
+        {
+            if (SessionCache.ContainsKey(cid))
             {
-                if (!character.IsPlayer() && character != null)
-                {
-                    if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true) {
-                        int numBossMods = ValConfig.MaxMajorModifiersPerCreature.Value;
-                        if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
-                        float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
-                        if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
-                        characterCacheEntry.Modifiers = CreatureModifiers.SelectOrLoadModifiers(character, characterCacheEntry, isBoss: true, maxBossMods: numBossMods, chanceBossMods: chanceForBossMod, rebuildCache: rebuildModifiers);
-                    } else {
-                        //Logger.LogDebug("Setting up creature modifiers");
-                        int majorMods = ValConfig.MaxMajorModifiersPerCreature.Value;
-                        if (creature_settings != null && creature_settings.MaxMajorModifiers > -1) { majorMods = creature_settings.MaxMajorModifiers; }
-                        int minorMods = ValConfig.MaxMinorModifiersPerCreature.Value;
-                        if (creature_settings != null && creature_settings.MaxMinorModifiers > -1) { minorMods = creature_settings.MaxMinorModifiers; }
-                        float chanceMajorMod = ValConfig.ChanceMajorModifier.Value;
-                        if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceMajorMod = creature_settings.ChanceForMajorModifier; }
-                        float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
-                        if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
-                        // Logger.LogDebug($"Setting up to {majorMods} major at chance {chanceMajorMod} and {minorMods} minor modifiers with chances {chanceMinorMod}");
-                        characterCacheEntry.Modifiers = CreatureModifiers.SelectOrLoadModifiers(character, characterCacheEntry, maxMajorMods: majorMods, maxMinorMods: minorMods, chanceMajorMods: chanceMajorMod, chanceMinorMods: chanceMinorMod, rebuildCache: rebuildModifiers);
-                    }
-                }
+                return SessionCache[cid];
             }
+            return null;
+        }
 
-            creatureZDO.Set(SLS_SETUP, true);
-
-            // Add it to the cache, and return it
-            if (character == null) {return null; }
-            if (!sessionCache.ContainsKey(character.GetZDOID().ID)) {
-                //Logger.LogDebug("Adding creature to cache");
-                sessionCache.Add(character.GetZDOID().ID, characterCacheEntry);
-            } else if (update == true) {
-                //Logger.LogDebug($"Adding Updating creature in cache {creature_name}-{characterCacheEntry.Level}");
-                sessionCache[character.GetZDOID().ID] = characterCacheEntry;
-            }
+        // Check for cached creature data
+        public static CharacterCacheEntry GetCacheEntry(Character character)
+        {
+            CharacterCacheEntry characterCacheEntry = RetrieveStoredCreatureFromCache(character);
             return characterCacheEntry;
         }
 
-        public static void RecalculateModifiers(Character chara)
-        {
-            CreatureDetailCache cdc = GetAndSetDetailCache(chara, update: true, setupModifiers: true);
-            if (cdc == null) { return; }
-            ApplyCachedChanges(chara);
+        public static CharacterCacheEntry GetAndSetLocalCache(Character character, int leveloverride = 0, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool updateCache = false) {
+
+            // Check for cached creature data
+            CharacterCacheEntry characterEntry = RetrieveStoredCreatureFromCache(character);
+            if (characterEntry != null) {
+                //Logger.LogDebug($"{character.name} Creature Data Object Cache available.");
+                return characterEntry;
+            }
+
+            ZDO creatureZDO = character.m_nview.GetZDO();
+
+            characterEntry ??= new CharacterCacheEntry();
+
+            // Get character based biome and creature configuration
+            //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
+            LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
+
+            // Set biome | used to deletion check
+            characterEntry.Biome = biome;
+            characterEntry.RefCreatureName = creatureName;
+            characterEntry.BiomeSettings = biomeSettings;
+            characterEntry.CreatureSettings = creatureSettings;
+            // Biome settings say to delete this
+            if (biomeSettings != null && biomeSettings.creatureSpawnsDisabled != null && biomeSettings.creatureSpawnsDisabled.Contains(creatureName)) {
+                characterEntry.ShouldDelete = true;
+            }
+            // biome or creature spawn settings 
+            if (biomeSettings != null) { characterEntry.SpawnRateModifier = biomeSettings.SpawnRateModifier; }
+            if (creatureSettings != null) { characterEntry.SpawnRateModifier = creatureSettings.SpawnRateModifier; }
+
+            //Logger.LogDebug("Checking Night settings.");
+            // Check if night time
+            if (EnvMan.IsNight()) {
+                // Override spawn rate modifiers for night time
+                //Logger.LogDebug($"Checking night settings for {creature_name} setup? {setupstatus}");
+                if (biomeSettings != null && biomeSettings.NightSettings != null) {
+                    //Logger.LogDebug("Checking biome settings.");
+                    if (biomeSettings.NightSettings.SpawnRateModifier != 1f) {
+                        biomeSettings.SpawnRateModifier = biomeSettings.NightSettings.SpawnRateModifier;
+                    }
+                    //Logger.LogDebug($"Biome has {biome_settings.NightSettings.creatureSpawnsDisabled.Count} disabled creatures: {string.Join(",", biome_settings.NightSettings.creatureSpawnsDisabled)}");
+                    if (biomeSettings.NightSettings.creatureSpawnsDisabled != null && biomeSettings.NightSettings.creatureSpawnsDisabled.Contains(creatureName)) {
+                        //Logger.LogDebug("Biome has spawn disabled.");
+                        characterEntry.ShouldDelete = true;
+                    }
+                }
+
+                if (creatureSettings != null && creatureSettings.NightSettings != null) {
+                   // Logger.LogDebug("Checking creature settings.");
+                    if (creatureSettings.NightSettings.SpawnRateModifier != 1f) {
+                        creatureSettings.SpawnRateModifier = creatureSettings.NightSettings.SpawnRateModifier;
+                    }
+                    if (creatureSettings.NightSettings.creatureSpawnsDisabled == true) {
+                        //Logger.LogDebug("Creature has spawn disabled.");
+                        characterEntry.ShouldDelete = true;
+                    }
+                }
+            }
+
+            // Set modifier requirements
+            characterEntry.ModifiersNotAllowed = notAllowedModifiers;
+            characterEntry.ModifiersRequired = requiredModifiers;
+
+            // Check for level or set it
+            //Logger.LogDebug("Setting creature level");
+            int level = LevelSystem.DetermineLevel(character, creatureZDO, creatureSettings, biomeSettings, leveloverride);
+            characterEntry.Level = level;
+            //Logger.LogDebug($"Determined {creatureName} level {level}");
+
+            // Set creature Colorization pallete
+            //Logger.LogDebug("Selecting creature colorization");
+            characterEntry.Colorization = Colorization.DetermineCharacterColorization(character, level);
+
+            //Logger.LogDebug("Selecting creature Damage Recieved, Per Level and base values.");
+            characterEntry.DamageRecievedModifiers = ModificationExtensionSystem.DetermineCreatureDamageRecievedModifiers(biomeSettings, creatureSettings);
+            characterEntry.CreaturePerLevelValueModifiers = ModificationExtensionSystem.DetermineCharacterPerLevelStats(biomeSettings, creatureSettings);
+            characterEntry.CreatureBaseValueModifiers = ModificationExtensionSystem.DetermineCreatureBaseStats(biomeSettings, creatureSettings);
+
+            // skip setting cache if the creature is gone already
+            if (character == null) { return null; }
+            uint uid = character.GetZDOID().ID;
+            if (SessionCache.ContainsKey(uid)) {
+                if (updateCache) {
+                    SessionCache[uid] = characterEntry;
+                }
+            } else {
+                SessionCache.Add(uid, characterEntry);
+            }
+
+            // Return the entry to the caller
+            return characterEntry;
         }
 
-        public static bool ApplyCachedChanges(Character character)
-        {
-            CreatureDetailCache cdc = GetAndSetDetailCache(character);
-            if (cdc == null) { return false; }
-            // Modify the creatures stats by custom character/biome modifications
-            ModificationExtensionSystem.ApplySpeedModifications(character, cdc);
-            ModificationExtensionSystem.ApplyDamageModification(character, cdc);
-            ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, cdc, true);
-            ModificationExtensionSystem.ApplyHealthModifications(character, cdc);
-            LevelSystem.SetAndUpdateCharacterLevel(character, cdc.Level);
+        // SAFE to re-run
+        public static void StartZOwnerCreatureRoutines(Character chara, CharacterCacheEntry characterEntry, bool spawnratecheck = true) {
+            if (characterEntry == null || chara == null) { return; }
 
-            if (character.m_level <= 1) { return true; }
-            // Colorization and visual adjustments
-            Colorization.ApplyColorizationWithoutLevelEffects(character.gameObject, cdc.Colorization);
-            Colorization.ApplyLevelVisual(character);
-            return true;
+            // Logger.LogDebug($"Activating ZOwner setup routines {characterEntry.RefCreatureName}");
+
+            // Destroy character if its selected for deletion
+            if (characterEntry.ShouldDelete && chara.m_tamed == false) {
+                ZNetScene.instance.StartCoroutine(ModificationExtensionSystem.DestroyCoroutine(chara.gameObject));
+                return;
+            }
+
+            // Set level ZDO, only if its not been set, and only if its not what the cache is expecting
+            if (chara.GetLevel() <= 1 && characterEntry.Level != chara.GetLevel()) {
+                chara.SetLevel(characterEntry.Level);
+                chara.m_level = characterEntry.Level;
+                LevelUI.InvalidateCacheEntry(chara);
+            }
+            // Verify that the cache and character variables match
+            if (chara.GetLevel() != characterEntry.Level)
+            {
+                characterEntry.Level = chara.GetLevel();
+                chara.m_level = characterEntry.Level;
+            }
+
+            //Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
+            // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
+            {
+                chara.SetLevel(characterEntry.Level);
+            }
+
+            // Set or load creature modifiers
+            characterEntry.CreatureModifiers = GetCreatureModifiers(chara);
+            //Logger.LogDebug($"Checking stored mods {characterEntry.CreatureModifiers.Count}");
+            //if (characterEntry.CreatureModifiers.Count > 0) {
+            //    Logger.LogDebug($"  Stored mods {characterEntry.CreatureModifiers.Keys}");
+            //}
+            if (characterEntry.CreatureModifiers == null || characterEntry.CreatureModifiers.Count == 0) {
+                characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(chara, characterEntry.RefCreatureName, characterEntry.CreatureSettings, characterEntry.Biome, characterEntry.Level, characterEntry.ModifiersRequired, characterEntry.ModifiersNotAllowed);
+                SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
+            }
+            // 
+            //if (characterEntry.CreatureModifiers != null) {
+            //    StringBuilder sb = new StringBuilder();
+            //    sb.AppendLine($"Selecting {characterEntry.RefCreatureName} modifiers:");
+            //    foreach (var modifier in characterEntry.CreatureModifiers) {
+            //        sb.AppendLine($"{modifier.Key}-{modifier.Value}");
+            //    }
+            //    Logger.LogDebug(sb.ToString());
+            //}
+
+            // Get/set check SLS_SPAWN_MULT - applies spawn if not already applied
+            if (spawnratecheck == false) {
+                chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+            } else {
+                Spawnrate.CheckSetApplySpawnrate(chara, characterEntry);
+            }
         }
 
-        //public static void UpdateCacheFromConfigChange() {
-        //    sessionCache.Clear();
-        //}
+        public static CharacterCacheEntry RetrieveStoredCreatureFromCache(Character character)
+        {
+            if (character == null || character.m_nview == null || character.IsPlayer() || character.m_nview.GetZDO() == null) { return null; }
+            uint cid = character.GetZDOID().ID;
+            if (SessionCache.ContainsKey(cid)) { return SessionCache[cid]; }
+            return null;
+        }
+
+        public static void UpdateCharacterCacheEntry(Character character, CharacterCacheEntry scd)
+        {
+            uint cid = character.GetZDOID().ID;
+            if (SessionCache.ContainsKey(cid))
+            {
+                SessionCache[cid] = scd; 
+            } else {
+                SessionCache.Add(cid, scd);
+            }
+        }
+
+        public static Dictionary<string, ModifierType> GetCreatureModifiers(Character character)
+        {
+            if (character == null || character.m_nview == null) { return null; }
+            string mods = character.m_nview.GetZDO().GetString(SLS_MODSV2, null);
+            // Priority storage of V2 Mod format
+            if (mods != null) {
+                try {
+                    return DataObjects.yamldeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+                }
+                catch {  return null; }
+            }
+
+            CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
+            return StoredMods.Get();
+        }
+
+        public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
+        {
+            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlserializerJsonCompat.Serialize(modifiers));
+            CharacterCacheEntry cce = GetCacheEntry(chara);
+            if (cce != null) {
+                cce.CreatureModifiers = modifiers;
+                UpdateCharacterCacheEntry(chara, cce);
+            }
+        }
     }
 }

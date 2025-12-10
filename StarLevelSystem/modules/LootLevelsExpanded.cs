@@ -279,9 +279,8 @@ namespace StarLevelSystem.modules
                                 }
                                 if (chara != null)
                                 {
-                                    CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                                    chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
-                                    chara.SetLevel(cdc.Level);
+                                    CompositeLazyCache.GetAndSetLocalCache(chara);
+                                    ModificationExtensionSystem.CreatureSetup(chara, multiply: false);
                                 }
                             }
 
@@ -360,10 +359,7 @@ namespace StarLevelSystem.modules
                         }
                         
                         if (chara != null) {
-                            CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(chara);
-                            Logger.LogDebug($"Creature level set from cache: {chara != null} - lvl: {cdc.Level}");
-                            chara.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
-                            chara.SetLevel(cdc.Level);
+                            ModificationExtensionSystem.CreatureSetup(chara, delay: 0.5f);
                         }
                     }
                         Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();

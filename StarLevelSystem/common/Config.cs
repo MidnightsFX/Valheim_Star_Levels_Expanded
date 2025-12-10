@@ -25,8 +25,8 @@ namespace StarLevelSystem
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
+        public static ConfigEntry<bool> OverlevedCreaturesGetRerolledOnLoad;
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
-        //public static ConfigEntry<bool> DistanceBonusMapsCanIncludeLowerLevels;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
         public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;
@@ -52,11 +52,17 @@ namespace StarLevelSystem
         public static ConfigEntry<float> FishSizeScalePerLevel;
         public static ConfigEntry<bool> EnableTreeScaling;
         public static ConfigEntry<float> TreeSizeScalePerLevel;
+        public static ConfigEntry<bool> UseDeterministicTreeScaling;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
         public static ConfigEntry<bool> RandomizeTameChildrenModifiers;
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
         public static ConfigEntry<bool> EnableColorization;
+
+        public static ConfigEntry<int> FishMaxLevel;
+        public static ConfigEntry<int> BirdMaxLevel;
+        public static ConfigEntry<int> TreeMaxLevel;
+        
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
@@ -67,6 +73,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> ChanceOfBossModifier;
         public static ConfigEntry<int> MaxBossModifiersPerBoss;
         public static ConfigEntry<bool> SplittersInheritLevel;
+        public static ConfigEntry<int> LimitCreatureModifierPrefixes;
 
         public static ConfigEntry<bool> EnableDistanceLevelScalingBonus;
         public static ConfigEntry<bool> EnableMultiplayerEnemyHealthScaling;
@@ -77,6 +84,9 @@ namespace StarLevelSystem
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
         public static ConfigEntry<bool> OutputColorizationGeneratorsData;
+        public static ConfigEntry<int> FallbackDelayBeforeCreatureSetup;
+        public static ConfigEntry<float> InitialDelayBeforeSetup;
+        public static ConfigEntry<bool> EnableDebugOutputForDamage;
 
         public ValConfig(ConfigFile cf)
         {
@@ -87,10 +97,10 @@ namespace StarLevelSystem
         }
 
         public void SetupConfigRPCs() {
-            LevelSettingsRPC = NetworkManager.Instance.AddRPC("LSE_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
-            ColorSettingsRPC = NetworkManager.Instance.AddRPC("LSE_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
-            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("LSE_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
-            ModifiersRPC = NetworkManager.Instance.AddRPC("LSE_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
+            LevelSettingsRPC = NetworkManager.Instance.AddRPC("SLS_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
+            ColorSettingsRPC = NetworkManager.Instance.AddRPC("SLS_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
+            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
+            ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
 
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
@@ -106,12 +116,19 @@ namespace StarLevelSystem
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             EnableDebugMode.SettingChanged += Logger.enableDebugLogging;
             Logger.CheckEnableDebugLogging();
+            EnableDebugOutputForDamage = Config.Bind("Client config", "EnableDebugOutputForDamage", false,
+                new ConfigDescription("Enables Detailed logging for damage calculations, warning, lots of logging.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 100);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 200);
+            OverlevedCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up overleveled creatures if you reduce the max level.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
+
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
+            EnableMapRingsForDistanceBonus.SettingChanged += LevelSystem.UpdateMapRingEnableSettingOnChange;
             DistanceBonusIsFromStarterTemple = BindServerConfig("LevelSystem", "DistanceBonusIsFromStarterTemple", false, "When enabled the distance bonus is calculated from the starter temple instead of world center, typically this makes little difference. But can help ensure your starting area is more correctly calculated.");
             DistanceBonusIsFromStarterTemple.SettingChanged += LevelSystem.OnRingCenterChanged;
             DistanceRingColorOptions = BindServerConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
@@ -130,12 +147,18 @@ namespace StarLevelSystem
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
-            EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
-            BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
-            EnableScalingFish = BindServerConfig("LevelSystem", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
-            FishSizeScalePerLevel = BindServerConfig("LevelSystem", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
-            EnableTreeScaling = BindServerConfig("LevelSystem", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
-            TreeSizeScalePerLevel = BindServerConfig("LevelSystem", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
+            
+            EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
+            BirdSizeScalePerLevel = BindServerConfig("ObjectLevels", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
+            EnableScalingFish = BindServerConfig("ObjectLevels", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
+            FishMaxLevel = BindServerConfig("ObjectLevels", "FishMaxLevel", 20, "Sets the max level that fish can scale up to.", true, 1, 150);
+            BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
+            EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
+            UseDeterministicTreeScaling = BindServerConfig("ObjectLevels", "UseDeterministicTreeScaling", true, "Scales the level of trees based on biome and distance from the center/spawn. This does not randomize tree levels, but reduces network usage.");
+            TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
+            
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);
@@ -155,7 +178,7 @@ namespace StarLevelSystem
             LootDropCalculationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
 
-            MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "DefaultMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
+            MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
             ChanceMajorModifier = BindServerConfig("Modifiers", "ChanceMajorModifier", 0.15f, "The chance that a creature will have a major modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
@@ -167,9 +190,13 @@ namespace StarLevelSystem
             ChanceOfBossModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
             SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Wether or not creatures spawned from the Splitter modifier inherit the level of the parent creature.");
+            LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
+            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
+            FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
+            
         }
 
         internal void LoadYamlConfigs()

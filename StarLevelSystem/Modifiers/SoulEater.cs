@@ -17,7 +17,7 @@ namespace StarLevelSystem.Modifiers
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class SoulEaterOnDeath
         {
-            private static void Postfix(Character __instance) {
+            private static void Prefix(Character __instance) {
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }
@@ -27,10 +27,11 @@ namespace StarLevelSystem.Modifiers
                 foreach (Character character in characters) {
                     // Logger.LogDebug($"Checking SoulEater on {character.name}");
                     if (character == null || character.IsPlayer()) { continue; }
-                    CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(character, onlycache: true);
-                    if (cDetails != null && cDetails.Modifiers.Keys.Contains(ModifierNames.SoulEater.ToString())) {
-                        CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater.ToString(), cDetails.Modifiers[ModifierNames.SoulEater.ToString()]);
-                        int powerIncrease = Mathf.RoundToInt(cmcfg.PerlevelPower * character.m_level);
+                    CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(character);
+                    Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
+                    if (cDetails != null && mods != null && mods.Keys.Contains(ModifierNames.SoulEater.ToString())) {
+                        CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater.ToString(), mods[ModifierNames.SoulEater.ToString()]);
+                        float powerIncrease = cmcfg.PerlevelPower * character.m_level;
                         Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}");
                         ModificationExtensionSystem.ForceUpdateDamageMod(character, powerIncrease);
                         ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, cDetails, true, true, 0.01f);

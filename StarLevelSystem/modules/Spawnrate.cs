@@ -12,33 +12,17 @@ namespace StarLevelSystem.modules
 {
     internal class Spawnrate
     {
-        public static IEnumerator CheckSpawnRate(Character character, ZDO creatureZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings, float delay = 1f) {
-            yield return new WaitForSeconds(delay);
-            if (CheckSetApplySpawnrate(character, creatureZDO, creature_settings, biomeSettings) == true) {
-                ZNetScene.instance.Destroy(character.gameObject);
-            }
-        }
-
         // Returns a bool based on whether or not the creature should be deleted, true = delete, false = do not delete
-        internal static bool CheckSetApplySpawnrate(Character character, ZDO creatureZDO,  CreatureSpecificSetting creature_settings, BiomeSpecificSetting biomeSettings) {
-            if (character == null || creatureZDO == null) {
-                //Logger.LogWarning($"Creature null or nview null, not running spawn multiplier.");
+        internal static bool CheckSetApplySpawnrate(Character chara, CharacterCacheEntry ccEntry) {
+            if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && chara.IsBoss()) {
                 return false;
             }
-            if (creatureZDO.GetBool("SLS_DSpwnMlt", false) == true) { return false; }
-            if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && character.IsBoss()) {
-                creatureZDO.Set("SLS_DSpwnMlt", true);
+            if (chara.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
                 return false;
             }
-
-            float spawnrate = 1f;
-            if (biomeSettings != null) { spawnrate = biomeSettings.SpawnRateModifier; }
-            if (creature_settings != null) { spawnrate = creature_settings.SpawnRateModifier; }
-
-            creatureZDO.Set("SLS_DSpwnMlt", true);
-            if (character.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
-                return false;
-            }
+            if (chara.m_nview.GetZDO().GetBool(SLS_SPAWN_MULT, false) == true) { return false; }
+            chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+            float spawnrate = ccEntry.SpawnRateModifier;
             // Chance to increase spawn, or decrease it
             //Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
             if (spawnrate > 1f) {
@@ -48,22 +32,22 @@ namespace StarLevelSystem.modules
                     float randv = UnityEngine.Random.value;
                     //Logger.LogDebug($"Spawn increase check {randv} <= {spawnrate} {randv <= spawnrate}");
                     if (randv <= spawnrate) {
-                        Vector3 position = character.transform.position;
-                        if (character.transform.position.y < 3000f) {
+                        Vector3 position = chara.transform.position;
+                        if (chara.transform.position.y < 3000f) {
                             // Randomize position a little
                             position = DetermineOffsetPosition(position, 15f);
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
-                        GameObject spawnedCreature = GameObject.Instantiate(PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(character.gameObject)), position, rotation);
+                        GameObject targetclone = PrefabManager.Instance.GetPrefab(ccEntry.RefCreatureName);
+                        GameObject spawnedCreature = GameObject.Instantiate(targetclone, position, rotation);
                         Character spawnedChara = spawnedCreature.GetComponent<Character>();
-                        if (character.IsTamed()) {
+                        if (chara.IsTamed()) {
                             spawnedChara?.SetTamed(true);
                         }
                         Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
-                        spawnedChara?.m_nview?.GetZDO()?.Set("SLS_DSpwnMlt", true);
-                        CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(character, false);
-                        spawnedChara.SetLevel(cdc.Level);
+                        ModificationExtensionSystem.CreatureSetup(spawnedChara, multiply: false);
+                        spawnedChara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
                     }
                     spawnrate -= 1f;
                 }
@@ -73,7 +57,7 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Checking for spawn rate reduction {randv} >= {spawnrate}");
                 // Chance to reduce spawnrate, if triggered this creature will be queued for deletion
                 if (randv >= spawnrate) {
-                    Logger.LogDebug($"Spawn Reducer| Selecting {character.gameObject} for deletion.");
+                    Logger.LogDebug($"Spawn Reducer| Selecting {ccEntry.RefCreatureName} for deletion.");
                     return true;
                 }
             }

@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
@@ -12,24 +13,54 @@ namespace StarLevelSystem.modules
 {
     public class StarLevelHud
     {
-        public bool isBoss { get; set; }
+        public bool IsBoss { get; set; }
 
-        public Dictionary<int, GameObject> starlevel = new Dictionary<int, GameObject>();
-        public Dictionary<int, Image> starlevel_front = new Dictionary<int, Image>();
-        public Dictionary<int, Image> starlevel_back = new Dictionary<int, Image>();
-        public GameObject starlevel_N { get; set; }
-        public Image starlevelN_front_image { get; set; }
-        public Image starlevelN_back_image { get; set; }
-        public Text starlevel_N_Text { get; set; }
+        public int Level { get; set; } = 1;
+
+        public int ModifierCount { get; set; } = 0;
+
+        public Dictionary<int, GameObject> Starlevel = new Dictionary<int, GameObject>();
+        public Dictionary<int, Image> StarLevelFront = new Dictionary<int, Image>();
+        public Dictionary<int, Image> StarLevelBack = new Dictionary<int, Image>();
+        public GameObject StarLevelN { get; set; }
+        public Image StarLevelNFrontImage { get; set; }
+        public Image StarLevelNBackImage { get; set; }
+        public Text StarLevelNText { get; set; }
+        public EnemyHud.HudData hudlink { get; set;
+        }
     }
     public static class LevelUI
     {
-        public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>();
+        public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject star;
 
-        public static void InvalidateCacheEntry(ZDOID zdo)
+        public static void InvalidateCacheEntry(uint zdo)
         {
-            if (characterExtendedHuds.ContainsKey(zdo)) { characterExtendedHuds.Remove(zdo); }
+            if (characterExtendedHuds.ContainsKey(zdo)) {
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(zdo);
+                
+                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(characterExtendedHuds[zdo].hudlink.m_character);
+                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterExtendedHuds[zdo].hudlink.m_character, cce.CreatureModifiers);
+                characterExtendedHuds[zdo].hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                if (cce == null || cce.CreatureNameLocalizable == null) { return; }
+            }
+        }
+
+        public static void InvalidateCacheEntry(Character chara)
+        {
+            uint id = chara.GetZDOID().ID;
+            InvalidateCacheEntry(id);
+        }
+
+        [HarmonyPatch(typeof(Tameable), nameof(Tameable.SetName))]
+        public static class UpdateTamedName
+        {
+            public static void Postfix(Tameable __instance)
+            {
+                //Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
+                //__instance.m_character.m_nview.GetZDO().Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(__instance.m_character, mods)); 
+                LevelUI.InvalidateCacheEntry(__instance.m_character.GetZDOID().ID);
+            }
         }
 
         [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.Awake))]
@@ -60,12 +91,12 @@ namespace StarLevelSystem.modules
                 // Star N | this position is set as the same 
                 GameObject star_7 = new GameObject(name: "SLS_level_n");
                 star_7.transform.SetParent(basehud);
-                GameObject star7 = Object.Instantiate(star, star_7.transform);
+                GameObject star7 = UnityEngine.Object.Instantiate(star, star_7.transform);
                 // star7.transform.SetParent(star_7.transform);
                 star_7.transform.localPosition = new Vector3(x: -42, y: 19, z: 0);
                 star7.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GameObject s7Name = new GameObject(name: "level_n_name");
-                GameObject star7Name = Object.Instantiate(s7Name, star_7.transform);
+                GameObject star7Name = UnityEngine.Object.Instantiate(s7Name, star_7.transform);
                 star7Name.transform.SetParent(star_7.transform);
                 star7Name.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GUIManager.Instance.CreateText(
@@ -93,7 +124,7 @@ namespace StarLevelSystem.modules
                 // Star N | this position is set as the same 
                 GameObject star_7_boss = new GameObject(name: "SLS_level_n");
                 star_7_boss.transform.SetParent(bosshud);
-                GameObject star7_boss = Object.Instantiate(star, star_7_boss.transform);
+                GameObject star7_boss = UnityEngine.Object.Instantiate(star, star_7_boss.transform);
                 // Size increase boss stars
                 star7_boss.GetComponent<RectTransform>().sizeDelta = new Vector2(20, 20);
                 star7_boss.transform.Find("star (1)").gameObject.GetComponent<RectTransform>().sizeDelta = new Vector2(16, 16);
@@ -101,7 +132,7 @@ namespace StarLevelSystem.modules
                 star_7_boss.transform.localPosition = new Vector3(x: -17, y: -6, z: 0);
                 star7_boss.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GameObject s7Name_boss = new GameObject(name: "level_n_name");
-                GameObject star7Name_boss = Object.Instantiate(s7Name_boss, star_7_boss.transform);
+                GameObject star7Name_boss = UnityEngine.Object.Instantiate(s7Name_boss, star_7_boss.transform);
                 star7Name_boss.transform.SetParent(star_7_boss.transform);
                 star7Name_boss.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
                 GUIManager.Instance.CreateText(
@@ -125,7 +156,7 @@ namespace StarLevelSystem.modules
             {
                 GameObject new_star_holder = new GameObject(name: $"SLS_level_{level}");
                 new_star_holder.transform.SetParent(parent_t);
-                GameObject new_star = Object.Instantiate(star, new_star_holder.transform);
+                GameObject new_star = UnityEngine.Object.Instantiate(star, new_star_holder.transform);
 
                 // Make boss stars a little bigger
                 if (boss) {
@@ -239,7 +270,7 @@ namespace StarLevelSystem.modules
             }
 
             public static void RemoveExtenedHudFromCache(Character char3) {
-                characterExtendedHuds.Remove(char3.GetZDOID());
+                characterExtendedHuds.Remove(char3.GetZDOID().ID);
             }
         }
 
@@ -272,9 +303,9 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Character), nameof(Character.GetHoverName))]
         public static class DisplayCreatureNameChanges {
             public static bool Prefix(Character __instance, ref string __result) {
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails == null || cDetails.CreatureDisabledInBiome) { return true; }
-                __result = CreatureModifiers.CheckOrBuildCreatureName(__instance, cDetails);
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
+                if (cce == null || cce.CreatureNameLocalizable == null) { return true; }
+                __result = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 return false;
             }
         }
@@ -285,27 +316,39 @@ namespace StarLevelSystem.modules
             int level = ehud.m_character.GetLevel();
             if (level <= 1) return;
             // Logger.LogInfo($"Creature Level {level}");
-            ZDOID czoid = ehud.m_character.GetZDOID();
-            if (czoid == ZDOID.None) { return; }
+            uint czid = ehud.m_character.GetZDOID().ID;
+            if (czid == 0L) { return; }
             StarLevelHud extended_hud = new StarLevelHud();
-            if (characterExtendedHuds.ContainsKey(czoid)) {
+            extended_hud.Level = level;
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(ehud.m_character);
+            if (characterExtendedHuds.ContainsKey(czid)) {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
-                extended_hud = characterExtendedHuds[czoid];
-                if (extended_hud == null || extended_hud.starlevel.ContainsKey(3) && extended_hud.starlevel[3] == null) {
-                    Logger.LogDebug($"UI Cache Invalid for {czoid}, removing.");
-                    characterExtendedHuds.Remove(czoid);
+                extended_hud = characterExtendedHuds[czid];
+                if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null) {
+                    Logger.LogDebug($"UI Cache Invalid for {czid}, removing.");
+                    characterExtendedHuds.Remove(czid);
+                    return;
+                }
+
+                // Mod count check here could be replaced by a Z request to refresh the cache by the controlling player
+                if (ehud.m_character.GetLevel() != extended_hud.Level || extended_hud.ModifierCount != mods.Count) {
+                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.ModifierCount}-{mods.Count}), updating cache.");
+                    characterExtendedHuds.Remove(czid);
                     return;
                 }
             } else {
-                CreatureDetailCache ccd = CompositeLazyCache.GetAndSetDetailCache(ehud.m_character);
+                extended_hud.hudlink = ehud;
+                if (mods == null) { return; }
                 //Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
-                foreach (var entry in ccd.Modifiers) {
+                extended_hud.ModifierCount = mods.Count;
+                foreach (KeyValuePair<string, ModifierType> entry in mods) {
+                    if (entry.Key == CreatureModifiers.NoMods) { continue; }
                     //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
-                    CreatureModifier cmd = CreatureModifiersData.GetModifierDef(entry.Key, entry.Value);
+                    CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
                     if (cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
                         Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
                         starReplacements.Add(star, starsprite);
@@ -315,42 +358,42 @@ namespace StarLevelSystem.modules
 
                 //Logger.LogDebug($"Determined replacement stars {string.Join(",", starReplacements.Keys)}");
 
-                extended_hud.isBoss = ehud.m_character.IsBoss();
+                extended_hud.IsBoss = ehud.m_character.IsBoss();
                 int star_index = 2;
                 while (star_index < 7)
                 {
                     //Logger.LogDebug($"Assigning star level {star_index}");
-                    extended_hud.starlevel.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
-                    extended_hud.starlevel_back.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
-                    extended_hud.starlevel_front.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
+                    extended_hud.Starlevel.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
+                    extended_hud.StarLevelBack.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
+                    extended_hud.StarLevelFront.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
                     if (starReplacements.ContainsKey(star_index)) {
                         //Logger.LogDebug($"Updating Icon to modifier icon {star_index} Front: {string.Join(",", extended_hud.starlevel_front.Keys)} Back: {string.Join(",", extended_hud.starlevel_back.Keys)}");
-                        if (extended_hud.starlevel_front[star_index] != null) {
-                            extended_hud.starlevel_front[star_index].sprite = starReplacements[star_index];
-                            extended_hud.starlevel_front[star_index].rectTransform.sizeDelta = new Vector2(17, 17);
+                        if (extended_hud.StarLevelFront[star_index] != null) {
+                            extended_hud.StarLevelFront[star_index].sprite = starReplacements[star_index];
+                            extended_hud.StarLevelFront[star_index].rectTransform.sizeDelta = new Vector2(17, 17);
                         }
-                        if (extended_hud.starlevel_back[star_index] != null) {
-                            extended_hud.starlevel_back[star_index].sprite = starReplacements[star_index];
-                            extended_hud.starlevel_back[star_index].rectTransform.sizeDelta = new Vector2(21, 21);
+                        if (extended_hud.StarLevelBack[star_index] != null) {
+                            extended_hud.StarLevelBack[star_index].sprite = starReplacements[star_index];
+                            extended_hud.StarLevelBack[star_index].rectTransform.sizeDelta = new Vector2(21, 21);
                         }
                     }
                     star_index++;
                 }
 
                 //Logger.LogDebug($"Assigning star level N");
-                extended_hud.starlevel_N = ehud.m_gui.transform.Find("SLS_level_n").gameObject;
-                extended_hud.starlevelN_back_image = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
-                extended_hud.starlevelN_front_image = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-                extended_hud.starlevel_N_Text = ehud.m_gui.transform.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
+                extended_hud.StarLevelN = ehud.m_gui.transform.Find("SLS_level_n").gameObject;
+                extended_hud.StarLevelNBackImage = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
+                extended_hud.StarLevelNFrontImage = ehud.m_gui.transform.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
+                extended_hud.StarLevelNText = ehud.m_gui.transform.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
                 if (starReplacements.Count > 0) {
-                    extended_hud.starlevelN_front_image.sprite = starReplacements.First().Value;
-                    extended_hud.starlevelN_front_image.rectTransform.sizeDelta = new Vector2(17, 17);
-                    extended_hud.starlevelN_back_image.sprite = starReplacements.First().Value;
-                    extended_hud.starlevelN_back_image.rectTransform.sizeDelta = new Vector2(21, 21);
+                    extended_hud.StarLevelNFrontImage.sprite = starReplacements.First().Value;
+                    extended_hud.StarLevelNFrontImage.rectTransform.sizeDelta = new Vector2(17, 17);
+                    extended_hud.StarLevelNBackImage.sprite = starReplacements.First().Value;
+                    extended_hud.StarLevelNBackImage.rectTransform.sizeDelta = new Vector2(21, 21);
                 }
 
                 // Need to find and add the N level text for updating here
-                characterExtendedHuds.Add(czoid, extended_hud);
+                characterExtendedHuds.Add(czid, extended_hud);
             }
             // Star level display starts at 2
             // Enable static star levels
@@ -358,38 +401,38 @@ namespace StarLevelSystem.modules
 
             switch (level) {
                 case 2:
-                    extended_hud.starlevel[2]?.SetActive(true);
+                    extended_hud.Starlevel[2]?.SetActive(true);
                     break;
                 case 3:
-                    extended_hud.starlevel[2]?.SetActive(true);
-                    extended_hud.starlevel[3]?.SetActive(true);
+                    extended_hud.Starlevel[2]?.SetActive(true);
+                    extended_hud.Starlevel[3]?.SetActive(true);
                     break;
                 case 4:
-                    extended_hud.starlevel[2]?.SetActive(true);
-                    extended_hud.starlevel[3]?.SetActive(true);
-                    extended_hud.starlevel[4]?.SetActive(true);
+                    extended_hud.Starlevel[2]?.SetActive(true);
+                    extended_hud.Starlevel[3]?.SetActive(true);
+                    extended_hud.Starlevel[4]?.SetActive(true);
                     break;
                 case 5:
-                    extended_hud.starlevel[2]?.SetActive(true);
-                    extended_hud.starlevel[3]?.SetActive(true);
-                    extended_hud.starlevel[4]?.SetActive(true);
-                    extended_hud.starlevel[5]?.SetActive(true);
+                    extended_hud.Starlevel[2]?.SetActive(true);
+                    extended_hud.Starlevel[3]?.SetActive(true);
+                    extended_hud.Starlevel[4]?.SetActive(true);
+                    extended_hud.Starlevel[5]?.SetActive(true);
                     break;
                 case 6:
-                    extended_hud.starlevel[2]?.SetActive(true);
-                    extended_hud.starlevel[3]?.SetActive(true);
-                    extended_hud.starlevel[4]?.SetActive(true);
-                    extended_hud.starlevel[5]?.SetActive(true);
-                    extended_hud.starlevel[6]?.SetActive(true);
+                    extended_hud.Starlevel[2]?.SetActive(true);
+                    extended_hud.Starlevel[3]?.SetActive(true);
+                    extended_hud.Starlevel[4]?.SetActive(true);
+                    extended_hud.Starlevel[5]?.SetActive(true);
+                    extended_hud.Starlevel[6]?.SetActive(true);
                     break;
             }
 
             // Enable dynamic levels
             if (level > 6) {
                 // Logger.LogInfo("Setting Nstar levels active");
-                extended_hud.starlevel_N?.SetActive(true);
+                extended_hud.StarLevelN?.SetActive(true);
                 // get the text componet here and set its display
-                extended_hud.starlevel_N_Text.text = (level - 1).ToString();
+                extended_hud.StarLevelNText.text = (level - 1).ToString();
             }
         }
     }

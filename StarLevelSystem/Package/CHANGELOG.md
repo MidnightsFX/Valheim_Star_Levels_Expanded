@@ -1,3 +1,53 @@
+**0.14.0**
+ ---
+ ```
+ - Improves UI synchronziation for creature modifier names
+ - Fixes an error when Lifelink triggers
+ - Changes configuration for Trees, Birds and Fish to have their own config section
+   - Trees now level up primarily based on distance to spawn/center of the world.
+   - Fish size is now reduced
+ ```
+
+m**0.13.0**
+ ---
+ ```
+ - Added a configuration option to force-reroll creatures that are over the specified max level when loaded
+ - Enables Map Ring redraw/removal when setting is changed
+ - Added more safety checks to BossSummoner
+ - Fixes an issue where characters would not get size increases
+ - Re-implements character client side cache
+ - Modifiers Updated (please delete your Modifiers.yaml)
+	- Changes Modifier name generation to be deterministic, removes multiple prefix and postfix options
+	- Updated Modifier configuration with user important details being centric
+ ```
+
+**0.12.1**
+ ---
+ ```
+ - Logged detailed scaling changes for damage per level
+ - Fix splitter not splitting when using fallbacks
+ - More cache invalidation for UI related and setup changes
+ - Fix size scale setting weapon sizes to zero before a creature has scale data
+ - Fixed Character specific level tables not being used if a biome table was available
+ ```
+
+**0.12.0**
+ ---
+ ```
+ - Fixes an issue where resistant creatures would be immune to damage (does not apply to creatures that have already rolled this modifier)
+ - Improves modifier and level consistency across players with variable connection speeds and latencies
+ - Provides more information for damage recieved and dealt modifiers, can be enabled/disabled seperately in the config (per client)
+ - Changed a number of base values in the modifiers configuration, it is recommended you delete your configuration
+ - Some modifiers no longer run regularly and instead are setup once, again required that you regenerate your configuration (delete Modifiers.yaml)
+ - Tuning
+	- Nerfed the boss modifier for resist pierce to be 25% resistance plus 2% per level
+	- Buffed Lootbags to provide more loot, also makes the creature slightly higher health and move faster
+	- Capped resistance modifiers at 80% resistance, nerfed default resistance values
+	- Increased the delay for the boss affix summoner
+	- Significantly reduced brutal speed modifiers (some old configs had these at 100%+ increases)
+	- Improved fallback logic for Splitter
+ ```
+
 **0.11.8**
  ---
  ```

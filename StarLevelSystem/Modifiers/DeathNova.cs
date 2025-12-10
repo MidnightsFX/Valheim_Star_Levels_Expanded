@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -17,22 +18,23 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails == null || cDetails.Modifiers == null) { return; }
-                if (cDetails.Modifiers.Keys.Contains(ModifierNames.FireNova.ToString())) {
-                    Logger.LogDebug("Activating FireNova");
-                    CreatureModifier cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), cDetails.Modifiers[ModifierNames.FireNova.ToString()]);
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
+                if (mods == null) { return; }
+                if (mods.Keys.Contains(ModifierNames.FireNova.ToString())) {
+                    CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), mods[ModifierNames.FireNova.ToString()]);
                     if (cmdef == null) { return; }
-                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[cmdef.SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
+                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[ModifierDefinitions[ModifierNames.FireNova.ToString()].SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
                     go.SetActive(false);
                     Aoe aoe = go.GetComponent<Aoe>();
                     // Configure damage
+                    float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                     if (aoe) {
                         float characterdmg = Extensions.EstimateCharacterDamage(__instance);
-                        float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                         aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 4f;
                         aoe.m_damage.m_fire = (characterdmg * dmgmod);
+                        Logger.LogDebug($"Activating FireNova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
                     }
+                    
                     go.SetActive(true);
                 }
                 //if (cDetails.Modifiers.Keys.Contains(ModifierNames.FrostNova)) {

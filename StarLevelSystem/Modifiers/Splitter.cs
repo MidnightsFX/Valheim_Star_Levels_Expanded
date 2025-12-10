@@ -1,6 +1,9 @@
 ﻿using HarmonyLib;
+using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -14,34 +17,30 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }
-                CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance);
-                if (cDetails != null && cDetails.Modifiers.ContainsKey(ModifierNames.Splitter.ToString())) {
-                    Logger.LogDebug("Checking splitter multiplication");
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter.ToString(), cDetails.Modifiers[ModifierNames.Splitter.ToString()]);
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
+                if (mods != null && mods.ContainsKey(ModifierNames.Splitter.ToString())) {
+                    
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter.ToString(), mods[ModifierNames.Splitter.ToString()]);
                     float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
                     bool shouldTame = __instance.IsTamed();
+                    int level = Mathf.RoundToInt(__instance.m_level / totalsplits);
+                    if (level <= 0) { level = 1; }
+                    if (ValConfig.SplittersInheritLevel.Value == false) {
+                        level = UnityEngine.Random.Range(1, level);
+                    }
+                    Logger.LogDebug($"Splitter on {__instance.name} total split potential:{totalsplits} split creature level: {level}");
                     while (totalsplits >= 1) {
-                        GameObject sgo = GameObject.Instantiate(cDetails.CreaturePrefab, __instance.transform.position, __instance.transform.rotation);
+                        GameObject creatureToCreate = PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(__instance.gameObject));
+                        if (creatureToCreate == null) { break; }
+                        GameObject sgo = GameObject.Instantiate(creatureToCreate, __instance.transform.position, __instance.transform.rotation);
                         totalsplits -= 1f;
-                        if (shouldTame) { sgo.GetComponent<Character>()?.SetTamed(true); }
+                        if (shouldTame) { sgo.GetComponent<Character>().SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
-                            if (ValConfig.SplittersInheritLevel.Value) {
-                                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(sChar);
-                                
-                                sChar.SetLevel(cDetails.Level);
-                                sChar.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
-                                cdc.Level = cDetails.Level;
-                                CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
-                                //ModificationExtensionSystem.CreatureSetup(sChar, delayedSetupTimer: 0);
-                            } else {
-                                CreatureDetailCache cdc = CompositeLazyCache.GetAndSetDetailCache(sChar);
-                                sChar.SetLevel(cdc.Level);
-                                sChar.m_nview.GetZDO().Set("SLS_DSpwnMlt", true);
-                                //ModificationExtensionSystem.CreatureSetup(sChar, delayedSetupTimer: 0);
-                                CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
-                            }
+                            CompositeLazyCache.GetAndSetLocalCache(sChar, level, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            ModificationExtensionSystem.CreatureSetup(sChar, multiply: false);
+                            CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }
                         
                     }

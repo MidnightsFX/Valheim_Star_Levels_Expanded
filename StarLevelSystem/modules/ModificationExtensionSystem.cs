@@ -47,6 +47,7 @@ namespace StarLevelSystem.modules
         }
 
         // TODO: Address scaling issues
+        // This isn't needed with delayed setup due to the weapons already being assigned and present for the creature when the size is applied
         //[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
         //public static class VisualEquipmentScaleToFit
         //{
@@ -353,7 +354,7 @@ namespace StarLevelSystem.modules
             ApplyHealthModifications(__instance, cDetails);
 
             // Rebuild UI since it may have been created before these changes were applied
-            LevelUI.InvalidateCacheEntry(__instance.GetZDOID());
+            LevelUI.InvalidateCacheEntry(__instance.GetZDOID().ID);
 
             if (__instance.m_level <= 1) { return true; }
             // Colorization and visual adjustments
@@ -430,7 +431,7 @@ namespace StarLevelSystem.modules
                 if (creatureref) {
                     Vector3 sizeEstimate = creatureref.transform.localScale * current_size;
                     creature.transform.localScale = sizeEstimate;
-                    Logger.LogDebug($"Increasing character size from existing {current_size} + {bonus}.");
+                    //Logger.LogDebug($"Increasing character size from existing {current_size} + {bonus}.");
                 }
                 Physics.SyncTransforms();
                 return;
@@ -445,7 +446,7 @@ namespace StarLevelSystem.modules
             if (creatureref) {
                 Vector3 sizeEstimate = creatureref.transform.localScale * scale;
                 creature.transform.localScale = sizeEstimate;
-                Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+                //Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
             }
             zview.GetZDO().Set(SLS_SIZE, scale);
             Physics.SyncTransforms();

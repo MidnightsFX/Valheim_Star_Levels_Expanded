@@ -1,4 +1,14 @@
-**0.13.0**
+**0.14.0**
+ ---
+ ```
+ - Improves UI synchronziation for creature modifier names
+ - Fixes an error when Lifelink triggers
+ - Changes configuration for Trees, Birds and Fish to have their own config section
+   - Trees now level up primarily based on distance to spawn/center of the world.
+   - Fish size is now reduced
+ ```
+
+m**0.13.0**
  ---
  ```
  - Added a configuration option to force-reroll creatures that are over the specified max level when loaded

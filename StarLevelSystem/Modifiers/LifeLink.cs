@@ -29,10 +29,12 @@ namespace StarLevelSystem.Modifiers
                         // No players, and not self
                         if (character.IsPlayer() || character == __instance) { continue; }
                         Logger.LogDebug($"Distributing Damage to {character.m_name}");
-                        if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(CreatureModifiersData.ModifierDefinitions[ModifierNames.LifeLink.ToString()].SecondaryEffect)) {
-                            Vector3 targetTravel = __instance.transform.position - character.transform.position;
-                            GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[CreatureModifiersData.ModifierDefinitions[ModifierNames.LifeLink.ToString()].SecondaryEffect], targetTravel, Quaternion.identity);
-                        }
+
+                        // TODO: Improve VFX for this
+                        //if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(CreatureModifiersData.ModifierDefinitions[ModifierNames.LifeLink.ToString()].SecondaryEffect)) {
+                        //    Vector3 targetTravel = __instance.transform.position - character.transform.position;
+                        //    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[CreatureModifiersData.ModifierDefinitions[ModifierNames.LifeLink.ToString()].SecondaryEffect], targetTravel, Quaternion.identity);
+                        //}
                         
                         character.Damage(transferHit);
                         transferred = true;

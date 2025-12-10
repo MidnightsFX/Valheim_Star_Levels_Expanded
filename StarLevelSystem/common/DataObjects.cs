@@ -35,6 +35,8 @@ namespace StarLevelSystem.common
         public static readonly string SLS_MODIFIERS = "SLS_MODS";
         public static readonly string SLS_MODSV2 = "SLS_MODV2";
         public static readonly string SLS_CHARNAME = "SLS_CHARNAME";
+        public static readonly string SLS_TREE = "SLE_Tree";
+        public static readonly string SLS_FISH = "SLE_Fish";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,

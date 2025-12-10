@@ -138,6 +138,8 @@ namespace StarLevelSystem.modules
             List<string> remainingNameSegments = modifiers.Keys.ToList();
             foreach (string modifierName in remainingNameSegments)
             {
+                // Don't show modifier names for creatures that have a limit number of modifiers based on their level
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && chara.m_level <= (nameEntries + 1)) { break; }
                 //Logger.LogDebug($"Setting name segment for: {modifierName}");
                 if (remainingNameSegments.Count <= 0 || nameEntries >= remainingNameSegments.Count) { break; }
                 nameEntries++;
@@ -328,9 +330,12 @@ namespace StarLevelSystem.modules
 
         public static bool AddCreatureModifier(Character character, ModifierType modType, string newModifier, bool applyChanges = true)
         {
+            if (newModifier == NoMods || newModifier == string.Empty) {
+                Logger.LogDebug($"No modifier specified to add to {character.name}, skipping.");
+                return false;
+            }
             // Select major and minor based on creature whole config
-            CreatureModifiersZNetProperty updatedMods = new CreatureModifiersZNetProperty($"SLS_MODS", character.m_nview, new Dictionary<string, ModifierType>() { });
-            Dictionary<string, ModifierType> savedMods = updatedMods.Get();
+            Dictionary<string, ModifierType> savedMods = CompositeLazyCache.GetCreatureModifiers(character);
 
             if (savedMods.Count > 0 && savedMods.ContainsKey(newModifier)) {
                 Logger.LogDebug($"{character.name} already has {newModifier}, skipping.");
@@ -338,7 +343,7 @@ namespace StarLevelSystem.modules
             }
             // Select a major modifiers
             savedMods.Add(newModifier, modType);
-            updatedMods.Set(savedMods);
+            CompositeLazyCache.SetCreatureModifiers(character, savedMods);
             //Logger.LogDebug($"Adding Modifier to ZDO.");
             CharacterCacheEntry scd = CompositeLazyCache.GetCacheEntry(character);
 

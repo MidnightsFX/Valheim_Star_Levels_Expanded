@@ -89,6 +89,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$LifeLink_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "LifeLink2",
+                        SecondaryEffect = "LifelinkEffect",
                     }
                 },
                 { ModifierNames.Brutal.ToString(), new CreatureModifierDefinition()

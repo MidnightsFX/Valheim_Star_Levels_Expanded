@@ -52,6 +52,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> FishSizeScalePerLevel;
         public static ConfigEntry<bool> EnableTreeScaling;
         public static ConfigEntry<float> TreeSizeScalePerLevel;
+        public static ConfigEntry<bool> UseDeterministicTreeScaling;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
         public static ConfigEntry<bool> RandomizeTameChildrenModifiers;
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
@@ -146,15 +147,18 @@ namespace StarLevelSystem
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
-            EnableScalingBirds = BindServerConfig("LevelSystem", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
-            BirdSizeScalePerLevel = BindServerConfig("LevelSystem", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
-            EnableScalingFish = BindServerConfig("LevelSystem", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
-            FishMaxLevel = BindServerConfig("LevelSystem", "FishMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
-            BirdMaxLevel = BindServerConfig("LevelSystem", "BirdMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
-            TreeMaxLevel = BindServerConfig("LevelSystem", "TreeMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
-            FishSizeScalePerLevel = BindServerConfig("LevelSystem", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
-            EnableTreeScaling = BindServerConfig("LevelSystem", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
-            TreeSizeScalePerLevel = BindServerConfig("LevelSystem", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
+            
+            EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
+            BirdSizeScalePerLevel = BindServerConfig("ObjectLevels", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
+            EnableScalingFish = BindServerConfig("ObjectLevels", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
+            FishMaxLevel = BindServerConfig("ObjectLevels", "FishMaxLevel", 20, "Sets the max level that fish can scale up to.", true, 1, 150);
+            BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
+            EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
+            UseDeterministicTreeScaling = BindServerConfig("ObjectLevels", "UseDeterministicTreeScaling", true, "Scales the level of trees based on biome and distance from the center/spawn. This does not randomize tree levels, but reduces network usage.");
+            TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
+            
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);

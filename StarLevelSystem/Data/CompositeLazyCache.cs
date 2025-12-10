@@ -2,20 +2,44 @@
 using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
-using static UnityEngine.EventSystems.EventTrigger;
 
 namespace StarLevelSystem.Data
 {
     internal static class CompositeLazyCache
     {
         public static readonly Vector2 center = new Vector2(0, 0);
-        // Add entry on creature awake
+
+
         // Add check to delete creature from Znet that removes the creature from the cache
         public static Dictionary<uint, CharacterCacheEntry> SessionCache = new Dictionary<uint, CharacterCacheEntry>();
 
+        // Session tree cache, to avoid recalculating tree levels multiple times
+        public static Dictionary<uint, int> TreeSessionCache = new Dictionary<uint, int>();
+
+        public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
+            if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
+            uint cid = zgo.GetZDO().m_uid.ID;
+            if (TreeSessionCache.ContainsKey(cid)) { return TreeSessionCache[cid]; }
+            TreeSessionCache.Add(cid, LevelSystem.DeterministicDetermineTreeLevel(zgo.gameObject));
+            return TreeSessionCache[cid];
+        }
+
+        public static void RemoveTreeCacheEntry(uint id) {
+            if (TreeSessionCache.ContainsKey(id)) {
+                TreeSessionCache.Remove(id);
+            }
+        }
+
+        public static CharacterCacheEntry GetCacheEntry(uint cid)
+        {
+            if (SessionCache.ContainsKey(cid))
+            {
+                return SessionCache[cid];
+            }
+            return null;
+        }
 
         // Check for cached creature data
         public static CharacterCacheEntry GetCacheEntry(Character character)
@@ -132,8 +156,16 @@ namespace StarLevelSystem.Data
             // Set level ZDO, only if its not been set, and only if its not what the cache is expecting
             if (chara.GetLevel() <= 1 && characterEntry.Level != chara.GetLevel()) {
                 chara.SetLevel(characterEntry.Level);
+                chara.m_level = characterEntry.Level;
                 LevelUI.InvalidateCacheEntry(chara);
             }
+            // Verify that the cache and character variables match
+            if (chara.GetLevel() != characterEntry.Level)
+            {
+                characterEntry.Level = chara.GetLevel();
+                chara.m_level = characterEntry.Level;
+            }
+
             //Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
             if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
@@ -207,6 +239,11 @@ namespace StarLevelSystem.Data
         public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
             chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlserializerJsonCompat.Serialize(modifiers));
+            CharacterCacheEntry cce = GetCacheEntry(chara);
+            if (cce != null) {
+                cce.CreatureModifiers = modifiers;
+                UpdateCharacterCacheEntry(chara, cce);
+            }
         }
     }
 }

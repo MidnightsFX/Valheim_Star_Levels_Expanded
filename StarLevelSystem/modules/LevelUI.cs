@@ -17,6 +17,8 @@ namespace StarLevelSystem.modules
 
         public int Level { get; set; } = 1;
 
+        public int ModifierCount { get; set; } = 0;
+
         public Dictionary<int, GameObject> Starlevel = new Dictionary<int, GameObject>();
         public Dictionary<int, Image> StarLevelFront = new Dictionary<int, Image>();
         public Dictionary<int, Image> StarLevelBack = new Dictionary<int, Image>();
@@ -24,21 +26,30 @@ namespace StarLevelSystem.modules
         public Image StarLevelNFrontImage { get; set; }
         public Image StarLevelNBackImage { get; set; }
         public Text StarLevelNText { get; set; }
+        public EnemyHud.HudData hudlink { get; set;
+        }
     }
     public static class LevelUI
     {
-        public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>();
+        public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject star;
 
-        public static void InvalidateCacheEntry(ZDOID zdo)
+        public static void InvalidateCacheEntry(uint zdo)
         {
-            if (characterExtendedHuds.ContainsKey(zdo)) { characterExtendedHuds.Remove(zdo); }
+            if (characterExtendedHuds.ContainsKey(zdo)) {
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(zdo);
+                
+                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(characterExtendedHuds[zdo].hudlink.m_character);
+                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterExtendedHuds[zdo].hudlink.m_character, cce.CreatureModifiers);
+                characterExtendedHuds[zdo].hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                if (cce == null || cce.CreatureNameLocalizable == null) { return; }
+            }
         }
 
         public static void InvalidateCacheEntry(Character chara)
         {
-            ZDOID zdoid = chara.GetZDOID();
-            if (characterExtendedHuds.ContainsKey(zdoid)) { characterExtendedHuds.Remove(zdoid); }
+            uint id = chara.GetZDOID().ID;
+            InvalidateCacheEntry(id);
         }
 
         [HarmonyPatch(typeof(Tameable), nameof(Tameable.SetName))]
@@ -46,9 +57,9 @@ namespace StarLevelSystem.modules
         {
             public static void Postfix(Tameable __instance)
             {
-                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
+                //Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
                 //__instance.m_character.m_nview.GetZDO().Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(__instance.m_character, mods)); 
-                LevelUI.InvalidateCacheEntry(__instance.m_character.GetZDOID());
+                LevelUI.InvalidateCacheEntry(__instance.m_character.GetZDOID().ID);
             }
         }
 
@@ -259,7 +270,7 @@ namespace StarLevelSystem.modules
             }
 
             public static void RemoveExtenedHudFromCache(Character char3) {
-                characterExtendedHuds.Remove(char3.GetZDOID());
+                characterExtendedHuds.Remove(char3.GetZDOID().ID);
             }
         }
 
@@ -305,30 +316,35 @@ namespace StarLevelSystem.modules
             int level = ehud.m_character.GetLevel();
             if (level <= 1) return;
             // Logger.LogInfo($"Creature Level {level}");
-            ZDOID czoid = ehud.m_character.GetZDOID();
-            if (czoid == ZDOID.None) { return; }
+            uint czid = ehud.m_character.GetZDOID().ID;
+            if (czid == 0L) { return; }
             StarLevelHud extended_hud = new StarLevelHud();
             extended_hud.Level = level;
-            if (characterExtendedHuds.ContainsKey(czoid)) {
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(ehud.m_character);
+            if (characterExtendedHuds.ContainsKey(czid)) {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
-                extended_hud = characterExtendedHuds[czoid];
+                extended_hud = characterExtendedHuds[czid];
                 if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null) {
-                    Logger.LogDebug($"UI Cache Invalid for {czoid}, removing.");
-                    characterExtendedHuds.Remove(czoid);
+                    Logger.LogDebug($"UI Cache Invalid for {czid}, removing.");
+                    characterExtendedHuds.Remove(czid);
                     return;
                 }
-                if (ehud.m_character.GetLevel() != extended_hud.Level) {
-                    Logger.LogDebug($"UI Cache for {czoid} outdated, updating cache.");
-                    characterExtendedHuds.Remove(czoid);
+
+                // Mod count check here could be replaced by a Z request to refresh the cache by the controlling player
+                if (ehud.m_character.GetLevel() != extended_hud.Level || extended_hud.ModifierCount != mods.Count) {
+                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.ModifierCount}-{mods.Count}), updating cache.");
+                    characterExtendedHuds.Remove(czid);
+                    return;
                 }
             } else {
-                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(ehud.m_character);
+                extended_hud.hudlink = ehud;
                 if (mods == null) { return; }
                 //Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
+                extended_hud.ModifierCount = mods.Count;
                 foreach (KeyValuePair<string, ModifierType> entry in mods) {
                     if (entry.Key == CreatureModifiers.NoMods) { continue; }
                     //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
@@ -377,7 +393,7 @@ namespace StarLevelSystem.modules
                 }
 
                 // Need to find and add the N level text for updating here
-                characterExtendedHuds.Add(czoid, extended_hud);
+                characterExtendedHuds.Add(czid, extended_hud);
             }
             // Star level display starts at 2
             // Enable static star levels

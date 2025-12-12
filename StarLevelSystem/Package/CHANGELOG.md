@@ -1,3 +1,10 @@
+**0.14.1**
+ ---
+ ```
+ - Fixes an issue where deterministic tree scaling would result in no wood if the tree rolled level 0
+ - Added in-game size-rescaling for trees, fish, and birds, changing size configurations will now automatically rescale
+ ```
+
 **0.14.0**
  ---
  ```
@@ -8,7 +15,7 @@
    - Fish size is now reduced
  ```
 
-m**0.13.0**
+**0.13.0**
  ---
  ```
  - Added a configuration option to force-reroll creatures that are over the specified max level when loaded

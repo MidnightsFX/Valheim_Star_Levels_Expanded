@@ -59,6 +59,9 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
         public static ConfigEntry<bool> EnableColorization;
 
+        public static ConfigEntry<float> PerLevelTreeLootScale;
+        public static ConfigEntry<float> PerLevelBirdLootScale;
+
         public static ConfigEntry<int> FishMaxLevel;
         public static ConfigEntry<int> BirdMaxLevel;
         public static ConfigEntry<int> TreeMaxLevel;
@@ -149,16 +152,24 @@ namespace StarLevelSystem
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
             
             EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
+            EnableScalingBirds.SettingChanged += LevelSystem.UpdateBirdSizeOnConfigChange;
             BirdSizeScalePerLevel = BindServerConfig("ObjectLevels", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
+            BirdSizeScalePerLevel.SettingChanged += LevelSystem.UpdateBirdSizeOnConfigChange;
             EnableScalingFish = BindServerConfig("ObjectLevels", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
+            EnableScalingFish.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
             FishMaxLevel = BindServerConfig("ObjectLevels", "FishMaxLevel", 20, "Sets the max level that fish can scale up to.", true, 1, 150);
             BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
             TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
             FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
+            FishSizeScalePerLevel.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
             EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
+            EnableTreeScaling.SettingChanged += LevelSystem.UpdateTreeSizeOnConfigChange;
             UseDeterministicTreeScaling = BindServerConfig("ObjectLevels", "UseDeterministicTreeScaling", true, "Scales the level of trees based on biome and distance from the center/spawn. This does not randomize tree levels, but reduces network usage.");
             TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
-            
+            TreeSizeScalePerLevel.SettingChanged += LevelSystem.UpdateTreeSizeOnConfigChange;
+            PerLevelTreeLootScale = BindServerConfig("ObjectLevels", "PerLevelTreeLootScale", 0.2f, "The amount of additional wood that each level grants for a tree.", true);
+            PerLevelBirdLootScale = BindServerConfig("ObjectLevels", "PerLevelBirdLootScale", 0.3f, "Per level additional loot that birds gain.", true);
+
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);

@@ -339,32 +339,6 @@ namespace StarLevelSystem.modules
             yield break;
         }
 
-        //[HarmonyPatch(typeof(Fish), nameof(Fish.Awake))]
-        //public static class RandomFishLevelExtension
-        //{
-        //    public static void Postfix(Fish __instance) {
-        //        if (ValConfig.EnableScalingFish.Value == false) { return; }
-        //        if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) {  return; }
-        //        int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Fish", 0);
-        //        if (storedLevel == 0) {
-        //            LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-        //            storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.FishMaxLevel.Value);
-        //            __instance.m_nview.GetZDO().Set("SLE_Fish", storedLevel);
-        //            __instance.GetComponent<ItemDrop>().SetQuality(storedLevel);
-        //            __instance.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = storedLevel + 1;
-        //        }
-        //        if (storedLevel > 1) {
-        //            float scale = 1 + (ValConfig.FishSizeScalePerLevel.Value * storedLevel);
-        //            __instance.GetComponent<ItemDrop>().SetQuality(storedLevel);
-        //            __instance.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = storedLevel + 1;
-        //            //Logger.LogDebug($"Setting Fish level {storedLevel} size {scale}.");
-        //            __instance.transform.localScale *= scale;
-        //            Physics.SyncTransforms();
-
-        //        }
-        //    }
-        //}
-
         public static void UpdateMaxLevel() {
             IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
             foreach (GameObject fish in fishes) {
@@ -379,7 +353,9 @@ namespace StarLevelSystem.modules
         {
             Vector3 p = go.transform.position;
             float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
-            return Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
+            int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
+            if (level < 1) { level = 1; }
+            return level;
         }
 
         public static IEnumerator ModifyTreeWithLevel(TreeBase tree, int level)
@@ -396,8 +372,8 @@ namespace StarLevelSystem.modules
             {
                 DropTable.DropData lvlupdrop = new DropTable.DropData();
                 // Scale the amount of drops based on level
-                lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * level));
-                lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * level));
+                lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelTreeLootScale.Value * level));
+                lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + ValConfig.PerLevelTreeLootScale.Value * level));
                 // Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
                 lvlupdrop.m_item = drop.m_item;
                 drops.Add(lvlupdrop);
@@ -536,8 +512,8 @@ namespace StarLevelSystem.modules
                 foreach (var drop in log.m_dropWhenDestroyed.m_drops) {
                     DropTable.DropData lvlupdrop = new DropTable.DropData();
                     // Scale the amount of drops based on level
-                    lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * level));
-                    lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * level));
+                    lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelTreeLootScale.Value * level));
+                    lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelTreeLootScale.Value * level));
                     Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {level}.");
                     if (drop.m_item == null) { continue; }
                     lvlupdrop.m_item = drop.m_item;
@@ -547,6 +523,153 @@ namespace StarLevelSystem.modules
             }
         }
 
+        public static void UpdateTreeSizeOnConfigChange(object s, EventArgs e)
+        {
+            ZNetScene.instance.StartCoroutine(UpdateAllTreeSizesOnConfigChangeCoroutine());
+        }
+
+        public static void UpdateBirdSizeOnConfigChange(object s, EventArgs e)
+        {
+            ZNetScene.instance.StartCoroutine(UpdateAllBirdSizesOnConfigChangeCoroutine());
+        }
+
+        public static void UpdateFishSizeOnConfigChange(object s, EventArgs e)
+        {
+            ZNetScene.instance.StartCoroutine(UpdateAllFishOnConfigChangeCoroutine());
+        }
+
+        public static IEnumerator UpdateAllTreeSizesOnConfigChangeCoroutine()
+        {
+            int updated = 0;
+            IEnumerable<GameObject> trees = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<TreeBase>() != null);
+            foreach (GameObject tree in trees)
+            {
+                updated++;
+                if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
+                    yield return new WaitForEndOfFrame();
+                    Physics.SyncTransforms();
+                }
+                TreeBase treebase = tree.GetComponent<TreeBase>();
+                if (treebase == null || treebase.m_nview == null || treebase.m_nview.GetZDO() == null) { continue; }
+                string treename = Utils.GetPrefabName(tree.gameObject);
+                // Check scalar objects, or fall back to the reference prefab scale
+                Vector3 baseSize = treebase.m_nview.GetZDO().GetVec3(ZDOVars.s_scaleHash, Vector3.zero);
+                if (baseSize == Vector3.zero) {
+                    float scaler = treebase.m_nview.GetZDO().GetFloat(ZDOVars.s_scaleScalarHash, 0f);
+                    baseSize = new Vector3(scaler, scaler, scaler);
+                }
+                // Falling back to the reference prefab scale will set tree size to be uniform, which will likely be adjusted when reloaded
+                if (baseSize == Vector3.zero) {
+                    baseSize = PrefabManager.Instance.GetPrefab(treename).gameObject.transform.localScale;
+                }
+                if (ValConfig.EnableTreeScaling.Value == false) {
+                    treebase.transform.localScale = baseSize;
+                    continue;
+                }
+
+                if (ValConfig.UseDeterministicTreeScaling.Value)
+                {
+                    float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * CompositeLazyCache.GetOrAddCachedTreeEntry(treebase.m_nview));
+                    treebase.transform.localScale = baseSize * scale;
+                }
+                else
+                {
+                    int storedLevel = treebase.m_nview.GetZDO().GetInt(SLS_TREE, 0);
+                    if (storedLevel > 1)
+                    {
+                        float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * storedLevel);
+                        //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
+                        treebase.transform.localScale = baseSize * scale;
+                    }
+                }
+            }
+            yield break;
+        }
+
+        public static IEnumerator UpdateAllBirdSizesOnConfigChangeCoroutine()
+        {
+            int updated = 0;
+            Dictionary<string, Vector3> BirdSizeReferences = new Dictionary<string, Vector3>();
+            IEnumerable<GameObject> birds = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<RandomFlyingBird>() != null);
+            foreach (GameObject bird in birds)
+            {
+                updated++;
+                if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0)
+                {
+                    yield return new WaitForEndOfFrame();
+                    Physics.SyncTransforms();
+                }
+                RandomFlyingBird treebase = bird.GetComponent<RandomFlyingBird>();
+                if (treebase == null || treebase.m_nview == null || treebase.m_nview.GetZDO() == null) { continue; }
+                string birdname = Utils.GetPrefabName(bird.gameObject);
+                if (BirdSizeReferences.ContainsKey(birdname) == false)
+                {
+                    BirdSizeReferences.Add(birdname, PrefabManager.Instance.GetPrefab(birdname).gameObject.transform.localScale);
+                }
+                if (ValConfig.EnableScalingBirds.Value == false)
+                {
+                    treebase.transform.localScale = BirdSizeReferences[birdname];
+                    continue;
+                }
+
+                int storedLevel = treebase.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
+                if (storedLevel > 1)
+                {
+                    float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
+                    //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
+                    treebase.transform.localScale = BirdSizeReferences[birdname] * scale;
+                }
+            }
+            yield break;
+        }
+
+        public static IEnumerator UpdateAllFishOnConfigChangeCoroutine()
+        {
+            int updated = 0;
+            Dictionary<string, Vector3> FishSizeReference = new Dictionary<string, Vector3>();
+            IEnumerable<GameObject> loadedFish = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<Fish>() != null);
+            foreach (GameObject fish in loadedFish)
+            {
+                updated++;
+                if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0)
+                {
+                    yield return new WaitForEndOfFrame();
+                    Physics.SyncTransforms();
+                }
+                Fish fishComp = fish.GetComponent<Fish>();
+                if (fishComp == null || fishComp.m_nview == null || fishComp.m_nview.GetZDO() == null) { continue; }
+                string fishname = Utils.GetPrefabName(fish.gameObject);
+                if (FishSizeReference.ContainsKey(fishname) == false)
+                {
+                    FishSizeReference.Add(fishname, PrefabManager.Instance.GetPrefab(fishname).gameObject.transform.localScale);
+                }
+                if (ValConfig.EnableScalingFish.Value == false)
+                {
+                    fishComp.transform.localScale = FishSizeReference[fishname];
+                    continue;
+                }
+
+                int storedLevel = fishComp.m_nview.GetZDO().GetInt(SLS_FISH, 0);
+                if (storedLevel > 1)
+                {
+                    float scale = 1 + (ValConfig.FishSizeScalePerLevel.Value * storedLevel);
+                    //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
+                    fishComp.transform.localScale = FishSizeReference[fishname] * scale;
+                    continue;
+                }
+                ItemDrop id = fish.GetComponent<ItemDrop>();
+                if (id.m_itemData.m_quality > 1)
+                {
+                    float scale = 1 + (ValConfig.FishSizeScalePerLevel.Value * id.m_itemData.m_quality);
+                    //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
+                    fishComp.transform.localScale = FishSizeReference[fishname] * scale;
+                    id.m_itemData.m_shared.m_scaleByQuality = ValConfig.FishSizeScalePerLevel.Value;
+                    id.Save();
+                }
+            }
+            yield break;
+        }
+
 
         [HarmonyPatch(typeof(RandomFlyingBird), nameof(RandomFlyingBird.Awake))]
         public static class RandomFlyingBirdExtension
@@ -554,12 +677,12 @@ namespace StarLevelSystem.modules
             public static void Postfix(RandomFlyingBird __instance)
             {
                 if (ValConfig.EnableScalingBirds.Value == false) { return; }
-                int storedLevel = __instance.m_nview.GetZDO().GetInt("SLE_Bird", 0);
+                int storedLevel = __instance.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
                 if (storedLevel == 0)
                 {
                     LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
                     storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.BirdMaxLevel.Value);
-                    __instance.m_nview.GetZDO().Set("SLE_Bird", storedLevel);
+                    __instance.m_nview.GetZDO().Set(SLS_BIRD, storedLevel);
                 }
                 if (storedLevel > 1)
                 {
@@ -573,8 +696,8 @@ namespace StarLevelSystem.modules
                     {
                         DropTable.DropData lvlupdrop = new DropTable.DropData();
                         // Scale the amount of drops based on level
-                        lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelLootScale.Value * storedLevel));
-                        lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelLootScale.Value * storedLevel));
+                        lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1+ ValConfig.PerLevelBirdLootScale.Value * storedLevel));
+                        lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1+ ValConfig.PerLevelBirdLootScale.Value * storedLevel));
                         //Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
                         lvlupdrop.m_item = drop.m_item;
                         drops.Add(lvlupdrop);

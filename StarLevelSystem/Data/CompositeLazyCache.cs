@@ -122,7 +122,7 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug("Setting creature level");
             int level = LevelSystem.DetermineLevel(character, creatureZDO, creatureSettings, biomeSettings, leveloverride);
             characterEntry.Level = level;
-            //Logger.LogDebug($"Determined {creatureName} level {level}");
+            //Logger.LogDebug($"Determined {creatureName} level {level} should delete? {characterEntry.ShouldDelete}");
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");

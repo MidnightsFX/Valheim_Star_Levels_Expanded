@@ -1,3 +1,10 @@
+**0.14.3**
+ ---
+ ```
+ - Fixes drops being left behind by creatures selected for deletion
+ - Fixes spawned creatures not having their levels set correctly in some cases
+ ```
+
 **0.14.2**
  ---
  ```

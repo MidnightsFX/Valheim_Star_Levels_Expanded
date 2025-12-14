@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
@@ -282,6 +283,12 @@ namespace StarLevelSystem.modules
         internal static IEnumerator DestroyCoroutine(GameObject go, float delay = 0.2f) {
             yield return new WaitForSeconds(delay);
             if (go != null) {
+                // recheck tame status
+                Character chara = go.GetComponent<Character>();
+                if (chara != null && chara.m_tamed) { yield break; }
+                // Remove drops before destroying the creature to ensure that we don't litter drops everywhere
+                CharacterDrop cd = go.GetComponent<CharacterDrop>();
+                if (cd != null) { GameObject.Destroy(cd); }
                 ZNetScene.instance.Destroy(go);
             }
         }
@@ -364,6 +371,14 @@ namespace StarLevelSystem.modules
 
             return true;
         }
+
+        internal static void CreatureSpawnerSetup(Character chara, int leveloverride = 0, bool multiply = true)
+        {
+            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, leveloverride);
+            CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, multiply);
+            CreatureSetup(chara, delay: 0.1f);
+        }
+
 
         // This is the primary flow setup for setting up a character
         internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {

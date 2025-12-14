@@ -28,15 +28,15 @@ namespace StarLevelSystem.modules
             }
         }
 
-        public static void SetCharacterLevelControl(Character chara, int providedLevel) {
+        public static void SetCharacterLevelControl(Character chara, int fallbackLevel) {
             if (chara == null) { return; }
             if (ValConfig.ControlSpawnerLevels.Value) {
-                ModificationExtensionSystem.CreatureSetup(chara, providedLevel);
+                ModificationExtensionSystem.CreatureSpawnerSetup(chara);
                 return;
             }
             // Fallback
-            Logger.LogDebug($"Setting creature level from fallback provided {providedLevel}");
-            chara.SetLevel(providedLevel);
+            Logger.LogDebug($"Setting creature level from fallback provided {fallbackLevel}");
+            chara.SetLevel(fallbackLevel);
         }
 
         public static int DetermineLevel(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
@@ -1140,7 +1140,7 @@ namespace StarLevelSystem.modules
             {
                 if (ValConfig.ControlAbilitySpawnedCreatures.Value)
                 {
-                    ModificationExtensionSystem.CreatureSetup(chara, providedLevel);
+                    ModificationExtensionSystem.CreatureSpawnerSetup(chara);
                     return;
                 }
                 // Fallback

@@ -26,7 +26,7 @@ namespace StarLevelSystem.modules
             int appliedMods = 0;
             foreach (KeyValuePair<string, ModifierType> kvp in cacheEntry.CreatureModifiers)
             {
-                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= character.m_level) { break; }
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= (character.m_level -1)) { break; }
                 if (kvp.Key == NoMods || kvp.Key == string.Empty) { continue; }
                 //Logger.LogDebug($"Runonce setup {kvp.Value} - {kvp.Key}");
                 switch (kvp.Value)
@@ -51,7 +51,7 @@ namespace StarLevelSystem.modules
             int appliedMods = 0;
             foreach (KeyValuePair<string, ModifierType> kvp in selectedMods)
             {
-                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= character.m_level) { break; }
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && appliedMods >= (character.m_level -1)) { break; }
                 if (kvp.Key == NoMods || kvp.Key == string.Empty) { continue; }
                 //Logger.LogDebug($"Setup running {kvp.Value} - {kvp.Key}");
                 switch (kvp.Value)
@@ -139,7 +139,7 @@ namespace StarLevelSystem.modules
             foreach (string modifierName in remainingNameSegments)
             {
                 // Don't show modifier names for creatures that have a limit number of modifiers based on their level
-                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && chara.m_level <= (nameEntries + 1)) { break; }
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && nameEntries >= chara.m_level - 1) { break; }
                 //Logger.LogDebug($"Setting name segment for: {modifierName}");
                 if (remainingNameSegments.Count <= 0 || nameEntries >= remainingNameSegments.Count) { break; }
                 nameEntries++;

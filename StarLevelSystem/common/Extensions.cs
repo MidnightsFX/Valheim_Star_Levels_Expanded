@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.modules;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
@@ -15,7 +16,7 @@ namespace StarLevelSystem.common
         /// Take any list of Objects and return it with Fischer-Yates shuffle
         /// </summary>
         /// <returns></returns>
-        public static List<T> shuffleList<T>(this List<T> inputList)
+        public static List<T> ShuffleList<T>(this List<T> inputList)
         {
             int i = 0;
             int t = inputList.Count;
@@ -34,6 +35,20 @@ namespace StarLevelSystem.common
             }
 
             return tempList;
+        }
+
+        public static bool CompareListContents<T>(this List<T> listA, List<T> listB)
+        {
+            if (listA == null && listB == null) return true;
+            if (listA == null || listB == null) return false;
+            if (listA.Count != listB.Count) return false;
+
+            // Check for items in both lists, regardless of order, extras are left out
+            // if both entries are the same count they are equal
+            var firstNotSecond = listA.Except(listB).ToList();
+            var secondNotFirst = listB.Except(listA).ToList();
+
+            return !firstNotSecond.Any() && !secondNotFirst.Any();
         }
 
 

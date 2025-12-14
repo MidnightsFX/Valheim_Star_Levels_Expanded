@@ -1,3 +1,12 @@
+**0.14.2**
+ ---
+ ```
+ - Significantly improves cache updates for networked changes to creature modifiers and levels
+ - Force rerolling of creatures above the maximum level will now also resize them to the correct size
+ - Fixes a race condition where tamed breeding creature would not inherit the correct level
+ - Fixes and issue where splitters would not always inherit the correct level from the parent creature
+ ```
+
 **0.14.1**
  ---
  ```

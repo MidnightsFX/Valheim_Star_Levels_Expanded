@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -17,7 +18,7 @@ namespace StarLevelSystem.modules
 
         public int Level { get; set; } = 1;
 
-        public int ModifierCount { get; set; } = 0;
+        public List<string> DisplayedMods { get; set; } = new List<string>();
 
         public Dictionary<int, GameObject> Starlevel = new Dictionary<int, GameObject>();
         public Dictionary<int, Image> StarLevelFront = new Dictionary<int, Image>();
@@ -328,13 +329,16 @@ namespace StarLevelSystem.modules
                 if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null) {
                     Logger.LogDebug($"UI Cache Invalid for {czid}, removing.");
                     characterExtendedHuds.Remove(czid);
+                    //CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     return;
                 }
 
                 // Mod count check here could be replaced by a Z request to refresh the cache by the controlling player
-                if (ehud.m_character.GetLevel() != extended_hud.Level || extended_hud.ModifierCount != mods.Count) {
-                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.ModifierCount}-{mods.Count}), updating cache.");
+                List<string> cmods = mods.Keys.ToList();
+                if (ehud.m_character.GetLevel() != extended_hud.Level || cmods.CompareListContents(mods.Keys.ToList()) == false) {
+                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count}), updating cache.");
                     characterExtendedHuds.Remove(czid);
+                    //CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     return;
                 }
             } else {
@@ -344,7 +348,7 @@ namespace StarLevelSystem.modules
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
                 int star = 2;
                 // Logger.LogDebug($"Building sprite list");
-                extended_hud.ModifierCount = mods.Count;
+                extended_hud.DisplayedMods = mods.Keys.ToList();
                 foreach (KeyValuePair<string, ModifierType> entry in mods) {
                     if (entry.Key == CreatureModifiers.NoMods) { continue; }
                     //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
@@ -401,38 +405,50 @@ namespace StarLevelSystem.modules
 
             switch (level) {
                 case 2:
-                    extended_hud.Starlevel[2]?.SetActive(true);
+                    extended_hud.Starlevel[2].SetActive(true);
+                    extended_hud.Starlevel[3].SetActive(false);
+                    extended_hud.Starlevel[4].SetActive(false);
+                    extended_hud.Starlevel[5].SetActive(false);
+                    extended_hud.Starlevel[6].SetActive(false);
                     break;
                 case 3:
-                    extended_hud.Starlevel[2]?.SetActive(true);
-                    extended_hud.Starlevel[3]?.SetActive(true);
+                    extended_hud.Starlevel[2].SetActive(true);
+                    extended_hud.Starlevel[3].SetActive(true);
+                    extended_hud.Starlevel[4].SetActive(false);
+                    extended_hud.Starlevel[5].SetActive(false);
+                    extended_hud.Starlevel[6].SetActive(false);
                     break;
                 case 4:
-                    extended_hud.Starlevel[2]?.SetActive(true);
-                    extended_hud.Starlevel[3]?.SetActive(true);
-                    extended_hud.Starlevel[4]?.SetActive(true);
+                    extended_hud.Starlevel[2].SetActive(true);
+                    extended_hud.Starlevel[3].SetActive(true);
+                    extended_hud.Starlevel[4].SetActive(true);
+                    extended_hud.Starlevel[5].SetActive(false);
+                    extended_hud.Starlevel[6].SetActive(false);
                     break;
                 case 5:
-                    extended_hud.Starlevel[2]?.SetActive(true);
-                    extended_hud.Starlevel[3]?.SetActive(true);
-                    extended_hud.Starlevel[4]?.SetActive(true);
-                    extended_hud.Starlevel[5]?.SetActive(true);
+                    extended_hud.Starlevel[2].SetActive(true);
+                    extended_hud.Starlevel[3].SetActive(true);
+                    extended_hud.Starlevel[4].SetActive(true);
+                    extended_hud.Starlevel[5].SetActive(true);
+                    extended_hud.Starlevel[6].SetActive(false);
                     break;
                 case 6:
-                    extended_hud.Starlevel[2]?.SetActive(true);
-                    extended_hud.Starlevel[3]?.SetActive(true);
-                    extended_hud.Starlevel[4]?.SetActive(true);
-                    extended_hud.Starlevel[5]?.SetActive(true);
-                    extended_hud.Starlevel[6]?.SetActive(true);
+                    extended_hud.Starlevel[2].SetActive(true);
+                    extended_hud.Starlevel[3].SetActive(true);
+                    extended_hud.Starlevel[4].SetActive(true);
+                    extended_hud.Starlevel[5].SetActive(true);
+                    extended_hud.Starlevel[6].SetActive(true);
                     break;
             }
 
             // Enable dynamic levels
             if (level > 6) {
                 // Logger.LogInfo("Setting Nstar levels active");
-                extended_hud.StarLevelN?.SetActive(true);
+                extended_hud.StarLevelN.SetActive(true);
                 // get the text componet here and set its display
                 extended_hud.StarLevelNText.text = (level - 1).ToString();
+            } else {
+                extended_hud.StarLevelN.SetActive(false);
             }
         }
     }

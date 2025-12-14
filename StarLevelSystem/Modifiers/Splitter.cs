@@ -38,8 +38,8 @@ namespace StarLevelSystem.Modifiers
                         if (shouldTame) { sgo.GetComponent<Character>().SetTamed(true); }
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
-                            CompositeLazyCache.GetAndSetLocalCache(sChar, level, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
-                            ModificationExtensionSystem.CreatureSetup(sChar, multiply: false);
+                            CompositeLazyCache.GetAndSetLocalCache(sChar, level, updateCache: true, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
+                            ModificationExtensionSystem.CreatureSetup(sChar, level, multiply: false, delay: 0.1f);
                             CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }
                         

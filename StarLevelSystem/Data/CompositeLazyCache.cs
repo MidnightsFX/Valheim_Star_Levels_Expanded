@@ -48,11 +48,18 @@ namespace StarLevelSystem.Data
             return characterCacheEntry;
         }
 
+        public static void ClearCachedCreature(Character character)
+        {
+            if (character == null || character.m_nview == null || character.IsPlayer() || character.m_nview.GetZDO() == null) { return; }
+            uint cid = character.GetZDOID().ID;
+            SessionCache.Remove(cid);
+        }
+
         public static CharacterCacheEntry GetAndSetLocalCache(Character character, int leveloverride = 0, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool updateCache = false) {
 
             // Check for cached creature data
             CharacterCacheEntry characterEntry = RetrieveStoredCreatureFromCache(character);
-            if (characterEntry != null) {
+            if (characterEntry != null && updateCache == false) {
                 //Logger.LogDebug($"{character.name} Creature Data Object Cache available.");
                 return characterEntry;
             }
@@ -153,20 +160,37 @@ namespace StarLevelSystem.Data
                 return;
             }
 
+            int clevel = chara.GetLevel();
             // Set level ZDO, only if its not been set, and only if its not what the cache is expecting
-            if (chara.GetLevel() <= 1 && characterEntry.Level != chara.GetLevel()) {
+            if (clevel <= 1 && characterEntry.Level != clevel) {
                 chara.SetLevel(characterEntry.Level);
                 chara.m_level = characterEntry.Level;
                 LevelUI.InvalidateCacheEntry(chara);
             }
+
+            // Running this causes inconsistent results due to how long it takes to set a creatures level
             // Verify that the cache and character variables match
-            if (chara.GetLevel() != characterEntry.Level)
+            //if (clevel != characterEntry.Level)
+            //{
+            //    characterEntry.Level = clevel;
+            //    chara.m_level = characterEntry.Level;
+            //}
+
+
+            // Reset character level if its overleveled
+            if (ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value + 1)
             {
-                characterEntry.Level = chara.GetLevel();
+                // Rebuild level?
+                int level = LevelSystem.DetermineLevel(chara, chara.m_nview.GetZDO(), characterEntry.CreatureSettings, characterEntry.BiomeSettings);
+                characterEntry.Level = level;
+                Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {ValConfig.MaxLevel.Value + 1}, resetting to {characterEntry.Level}");
+                chara.SetLevel(characterEntry.Level);
                 chara.m_level = characterEntry.Level;
+                ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, characterEntry, force_update: true);
+                LevelUI.InvalidateCacheEntry(chara);
             }
 
-            //Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
+            // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
             if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
             {

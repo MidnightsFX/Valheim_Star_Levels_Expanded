@@ -52,13 +52,19 @@ namespace StarLevelSystem.modules
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
-            //Logger.LogDebug($"Current level from ZDO: {clevel}");
+            //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > ValConfig.MaxLevel.Value}");
             if (clevel <= 0 || ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value) {
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value;
                 int min_level = 0;
-                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
-                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
+                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) {
+                    //Logger.LogDebug($"Max Level from: BiomeSpecific {biome_settings.BiomeMaxLevelOverride}");
+                    max_level = biome_settings.BiomeMaxLevelOverride;
+                }
+                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) {
+                    //Logger.LogDebug($"Max Level from: CreatureSpecific:{creature_settings.CreatureMaxLevelOverride}");
+                    max_level = creature_settings.CreatureMaxLevelOverride;
+                }
                 
                 if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
@@ -210,6 +216,41 @@ namespace StarLevelSystem.modules
                 }
             }
             return selected_level;
+        }
+
+        public static void ModifyLoadedCreatureLevels(object s, EventArgs e)
+        {
+            ZNetScene.instance.StartCoroutine(ModifyLoadedCreaturesLevels());
+        }
+
+        public static IEnumerator ModifyLoadedCreaturesLevels()
+        {
+            int updated = 0;
+            IEnumerable<GameObject> creatures = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<Character>() != null || obj.GetComponent<Humanoid>());
+            foreach (GameObject creature in creatures)
+            {
+                updated++;
+                if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0)
+                {
+                    yield return new WaitForEndOfFrame();
+                    Physics.SyncTransforms();
+                }
+                Character chara = creature.GetComponent<Character>();
+                if (chara == null) { chara = creature.GetComponent<Humanoid>(); }
+                if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
+
+                if (chara.GetLevel() <= ValConfig.MaxLevel.Value) { continue; }
+                //CompositeLazyCache.ClearCachedCreature(chara);
+                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
+
+                //cce.Level = LevelSystem.DetermineLevel(chara, chara.m_nview.GetZDO(), cce.CreatureSettings, cce.BiomeSettings);
+                //CompositeLazyCache.UpdateCharacterCacheEntry(chara, cce);
+                //CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, false);
+                ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, cce, force_update: true);
+                ModificationExtensionSystem.CreatureSetup(chara, cce.Level);
+                //LevelUI.InvalidateCacheEntry(chara);
+            }
+            yield break;
         }
 
         public static void CreateLevelBonusRingMapOverlays()
@@ -767,32 +808,36 @@ namespace StarLevelSystem.modules
             {
                 Logger.LogDebug($"Setting child level for {chara.m_name}");
                 chara.SetTamed(true);
+                CharacterCacheEntry cdc_parent = CompositeLazyCache.GetCacheEntry(proc.m_character);
 
                 if (ValConfig.RandomizeTameChildrenModifiers.Value == false && proc.m_character != null) {
-                    CharacterCacheEntry cdc_parent = CompositeLazyCache.GetCacheEntry(proc.m_character);
-                    if (cdc_parent == null)
-                    {
-                        chara.SetLevel(proc.m_character.m_level);
-                        return;
+                    // Consider randomly inheriting _some_ modifiers from the parents
+                    // Children won't inherit parents modifiers
+                } else {
+                    //// TODO: Add randomization, limits and variations to children
+                    if (cdc_parent != null) {
+                        CompositeLazyCache.SetCreatureModifiers(chara, cdc_parent.CreatureModifiers);
                     }
-                    // TODO: Add randomization, limits and variations to children
-                    ModificationExtensionSystem.CreatureSetup(chara, proc.m_character.GetLevel());
                 }
 
-                int inheritedLevel = proc.m_character ? proc.m_character.GetLevel(): proc.m_minOffspringLevel;
-                if (ValConfig.RandomizeTameChildrenLevels.Value == true)
-                {
-                    int level = UnityEngine.Random.Range(1, inheritedLevel);
-                    Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
-                    ModificationExtensionSystem.CreatureSetup(chara, level);
-                } else {
-                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child.");
-                    ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel);
-                }
                 if (ValConfig.SpawnMultiplicationAppliesToTames.Value == false && chara.m_nview.GetZDO() != null)
                 {
                     Logger.LogDebug("Disabling spawn multiplier for tamed child.");
                     chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+                }
+
+                int inheritedLevel = proc.m_character.m_level;
+                if (cdc_parent != null && cdc_parent.Level != 0) {
+                    inheritedLevel = cdc_parent.Level;
+                }
+                if (ValConfig.RandomizeTameChildrenLevels.Value == true)
+                {
+                    int level = UnityEngine.Random.Range(1, inheritedLevel);
+                    Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
+                    ModificationExtensionSystem.CreatureSetup(chara, level, delay: 0.1f);
+                } else {
+                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
+                    ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
                 }
             }
         }

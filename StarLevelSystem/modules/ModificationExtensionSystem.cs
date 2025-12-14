@@ -290,6 +290,7 @@ namespace StarLevelSystem.modules
             if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { return; }
             //Logger.LogDebug("Setting up creature cache as Z-owner");
             CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
+            if (cce.Level != level_override) { cce.Level = level_override; }
             CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce, spawnMultiply);
         }
 
@@ -367,6 +368,8 @@ namespace StarLevelSystem.modules
         // This is the primary flow setup for setting up a character
         internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
             if (__instance.IsPlayer()) { return; }
+            // Setting a zero delay can prevent all other scripts from running by hogging the CPU
+            if (delay == 0) { delay = 0.1f; }
 
             //// Select the creature data
             //CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, leveloverride);

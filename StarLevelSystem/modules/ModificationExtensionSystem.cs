@@ -67,15 +67,14 @@ namespace StarLevelSystem.modules
         }
 
         //[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Awake))]
-        //public static class PostfixSetupBosses {
-        //    public static void Postfix(Humanoid __instance) {
-        //        Logger.LogDebug($"Humanoid awake {__instance.m_name}");
-        //        bool setlevel = false;
+        //public static class PostfixSetupBosses
+        //{
+        //    public static void Postfix(Humanoid __instance)
+        //    {
         //        if (__instance.IsBoss() && ValConfig.ControlBossSpawns.Value || ForceLeveledCreatures.Contains(__instance.name))
         //        {
-        //            setlevel = true;
+        //            CreatureSetup(__instance, delay: 1f);
         //        }
-        //        CreatureSetup(__instance, delay: 1f, setLevel: setlevel);
         //    }
         //}
 
@@ -294,11 +293,7 @@ namespace StarLevelSystem.modules
         }
 
         static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null) {
-            if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { return; }
-            //Logger.LogDebug("Setting up creature cache as Z-owner");
-            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
-            if (cce.Level != level_override) { cce.Level = level_override; }
-            CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce, spawnMultiply);
+
         }
 
         static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)
@@ -314,17 +309,23 @@ namespace StarLevelSystem.modules
                 // Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
                 if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
                 // Only the owner should setup a creature, OR if someone is controlling it and it was just spawned it is setup immediately
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
                 if (__instance.m_nview.IsOwner() || delay == 0) {
-                    SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
+                    //SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
+                    if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { continue; }
+                    //Logger.LogDebug("Setting up creature cache as Z-owner");
+                    cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
+                    CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce, spawnMultiply);
                 }
-                status = CharacterSetup(__instance);
+                
+                status = CharacterSetup(__instance, cce);
                 //Logger.LogDebug($"Setup status: {status}");
                 times += 1;
                 // We've failed to get the creature setup and we don't have data for it, its not getting setup
-                if (times == ValConfig.FallbackDelayBeforeCreatureSetup.Value - 1) {
+                if (times >= ValConfig.FallbackDelayBeforeCreatureSetup.Value - 1) {
                     CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
                     CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, scd, spawnMultiply);
-                    CharacterSetup(__instance);
+                    CharacterSetup(__instance, scd);
                     Logger.LogDebug($"{scd.RefCreatureName} running delayed setup.");
                 }
                 if (times >= ValConfig.FallbackDelayBeforeCreatureSetup.Value) { break; }
@@ -334,13 +335,9 @@ namespace StarLevelSystem.modules
         }
 
         // This is the main entry point for setting up a character
-        private static bool CharacterSetup(Character __instance)
+        private static bool CharacterSetup(Character __instance, CharacterCacheEntry cDetails)
         {
-            if (__instance == null) { return false; }
-
-            // Do not run setup, only use saved ZDO data/cached
-            CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
-            if (cDetails == null) { return false; }
+            if (__instance == null || cDetails == null || cDetails.Level == 0) { return false; }
 
             if (ValConfig.ForceControlAllSpawns.Value == true) {
                 CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cDetails);
@@ -398,7 +395,7 @@ namespace StarLevelSystem.modules
                 Logger.LogDebug("FALLBACK setup of creature, does this client have network issues?");
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, leveloverride, requiredModifiers);
                 CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce);
-                CharacterSetup(__instance);
+                CharacterSetup(__instance, cce);
             }
         }
 

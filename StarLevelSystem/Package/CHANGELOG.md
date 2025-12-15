@@ -1,3 +1,12 @@
+**0.14.4**
+ ---
+ ```
+ - Fixes cache reset before znet has updated character level
+ - Fixes level on-change running during loading
+ - Fixes children exploding instead of growing up
+ - Fixes Fish and Bird onchange settings running too early when connecting to a server
+ ```
+
 **0.14.3**
  ---
  ```

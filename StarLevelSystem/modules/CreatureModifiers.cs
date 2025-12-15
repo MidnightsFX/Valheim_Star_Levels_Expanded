@@ -22,7 +22,7 @@ namespace StarLevelSystem.modules
 
         public static void RunOnceModifierSetup(Character character, CharacterCacheEntry cacheEntry)
         {
-            if (cacheEntry.CreatureModifiers == null || cacheEntry.runOnceDone == true) { return; }
+            if (cacheEntry.CreatureModifiers == null || cacheEntry.RunOnceDone == true) { return; }
             int appliedMods = 0;
             foreach (KeyValuePair<string, ModifierType> kvp in cacheEntry.CreatureModifiers)
             {
@@ -43,7 +43,7 @@ namespace StarLevelSystem.modules
                 }
                 appliedMods += 1;
             }
-            cacheEntry.runOnceDone = true;
+            cacheEntry.RunOnceDone = true;
         }
 
         public static void SetupModifiers(Character character, CharacterCacheEntry cacheEntry, Dictionary<string, ModifierType> selectedMods) {

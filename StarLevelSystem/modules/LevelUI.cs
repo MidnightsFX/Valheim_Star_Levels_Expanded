@@ -35,14 +35,14 @@ namespace StarLevelSystem.modules
         public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject star;
 
-        public static void InvalidateCacheEntry(uint zdo)
+        public static void InvalidateCacheEntry(uint zdid)
         {
-            if (characterExtendedHuds.ContainsKey(zdo)) {
-                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(zdo);
+            if (characterExtendedHuds.ContainsKey(zdid)) {
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(zdid);
                 
-                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(characterExtendedHuds[zdo].hudlink.m_character);
-                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterExtendedHuds[zdo].hudlink.m_character, cce.CreatureModifiers);
-                characterExtendedHuds[zdo].hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(characterExtendedHuds[zdid].hudlink.m_character);
+                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterExtendedHuds[zdid].hudlink.m_character, cce.CreatureModifiers);
+                characterExtendedHuds[zdid].hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 if (cce == null || cce.CreatureNameLocalizable == null) { return; }
             }
         }

@@ -364,19 +364,17 @@ namespace StarLevelSystem.common
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
-        [DataContract]
         [Serializable]
         public class CharacterCacheEntry
         {
-            public int Level { get; set; } = 0;
+            public int Level { get; set; }
             public bool ShouldDelete { get; set; } = false;
             public string CreatureNameLocalizable { get; set; } = null;
             public string RefCreatureName { get; set; } = null;
             public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }
             public float SpawnRateModifier { get; set; } = 1f;
-            public bool runOnceDone { get; set; } = false;
-            public Vector3 defaultSize { get; set; } = Vector3.zero;
+            public bool RunOnceDone { get; set; } = false;
             public Dictionary<string, ModifierType> CreatureModifiers { get; set; } = new Dictionary<string, ModifierType>();
             public Dictionary<string, ModifierType> ModifiersRequired { get; set; } = null;
             public List<string> ModifiersNotAllowed { get; set; } = null;
@@ -407,8 +405,6 @@ namespace StarLevelSystem.common
                 { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
-            public CreatureSpecificSetting CreatureSettings { get; set; } = null;
-            public BiomeSpecificSetting BiomeSettings { get; set; } = null;
 
             public string GetDamageBonusDescription()
             {

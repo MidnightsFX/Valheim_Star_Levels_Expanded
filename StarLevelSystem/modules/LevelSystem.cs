@@ -220,6 +220,9 @@ namespace StarLevelSystem.modules
 
         public static void ModifyLoadedCreatureLevels(object s, EventArgs e)
         {
+            // Do not run before the area is loaded
+            if (Player.m_localPlayer == null) { return; }
+            if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
             ZNetScene.instance.StartCoroutine(ModifyLoadedCreaturesLevels());
         }
 
@@ -235,6 +238,7 @@ namespace StarLevelSystem.modules
                     yield return new WaitForEndOfFrame();
                     Physics.SyncTransforms();
                 }
+                if (creature == null) { continue; }
                 Character chara = creature.GetComponent<Character>();
                 if (chara == null) { chara = creature.GetComponent<Humanoid>(); }
                 if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
@@ -266,6 +270,7 @@ namespace StarLevelSystem.modules
 
         public static void OnRingCenterChanged(object s, EventArgs e)
         {
+            if (ZNet.instance.IsCurrentServerDedicated()) { return; }
             SetRingCenter();
             CreateLevelBonusRingMapOverlays();
         }
@@ -297,6 +302,7 @@ namespace StarLevelSystem.modules
                 ZNetScene.instance.StartCoroutine(BuildMapRingOverlay());
             } else {
                 MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
+                if (ringbonuses == null) { return; }
                 ringbonuses.Enabled = false;
             }
         }
@@ -566,16 +572,25 @@ namespace StarLevelSystem.modules
 
         public static void UpdateTreeSizeOnConfigChange(object s, EventArgs e)
         {
+            // Do not run before the area is loaded
+            if (Player.m_localPlayer == null) { return; }
+            if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
             ZNetScene.instance.StartCoroutine(UpdateAllTreeSizesOnConfigChangeCoroutine());
         }
 
         public static void UpdateBirdSizeOnConfigChange(object s, EventArgs e)
         {
+            // Do not run before the area is loaded
+            if (Player.m_localPlayer == null) { return; }
+            if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
             ZNetScene.instance.StartCoroutine(UpdateAllBirdSizesOnConfigChangeCoroutine());
         }
 
         public static void UpdateFishSizeOnConfigChange(object s, EventArgs e)
         {
+            // Do not run before the area is loaded
+            if (Player.m_localPlayer == null) { return; }
+            if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
             ZNetScene.instance.StartCoroutine(UpdateAllFishOnConfigChangeCoroutine());
         }
 
@@ -775,10 +790,10 @@ namespace StarLevelSystem.modules
                 {
                     grownup.SetLevel(childChar.m_level);
                     return;
-                } else {
-                    CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
                 }
-                ModificationExtensionSystem.CreatureSetup(grownup, multiply: false);
+                CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
+                CompositeLazyCache.SetCreatureModifiers(grownup, cdc_child.CreatureModifiers);
+                ModificationExtensionSystem.CreatureSpawnerSetup(grownup, multiply: false);
             }
         }
 
@@ -811,9 +826,6 @@ namespace StarLevelSystem.modules
                 CharacterCacheEntry cdc_parent = CompositeLazyCache.GetCacheEntry(proc.m_character);
 
                 if (ValConfig.RandomizeTameChildrenModifiers.Value == false && proc.m_character != null) {
-                    // Consider randomly inheriting _some_ modifiers from the parents
-                    // Children won't inherit parents modifiers
-                } else {
                     //// TODO: Add randomization, limits and variations to children
                     if (cdc_parent != null) {
                         CompositeLazyCache.SetCreatureModifiers(chara, cdc_parent.CreatureModifiers);

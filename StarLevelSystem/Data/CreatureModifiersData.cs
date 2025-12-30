@@ -3,7 +3,7 @@ using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
+using StarLevelSystem.Modifiers;
 using UnityEngine;
 using YamlDotNet.Serialization;
 using static Heightmap;
@@ -72,7 +72,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$bossSummoner_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "summoner",
-                        SetupMethodClass = "StarLevelSystem.Modifiers.Summoner",
+                        SetupEvent = Summoner.Setup,
                     }
                 },
                 { ModifierNames.SoulEater.ToString(), new CreatureModifierDefinition()
@@ -98,7 +98,7 @@ namespace StarLevelSystem.Data
                         namingConvention = NameSelectionStyle.RandomFirst,
                         VisualEffectStyle = VisualEffectStyle.bottom,
                         StarVisual = "brutal",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Brutal",
+                        RunOnceEvent = Brutal.RunOnce,
                     }
                 },
                 { ModifierNames.Fire.ToString(), new CreatureModifierDefinition()
@@ -109,7 +109,7 @@ namespace StarLevelSystem.Data
                         VisualEffectStyle = VisualEffectStyle.bottom,
                         VisualEffect = "creatureFire",
                         StarVisual = "flame",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Flame",
+                        RunOnceEvent = Flame.RunOnce,
                     }
                 },
                 { ModifierNames.Frost.ToString(), new CreatureModifierDefinition()
@@ -119,7 +119,7 @@ namespace StarLevelSystem.Data
                         namingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffect = "creatureFrost",
                         StarVisual = "snowflake",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Frost",
+                        RunOnceEvent = Frost.RunOnce,
                     }
                 },
                 { ModifierNames.Poison.ToString(), new CreatureModifierDefinition()
@@ -129,7 +129,7 @@ namespace StarLevelSystem.Data
                         namingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffect = "creaturePoison",
                         StarVisual = "poison",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Poison",
+                        RunOnceEvent = Poison.RunOnce,
                     }
                 },
                 { ModifierNames.Lightning.ToString(), new CreatureModifierDefinition()
@@ -140,7 +140,7 @@ namespace StarLevelSystem.Data
                         VisualEffectStyle = VisualEffectStyle.objectCenter,
                         VisualEffect = "creatureLightning",
                         StarVisual = "lightning",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Lightning",
+                        RunOnceEvent = Lightning.RunOnce,
                     }
                 },
                 { ModifierNames.Splitter.ToString(), new CreatureModifierDefinition()
@@ -158,7 +158,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$ResistPierce_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "pierceresist",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistPierce"
+                        RunOnceEvent = ResistPierce.RunOnce
                     }
                 },
                 { ModifierNames.ResistSlash.ToString(), new CreatureModifierDefinition()
@@ -167,7 +167,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$ResistSlash_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "slashresist",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistSlash"
+                        RunOnceEvent = ResistSlash.RunOnce
                     }
                 },
                 { ModifierNames.ResistBlunt.ToString(), new CreatureModifierDefinition()
@@ -176,7 +176,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$ResistBlunt_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "bluntresist",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.ResistBlunt"
+                        RunOnceEvent = ResistBlunt.RunOnce
                     }
                 },
                 { ModifierNames.FireNova.ToString(), new CreatureModifierDefinition()
@@ -195,7 +195,7 @@ namespace StarLevelSystem.Data
                         namingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect = "creatureLightning",
                         StarVisual = "lootbag",
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Lootbags"
+                        RunOnceEvent = Lootbags.RunOnce
                     }
                 },
                 { ModifierNames.Alert.ToString(), new CreatureModifierDefinition()
@@ -204,7 +204,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$alert_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect
-                        SetupMethodClass = "StarLevelSystem.Modifiers.Alert"
+                        SetupEvent = Alert.Setup
                     }
                 },
                 { ModifierNames.Big.ToString(), new CreatureModifierDefinition()
@@ -213,7 +213,7 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$big_suffix1",
                         namingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Big"
+                        RunOnceEvent = Big.RunOnce
                     }
                 },
                 { ModifierNames.Fast.ToString(), new CreatureModifierDefinition()
@@ -221,7 +221,7 @@ namespace StarLevelSystem.Data
                         NamePrefix = "$fast_prefix1",
                         namingConvention = NameSelectionStyle.RandomFirst,
                         //visualEffect
-                        RunOnceMethodClass = "StarLevelSystem.Modifiers.Fast"
+                        RunOnceEvent = Fast.RunOnce
                     }
                 },
                 { ModifierNames.StaminaDrain.ToString(), new CreatureModifierDefinition()

@@ -245,7 +245,7 @@ namespace StarLevelSystem.modules
         public static bool AddNewModifierToSLS(
             int modifierID,
             string modifier_name,
-            string setupMethod = null,
+            Delegate setupMethod = null,
             float selectionWeight = 10f,
             float basepower = 0f,
             float perlevelpower = 0f,
@@ -280,7 +280,7 @@ namespace StarLevelSystem.modules
             }
 
             if (setupMethod != null) {
-                newMod.SetupMethodClass = setupMethod;
+                newMod.SetupEvent = setupMethod;
             }
 
             if (name_suffixes != null)

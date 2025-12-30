@@ -338,7 +338,10 @@ namespace StarLevelSystem.modules
                 if (ehud.m_character.GetLevel() != extended_hud.Level || cmods.CompareListContents(mods.Keys.ToList()) == false) {
                     Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count}), updating cache.");
                     characterExtendedHuds.Remove(czid);
-                    //CompositeLazyCache.ClearCachedCreature(ehud.m_character);
+                    CompositeLazyCache.ClearCachedCreature(ehud.m_character);
+                    //Colorization.ApplyColorizationWithoutLevelEffects();
+                    // Re set up the character, to ensure it gets updated visual effects, and sizing
+                    ModificationExtensionSystem.CreatureSetup(ehud.m_character);
                     return;
                 }
             } else {
@@ -399,10 +402,10 @@ namespace StarLevelSystem.modules
                 // Need to find and add the N level text for updating here
                 characterExtendedHuds.Add(czid, extended_hud);
             }
-            // Star level display starts at 2
-            // Enable static star levels
-            //Logger.LogInfo("Setting star levels active");
+            // Show the creatures health value
 
+
+            // Set star level, this can change if the characters level gets modified
             switch (level) {
                 case 2:
                     extended_hud.Starlevel[2].SetActive(true);

@@ -271,8 +271,8 @@ namespace StarLevelSystem.common
             public string VisualEffect { get; set; }
             public string SecondaryEffect { get; set; }
             public VisualEffectStyle VisualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
-            public string SetupMethodClass { get; set; }
-            public string RunOnceMethodClass { get; set; }
+            public Delegate SetupEvent { get; set; } = null;
+            public Delegate RunOnceEvent { get; set; } = null;
             public bool FromAPI { get; set; } = false;
             public Sprite StarVisualAPI { get; set; }
             public GameObject VisualEffectAPI { get; set; }
@@ -318,31 +318,13 @@ namespace StarLevelSystem.common
 
             public void RunOnceMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd)
             {
-                if (RunOnceMethodClass == null || RunOnceMethodClass == "") { return; }
-                Type methodClass = Type.GetType(RunOnceMethodClass);
-                //Logger.LogDebug($"Setting up modifier {RunOnceMethodClass} with signature {methodClass}");
-                MethodInfo theMethod = methodClass.GetMethod("RunOnce");
-                if (theMethod == null) {
-                    Logger.LogInfo($"Modifier: Could not find RunOnce method, skipping setup. Recreate your Modifiers.yaml");
-                    return;
-                }
-                try {
-                    theMethod.Invoke(this, new object[] { chara, cfg, scd });
-                } catch {  return; }
+                if (RunOnceEvent == null) { return; }
+                RunOnceEvent.DynamicInvoke(chara, cfg, scd);
             }
 
             public void SetupMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd) {
-                if (SetupMethodClass == null || SetupMethodClass == "") { return; }
-                Type methodClass = Type.GetType(SetupMethodClass);
-                //Logger.LogDebug($"Setting up modifier {SetupMethodClass} with signature {methodClass}");
-                MethodInfo theMethod = methodClass.GetMethod("Setup");
-                if (theMethod == null) {
-                    Logger.LogInfo($"Modifier: Could not find Setup method, skipping setup. Recreate your Modifiers.yaml");
-                    return;
-                }
-                try {
-                    theMethod.Invoke(this, new object[] { chara, cfg, scd });
-                } catch {  return; }
+                if (SetupEvent == null) { return; }
+                SetupEvent.DynamicInvoke(chara, cfg, scd);
             }
         }
 
@@ -404,6 +386,7 @@ namespace StarLevelSystem.common
                 { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
                 { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
+            public CreatureSpecificSetting creatureSettings { get; set; } = null;
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
 
             public string GetDamageBonusDescription()

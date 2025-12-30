@@ -71,6 +71,8 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
 
+            characterEntry.creatureSettings = creatureSettings;
+
             // Set biome | used to deletion check
             characterEntry.Biome = biome;
             characterEntry.RefCreatureName = creatureName;
@@ -175,6 +177,7 @@ namespace StarLevelSystem.Data
                 chara.SetLevel(characterEntry.Level);
                 chara.m_level = characterEntry.Level;
                 ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, characterEntry, force_update: true);
+                Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
                 LevelUI.InvalidateCacheEntry(chara);
             }
 
@@ -191,8 +194,18 @@ namespace StarLevelSystem.Data
             //if (characterEntry.CreatureModifiers.Count > 0) {
             //    Logger.LogDebug($"  Stored mods {characterEntry.CreatureModifiers.Keys}");
             //}
+            // Setup the creatures modifiers if it does not have any- ideally this only gets calculated on the zowners first setup
+            // If network calls are significantly delayed this could be updated by a client and overwritten
             if (characterEntry.CreatureModifiers == null || characterEntry.CreatureModifiers.Count == 0) {
-                characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
+                characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(
+                    chara,
+                    creatureName: characterEntry.RefCreatureName,
+                    creature_settings: characterEntry.creatureSettings,
+                    biome: characterEntry.Biome,
+                    level: characterEntry.Level,
+                    requiredModifiers: characterEntry.ModifiersRequired,
+                    notAllowedModifiers: characterEntry.ModifiersNotAllowed
+                    );
                 SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
             }
             // 

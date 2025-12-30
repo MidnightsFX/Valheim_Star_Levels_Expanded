@@ -373,7 +373,7 @@ namespace StarLevelSystem
         public static bool AddNewModifier(
             int modifierID,
             string modifier_name,
-            string setupMethod = null,
+            Delegate setupMethod = null,
             float selectionWeight = 10f,
             float basepower = 0f,
             float perlevelpower = 0f,

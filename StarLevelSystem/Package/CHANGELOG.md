@@ -1,3 +1,18 @@
+**0.14.6**
+ ---
+ ```
+ - Consistency improvements for delayed growth setup for bred creatures
+ - Recoloring of overleveled creatures that get rerolled
+ ```
+
+**0.14.5**
+ ---
+ ```
+ - Simplifies Modifier method setup calls
+ - Ensure creature modifier prefixes are limited properly
+ - Ensure creature modifiers are rolled by zowner or secondary
+ ```
+
 **0.14.4**
  ---
  ```

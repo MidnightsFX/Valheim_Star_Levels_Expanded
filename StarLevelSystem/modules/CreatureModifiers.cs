@@ -134,7 +134,7 @@ namespace StarLevelSystem.modules
             List<string> prefix_names = new List<string>();
             List<string> suffix_names = new List<string>();
             int nameEntries = 0;
-            int selectedPrefixes = 0;
+            int selectedPrefixes = 1; // Starts at 1 since it only gains when one is added, and needs to be greater than 0 to skip if no prefixes are allowed
             List<string> remainingNameSegments = modifiers.Keys.ToList();
             foreach (string modifierName in remainingNameSegments)
             {
@@ -153,6 +153,7 @@ namespace StarLevelSystem.modules
                 if (creaturemod == null) { continue; }
                 if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value && prefixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NamePrefix != null && creaturemod.NamePrefix.Length > 0)
                 {
+                    selectedPrefixes++;
                     prefix_names.Add(creaturemod.NamePrefix);
                     continue;
                 }

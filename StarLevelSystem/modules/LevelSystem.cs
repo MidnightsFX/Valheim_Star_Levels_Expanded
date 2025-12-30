@@ -786,14 +786,14 @@ namespace StarLevelSystem.modules
             internal static void SetupGrownUp(Character grownup, Character childChar)
             {
                 CharacterCacheEntry cdc_child = CompositeLazyCache.GetCacheEntry(childChar);
-                if (cdc_child == null)
-                {
+                int level = 0;
+                if (cdc_child == null) {
+                    level = childChar.m_level;
                     grownup.SetLevel(childChar.m_level);
-                    return;
                 }
                 CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
                 CompositeLazyCache.SetCreatureModifiers(grownup, cdc_child.CreatureModifiers);
-                ModificationExtensionSystem.CreatureSpawnerSetup(grownup, multiply: false);
+                ModificationExtensionSystem.CreatureSpawnerSetup(grownup, level, multiply: false);
             }
         }
 
@@ -973,7 +973,7 @@ namespace StarLevelSystem.modules
                     new CodeInstruction(OpCodes.Ldloc_2),
                     Transpilers.EmitDelegate(SpawnAreaSetCharacterLevelControl)
                     )
-                .CreateLabelOffset(out Label label, offset: 28)
+                .CreateLabelOffset(out System.Reflection.Emit.Label label, offset: 28)
                 .InsertAndAdvance(new CodeInstruction(OpCodes.Br, label))
                 .MatchStartForward(
                     new CodeMatch(OpCodes.Ldloc_S),

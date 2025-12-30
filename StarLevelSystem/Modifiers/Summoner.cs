@@ -8,8 +8,7 @@ namespace StarLevelSystem.Modifiers
 {
     internal class Summoner
     {
-        [UsedImplicitly]
-        public static void Setup(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
+        public static void Setup(Character creature = null, CreatureModConfig config = null, CharacterCacheEntry ccache = null) {
             if (ccache == null) { return; }
             SLSSummoner summoningScript = creature.GetComponent<SLSSummoner>();
             Logger.LogDebug($"Setting up Summoner for {creature.name} summon script {summoningScript}");
@@ -37,6 +36,9 @@ namespace StarLevelSystem.Modifiers
             {
                 if (!setup) return;
                 if (!creature_znet.IsOwner()) return;
+                if (creature_znet == null) {
+                    creature_znet = this.gameObject.GetComponent<ZNetView>();
+                }
 
                 if (started == false) {
                     InvokeRepeating("SpawnCreaturesBatch", timeBetweenSummons, timeBetweenSummons);

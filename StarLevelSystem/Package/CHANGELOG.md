@@ -1,3 +1,12 @@
+**0.15.0**
+ ---
+ ```
+ - Adds loot leveling for Rocks (no size changes for rocks)
+	- Levels and loot increase configurable
+	- Rock levels are disabled by default (enable in the configs)
+- Adds a performance patch for wood, rock and destructible drops that will combine drops to help reduce heavy load when gaining massive amounts of resources
+ ```
+
 **0.14.6**
  ---
  ```

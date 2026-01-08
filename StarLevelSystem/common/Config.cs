@@ -58,14 +58,16 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
         public static ConfigEntry<bool> EnableColorization;
+        public static ConfigEntry<bool> EnableRockLevels;
 
         public static ConfigEntry<float> PerLevelTreeLootScale;
         public static ConfigEntry<float> PerLevelBirdLootScale;
+        public static ConfigEntry<float> PerLevelMineRockLootScale;
 
         public static ConfigEntry<int> FishMaxLevel;
         public static ConfigEntry<int> BirdMaxLevel;
         public static ConfigEntry<int> TreeMaxLevel;
-        
+        public static ConfigEntry<int> RockMaxLevel;
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
@@ -158,9 +160,11 @@ namespace StarLevelSystem
             BirdSizeScalePerLevel.SettingChanged += LevelSystem.UpdateBirdSizeOnConfigChange;
             EnableScalingFish = BindServerConfig("ObjectLevels", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
             EnableScalingFish.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
+            EnableRockLevels = BindServerConfig("ObjectLevels", "EnableRockLevels", false, "Enables level scaling for rocks.");
             FishMaxLevel = BindServerConfig("ObjectLevels", "FishMaxLevel", 20, "Sets the max level that fish can scale up to.", true, 1, 150);
-            BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
-            TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that fish can scale up to.", true, 1, 150);
+            BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that birds can scale up to.", true, 1, 150);
+            TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that trees can scale up to.", true, 1, 150);
+            RockMaxLevel = BindServerConfig("ObjectLevels", "RockMaxLevel", 10, "Sets the max level that rocks can scale up to.", true, 1, 150);
             FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
             FishSizeScalePerLevel.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
             EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
@@ -170,6 +174,7 @@ namespace StarLevelSystem
             TreeSizeScalePerLevel.SettingChanged += LevelSystem.UpdateTreeSizeOnConfigChange;
             PerLevelTreeLootScale = BindServerConfig("ObjectLevels", "PerLevelTreeLootScale", 0.2f, "The amount of additional wood that each level grants for a tree.", true);
             PerLevelBirdLootScale = BindServerConfig("ObjectLevels", "PerLevelBirdLootScale", 0.3f, "Per level additional loot that birds gain.", true);
+            PerLevelMineRockLootScale = BindServerConfig("ObjectLevels", "PerLevelMineRockLootScale", 0.2f, "The amount of additional stones and ores that each level grants for a rock", true);
 
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);

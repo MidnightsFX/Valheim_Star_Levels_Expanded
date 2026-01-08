@@ -1,11 +1,16 @@
 ﻿using BepInEx.Configuration;
 using HarmonyLib;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.InputSystem.HID;
+using static CharacterDrop;
+using static MineRock5;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -219,87 +224,166 @@ namespace StarLevelSystem.modules
             return UnityEngine.Random.Range(min_drop, max_drop);
         }
 
+        [HarmonyPatch(typeof(MineRock5))]
+        public static class MineRockperformancePatch {
+
+            //[HarmonyEmitIL(".dumps")]
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(MineRock5.DamageArea))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                        new CodeMatch(OpCodes.Ldarg_0),
+                        new CodeMatch(OpCodes.Ldfld),
+                        new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                        )
+                    .Advance(1)
+                    .RemoveInstructions(27) //25? + 2
+                    .InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldloc_3),
+                        Transpilers.EmitDelegate(MineDrop)
+                        )
+                    .ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops.");
+                return codeMatcher.Instructions();
+            }
+
+            internal static void MineDrop(MineRock5 instance, Vector3 vector) {
+                List<GameObject> drops = instance.m_dropItems.GetDropList();
+                float modifier = 1;
+                if (ValConfig.EnableRockLevels.Value) {
+                    modifier =+ (LevelSystem.DeterministicDetermineRockLevel(vector) * ValConfig.PerLevelMineRockLootScale.Value);
+                }
+                //Logger.LogDebug($"Starting MineRock5 Destroy drop sequence tree:{instance} drops:{drops}");
+                Vector3 position = vector + UnityEngine.Random.insideUnitSphere * 0.3f;
+                DropItems(position, drops, immediate: true, modifier);
+            }
+        }
+
+        [HarmonyPatch(typeof(DropOnDestroyed))]
+        public static class DropItemsNonCharacterPerformancePatch {
+            
+            //[HarmonyEmitIL(".dumps")]
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(DropOnDestroyed.OnDestroyed))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList))),
+                    new CodeMatch(OpCodes.Stloc_2)
+                    ).Advance(2)
+                    .InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldloc_1),
+                        new CodeInstruction(OpCodes.Ldloc_2),
+                        Transpilers.EmitDelegate(DropItemsOnDestroy),
+                        new CodeInstruction(OpCodes.Ret)
+                        )
+                    .ThrowIfNotMatch("Unable to patch DropOnDestroy to handle large drops.");
+                return codeMatcher.Instructions();
+            }
+
+            private static void DropItemsOnDestroy(Vector3 position, List<GameObject> drops) {
+                DropItems(position, drops);
+            }
+        }
+
         [HarmonyPatch(typeof(CharacterDrop))]
-        public static class  DropItemsPerformancePatch
-        {
+        public static class  DropItemsPerformancePatch {
             // effectively replace the drop items function since we need to drop things in a way that is not insane for large amounts of loot
             [HarmonyPatch(nameof(CharacterDrop.DropItems))]
-            public static bool Prefix(CharacterDrop __instance, List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea)
-            {
-                if (Player.m_localPlayer != null)
-                {
+            public static bool Prefix(CharacterDrop __instance, List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea) {
+                if (Player.m_localPlayer != null) {
                     Player.m_localPlayer.StartCoroutine(DropItemsAsync(drops, centerPos, dropArea));
-                }
-                else
-                {
-                    foreach (var drop in drops)
-                    {
-                        bool set_stack_size = false;
-                        int max_stack_size = 0;
-                        var item = drop.Key;
-                        int amount = drop.Value;
-                        Logger.LogDebug($"Dropping {item.name} {amount}");
-                        for (int i = 0; i < amount;)
-                        {
-                            // Drop the item at the specified position
-                            GameObject droppedItem = UnityEngine.Object.Instantiate(item, centerPos, Quaternion.identity);
-
-                            ItemDrop component = droppedItem.GetComponent<ItemDrop>();
-                            if (set_stack_size == false)
-                            {
-                                set_stack_size = true;
-                                if (component) { max_stack_size = component.m_itemData.m_shared.m_maxStackSize; }
-                            }
-
-                            // Drop in stacks if this is an item
-                            if (component is not null)
-                            {
-                                int remaining = (amount - i);
-                                if (remaining > 0)
-                                {
-                                    if (amount > max_stack_size)
-                                    {
-                                        component.m_itemData.m_stack = max_stack_size;
-                                        i += max_stack_size;
-                                    }
-                                    else
-                                    {
-                                        component.m_itemData.m_stack = remaining;
-                                        i += remaining;
-                                    }
-                                }
-                                component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
-                            }
-                            else
-                            {
-                                Character chara = droppedItem.GetComponent<Character>();
-                                if (chara == null)
-                                {
-                                    chara = droppedItem.GetComponent<Humanoid>();
-                                }
-                                if (chara != null)
-                                {
-                                    CompositeLazyCache.GetAndSetLocalCache(chara);
-                                    ModificationExtensionSystem.CreatureSetup(chara, multiply: false);
-                                }
-                            }
-
-                            Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
-                            if ((bool)component2)
-                            {
-                                Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere;
-                                if (insideUnitSphere.y < 0f)
-                                {
-                                    insideUnitSphere.y = 0f - insideUnitSphere.y;
-                                }
-                                component2.AddForce(insideUnitSphere * 5f, ForceMode.VelocityChange);
-                            }
-                            i++;
-                        }
-                    }
+                } else {
+                    DropItemsImmediate(drops, centerPos, dropArea);
                 }
 
                 return false;
+            }
+        }
+
+        internal static void DropItems(Vector3 position, List<GameObject> drops, bool immediate = false, float lootmult = 1) {
+            List<KeyValuePair<GameObject, int>> optimizeDrops = new List<KeyValuePair<GameObject, int>>();
+            Dictionary<GameObject, int> dropCollect = new Dictionary<GameObject, int>();
+            foreach (GameObject drop in drops) {
+                if (dropCollect.ContainsKey(drop)) {
+                    dropCollect[drop] += 1;
+                    continue;
+                }
+                dropCollect.Add(drop, 1);
+            }
+            // Apply loot increases or decreases if we have those set, else just add to the drop list
+            if (lootmult != 1) {
+                foreach (KeyValuePair<GameObject, int> kvp in dropCollect) {
+                    int amount = Mathf.RoundToInt(kvp.Value * lootmult);
+                    Logger.LogDebug($"{kvp.Key} loot modified: {kvp.Value} * {lootmult} = {amount}");
+                    optimizeDrops.Add(new KeyValuePair<GameObject, int>(kvp.Key, amount));
+                }
+            } else {
+                foreach (KeyValuePair<GameObject, int> ddrop in dropCollect) {
+                    optimizeDrops.Add(new KeyValuePair<GameObject, int>(ddrop.Key, ddrop.Value));
+                }
+            }
+
+            if (Player.m_localPlayer != null && immediate == false) {
+                Player.m_localPlayer.StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f));
+            } else {
+                DropItemsImmediate(optimizeDrops, position, 0.5f);
+            }
+        }
+
+        internal static void DropItemsImmediate(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea) {
+            foreach (var drop in drops) {
+                bool set_stack_size = false;
+                int max_stack_size = 0;
+                var item = drop.Key;
+                int amount = drop.Value;
+                Logger.LogDebug($"Dropping {item.name} {amount}");
+                for (int i = 0; i < amount;) {
+                    // Drop the item at the specified position
+                    GameObject droppedItem = UnityEngine.Object.Instantiate(item, centerPos, Quaternion.identity);
+
+                    ItemDrop component = droppedItem.GetComponent<ItemDrop>();
+                    if (set_stack_size == false) {
+                        set_stack_size = true;
+                        if (component) { max_stack_size = component.m_itemData.m_shared.m_maxStackSize; }
+                    }
+
+                    // Drop in stacks if this is an item
+                    if (component is not null) {
+                        int remaining = (amount - i);
+                        if (remaining > 0) {
+                            if (amount > max_stack_size) {
+                                component.m_itemData.m_stack = max_stack_size;
+                                i += max_stack_size;
+                            } else {
+                                component.m_itemData.m_stack = remaining;
+                                i += remaining;
+                            }
+                        }
+                        component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
+                    } else {
+                        Character chara = droppedItem.GetComponent<Character>();
+                        if (chara == null) {
+                            chara = droppedItem.GetComponent<Humanoid>();
+                        }
+                        if (chara != null) {
+                            CompositeLazyCache.GetAndSetLocalCache(chara);
+                            ModificationExtensionSystem.CreatureSetup(chara, multiply: false);
+                        }
+                    }
+
+                    Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
+                    if ((bool)component2) {
+                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere * dropArea;
+                        if (insideUnitSphere.y < 0f) {
+                            insideUnitSphere.y = 0f - insideUnitSphere.y;
+                        }
+                        component2.AddForce(insideUnitSphere * 5f, ForceMode.VelocityChange);
+                    }
+                    i++;
+                }
             }
         }
 
@@ -364,7 +448,7 @@ namespace StarLevelSystem.modules
                     }
                         Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
                     if ((bool)component2) {
-                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere;
+                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere * dropArea;
                         if (insideUnitSphere.y < 0f) {
                             insideUnitSphere.y = 0f - insideUnitSphere.y;
                         }

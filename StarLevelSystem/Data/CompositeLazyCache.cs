@@ -22,8 +22,9 @@ namespace StarLevelSystem.Data
             if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
             uint cid = zgo.GetZDO().m_uid.ID;
             if (treeSessionCache.ContainsKey(cid)) { return treeSessionCache[cid]; }
-            treeSessionCache.Add(cid, LevelSystem.DeterministicDetermineTreeLevel(zgo.gameObject));
-            return treeSessionCache[cid];
+            int level = LevelSystem.DeterministicDetermineTreeLevel(zgo.gameObject);
+            treeSessionCache.Add(cid, level);
+            return level;
         }
 
         public static void RemoveTreeCacheEntry(uint id) {

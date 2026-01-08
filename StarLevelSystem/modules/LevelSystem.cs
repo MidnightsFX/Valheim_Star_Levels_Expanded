@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.UIElements;
+using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -405,6 +407,13 @@ namespace StarLevelSystem.modules
             return level;
         }
 
+        public static int DeterministicDetermineRockLevel(Vector3 pos) {
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(center.x, center.z));
+            int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.RockMaxLevel.Value));
+            if (level < 1) { level = 1; }
+            return level;
+        }
+
         public static IEnumerator ModifyTreeWithLevel(TreeBase tree, int level)
         {
             yield return new WaitForSeconds(1f);
@@ -459,41 +468,23 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(TreeLog))]
         public static class SetTreeLogPassLevel
         {
-            //[HarmonyDebug]
-            [HarmonyTranspiler]
             [HarmonyPatch(nameof(TreeLog.Destroy))]
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-            {
-                var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher
-                    .MatchStartForward(
-                        new CodeMatch(OpCodes.Call),
-                        new CodeMatch(OpCodes.Ldarg_0),
-                        new CodeMatch(OpCodes.Call),
-                        new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(ZNetScene), nameof(ZNetScene.Destroy)))
-                    ).RemoveInstructions(4)
-                    .MatchStartForward(
-                        new CodeMatch(OpCodes.Ldarg_0),
-                        new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(TreeLog), nameof(TreeLog.m_subLogPrefab))),
-                        new CodeMatch(OpCodes.Ldloc_S),
-                        new CodeMatch(OpCodes.Callvirt)
-                    ).Advance(1)
-                    .RemoveInstructions(10)
-                    .InsertAndAdvance(
-                        new CodeInstruction(OpCodes.Ldloc_S, (byte)10),
-                        new CodeInstruction(OpCodes.Ldloc_S, (byte)11),
-                        Transpilers.EmitDelegate(SetupTreeLog)
-                    //).MatchStartForward(
-                    //    new CodeMatch(OpCodes.Blt_S),
-                    //    new CodeMatch(OpCodes.Ret)
-                    //).Advance(1)
-                    //.Insert(
-                    //    new CodeInstruction(OpCodes.Ldarg_0),
-                    //    Transpilers.EmitDelegate(RemoveTreeLogInst)
-                    ).ThrowIfNotMatch("Unable to patch Tree Log Child Spawn Set Level.");
-
-                return codeMatcher.Instructions();
+            [HarmonyPrefix]
+            [HarmonyPriority(Priority.Last)] // We are skipping the original, give everyone else a chance to run first.
+            static bool DropAndSpawnTreeLogs(TreeLog __instance) {
+                List<GameObject> dropList = __instance.m_dropWhenDestroyed.GetDropList();
+                //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
+                Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
+                LootLevelsExpanded.DropItems(position, dropList);
+                // Spawn logs if we should
+                if (__instance.m_subLogPrefab != null) {
+                    Quaternion logRotation = __instance.m_useSubLogPointRotation ? __instance.transform.rotation : __instance.transform.rotation;
+                    SetupTreeLog(__instance, __instance.transform, logRotation);
+                }
+                // Skip the original, we entirely rewrite it.
+                return true;
             }
+
 
             [HarmonyPatch(nameof(TreeLog.Awake))]
             [HarmonyPostfix]
@@ -546,27 +537,26 @@ namespace StarLevelSystem.modules
                 tchild.m_health += (tchild.m_health * 0.1f * level);
                 go.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
                 //Logger.LogDebug($"Setting tree level {level}");
-                nview.GetZDO().Set(SLS_TREE, level);
+                if (ValConfig.UseDeterministicTreeScaling.Value == false) {
+                    nview.GetZDO().Set(SLS_TREE, level);
+                }
                 // This is the last log point, destroy the parent
                 ZNetScene.instance.Destroy(instance.gameObject);
             }
 
             internal static void UpdateDrops(TreeLog log, int level) {
                 if (log.m_dropWhenDestroyed == null || log.m_dropWhenDestroyed.m_drops == null || level == 1) { return; }
-                List<DropTable.DropData> drops = new List<DropTable.DropData>();
                 // Update Drops
-                Logger.LogDebug($"Updating Drops for tree to: {level}");
-                foreach (var drop in log.m_dropWhenDestroyed.m_drops) {
-                    DropTable.DropData lvlupdrop = new DropTable.DropData();
-                    // Scale the amount of drops based on level
-                    lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelTreeLootScale.Value * level));
-                    lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelTreeLootScale.Value * level));
-                    Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {level}.");
-                    if (drop.m_item == null) { continue; }
-                    lvlupdrop.m_item = drop.m_item;
-                    drops.Add(lvlupdrop);
+                List<DropTable.DropData> dropReplacement = new List<DropTable.DropData>();
+                Logger.LogDebug($"Updating Drops for tree to: level-{level}");
+                foreach (DropTable.DropData drop in log.m_dropWhenDestroyed.m_drops) {
+                    DropTable.DropData newDrop = drop;
+                    newDrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelTreeLootScale.Value * level));
+                    newDrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelTreeLootScale.Value * level));
+                    Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {newDrop.m_stackMin}-{newDrop.m_stackMax} for level {level}.");
+                    dropReplacement.Add(newDrop);
                 }
-                log.m_dropWhenDestroyed.m_drops = drops;
+                log.m_dropWhenDestroyed.m_drops = dropReplacement;
             }
         }
 
@@ -1003,7 +993,7 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(SpawnSystem))]
         public static class SpawnSystemSpawnPatch
         {
-            [HarmonyEmitIL(".dumps")]
+            //[HarmonyEmitIL(".dumps")]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(SpawnSystem.Spawn))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)

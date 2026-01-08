@@ -32,7 +32,7 @@ namespace StarLevelSystem.Modifiers
                     foreach (var kvp in __result) {
                         ExtraLoot.Add(new KeyValuePair<GameObject, int>(key: kvp.Key, value: Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier)));
                     }
-                    ZNet.instance.StartCoroutine(LootLevelsExpanded.DropItemsAsync(ExtraLoot, __instance.gameObject.transform.position, 1f));
+                    LootLevelsExpanded.DropItemsImmediate(ExtraLoot, __instance.gameObject.transform.position, 1f);
                 }
             }
         }

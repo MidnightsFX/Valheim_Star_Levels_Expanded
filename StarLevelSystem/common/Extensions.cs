@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
+using System.Text;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -56,6 +57,37 @@ namespace StarLevelSystem.common
         {
             return matcher.CreateLabelAt(matcher.Pos + offset, out label);
         }
+
+        public static CodeMatcher ExtractLabel( this CodeMatcher matcher, out Label elabel, int searchrange = 1) {
+            elabel = default;
+
+            var list = matcher.Instructions();
+            int end = Math.Min(list.Count, matcher.Pos + 1 + searchrange);
+            bool found = false;
+            for (int i = matcher.Pos + 1; i < end; i++) {
+                var instr = list[i];
+                if (instr.labels is { Count: > 0 }) {
+                    elabel = instr.labels[0];
+                    instr.labels.RemoveAt(0);
+                    return matcher; // keep matcher at current position
+                }
+            }
+
+            if (found == false) {
+                throw new InvalidOperationException($"No label found within {searchrange} instructions ahead of position {matcher.Pos}.");
+            }
+            
+            return matcher; // keep matcher at current position
+        }
+
+
+        public static CodeMatcher ExtractThisLabel(this CodeMatcher matcher, out Label label) {
+            label = matcher.Labels.First();
+            matcher.Labels.Clear();
+
+            return matcher;
+        }
+
 
         public static void Times(this int count, Action action)
         {

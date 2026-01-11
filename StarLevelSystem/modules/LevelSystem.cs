@@ -470,7 +470,7 @@ namespace StarLevelSystem.modules
         {
             [HarmonyPatch(nameof(TreeLog.Destroy))]
             [HarmonyPrefix]
-            [HarmonyPriority(Priority.Last)] // We are skipping the original, give everyone else a chance to run first.
+            //[HarmonyPriority(Priority.LowerThanNormal)] // We are skipping the original, give everyone else a chance to run first.
             static bool DropAndSpawnTreeLogs(TreeLog __instance) {
                 List<GameObject> dropList = __instance.m_dropWhenDestroyed.GetDropList();
                 //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
@@ -478,17 +478,25 @@ namespace StarLevelSystem.modules
                 LootLevelsExpanded.DropItems(position, dropList);
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {
-                    Quaternion logRotation = __instance.m_useSubLogPointRotation ? __instance.transform.rotation : __instance.transform.rotation;
-                    SetupTreeLog(__instance, __instance.transform, logRotation);
+                    foreach (Transform transform in __instance.m_subLogPoints) {
+                        Quaternion logRotation = __instance.m_useSubLogPointRotation ? __instance.transform.rotation : __instance.transform.rotation;
+                        Logger.LogDebug($"Spawning Treelog at point {transform.position} rot:{logRotation}");
+                        SetupTreeLog(__instance, transform, logRotation);
+                    }
                 }
                 // Skip the original, we entirely rewrite it.
-                return true;
+                if (ValConfig.EnableTreeScaling.Value == true) {
+                    if (__instance.m_nview != null && __instance.m_nview.GetZDO() != null) { CompositeLazyCache.RemoveTreeCacheEntry(__instance.m_nview.GetZDO().m_uid.ID); }
+                }
+                ZNetScene.instance.Destroy(__instance.gameObject);
+                return false;
             }
 
 
             [HarmonyPatch(nameof(TreeLog.Awake))]
             [HarmonyPostfix]
             static void SetupAwakeLog(TreeLog __instance) {
+                if (ValConfig.EnableTreeScaling.Value == false) { return; }
                 int level = 1;
                 if (ValConfig.UseDeterministicTreeScaling.Value) {
                     level = CompositeLazyCache.GetOrAddCachedTreeEntry(__instance.m_nview);
@@ -503,15 +511,6 @@ namespace StarLevelSystem.modules
                 __instance.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
             }
 
-            [HarmonyPatch(nameof(TreeLog.Destroy))]
-            [HarmonyPostfix]
-            internal static void RemoveTreeLogInst(TreeLog __instance) {
-                //Logger.LogDebug("Destroying Treelog");
-                if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) { return; }
-                CompositeLazyCache.RemoveTreeCacheEntry(__instance.m_nview.GetZDO().m_uid.ID);
-                ZNetScene.instance.Destroy(__instance.gameObject);
-            }
-
             internal static void SetupTreeLog(TreeLog instance, Transform tform, Quaternion qt)
             {
                 GameObject go = GameObject.Instantiate(instance.m_subLogPrefab, tform.position, qt);
@@ -521,14 +520,16 @@ namespace StarLevelSystem.modules
                 nview.SetLocalScale(instance.transform.localScale);
                 // pass on the level
                 // Logger.LogDebug($"Getting tree level");
+
                 int level = 1;
-                if (ValConfig.UseDeterministicTreeScaling.Value) {
-                    level = CompositeLazyCache.GetOrAddCachedTreeEntry(instance.m_nview);
-                } else {
-                    if (instance.m_nview.GetZDO() != null)
-                    {
-                        //Logger.LogDebug("Checking stored Zvalue for tree level");
-                        level = instance.m_nview.GetZDO().GetInt(SLS_TREE, 1);
+                if (ValConfig.EnableTreeScaling.Value == true) {
+                    if (ValConfig.UseDeterministicTreeScaling.Value) {
+                        level = CompositeLazyCache.GetOrAddCachedTreeEntry(instance.m_nview);
+                    } else {
+                        if (instance.m_nview.GetZDO() != null) {
+                            //Logger.LogDebug("Checking stored Zvalue for tree level");
+                            level = instance.m_nview.GetZDO().GetInt(SLS_TREE, 1);
+                        }
                     }
                 }
 
@@ -540,8 +541,6 @@ namespace StarLevelSystem.modules
                 if (ValConfig.UseDeterministicTreeScaling.Value == false) {
                     nview.GetZDO().Set(SLS_TREE, level);
                 }
-                // This is the last log point, destroy the parent
-                ZNetScene.instance.Destroy(instance.gameObject);
             }
 
             internal static void UpdateDrops(TreeLog log, int level) {

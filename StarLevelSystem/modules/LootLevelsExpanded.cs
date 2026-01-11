@@ -84,7 +84,7 @@ namespace StarLevelSystem.modules
                 if (__instance.m_character == null) { return true; }
                 string name = Utils.GetPrefabName(__instance.m_character.gameObject);
                 // Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
-                if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot == null) { return true; }
+                if (LootSystemData.SLS_Drop_Settings == null || LootSystemData.SLS_Drop_Settings.characterSpecificLoot == null) { return true; }
                 if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.characterSpecificLoot.ContainsKey(name) != true) { return true; }
 
                 List<KeyValuePair<GameObject, int>> drop_results = new List<KeyValuePair<GameObject, int>>();
@@ -252,7 +252,7 @@ namespace StarLevelSystem.modules
                 List<GameObject> drops = instance.m_dropItems.GetDropList();
                 float modifier = 1;
                 if (ValConfig.EnableRockLevels.Value) {
-                    modifier =+ (LevelSystem.DeterministicDetermineRockLevel(vector) * ValConfig.PerLevelMineRockLootScale.Value);
+                    modifier =+ 1 + (LevelSystem.DeterministicDetermineRockLevel(vector) * ValConfig.PerLevelMineRockLootScale.Value);
                 }
                 //Logger.LogDebug($"Starting MineRock5 Destroy drop sequence tree:{instance} drops:{drops}");
                 Vector3 position = vector + UnityEngine.Random.insideUnitSphere * 0.3f;
@@ -473,8 +473,8 @@ namespace StarLevelSystem.modules
 
         private static DistanceLootModifier SelectDistanceFromCenterLootBonus(float distance_from_center)
         {
-            DistanceLootModifier distance_levelup_bonuses = new DistanceLootModifier() { };
-            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LootSystemData.SLS_Drop_Settings.DistanceLootModifier != null)
+            DistanceLootModifier distance_levelup_bonuses = new DistanceLootModifier();
+            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.DistanceLootModifier != null)
             {
                 // Check if we are in a distance level bonus area
                 foreach (KeyValuePair<int, DistanceLootModifier> kvp in LootSystemData.SLS_Drop_Settings.DistanceLootModifier)

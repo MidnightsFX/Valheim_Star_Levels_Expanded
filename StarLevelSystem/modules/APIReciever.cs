@@ -34,6 +34,10 @@ namespace StarLevelSystem.modules
             CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute] = value;
+            if ((CreatureBaseAttribute)attribute == CreatureBaseAttribute.Size) {
+                // Size is persisted
+                ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, cdc);
+            }
             return true;
         }
 
@@ -54,7 +58,7 @@ namespace StarLevelSystem.modules
                 scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-
+            ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, scd);
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
             ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, scd, true);
@@ -73,6 +77,10 @@ namespace StarLevelSystem.modules
             CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute] = value;
+            if ((CreaturePerLevelAttribute)attribute == CreaturePerLevelAttribute.SizePerLevel) {
+                // Size is persisted
+                ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, cdc);
+            }
             return true;
         }
 

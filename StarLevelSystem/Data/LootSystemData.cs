@@ -209,7 +209,7 @@ namespace StarLevelSystem.Data
         }
 
         public static void AttachLootPrefabs(LootSettings lootconfig) {
-            if (lootconfig.characterSpecificLoot == null || lootconfig.characterSpecificLoot.Count == 0) { return; }
+            if (lootconfig == null || lootconfig.characterSpecificLoot == null || lootconfig.characterSpecificLoot.Count == 0) { return; }
             foreach (var dropset in lootconfig.characterSpecificLoot) {
                 foreach (var itemdrop in dropset.Value) {
                     itemdrop.SetupDrop();

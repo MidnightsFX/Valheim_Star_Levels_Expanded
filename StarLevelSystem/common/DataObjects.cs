@@ -52,6 +52,7 @@ namespace StarLevelSystem.common
             CreatureBaseAttribute.BaseDamage,
             CreatureBaseAttribute.Speed,
             CreatureBaseAttribute.AttackSpeed,
+            CreatureBaseAttribute.Size
         };
 
         public enum CreaturePerLevelAttribute

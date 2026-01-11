@@ -423,6 +423,27 @@ namespace StarLevelSystem.modules
             }
         }
 
+        internal static void SetCreatureSizeFromCCE(Character creature, CharacterCacheEntry cDetails) {
+            GameObject creatureref = PrefabManager.Instance.GetPrefab(cDetails.RefCreatureName);
+            UpdateSizeZNet(creature.gameObject, creature.m_nview, cDetails, creatureref);
+        }
+
+        internal static void UpdateSizeZNet(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, GameObject creatureref) {
+            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
+            float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
+
+            float creature_level_size = (per_level_mod * cDetails.Level);
+            float scale = base_size_mod + creature_level_size;
+
+            if (creatureref) {
+                Vector3 sizeEstimate = creatureref.transform.localScale * scale;
+                creature.transform.localScale = sizeEstimate;
+                //Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+            }
+            zview.GetZDO().Set(SLS_SIZE, scale);
+            Physics.SyncTransforms();
+        }
+
         internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
             // Don't scale in dungeons
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false || cDetails == null) {
@@ -452,19 +473,7 @@ namespace StarLevelSystem.modules
                 return;
             }
 
-            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
-            float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
-
-            float creature_level_size = (per_level_mod * cDetails.Level);
-            float scale = base_size_mod + creature_level_size;
-
-            if (creatureref) {
-                Vector3 sizeEstimate = creatureref.transform.localScale * scale;
-                creature.transform.localScale = sizeEstimate;
-                //Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
-            }
-            zview.GetZDO().Set(SLS_SIZE, scale);
-            Physics.SyncTransforms();
+            UpdateSizeZNet(creature, zview, cDetails, creatureref);
         }
 
         public static void ApplySizeModificationToObjWhenZReady(GameObject obj, ZNetView zview)

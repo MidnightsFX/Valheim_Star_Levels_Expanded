@@ -1,3 +1,11 @@
+**0.15.1**
+ ---
+ ```
+ - Prevents stone level scaling from being negative
+ - Fixes an issue where logs could spawn more than 2 segments on destruction
+ - Fixes an issue where deleting your configuration could result in loot table errors
+ ```
+
 **0.15.0**
  ---
  ```

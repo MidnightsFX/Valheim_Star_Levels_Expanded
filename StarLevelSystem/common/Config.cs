@@ -92,6 +92,7 @@ namespace StarLevelSystem
         public static ConfigEntry<int> FallbackDelayBeforeCreatureSetup;
         public static ConfigEntry<float> InitialDelayBeforeSetup;
         public static ConfigEntry<bool> EnableDebugOutputForDamage;
+        public static ConfigEntry<bool> EnableDebugOutputLevelRolls;
 
         public ValConfig(ConfigFile cf)
         {
@@ -123,6 +124,10 @@ namespace StarLevelSystem
             Logger.CheckEnableDebugLogging();
             EnableDebugOutputForDamage = Config.Bind("Client config", "EnableDebugOutputForDamage", false,
                 new ConfigDescription("Enables Detailed logging for damage calculations, warning, lots of logging.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
+            EnableDebugOutputLevelRolls = Config.Bind("Client config", "EnableDebugOutputLevelRolls", false,
+                new ConfigDescription("Enables Detailed logging for creature levelup rolls.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
 

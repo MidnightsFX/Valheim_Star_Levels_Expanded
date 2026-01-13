@@ -1,3 +1,12 @@
+**0.15.2**
+ ---
+ ```
+ - Improves max level reduction
+ - Fixes level distance bonuses being applied as a multiplier instead of additive
+	- distance multipliers are still available in the form of biome distance scalars, by default these are used to curb extreme distance difficulty increases for Ashlands and DeepNorth
+ - Adds client side configuration to enable viewing final level calculation math and all modifiers that were applied to reach that level
+ ```
+
 **0.15.1**
  ---
  ```

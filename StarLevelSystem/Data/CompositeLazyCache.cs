@@ -174,9 +174,10 @@ namespace StarLevelSystem.Data
             {
                 // Rebuild level?
                 characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
-                Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {ValConfig.MaxLevel.Value + 1}, resetting to {characterEntry.Level}");
-                chara.SetLevel(characterEntry.Level);
-                chara.m_level = characterEntry.Level;
+                int maxlevel = ValConfig.MaxLevel.Value + 1;
+                Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
+                chara.SetLevel(maxlevel);
+                chara.m_level = maxlevel;
                 ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, characterEntry, force_update: true);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
                 LevelUI.InvalidateCacheEntry(chara);

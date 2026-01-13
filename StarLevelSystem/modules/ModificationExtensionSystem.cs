@@ -288,12 +288,9 @@ namespace StarLevelSystem.modules
                 // Remove drops before destroying the creature to ensure that we don't litter drops everywhere
                 CharacterDrop cd = go.GetComponent<CharacterDrop>();
                 if (cd != null) { GameObject.Destroy(cd); }
+                //Logger.LogDebug($"Destroying object {go.name}.");
                 ZNetScene.instance.Destroy(go);
             }
-        }
-
-        static public void SetupCreatureZOwner(Character __instance, int level_override = 0, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null) {
-
         }
 
         static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)

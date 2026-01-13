@@ -2,6 +2,7 @@
 using Jotunn;
 using Jotunn.Extensions;
 using Jotunn.Managers;
+using MonoMod.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -13,6 +14,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
+using Extensions = StarLevelSystem.common.Extensions;
 
 namespace StarLevelSystem.modules
 {
@@ -190,31 +192,41 @@ namespace StarLevelSystem.modules
 
         // Consider decision tree for levelups to reduce iterations
         public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f) {
-            // Do we want to do a re-roll after certain points?
             int selected_level = 0;
-            //Logger.LogDebug($"Determine with: roll:{roll} maxlevel:{maxLevel} levelupchance:{creature_levelup_chance} levelup_bonus:{levelup_bonus} distance_influence:{distance_influence} nightbonus:{nightBonus}");
             creature_levelup_chance ??= LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
 
-            //foreach (var lb in levelup_bonus) {
-            //    Logger.LogDebug($"levelup bonus: {lb.Key} {lb.Value}");
-            //}
-            foreach (KeyValuePair<int, float> kvp in creature_levelup_chance) {
-                //Logger.LogDebug($"levelup k: {kvp.Key} v: {kvp.Value}");
-                if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) {
-                    float distance_bonus = ((1f + levelup_bonus[kvp.Key]) * distance_influence);
-                    float levelup_req = kvp.Value * nightBonus * distance_bonus;
-                    //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value} * {nightBonus} * {distance_bonus}");
-                    if (roll >= levelup_req || kvp.Key >= maxLevel) {
-                        selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = {kvp.Value}(base) * {nightBonus}(Night) * {distance_bonus}(Distance) | Selected Level: {selected_level}");
-                        break;
+            // Build new levelup definitions with bonuses applied
+            SortedDictionary<int, float> LevelUpWithBonus = new SortedDictionary<int, float>() { };
+            LevelUpWithBonus.AddRange<int, float>(creature_levelup_chance);
+            if (levelup_bonus != null) {
+                foreach (KeyValuePair<int, float> kvp in levelup_bonus) {
+                    if (LevelUpWithBonus.ContainsKey(kvp.Key)) {
+                        LevelUpWithBonus[kvp.Key] += kvp.Value;
+                    } else {
+                        LevelUpWithBonus[kvp.Key] = kvp.Value;
                     }
-                } else {
-                    if (roll >= (kvp.Value * nightBonus * distance_influence) || kvp.Key >= maxLevel) {
-                        selected_level = kvp.Key;
-                        //Logger.LogDebug($"Level Roll: {roll} >= {kvp.Value * nightBonus * distance_influence} = {kvp.Value}(base) * {nightBonus}(night) {distance_influence}(distance) || {kvp.Key} >= {maxLevel} | Selected Level: {selected_level}");
-                        break;
+                }
+            }
+
+            foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {
+                float levelup_req = kvp.Value * nightBonus * distance_influence;
+                //if (ValConfig.EnableDebugOutputLevelRolls.Value) {
+                //    float bonus = 0;
+                //    if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
+                //    float baseval = 0;
+                //    if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
+                //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(bonus) ] * {nightBonus} * {distance_influence} | {kvp.Key}");
+                //}
+                if (roll >= levelup_req || kvp.Key >= maxLevel) {
+                    selected_level = kvp.Key;
+                    if (ValConfig.EnableDebugOutputLevelRolls.Value) {
+                        float bonus = 0;
+                        if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
+                        float baseval = 0;
+                        if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) ] * {nightBonus}(Night) * {distance_influence}(DistanceInfluence) | max-level used: {maxLevel} Selected Level: {selected_level}");
                     }
+                    break;
                 }
             }
             return selected_level;
@@ -780,7 +792,10 @@ namespace StarLevelSystem.modules
                     level = childChar.m_level;
                     grownup.SetLevel(childChar.m_level);
                 }
-                CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
+                CharacterCacheEntry cdc_grownup = CompositeLazyCache.GetAndSetLocalCache(grownup);
+                cdc_grownup.CreatureModifiers = cdc_child.CreatureModifiers;
+                cdc_grownup.Level = cdc_child.Level;
+                //CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
                 CompositeLazyCache.SetCreatureModifiers(grownup, cdc_child.CreatureModifiers);
                 ModificationExtensionSystem.CreatureSpawnerSetup(grownup, level, multiply: false);
             }

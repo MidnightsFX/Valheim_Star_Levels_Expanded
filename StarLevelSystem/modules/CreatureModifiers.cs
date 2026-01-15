@@ -137,7 +137,7 @@ namespace StarLevelSystem.modules
             int selectedPrefixes = 1; // Starts at 1 since it only gains when one is added, and needs to be greater than 0 to skip if no prefixes are allowed
             List<string> remainingNameSegments = modifiers.Keys.ToList();
             if (ValConfig.MinorModifiersFirstInName.Value) {
-                remainingNameSegments = modifiers.OrderBy(kvp => kvp.Value).Select(kvp => kvp.Key).ToList();
+                remainingNameSegments = modifiers.OrderBy(kvp => kvp.Value).Select(kvp => kvp.Key).Reverse().ToList();
             }
             foreach (string modifierName in remainingNameSegments)
             {
@@ -208,7 +208,7 @@ namespace StarLevelSystem.modules
                     float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
                     if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
                     // Logger.LogDebug($"Setting up to {majorMods} major at chance {chanceMajorMod} and {minorMods} minor modifiers with chances {chanceMinorMod}");
-                    creatureModifiers = CreatureModifiers.SelectModifiers(character, creatureName, biome, level, maxMajorMods: majorMods, maxMinorMods: minorMods, chanceMajorMods: chanceMajorMod, chanceMinorMods: chanceMinorMod, notAllowedModifiers: notAllowedModifiers);
+                    creatureModifiers = CreatureModifiers.SelectModifiers(character, creatureName, biome, level, maxMajorMods: majorMods, maxMinorMods: minorMods, chanceMajorMods: chanceMajorMod, chanceMinorMods: chanceMinorMod, notAllowedModifiers: notAllowedModifiers, requiredModifiers: requiredModifiers);
                 }
             }
 

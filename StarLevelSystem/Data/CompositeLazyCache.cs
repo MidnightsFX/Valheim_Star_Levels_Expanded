@@ -115,11 +115,11 @@ namespace StarLevelSystem.Data
             }
 
             if (requiredModifiers == null) {
-                if (creatureSettings.RequiredModifiers != null) {
+                if (creatureSettings != null && creatureSettings.RequiredModifiers != null) {
                     requiredModifiers = creatureSettings.RequiredModifiers;
                 }
             } else {
-                if (creatureSettings.RequiredModifiers != null) {
+                if (creatureSettings != null && creatureSettings.RequiredModifiers != null) {
                     // Merge required modifiers
                     foreach (var reqmod in creatureSettings.RequiredModifiers) {
                         if (requiredModifiers.ContainsKey(reqmod.Key) == false) {

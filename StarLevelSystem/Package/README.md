@@ -81,14 +81,26 @@ to 26 and the distance modifier is being reduced by 50%
 Creature specific configuration allows you to override what is set in the biome definition for a creature, which allows more
 fine-grained control of how a specific creature should be modified.
 
-Lets take a look at Eikthyr
+Lets take a look at this creature definition
 ```
-  Eikthyr:                            # The prefab of the creature to modify, this can be any valid creature.
-    creatureMaxLevelOverride: 4       # The maximum level that this creature can level up to, regardless of biome
-    creaturePerLevelValueModifiers:   # Creature base and per level modifiers are supported here, just like the ones defined in Biome configuration
-      HealthPerLevel: 0.3             # 30% (0.3) more health per level
-      DamagePerLevel: 0.05            # 5% (0.05) more damage per level
-      SizePerLevel: 0.07              # 7% (0.07) larger per level
+  Troll:                                # Creature prefab name, must match exactly, you can find this using VNEI, the wiki, or Jotunn prefab documentation
+    customCreatureLevelUpChance:        # Sets the levelup chance for this specific creature, overrides the default values, can still be modified by distance bonuses
+      1: 100                            # Gauranteed level 1
+      2: 50                             # 50% chance to reach level 2
+      3: 5                              # 5% chance to reach level 3
+    creatureMaxLevelOverride: 11        # Overrides the max level for this creature (11 instead of biome default)
+    creatureBaseValueModifiers:         # Overrides the base stat modifiers for this creature, values below 1 reduce stats, above 1 increase stats
+      BaseHealth: 1.05                  # Base health is increased by 5%
+      BaseDamage: 0.95                  # Base damage is reduced by 5%
+      Speed: 1.05                       # Speed is increased by 5%
+      Size: 1.05                        # Size is increased by 5%
+      AttackSpeed: 1.05                 # Attack speed is increased by 5%
+    creaturePerLevelValueModifiers:     # Per level stat modifiers for this creature, these are multiplied by the creatures level and applied to the total stat value
+      HealthPerLevel: 0.3               # Each star provides 30% more health
+      DamagePerLevel: 0.05              # Each star provides 5% more damage
+      SizePerLevel: 0.005               # Each star provides 0.5% more size
+    requiredModifiers:                  # Modifiers that this creature will always spawn with, regardless of level, chance or modifier limit, but still count towards max modifier count
+      Poison: Major                     # Trolls will always spawn with the Poison major modifier, Modifier names can be found in Modifiers.yaml, along with their categories
 ```
 
 #### Levelup Chance
@@ -100,23 +112,44 @@ eg:
 ```
 distanceLevelBonus:
   1250:
-    1: 0.25
+    1: 25
 ```
-Will give all creatures a +25% chance to reach the first star level, if they are at least 1250m from the center. This value is then modified bast on biome settings.
-In our example biome file we have a `1.5` value for the distance modifier so `1.5 x 0.25 = 0.375` would be the increase provided to reach level 1.
+Will give all creatures a +25% chance to reach the first star level, if they are at least 1250m from the center. This value is then modified based on biome settings.
+In our example biome file we have a `1.5` value for the distance modifier so `1.5 x 25 = 37.5` would be the increase provided to reach level 1.
 
-If the total bonus and base value exceeds `1.0` that level will be gaurenteed, every creature with that condition will be at a minimum that level.
-You can see this in some of the later distance bonuses which slowly drive of the guarnteed spawn level of creatures.
+If the total bonus and base value exceeds `100` that level will be gaurenteed, every creature with that condition will be at a minimum that level.
+You can see this in some of the later distance bonuses which slowly drive of the guaranteed spawn level of creatures up
 
 ```
   5000:
-    1: 1      
-    2: 1      # All creatures at least 5000m from center will be level 2+
-    3: 0.75
-    4: 0.5
-    5: 0.25
-    6: 0.15
+    1: 100      
+    2: 100      # All creatures at least 5000m from center will be level 2+
+    3: 75
+    4: 50
+    5: 25
+    6: 15
 ```
+
+You can also use the distanceLevelBonus to add additional levels, make it so that certain distances are required to spawn higher level enemies.
+
+```
+defaultCreatureLevelUpChance:
+  1: 20
+  2: 15
+distanceLevelBonus:
+  1250:
+    1: 25
+    2: 15
+    3: 5
+  5000:
+    1: 100      
+    2: 100
+    3: 75
+    4: 50
+```
+
+With the above configuation the region closest to start up to 1250m will only be able to spawn level 1 and 2 creatures. Between 1250m and 5000m creatures can spawn up to level 3, and beyond 5000m creatures can spawn up to level 4.
+
 
 Now, we've walked through a lot of the bonuses to level up chance but lets take a look at the base values too. 
 Star level systems default config has a relatively large spawn range- which is limited by biome configuration.

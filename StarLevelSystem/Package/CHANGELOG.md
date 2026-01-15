@@ -1,3 +1,15 @@
+**0.15.3**
+ ---
+ ```
+ - Configuration to set ordering of name generation for creatures with modifiers
+ - Updated documentation to cover how to limit and expand star levels based on distance
+ - Fixes requiredModifiers not being enforced correctly and exposes configuration to set requiredModifiers per creature
+	- requiredModifiers can be added to any entry in creatureConfiguration, modifiers must include their name and type eg: 
+	  Boar:
+		requiredModifiers:
+		  Fire: Major
+ ```
+
 **0.15.2**
  ---
  ```

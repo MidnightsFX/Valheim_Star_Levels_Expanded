@@ -218,6 +218,7 @@ namespace StarLevelSystem.common
             [DefaultValue(-1f)]
             public float ChanceForBossModifier { get; set; } = -1f;
             [DefaultValue(1f)]
+            public Dictionary<string, ModifierType> RequiredModifiers { get; set; }
             public float SpawnRateModifier { get; set; } = 1f;
             public NightSettings NightSettings { get; set; }
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }

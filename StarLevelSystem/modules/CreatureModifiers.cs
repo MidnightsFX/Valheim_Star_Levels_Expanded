@@ -136,6 +136,9 @@ namespace StarLevelSystem.modules
             int nameEntries = 0;
             int selectedPrefixes = 1; // Starts at 1 since it only gains when one is added, and needs to be greater than 0 to skip if no prefixes are allowed
             List<string> remainingNameSegments = modifiers.Keys.ToList();
+            if (ValConfig.MinorModifiersFirstInName.Value) {
+                remainingNameSegments = modifiers.OrderBy(kvp => kvp.Value).Select(kvp => kvp.Key).ToList();
+            }
             foreach (string modifierName in remainingNameSegments)
             {
                 // Don't show modifier names for creatures that have a limit number of modifiers based on their level

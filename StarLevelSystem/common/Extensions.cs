@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using UnityEngine;
@@ -52,23 +53,36 @@ namespace StarLevelSystem.common
             return !firstNotSecond.Any() && !secondNotFirst.Any();
         }
 
+        public static int GetLabelValue(Label label) {
+            MethodInfo privateMethod = typeof(Label).GetMethod("GetLabelValue", BindingFlags.NonPublic | BindingFlags.Instance);
+            return (int)privateMethod.Invoke(label, null);
+        }
 
         public static CodeMatcher CreateLabelOffset(this CodeMatcher matcher, out Label label, int offset = 0)
         {
             return matcher.CreateLabelAt(matcher.Pos + offset, out label);
         }
 
-        public static CodeMatcher ExtractLabel( this CodeMatcher matcher, out Label elabel, int searchrange = 1) {
+        public static CodeMatcher ExtractLabel( this CodeMatcher matcher, out Label elabel, int searchrange = 1, int labelToSelect = 0) {
             elabel = default;
 
             var list = matcher.Instructions();
             int end = Math.Min(list.Count, matcher.Pos + 1 + searchrange);
             bool found = false;
+            List<Label> foundLabels = new List<Label>();
             for (int i = matcher.Pos + 1; i < end; i++) {
                 var instr = list[i];
                 if (instr.labels is { Count: > 0 }) {
-                    elabel = instr.labels[0];
-                    instr.labels.RemoveAt(0);
+                    Logger.LogDebug($"found labels: {instr.labels.Count}");
+                    int labelindex = 0;
+                    foreach(Label lb in instr.labels) {
+                        foundLabels.Add(lb);
+                        if (foundLabels.Count == labelToSelect + 1) {
+                            Logger.LogDebug($"Selected Label {GetLabelValue(lb)}");
+                            instr.labels.RemoveAt(labelindex);
+                        }
+                        labelindex++;
+                    }
                     return matcher; // keep matcher at current position
                 }
             }
@@ -80,8 +94,56 @@ namespace StarLevelSystem.common
             return matcher; // keep matcher at current position
         }
 
+        public static CodeMatcher ExtractLabelOnNextInstructionOfType(this CodeMatcher matcher, CodeInstruction op, out Label label) {
+            List<CodeInstruction> list = matcher.Instructions().GetRange(matcher.Pos - 1, matcher.Instructions().Count - matcher.Pos - 1);
+            bool matched = false;
+            label = default;
+            foreach (CodeInstruction ci in list) {
+                if (ci != op) { continue; }
 
-        public static CodeMatcher ExtractThisLabel(this CodeMatcher matcher, out Label label) {
+                matched = true;
+                if (ci.labels.Count > 0) {
+                    label = ci.labels[0];
+                } else {
+                    Logger.LogWarning($"No Labels found on the selected CodeInstruction {ci.opcode}");
+                }
+            }
+            if (!matched) {
+                throw new InvalidOperationException($"Did not match an opcode.");
+            }
+
+            return matcher; // keep matcher at current position
+        }
+
+        public static CodeMatcher SelectLabelInRange(this CodeMatcher matcher, int key, out Label label, int keyindex = 0) {
+            List<CodeInstruction> list = matcher.Instructions();
+            int index = 0;
+            label = default;
+            Dictionary<int, List<Label>> labelLoc = new Dictionary<int, List<Label>>();
+            foreach (CodeInstruction ci in list) {
+                if (ci.labels.Count > 0) {
+                    labelLoc.Add(index, ci.labels);
+                    Logger.LogDebug($"Found Label at index {index} on {ci.opcode} label-target: {ci.labels[0]}");
+                }
+                index++;
+            }
+            if (labelLoc.ContainsKey(key)) {
+                if (labelLoc[key].Count > 0) {
+                    label = labelLoc[key][keyindex];
+                } else {
+                    label = labelLoc[key][0];
+                }
+            } else {
+                Logger.LogWarning($"Keyed label was not found with key {key}");
+            }
+
+            Logger.LogDebug($"Label indexes {String.Join(",",labelLoc.Keys)} current position: {matcher.Pos}");
+
+            return matcher; // keep matcher at current position
+        }
+
+
+        public static CodeMatcher ExtractFirstLabel(this CodeMatcher matcher, out Label label) {
             label = matcher.Labels.First();
             matcher.Labels.Clear();
 

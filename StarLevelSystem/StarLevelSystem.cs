@@ -7,6 +7,7 @@ using Jotunn.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
@@ -16,11 +17,12 @@ namespace StarLevelSystem
     [BepInDependency(Jotunn.Main.ModGuid)]
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
     [BepInIncompatibility("org.bepinex.plugins.creaturelevelcontrol")]
+    [BepInDependency("asharppen.valheim.drop_that", BepInDependency.DependencyFlags.SoftDependency)]
     internal class StarLevelSystem : BaseUnityPlugin
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.15.3";
+        public const string PluginVersion = "0.16.0";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -29,6 +31,7 @@ namespace StarLevelSystem
         public static AssetBundle EmbeddedResourceBundle;
         public static Harmony HarmonyInstance { get; private set; }
         public static ManualLogSource Log;
+        public static bool IsDropThatEnabled = false;
 
         public void Awake()
         {
@@ -36,6 +39,8 @@ namespace StarLevelSystem
             cfg = new ValConfig(Config);
             cfg.SetupConfigRPCs();
             cfg.LoadYamlConfigs();
+
+            CheckModCompat();
 
             EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
@@ -53,6 +58,12 @@ namespace StarLevelSystem
 
             TerminalCommands.AddCommands();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
+        }
+
+        internal static void CheckModCompat() {
+            if (BepInExUtils.GetPlugins().Keys.Contains("asharppen.valheim.drop_that")) {
+                IsDropThatEnabled = true;
+            }
         }
     }
 }

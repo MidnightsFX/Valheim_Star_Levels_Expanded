@@ -73,6 +73,7 @@ namespace StarLevelSystem.modules
                 }
                 if (creatureColorizationSettings.characterColorGenerators != null) {
                     Logger.LogInfo("Running color generators");
+                    creatureColorizationSettings.characterSpecificColorization ??= new Dictionary<string, Dictionary<int, ColorDef>>();
                     foreach (var entry in creatureColorizationSettings.characterColorGenerators) {
                         Logger.LogInfo($"Building color range for {entry.Key}");
                         foreach (var colorRange in entry.Value) { BuildAddColorRange(entry.Key, colorRange); }
@@ -124,7 +125,7 @@ namespace StarLevelSystem.modules
             if (cgo == null) { return null; }
             string cname = Utils.GetPrefabName(cgo.gameObject);
             //Logger.LogDebug($"Checking for character specific colorization {cname}");
-            if (creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname) && creatureColorizationSettings.characterSpecificColorization[cname].ContainsKey(level - 1)) {
+            if (creatureColorizationSettings.characterSpecificColorization != null && creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname) && creatureColorizationSettings.characterSpecificColorization[cname].ContainsKey(level - 1)) {
                 if (creatureColorizationSettings.characterSpecificColorization[cname].TryGetValue((level-1), out ColorDef charspecific_color_def)) {
                     //Logger.LogDebug($"Found character specific colorization for {cname} - {level}");
                     return charspecific_color_def;

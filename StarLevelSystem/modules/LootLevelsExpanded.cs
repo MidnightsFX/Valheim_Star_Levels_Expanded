@@ -5,12 +5,12 @@ using StarLevelSystem.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
-using UnityEngine.InputSystem.HID;
+using UnityEngine.UIElements;
+using static CharacterAnimEvent;
 using static CharacterDrop;
-using static MineRock5;
+using static Mono.Security.X509.X520;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -92,11 +92,11 @@ namespace StarLevelSystem.modules
                 if (__instance.m_character != null) {
                     level = __instance.m_character.m_level;
                 }
-                
-                SelectLootSettings(__instance.m_character, out DistanceLootModifier distance_bonus, out Heightmap.Biome biome);
+               
+                SelectCharacterLootSettings(__instance.m_character, out DistanceLootModifier distance_bonus);
                 // Logger.LogDebug($"SLS Custom drop set for {name} - level {level}");
                 // Use modified loot drop settings
-                foreach(ExtendedDrop loot in LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name]) {
+                foreach(ExtendedCharacterDrop loot in LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name]) {
                     // Skip this loop drop if it doesn't drop for tamed creatures or only drops for tamed creatures
                     if (__instance.m_character != null) {
                         // Logger.LogDebug($"Checking if drop is tame only or non-tame only.");
@@ -110,7 +110,7 @@ namespace StarLevelSystem.modules
                     if (loot.Drop.Chance < 1) {
                         float luck_roll = UnityEngine.Random.value;
                         float chance = loot.Drop.Chance;
-                        if (loot.ChanceScaleFactor > 0f) { chance *= (scale_multiplier * level); }
+                        if (loot.ChanceScaleFactor > 0f) { chance *= 1 + (loot.ChanceScaleFactor * level); }
                         // check the chance for this to be rolled
                         if (luck_roll > chance) {
                             // Logger.LogDebug($"Drop {loot.Drop.Prefab} failed random drop chance ({luck_roll} < {chance}).");
@@ -125,7 +125,7 @@ namespace StarLevelSystem.modules
                     }
 
                     // Modify the multiplier for how many this drops based on local players
-                    if (loot.ScalePerNearbyPlayer) {
+                    if (loot.Drop.OnePerPlayer) {
                         scale_multiplier += Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
                         // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
                     }
@@ -169,7 +169,13 @@ namespace StarLevelSystem.modules
                     // Add the drop to the results
                     if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
                         // Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
-                        loot.SetupDrop();
+                        loot.ToCharacterDrop();
+                    }
+
+                    // Modify the multiplier for how many this drops based on local players
+                    if (loot.Drop.OnePerPlayer) {
+                        scale_multiplier += Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
+                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
                     }
 
                     drop_results.Add(new KeyValuePair<GameObject, int>(loot.GameDrop.m_prefab, drop));
@@ -179,16 +185,137 @@ namespace StarLevelSystem.modules
             }
         }
 
+        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeLog treeInstance) {
+            int level = CompositeLazyCache.GetOrAddCachedTreeEntry(treeInstance.m_nview);
+            SelectObjectDistanceBonus(treeInstance.transform, out DistanceLootModifier distance_bonus);
+            return ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
+        }
+
+        internal static List<KeyValuePair<GameObject, int>> ModifyRockDropsOrDefault(Transform tform, DropTable droptable, string name, int level) {
+            SelectObjectDistanceBonus(tform, out DistanceLootModifier distance_bonus);
+            return ModifyObjectDropsOrDefault(droptable, name, level, distance_bonus, DropType.Rock);
+        }
+
+
+        internal static List<KeyValuePair<GameObject, int>> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree) {
+            List<KeyValuePair<GameObject, int>> dropList = new List<KeyValuePair<GameObject, int>>();
+
+            //Logger.LogDebug($"Checking for custom drop configuration for {lookupkey}");
+            if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot.ContainsKey(lookupkey)) {
+                //Logger.LogDebug($"Custom loot drops configured for:{lookupkey}");
+                foreach (ExtendedObjectDrop eod in LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot[lookupkey]) {
+
+                    // If chance is enabled, calculate all of the chance characteristics
+                    if (eod.Drop.Chance < 1) {
+                        float luck_roll = UnityEngine.Random.value;
+                        float chance = eod.Drop.Chance;
+                        if (eod.ChanceScaleFactor > 0f) { chance *= 1 + (eod.ChanceScaleFactor * level); }
+                        // check the chance for this to be rolled
+                        if (luck_roll > chance) {
+                            Logger.LogDebug($"Drop {eod.Drop.Prefab} failed random drop chance ({luck_roll} < {chance}).");
+                            continue;
+                        }
+                    }
+
+                    if (eod.DropGo == null) {
+                        // Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
+                        eod.ResolveDropPrefab();
+                        if (eod.DropGo == null) {
+                            Logger.LogWarning($"Prefab {eod.Drop.Prefab} was not found, ensure it is spelled correctly and available in the game. This lootdrop will be skipped.");
+                            continue;
+                        }
+                    }
+
+                    if (eod.Drop.DontScale == true) {
+                        // Apply Random change, and the range of the loot drop
+                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} does not scale and will drop {drop_base_amount}");
+                        dropList.Add(new KeyValuePair<GameObject, int>(eod.DropGo, UnityEngine.Random.Range(eod.Drop.Min,eod.Drop.Max)));
+                        continue;
+                    }
+
+                    float scale_multiplier = 1f;
+                    int drop_min = eod.Drop.Min;
+                    int drop_max = eod.Drop.Max;
+                    int drop_base_amount = drop_min;
+                    if (drop_min != drop_max) {
+                        drop_base_amount = UnityEngine.Random.Range(drop_min, drop_max);
+                    }
+
+                    // Set scale modifier for the loot drop, based on chance, if enabled
+                    if (eod.UseChanceAsMultiplier) {
+                        scale_multiplier = (eod.Drop.Chance * level);
+                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified by chance and creature level.");
+                    }
+
+                    // Determine the actual amount of the drop
+                    int drop = drop_base_amount;
+                    float scale_factor = eod.AmountScaleFactor * scale_multiplier;
+                    if (scale_factor <= 0f) { scale_factor = 1f; }
+                    if (SelectedLootFactor == LootFactorType.PerLevel) {
+                        drop *= MultiplyLootPerLevel(level, distance_bonus, scale_factor);
+                    } else {
+                        drop *= ExponentLootPerLevel(level, distance_bonus, scale_factor);
+                    }
+                    Logger.LogDebug($"Drop {eod.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCalculationType.Value} ({scale_factor}) = {drop}");
+
+                    // Enforce max drop cap
+                    if (eod.MaxScaledAmount > 0 && drop > eod.MaxScaledAmount) {
+                        drop = eod.MaxScaledAmount;
+                        Logger.LogDebug($"Drop {eod.Drop.Prefab} capped to {drop}");
+                    }
+
+                    dropList.Add(new KeyValuePair<GameObject, int>(eod.DropGo, drop));
+                }
+            } else {
+                // generate the default loot list for this tree
+                if (defaultDrops == null) { return dropList; }
+                switch (type) {
+                    case DropType.Tree:
+                        Logger.LogDebug($"Updating Tree drops with: level-{level}");
+                        defaultDrops = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelTreeLootScale.Value);
+                        break;
+                    case DropType.Rock:
+                        Logger.LogDebug($"Updating Rock drops with: level-{level}");
+                        defaultDrops = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelMineRockLootScale.Value);
+                        break;
+                    case DropType.Destructible:
+                        Logger.LogDebug($"Updating Destructible drops with: level-{level}");
+                        defaultDrops = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
+                        break;
+                }
+                dropList = OptimizeToDropStacks(defaultDrops.GetDropList());
+            }
+            return dropList;
+        }
+
+        internal static DropTable UpdateDroptableByLevel(DropTable droptable, int level, float mod) {
+            // Update For pure level based distance scaling on rocks
+            if (level > 1) {
+                List<DropTable.DropData> dropReplacement = new List<DropTable.DropData>();
+                foreach (DropTable.DropData drop in droptable.m_drops) {
+                    DropTable.DropData newDrop = drop;
+                    newDrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + (mod * level)));
+                    newDrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + (mod * level)));
+                    Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {newDrop.m_stackMin}-{newDrop.m_stackMax} for level {level}.");
+                    dropReplacement.Add(newDrop);
+                    droptable.m_drops = dropReplacement;
+                }
+            }
+            return droptable;
+        }
+
         private static int DetermineLootScale(Character character) {
             int char_level = 1;
             if (character != null) { char_level = character.GetLevel(); }
-            SelectLootSettings(character, out DistanceLootModifier distance_bonus, out Heightmap.Biome biome);
+            SelectCharacterLootSettings(character, out DistanceLootModifier distance_bonus);
             if (SelectedLootFactor == LootFactorType.PerLevel) {
                 return MultiplyLootPerLevel(char_level, distance_bonus);
             } else {
                 return ExponentLootPerLevel(char_level, distance_bonus);
             }
         }
+
+
 
         private static int MultiplyLootPerLevel(int level, DistanceLootModifier dmod, float scale_factor = 1f)
         {
@@ -200,7 +327,7 @@ namespace StarLevelSystem.modules
             float loot_scale_factor = ValConfig.PerLevelLootScale.Value * level;
             int min_drop = (int)(loot_scale_factor * dmod_min * scale_factor);
             int max_drop = (int)(loot_scale_factor * dmod_max * scale_factor);
-            Logger.LogDebug($"MLPL range: {min_drop}-{max_drop} using: loot_factor {loot_scale_factor} x {dmod_min} or {dmod_max} x {scale_factor}");
+            Logger.LogDebug($"MultiplyLootPerLevel range: {min_drop}-{max_drop} using: loot_factor {loot_scale_factor} x {dmod_min} or {dmod_max} x {scale_factor}");
             if (min_drop == max_drop) {
                 return min_drop;
             }
@@ -224,16 +351,65 @@ namespace StarLevelSystem.modules
             return UnityEngine.Random.Range(min_drop, max_drop);
         }
 
-        [HarmonyPatch(typeof(MineRock5))]
-        public static class MineRockperformancePatch {
+        [HarmonyPatch]
+        public static class MineRockPerformancePatch {
+            //[HarmonyEmitIL(".dumps")]
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(typeof(MineRock), nameof(MineRock.RPC_Hit))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchEndForward(
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(MineRock), nameof(MineRock.m_dropItems))),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                ).Advance(1)
+                .RemoveInstructions(4)
+                .InsertAndAdvance(
+                    //new CodeInstruction(OpCodes.Ldarg_0), // load __instance
+                    Transpilers.EmitDelegate(ModifyMinerockDrops)
+                )
+                //.CreateLabelOffset(out System.Reflection.Emit.Label label, offset: 31)
+                //.InsertAndAdvance(new CodeInstruction(OpCodes.Br, label))
+                .RemoveInstructions(30)
+                .ThrowIfNotMatch("Unable to patch Minerock performance increase.");
 
+                return codeMatcher.Instructions();
+            }
+            internal static void ModifyMinerockDrops(MineRock instance) {
+                // Modify Loot Drop for minerock5
+                Vector3 pos = instance.gameObject.transform.position;
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(pos));
+                Vector3 position = pos + UnityEngine.Random.insideUnitSphere * 0.3f;
+                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops);
+            }
+        }
+
+
+
+        [HarmonyPatch(typeof(MineRock5))]
+        public static class MineRock5performancePatch {
             //[HarmonyEmitIL(".dumps")]
             //[HarmonyDebug]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(MineRock5.DamageArea))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
                 var codeMatcher = new CodeMatcher(instructions, generator);
-                codeMatcher.MatchStartForward(
+                if (StarLevelSystem.IsDropThatEnabled) {
+                    Logger.LogDebug("DropThat detected, using non-performance based Minerock5 patch for compat.");
+                    codeMatcher
+                        .MatchStartForward(
+                            new CodeMatch(OpCodes.Ldarg_0),
+                            new CodeMatch(OpCodes.Ldfld),
+                            new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                            )
+                        .Advance(1) // includes the Ldarg_0
+                        .RemoveInstructions(2)
+                        .InsertAndAdvance(
+                            Transpilers.EmitDelegate(NonPerformanceBasedMineDrop)
+                        ).ThrowIfNotMatch("Unable to patch MineRock5 to provide loot modifications.");
+
+                } else {
+                    codeMatcher.MatchStartForward(
                         new CodeMatch(OpCodes.Ldarg_0),
                         new CodeMatch(OpCodes.Ldfld),
                         new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
@@ -245,6 +421,7 @@ namespace StarLevelSystem.modules
                         Transpilers.EmitDelegate(MineDrop)
                         )
                     .ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops.");
+                }
                 return codeMatcher.Instructions();
             }
 
@@ -258,6 +435,19 @@ namespace StarLevelSystem.modules
                 Vector3 position = vector + UnityEngine.Random.insideUnitSphere * 0.3f;
                 DropItems(position, drops, immediate: true, modifier);
             }
+            
+            // This is specifically used for compatibility with DropThat, as removing the loop will break DropThats functionality for Minerock5
+            internal static List<GameObject> NonPerformanceBasedMineDrop(MineRock5 instance) {
+                // Modify Loot Drop for minerock5
+                List<GameObject> drops = new List<GameObject>();
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.transform.position));
+                foreach (KeyValuePair<GameObject, int> drop in optimizeDrops) {
+                    drop.Value.Times(() => drops.Add(drop.Key));
+                }
+                //Vector3 position = vector + UnityEngine.Random.insideUnitSphere * 0.3f;
+                //LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops);
+                return drops;
+            }
         }
 
         [HarmonyPatch(typeof(DropOnDestroyed))]
@@ -270,12 +460,12 @@ namespace StarLevelSystem.modules
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
                 var codeMatcher = new CodeMatcher(instructions);
                 codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList))),
                     new CodeMatch(OpCodes.Stloc_2)
-                    ).Advance(2)
+                    ).Advance(1)
                     .InsertAndAdvance(
-                        new CodeInstruction(OpCodes.Ldloc_1),
-                        new CodeInstruction(OpCodes.Ldloc_2),
                         Transpilers.EmitDelegate(DropItemsOnDestroy),
                         new CodeInstruction(OpCodes.Ret)
                         )
@@ -283,8 +473,11 @@ namespace StarLevelSystem.modules
                 return codeMatcher.Instructions();
             }
 
-            private static void DropItemsOnDestroy(Vector3 position, List<GameObject> drops) {
-                DropItems(position, drops);
+            private static void DropItemsOnDestroy(DropOnDestroyed instance) {
+                int level = LevelSystem.DetermineisticDetermineObjectLevel(instance.transform.position);
+                SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);
+                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
             }
         }
 
@@ -303,7 +496,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static void DropItems(Vector3 position, List<GameObject> drops, bool immediate = false, float lootmult = 1) {
+        internal static List<KeyValuePair<GameObject, int>> OptimizeToDropStacks(List<GameObject> drops, float lootmult = 1) {
             List<KeyValuePair<GameObject, int>> optimizeDrops = new List<KeyValuePair<GameObject, int>>();
             Dictionary<GameObject, int> dropCollect = new Dictionary<GameObject, int>();
             foreach (GameObject drop in drops) {
@@ -325,7 +518,15 @@ namespace StarLevelSystem.modules
                     optimizeDrops.Add(new KeyValuePair<GameObject, int>(ddrop.Key, ddrop.Value));
                 }
             }
+            return optimizeDrops;
+        }
 
+        internal static void DropItems(Vector3 position, List<GameObject> drops, bool immediate = false, float lootmult = 1) {
+            List<KeyValuePair<GameObject, int>> optimizeDrops = OptimizeToDropStacks(drops, lootmult);
+            DropItemsPreferAsync(position, optimizeDrops, immediate);
+        }
+
+        public static void DropItemsPreferAsync(Vector3 position, List<KeyValuePair<GameObject, int>> optimizeDrops, bool immediate = false) {
             if (Player.m_localPlayer != null && immediate == false) {
                 Player.m_localPlayer.StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f));
             } else {
@@ -461,11 +662,19 @@ namespace StarLevelSystem.modules
             yield break;
         }
 
-        public static void SelectLootSettings(Character creature, out DistanceLootModifier distance_bonus, out Heightmap.Biome creature_biome)
+        public static void SelectCharacterLootSettings(Character creature, out DistanceLootModifier distance_bonus)
         {
             Vector3 p = creature.gameObject.transform.position;
-            ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
-            creature_biome = biome;
+            //ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
+            //creature_biome = biome;
+            float distance_from_center = Vector2.Distance(p, LevelSystem.center);
+            distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
+            //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
+        }
+
+        public static void SelectObjectDistanceBonus(Transform tform, out DistanceLootModifier distance_bonus) {
+            Vector3 p = tform.position;
+            //ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
             float distance_from_center = Vector2.Distance(p, LevelSystem.center);
             distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
             //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");

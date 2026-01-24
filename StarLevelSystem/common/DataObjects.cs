@@ -106,6 +106,12 @@ namespace StarLevelSystem.common
             Boss = 2
         }
 
+        public enum DropType {
+            Tree,
+            Rock,
+            Destructible
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -234,7 +240,8 @@ namespace StarLevelSystem.common
         }
 
         public class LootSettings {
-            public Dictionary<string, List<ExtendedDrop>> characterSpecificLoot { get; set; }
+            public Dictionary<string, List<ExtendedCharacterDrop>> characterSpecificLoot { get; set; }
+            public Dictionary<string, List<ExtendedObjectDrop>> nonCharacterSpecificLoot { get; set; }
             public bool EnableDistanceLootModifier { get; set; } = false;
             public SortedDictionary<int, DistanceLootModifier> DistanceLootModifier { get; set; }
         }
@@ -403,7 +410,7 @@ namespace StarLevelSystem.common
         }
 
         [DataContract]
-        public class ExtendedDrop
+        public class ExtendedCharacterDrop
         {
             // Use fractional scaling for decaying drop increases
             public Drop Drop { get; set; }
@@ -419,11 +426,26 @@ namespace StarLevelSystem.common
             [DefaultValue(0)]
             public int MaxScaledAmount { get; set; } = 0;
             // Modify drop amount based on creature stars
-            public bool ScalePerNearbyPlayer { get; set; } = false;
             public bool UntamedOnlyDrop { get; set; } = false;
             public bool TamedOnlyDrop { get; set; } = false;
-            public void SetupDrop() {
+            public void ToCharacterDrop() {
                 GameDrop = Drop.ToCharDrop();
+            }
+        }
+
+        [DataContract]
+        public class ExtendedObjectDrop {
+            public Drop Drop { get; set; }
+            public GameObject DropGo { get; private set; }
+            public float AmountScaleFactor { get; set; } = 0f;
+            [DefaultValue(0f)]
+            public float ChanceScaleFactor { get; set; } = 0f;
+            public bool UseChanceAsMultiplier { get; set; } = false;
+            [DefaultValue(0)]
+            public int MaxScaledAmount { get; set; } = 0;
+
+            public void ResolveDropPrefab() {
+                DropGo = PrefabManager.Instance.GetPrefab(Drop.Prefab);
             }
         }
 
@@ -437,8 +459,11 @@ namespace StarLevelSystem.common
             public int Max { get; set; } = 1;
             [DefaultValue(1f)]
             public float Chance { get; set; } = 1f;
+            [DefaultValue(false)]
             public bool OnePerPlayer { get; set; } = false;
+            [DefaultValue(true)]
             public bool LevelMultiplier { get; set; } = true;
+            [DefaultValue(false)]
             public bool DontScale { get; set; } = false;
 
             public CharacterDrop.Drop ToCharDrop()

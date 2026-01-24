@@ -1,3 +1,15 @@
+**0.16.0**
+ ---
+ ```
+ - Performance patch support for Minerock
+ - Improves compatibility between DropThat and SLS
+ - Adds in loot table support for non-creature loot objects
+	- Loot table dump command now supports including all of these (trees, DropOnDestroy, Minerock, Minerock5)
+ - Safety checks for removing all of the colorization configuration
+ - Adds a command to kill nearby creatures and prevent them from dropping loot
+ - Adds documentation for existing terminal commands
+ ```
+
 **0.15.3**
  ---
  ```

@@ -11,9 +11,9 @@ namespace StarLevelSystem.Data
         public static LootSettings SLS_Drop_Settings { get; set; }
         public static LootSettings DefaultDropConfiguration = new LootSettings()
         {
-            characterSpecificLoot = new Dictionary<string, List<ExtendedDrop>>() {
-                { "BlobElite", new List<ExtendedDrop>() {
-                    new ExtendedDrop{
+            characterSpecificLoot = new Dictionary<string, List<ExtendedCharacterDrop>>() {
+                { "BlobElite", new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop{
                             Drop = new Drop
                             {
                                 Prefab = "Ooze",
@@ -22,7 +22,7 @@ namespace StarLevelSystem.Data
                             },
                             AmountScaleFactor = 0.5f,
                         },
-                    new ExtendedDrop{
+                    new ExtendedCharacterDrop{
                             Drop = new Drop
                             {
                                 Prefab = "IronScrap",
@@ -32,7 +32,7 @@ namespace StarLevelSystem.Data
                             },
                             AmountScaleFactor = 0.2f,
                         },
-                    new ExtendedDrop{
+                    new ExtendedCharacterDrop{
                             Drop = new Drop
                             {
                                 Prefab = "TrophyBlob",
@@ -40,10 +40,10 @@ namespace StarLevelSystem.Data
                                 Max = 1,
                                 Chance = 0.1f
                             },
-                            ChanceScaleFactor = 1.01f,
+                            ChanceScaleFactor = 0.01f,
                             MaxScaledAmount = 1,
                         },
-                    new ExtendedDrop{
+                    new ExtendedCharacterDrop{
                             Drop = new Drop
                             {
                                 Prefab = "Blob",
@@ -55,8 +55,8 @@ namespace StarLevelSystem.Data
                         }
                     }
                 },
-                { "Tick", new List<ExtendedDrop>() {
-                    new ExtendedDrop{
+                { "Tick", new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop{
                             Drop = new Drop
                             {
                                 Prefab = "GiantBloodSack",
@@ -66,7 +66,7 @@ namespace StarLevelSystem.Data
                             },
                             AmountScaleFactor = 0.5f,
                         },
-                    new ExtendedDrop{
+                    new ExtendedCharacterDrop{
                             Drop = new Drop
                             {
                                 Prefab = "TrophyTick",
@@ -74,67 +74,36 @@ namespace StarLevelSystem.Data
                                 Max = 1,
                                 Chance = 0.05f
                             },
-                            ChanceScaleFactor = 1.01f,
+                            ChanceScaleFactor = 0.01f,
                             MaxScaledAmount = 1,
                         }
                     }
-                },
-                { "Greyling", new List<ExtendedDrop>() {
-                    new ExtendedDrop{
-                            Drop = new Drop
-                            {
-                                Prefab = "Resin",
-                                Min = 1,
-                                Max = 1,
-                                Chance = 0.75f
-                            },
-                            AmountScaleFactor = 0.5f,
+                }
+            },
+            nonCharacterSpecificLoot = new Dictionary<string, List<ExtendedObjectDrop>>() {
+                {"caverock_ice_stalagtite_falling", new List<ExtendedObjectDrop>() {
+                    new ExtendedObjectDrop() {
+                        Drop = new Drop {
+                            Prefab = "Crystal",
+                            Min = 1,
+                            Max = 3,
+                            Chance = 0.3f,
+                            DontScale = true
+                        },
                         }
                     }
                 },
-                { "Greydwarf", new List<ExtendedDrop>() {
-                    new ExtendedDrop{
-                            Drop = new Drop
-                            {
-                                Prefab = "Stone",
-                                Min = 1,
-                                Max = 1,
-                                Chance = 1f
-                            },
-                            AmountScaleFactor = 0.5f,
+                { "EvilHeart_Forest", new List<ExtendedObjectDrop>() {
+                    new ExtendedObjectDrop() {
+                        Drop = new Drop {
+                            Prefab = "AncientSeed",
+                            Min = 1,
+                            Max = 1,
+                            OnePerPlayer = true,
                         },
-                    new ExtendedDrop{
-                            Drop = new Drop
-                            {
-                                Prefab = "Wood",
-                                Min = 1,
-                                Max = 1,
-                                Chance = 1f
-                            },
-                            AmountScaleFactor = 0.5f,
-                        },
-                    new ExtendedDrop{
-                            Drop = new Drop
-                            {
-                                Prefab = "Resin",
-                                Min = 1,
-                                Max = 1,
-                                Chance = 0.50f
-                            },
-                            AmountScaleFactor = 0.5f,
-                        },
-                    new ExtendedDrop{
-                            Drop = new Drop
-                            {
-                                Prefab = "GreydwarfEye",
-                                Min = 1,
-                                Max = 1,
-                                Chance = 0.50f
-                            },
-                            AmountScaleFactor = 0.5f,
+                        MaxScaledAmount = 3
                         }
                     }
-
                 }
             },
             EnableDistanceLootModifier = true,
@@ -209,12 +178,22 @@ namespace StarLevelSystem.Data
         }
 
         public static void AttachLootPrefabs(LootSettings lootconfig) {
-            if (lootconfig == null || lootconfig.characterSpecificLoot == null || lootconfig.characterSpecificLoot.Count == 0) { return; }
-            foreach (var dropset in lootconfig.characterSpecificLoot) {
-                foreach (var itemdrop in dropset.Value) {
-                    itemdrop.SetupDrop();
+            if (lootconfig == null) { return; }
+            if (lootconfig.characterSpecificLoot != null) {
+                foreach (KeyValuePair<string, List<ExtendedCharacterDrop>> dropset in lootconfig.characterSpecificLoot) {
+                    foreach (ExtendedCharacterDrop itemdrop in dropset.Value) {
+                        itemdrop.ToCharacterDrop();
+                    }
                 }
             }
+            if (lootconfig.nonCharacterSpecificLoot != null) {
+                foreach (KeyValuePair<string, List<ExtendedObjectDrop>> dropset in lootconfig.nonCharacterSpecificLoot) {
+                    foreach (ExtendedObjectDrop itemdrop in dropset.Value) {
+                        itemdrop.ResolveDropPrefab();
+                    }
+                }
+            }
+
         }
 
         public static bool UpdateYamlConfig(string yaml)

@@ -26,11 +26,10 @@ namespace StarLevelSystem.Modifiers
             static List<ZDOID> spawned = new List<ZDOID>();
             static int maxSummoned = 10;
             static int summonBatchSize = 2;
-            static float timeBetweenSummons = 120;
+            static float timeBetweenSummons = 30;
             static Character bossCharacter;
             static bool setup = false;
             static bool started = false;
-            static double spawntimestamp = 0;
 
             public void Update()
             {
@@ -42,6 +41,7 @@ namespace StarLevelSystem.Modifiers
 
                 if (started == false) {
                     InvokeRepeating("SpawnCreaturesBatch", timeBetweenSummons, timeBetweenSummons);
+                    started = true;
                 }
             }
 
@@ -58,7 +58,7 @@ namespace StarLevelSystem.Modifiers
                     if (spawned.Count >= maxSummoned) return;
                 }
                 // Skip spawning for the requested cooldown time
-                if (spawntimestamp + timeBetweenSummons < ZNet.instance.GetTimeSeconds()) { return; }
+                //if (spawntimestamp + timeBetweenSummons < ZNet.instance.GetTimeSeconds()) { return; }
                 if (summonableCreatures.Count == 0) { return; }
                 if (bossCharacter  == null) { return; }
 
@@ -70,10 +70,9 @@ namespace StarLevelSystem.Modifiers
                 if (character != null) {
                     spawned.Add(character.GetZDOID());
                 }
-                spawntimestamp = ZNet.instance.GetTimeSeconds();
             }
 
-            public void SetupSummoner(Character character, List<string> summonPrefabs, int max_summoned = 10, float time_between_summons = 120) {
+            public void SetupSummoner(Character character, List<string> summonPrefabs, int max_summoned = 10, float time_between_summons = 60) {
                 bossCharacter = character;
                 timeBetweenSummons = time_between_summons;
                 maxSummoned = max_summoned;

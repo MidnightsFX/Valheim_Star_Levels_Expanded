@@ -410,8 +410,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        public static int DeterministicDetermineTreeLevel(GameObject go)
-        {
+        public static int DeterministicDetermineTreeLevel(GameObject go) {
             Vector3 p = go.transform.position;
             float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
@@ -422,6 +421,13 @@ namespace StarLevelSystem.modules
         public static int DeterministicDetermineRockLevel(Vector3 pos) {
             float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(center.x, center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.RockMaxLevel.Value));
+            if (level < 1) { level = 1; }
+            return level;
+        }
+
+        public static int DetermineisticDetermineObjectLevel(Vector3 pos) {
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(center.x, center.z));
+            int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.DestructibleMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;
         }
@@ -484,10 +490,13 @@ namespace StarLevelSystem.modules
             [HarmonyPrefix]
             //[HarmonyPriority(Priority.LowerThanNormal)] // We are skipping the original, give everyone else a chance to run first.
             static bool DropAndSpawnTreeLogs(TreeLog __instance) {
-                List<GameObject> dropList = __instance.m_dropWhenDestroyed.GetDropList();
+                // Modify Tree Drops
+                List<KeyValuePair<GameObject, int>> optimizeDrops = LootLevelsExpanded.ModifyTreeDropsOrDefault(__instance);
+
                 //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
                 Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
-                LootLevelsExpanded.DropItems(position, dropList);
+                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops);
+
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {
                     foreach (Transform transform in __instance.m_subLogPoints) {
@@ -496,11 +505,11 @@ namespace StarLevelSystem.modules
                         SetupTreeLog(__instance, transform, logRotation);
                     }
                 }
-                // Skip the original, we entirely rewrite it.
                 if (ValConfig.EnableTreeScaling.Value == true) {
                     if (__instance.m_nview != null && __instance.m_nview.GetZDO() != null) { CompositeLazyCache.RemoveTreeCacheEntry(__instance.m_nview.GetZDO().m_uid.ID); }
                 }
                 ZNetScene.instance.Destroy(__instance.gameObject);
+                // Skip the original, we entirely rewrite it.
                 return false;
             }
 
@@ -518,7 +527,6 @@ namespace StarLevelSystem.modules
                         level = __instance.m_nview.GetZDO().GetInt(SLS_TREE, 1);
                     }
                 }
-                UpdateDrops(__instance, level);
                 __instance.m_health += (__instance.m_health * 0.1f * level);
                 __instance.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
             }
@@ -546,28 +554,12 @@ namespace StarLevelSystem.modules
                 }
 
                 //Logger.LogDebug($"Got Tree level {level}");
-                UpdateDrops(tchild, level);
                 tchild.m_health += (tchild.m_health * 0.1f * level);
                 go.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
                 //Logger.LogDebug($"Setting tree level {level}");
                 if (ValConfig.UseDeterministicTreeScaling.Value == false) {
                     nview.GetZDO().Set(SLS_TREE, level);
                 }
-            }
-
-            internal static void UpdateDrops(TreeLog log, int level) {
-                if (log.m_dropWhenDestroyed == null || log.m_dropWhenDestroyed.m_drops == null || level == 1) { return; }
-                // Update Drops
-                List<DropTable.DropData> dropReplacement = new List<DropTable.DropData>();
-                Logger.LogDebug($"Updating Drops for tree to: level-{level}");
-                foreach (DropTable.DropData drop in log.m_dropWhenDestroyed.m_drops) {
-                    DropTable.DropData newDrop = drop;
-                    newDrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (ValConfig.PerLevelTreeLootScale.Value * level));
-                    newDrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (ValConfig.PerLevelTreeLootScale.Value * level));
-                    Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {newDrop.m_stackMin}-{newDrop.m_stackMax} for level {level}.");
-                    dropReplacement.Add(newDrop);
-                }
-                log.m_dropWhenDestroyed.m_drops = dropReplacement;
             }
         }
 

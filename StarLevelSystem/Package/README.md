@@ -209,6 +209,92 @@ There are two different ways to apply colorization values to creatures.
   If you want to see the output from a generator you can enable the debug flag to dump the generated colorization config to a file. 
   You can use this to hand-pick color values etc.
 
+### Loot Configuration
+Star level systems provides full optional configuration to control in detail all loot drops. Loot configuration can be found in the `LootSettings.yaml` file.
+
+You may find it useful to see what existing drops look like within the SLS system. 
+You can do this by dumping a debug configuration of all loot drops (as they are) with the in-game console command `sls-dump-loottables`, this is output to the SLS config folder in the file `LootTablesDump.yaml`.
+
+There are three core parts to configuring loot drops, but many options to modify if you wish to fine tune loot configurations.
+
+- characterSpecificLoot | this governs all character based loot drops
+- nonCharacterSpecificLoot | this controls all non-character based loot drops
+- distanceLootModifier | this allows distance scaling of loot, similar to how distance level scaling works
+
+#### Character Specific Loot configuration
+Lets take a look at the character specific loot drop. Here is one of the example configurations, and it is here to address a specific challenge.
+Oozers create blobs when they die, this scales with the level of the creature. However, when you have a very high level oozer you can end up with 20,30 or more blobs.
+Which can be impossible to deal with. This deals with that in a few ways, the final `- drop:` entry is for the Blob, spawning a minimum of 2 and a maximum of 2. But scaling with
+the level of the `BlobElite` (Oozer), however that scaling is capped at a maximum of 6 drops, and only scales `.5` per level. So every other level another blob can be spawned
+up to a maximum of 6.
+
+Another useful entry to look at here is the drop for `TrophyBlob`, this has a `0.1` (10%) chance of happening, but it scales x0.01 per level, so a level five is (0.01 x 5) = 0.05 (5%) higher chance of happening.
+This can be combined with a drop count to scale the drops for the entry, so a level 5 could drop more trophies. But this is disabled by setting the `maxScaledAmount: 1`
+```
+characterSpecificLoot:
+  BlobElite:
+  - drop:
+      prefab: Ooze
+      min: 2
+      max: 3
+      levelMultiplier: true
+    amountScaleFactor: 0.5
+  - drop:
+      prefab: IronScrap
+      chance: 0.33
+      levelMultiplier: true
+    amountScaleFactor: 0.2
+  - drop:
+      prefab: TrophyBlob
+      chance: 0.1
+      levelMultiplier: true
+    chanceScaleFactor: 0.01
+    maxScaledAmount: 1
+  - drop:
+      prefab: Blob
+      min: 2
+      max: 2
+      levelMultiplier: true
+    amountScaleFactor: 0.5
+    maxScaledAmount: 6
+```
+
+#### Non Character specific loot configuration
+
+This is the section which allows you to configure all of the non-creature related loot in detail. It follows a similar structure to character loot configuration.
+You can use this to modify or add loot to any existing objects which have the option to drop loot. For example, falling stalagtites. This configuration gives them a chance to drop crystals.
+The chance scales per level (yes inanimate objects can be leveled, tree, rock or destructible based on type). If loot configuration is not defined here then the generic configuration values from
+the main config file apply here `PerLevelDestructibleLootScale`, `PerLevelMineRockLootScale`, and `PerLevelTreeLootScale` along with their max level values.
+Level scaling can be ignored by setting `dontScale: true`
+
+```
+nonCharacterSpecificLoot:
+  caverock_ice_stalagtite_falling:
+  - drop:
+      prefab: crystal
+      chance: 0.3
+      min: 1
+      max: 3
+      dontScale: true
+  EvilHeart_Forest:
+  - drop:
+      prefab: AncientSeed
+      onePerPlayer: true
+      levelMultiplier: true
+    maxScaledAmount: 3
+```
+
+#### Distance Loot Modifier
+This is similar to the character distance modifier in that it applies a bonus to the minimum and maximum drops that an entry can have based on distance.
+Loot rings are not drawn on the map, but behave exactly the same as Character distance rings (if the object is greater than x distance and less than the next once it recieves that bonus).
+
+```
+distanceLootModifier:
+  1250:
+    minAmountScaleFactorBonus: 1.02
+    maxAmountScaleFactorBonus: 1.02
+```
+
 ### Modifiers
 Maybe you've tried out CLLC's modifiers, or Monster Modifiers? Both really add variety to the game that is much needed.
 Star Levels Systems modifiers are designed to be extremely flexible, both in configuration- but also in effect.
@@ -265,6 +351,12 @@ These modifiers are attainable by most creatures and are typically less directly
 Localization is available for everything in the mod. I accept community translations! If you would like to contribute localizations or improve them please reach out on discord.
 
 Otherwise localizations are available at `Bepinex/config/StarLevelSystems/localizations`, new languages can be made using any of [Jotunns language specific names](https://valheim-modding.github.io/Jotunn/data/localization/language-list.html)
+
+### Terminal Commands
+Star Level Systems provides a number of terminal commands for debugging and testing and cleanup.
+- `sls-killall [range:500]` - kills creatures within the specfiied range (default 500m), skips players and tamed creatures.
+- `sls-give-modifier [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
+- `sls-dump-loottables` - provides dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
 
 ### API Usage (WIP)
 Star Level Systems provides a public API for other mods to interact with.

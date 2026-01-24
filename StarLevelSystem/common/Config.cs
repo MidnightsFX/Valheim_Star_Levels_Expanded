@@ -13,10 +13,15 @@ namespace StarLevelSystem
     internal class ValConfig
     {
         public static ConfigFile cfg;
-        internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "LevelSettings.yaml");
-        internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "ColorSettings.yaml");
-        internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "CreatureLootSettings.yaml");
-        internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, "StarLevelSystem", "Modifiers.yaml");
+        internal const string LevelSettingsFileName = "LevelSettings.yaml";
+        internal const string ColorSettingsFileName = "ColorSettings.yaml";
+        internal const string LootSettingsFileName = "LootSettings.yaml";
+        internal const string ModifiersFileName = "Modifiers.yaml";
+        internal const string StarLevelSystem = "StarLevelSystem";
+        internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LevelSettingsFileName);
+        internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ColorSettingsFileName);
+        internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LootSettingsFileName);
+        internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
 
         private static CustomRPC LevelSettingsRPC;
         private static CustomRPC ColorSettingsRPC;
@@ -63,11 +68,13 @@ namespace StarLevelSystem
         public static ConfigEntry<float> PerLevelTreeLootScale;
         public static ConfigEntry<float> PerLevelBirdLootScale;
         public static ConfigEntry<float> PerLevelMineRockLootScale;
+        public static ConfigEntry<float> PerLevelDestructibleLootScale;
 
         public static ConfigEntry<int> FishMaxLevel;
         public static ConfigEntry<int> BirdMaxLevel;
         public static ConfigEntry<int> TreeMaxLevel;
         public static ConfigEntry<int> RockMaxLevel;
+        public static ConfigEntry<int> DestructibleMaxLevel;
 
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
@@ -171,6 +178,7 @@ namespace StarLevelSystem
             BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that birds can scale up to.", true, 1, 150);
             TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that trees can scale up to.", true, 1, 150);
             RockMaxLevel = BindServerConfig("ObjectLevels", "RockMaxLevel", 10, "Sets the max level that rocks can scale up to.", true, 1, 150);
+            DestructibleMaxLevel = BindServerConfig("ObjectLevels", "DestructibleMaxLevel", 1, "Sets the max level that generic destructibles can be leveled to", true, 1, 150);
             FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
             FishSizeScalePerLevel.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
             EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
@@ -181,6 +189,7 @@ namespace StarLevelSystem
             PerLevelTreeLootScale = BindServerConfig("ObjectLevels", "PerLevelTreeLootScale", 0.2f, "The amount of additional wood that each level grants for a tree.", true);
             PerLevelBirdLootScale = BindServerConfig("ObjectLevels", "PerLevelBirdLootScale", 0.3f, "Per level additional loot that birds gain.", true);
             PerLevelMineRockLootScale = BindServerConfig("ObjectLevels", "PerLevelMineRockLootScale", 0.2f, "The amount of additional stones and ores that each level grants for a rock", true);
+            PerLevelDestructibleLootScale = BindServerConfig("ObjectLevels", "PerLevelDestructibleLootScale", 0.2f, "The amount of additional loot that destructible items grant for each level", true);
 
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
@@ -233,27 +242,27 @@ namespace StarLevelSystem
             bool foundModifierFile = false;
 
             foreach (string configFile in presentFiles) {
-                if (configFile.Contains("LevelSettings.yaml"))
+                if (configFile.Contains(LevelSettingsFileName))
                 {
                     Logger.LogDebug($"Found level configuration: {configFile}");
                     levelsFilePath = configFile;
                     foundLevelsFile = true;
                 }
 
-                if (configFile.Contains("ColorSettings.yaml"))
+                if (configFile.Contains(ColorSettingsFileName))
                 {
                     Logger.LogDebug($"Found color configuration: {configFile}");
                     colorsFilePath = configFile;
                     foundColorFile = true;
                 }
 
-                if (configFile.Contains("LootSettings.yaml"))
+                if (configFile.Contains(LootSettingsFileName))
                 {
                     Logger.LogDebug($"Found loot configuration: {configFile}");
                     creatureLootFilePath = configFile;
                     foundLootFile = true;
                 }
-                if (configFile.Contains("Modifiers.yaml"))
+                if (configFile.Contains(ModifiersFileName))
                 {
                     Logger.LogDebug($"Found modifier configuration: {configFile}");
                     creatureModifierFilePath = configFile;
@@ -314,10 +323,10 @@ namespace StarLevelSystem
                 }
             }
 
-            SetupFileWatcher("ColorSettings.yaml");
-            SetupFileWatcher("LevelSettings.yaml");
-            SetupFileWatcher("Modifiers.yaml");
-            SetupFileWatcher("CreatureLootSettings.yaml");
+            SetupFileWatcher(ColorSettingsFileName);
+            SetupFileWatcher(LevelSettingsFileName);
+            SetupFileWatcher(ModifiersFileName);
+            SetupFileWatcher($"*{LootSettingsFileName}");
         }
 
         private void SetupFileWatcher(string filtername)
@@ -344,22 +353,24 @@ namespace StarLevelSystem
             var fileInfo = new FileInfo(e.FullPath);
             Logger.LogDebug($"Filewatch changes from: ({fileInfo.Name}) {fileInfo.FullName}");
             switch (fileInfo.Name) {
-                case "ColorSettings.yaml":
+                case ColorSettingsFileName:
                     Logger.LogDebug("Triggering Color Settings update.");
                     Colorization.UpdateYamlConfig(filetext);
                     ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
-                case "LevelSettings.yaml":
+                case LevelSettingsFileName:
                     Logger.LogDebug("Triggering Level Settings update.");
                     LevelSystemData.UpdateYamlConfig(filetext);
                     LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
+                // Support both file names for legacy configurations
+                case LootSettingsFileName:
                 case "CreatureLootSettings.yaml":
                     Logger.LogDebug("Triggering Loot Settings update.");
                     LootSystemData.UpdateYamlConfig(filetext);
                     CreatureLootSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
-                case "Modifiers.yaml":
+                case ModifiersFileName:
                     Logger.LogDebug("Triggering Modifiers Settings update.");
                     CreatureModifiersData.UpdateModifierConfig(filetext);
                     ModifiersRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));

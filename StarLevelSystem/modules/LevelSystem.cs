@@ -411,6 +411,7 @@ namespace StarLevelSystem.modules
         }
 
         public static int DeterministicDetermineTreeLevel(GameObject go) {
+            if (ValConfig.EnableTreeScaling.Value == false) { return 1; }
             Vector3 p = go.transform.position;
             float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
@@ -419,6 +420,7 @@ namespace StarLevelSystem.modules
         }
 
         public static int DeterministicDetermineRockLevel(Vector3 pos) {
+            if (ValConfig.EnableRockLevels.Value == false) { return 1; }
             float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(center.x, center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.RockMaxLevel.Value));
             if (level < 1) { level = 1; }

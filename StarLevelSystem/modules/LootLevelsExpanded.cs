@@ -200,9 +200,9 @@ namespace StarLevelSystem.modules
         internal static List<KeyValuePair<GameObject, int>> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree) {
             List<KeyValuePair<GameObject, int>> dropList = new List<KeyValuePair<GameObject, int>>();
 
-            //Logger.LogDebug($"Checking for custom drop configuration for {lookupkey}");
+            Logger.LogDebug($"Checking for custom drop configuration for {lookupkey}");
             if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot.ContainsKey(lookupkey)) {
-                //Logger.LogDebug($"Custom loot drops configured for:{lookupkey}");
+                Logger.LogDebug($"Custom loot drops configured for:{lookupkey}");
                 foreach (ExtendedObjectDrop eod in LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot[lookupkey]) {
 
                     // If chance is enabled, calculate all of the chance characteristics
@@ -269,21 +269,22 @@ namespace StarLevelSystem.modules
             } else {
                 // generate the default loot list for this tree
                 if (defaultDrops == null) { return dropList; }
+                DropTable updatedDropTable = new DropTable();
                 switch (type) {
                     case DropType.Tree:
                         Logger.LogDebug($"Updating Tree drops with: level-{level}");
-                        defaultDrops = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelTreeLootScale.Value);
+                        updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelTreeLootScale.Value);
                         break;
                     case DropType.Rock:
                         Logger.LogDebug($"Updating Rock drops with: level-{level}");
-                        defaultDrops = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelMineRockLootScale.Value);
+                        updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelMineRockLootScale.Value);
                         break;
                     case DropType.Destructible:
                         Logger.LogDebug($"Updating Destructible drops with: level-{level}");
-                        defaultDrops = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
+                        updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
                         break;
                 }
-                dropList = OptimizeToDropStacks(defaultDrops.GetDropList());
+                dropList = OptimizeToDropStacks(updatedDropTable.GetDropList());
             }
             return dropList;
         }
@@ -291,6 +292,7 @@ namespace StarLevelSystem.modules
         internal static DropTable UpdateDroptableByLevel(DropTable droptable, int level, float mod) {
             // Update For pure level based distance scaling on rocks
             if (level > 1) {
+                DropTable newDropTable = droptable.Clone();
                 List<DropTable.DropData> dropReplacement = new List<DropTable.DropData>();
                 foreach (DropTable.DropData drop in droptable.m_drops) {
                     DropTable.DropData newDrop = drop;
@@ -298,8 +300,9 @@ namespace StarLevelSystem.modules
                     newDrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + (mod * level)));
                     Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {newDrop.m_stackMin}-{newDrop.m_stackMax} for level {level}.");
                     dropReplacement.Add(newDrop);
-                    droptable.m_drops = dropReplacement;
                 }
+                newDropTable.m_drops = dropReplacement;
+                return newDropTable;
             }
             return droptable;
         }
@@ -426,14 +429,9 @@ namespace StarLevelSystem.modules
             }
 
             internal static void MineDrop(MineRock5 instance, Vector3 vector) {
-                List<GameObject> drops = instance.m_dropItems.GetDropList();
-                float modifier = 1;
-                if (ValConfig.EnableRockLevels.Value) {
-                    modifier =+ 1 + (LevelSystem.DeterministicDetermineRockLevel(vector) * ValConfig.PerLevelMineRockLootScale.Value);
-                }
-                //Logger.LogDebug($"Starting MineRock5 Destroy drop sequence tree:{instance} drops:{drops}");
-                Vector3 position = vector + UnityEngine.Random.insideUnitSphere * 0.3f;
-                DropItems(position, drops, immediate: true, modifier);
+                int level = LevelSystem.DeterministicDetermineRockLevel(vector);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level);
+                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
             }
             
             // This is specifically used for compatibility with DropThat, as removing the loop will break DropThats functionality for Minerock5

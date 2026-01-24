@@ -1,3 +1,10 @@
+**0.16.1**
+ ---
+ ```
+ - Improves support for rock leveling
+ - Prevents potential exponential rock leveling on massive multipart drop tables
+ ```
+
 **0.16.0**
  ---
  ```

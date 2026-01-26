@@ -1,3 +1,9 @@
+**0.16.2**
+ ---
+ ```
+ - Fixes a crash when mining Flametal
+ ```
+
 **0.16.1**
  ---
  ```

@@ -362,13 +362,14 @@ namespace StarLevelSystem.modules
             [HarmonyPatch(typeof(MineRock), nameof(MineRock.RPC_Hit))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
                 var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchEndForward(
+                codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(MineRock), nameof(MineRock.m_dropItems))),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                ).Advance(1)
-                .RemoveInstructions(4)
+                )
+                .RemoveInstructions(6)
                 .InsertAndAdvance(
-                    //new CodeInstruction(OpCodes.Ldarg_0), // load __instance
+                    // new CodeInstruction(OpCodes.Ldarg_0), // load __instance
+                    new CodeInstruction(OpCodes.Ldarg_2), // load hitdata
                     Transpilers.EmitDelegate(ModifyMinerockDrops)
                 )
                 //.CreateLabelOffset(out System.Reflection.Emit.Label label, offset: 31)
@@ -378,11 +379,10 @@ namespace StarLevelSystem.modules
 
                 return codeMatcher.Instructions();
             }
-            internal static void ModifyMinerockDrops(MineRock instance) {
+            internal static void ModifyMinerockDrops(MineRock instance, HitData hit) {
                 // Modify Loot Drop for minerock5
-                Vector3 pos = instance.gameObject.transform.position;
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(pos));
-                Vector3 position = pos + UnityEngine.Random.insideUnitSphere * 0.3f;
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.gameObject.transform.position));
+                Vector3 position = hit.m_point - hit.m_dir * 0.2f + UnityEngine.Random.insideUnitSphere * 0.3f;
                 LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops);
             }
         }

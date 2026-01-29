@@ -7,10 +7,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static CharacterAnimEvent;
-using static CharacterDrop;
-using static Mono.Security.X509.X520;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
@@ -38,6 +34,7 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(CharacterDrop))]
         public static class CalculateLootPerLevelStyle
         {
+            //[HarmonyEmitIL(".dumps")]
             //[HarmonyDebug]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(CharacterDrop.GenerateDropList))]
@@ -153,11 +150,10 @@ namespace StarLevelSystem.modules
                     float scale_factor = loot.AmountScaleFactor * scale_multiplier;
                     if (scale_factor <= 0f) { scale_factor = 1f; }
                     if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop *= MultiplyLootPerLevel(level, distance_bonus, scale_factor);
+                        drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
                     } else {
-                        drop *= ExponentLootPerLevel(level, distance_bonus, scale_factor);
+                        drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
                     }
-                    Logger.LogDebug($"Drop {loot.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCalculationType.Value} ({scale_factor}) = {drop}");
 
                     // Enforce max drop cap
                     if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) { 
@@ -252,11 +248,10 @@ namespace StarLevelSystem.modules
                     float scale_factor = eod.AmountScaleFactor * scale_multiplier;
                     if (scale_factor <= 0f) { scale_factor = 1f; }
                     if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop *= MultiplyLootPerLevel(level, distance_bonus, scale_factor);
+                        drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
                     } else {
-                        drop *= ExponentLootPerLevel(level, distance_bonus, scale_factor);
+                        drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
                     }
-                    Logger.LogDebug($"Drop {eod.Drop.Prefab} drops amount base {drop_base_amount} x scale_mult {scale_multiplier} x loot factor type {ValConfig.LootDropCalculationType.Value} ({scale_factor}) = {drop}");
 
                     // Enforce max drop cap
                     if (eod.MaxScaledAmount > 0 && drop > eod.MaxScaledAmount) {
@@ -307,51 +302,55 @@ namespace StarLevelSystem.modules
             return droptable;
         }
 
+        // This determines the "level" that is used to generate loot multipled by level in vanilla configurations
         private static int DetermineLootScale(Character character) {
             int char_level = 1;
             if (character != null) { char_level = character.GetLevel(); }
             SelectCharacterLootSettings(character, out DistanceLootModifier distance_bonus);
             if (SelectedLootFactor == LootFactorType.PerLevel) {
-                return MultiplyLootPerLevel(char_level, distance_bonus);
+                float min_drop_scale = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                float max_drop_scale = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                return Mathf.RoundToInt(UnityEngine.Random.Range(min_drop_scale, max_drop_scale));
             } else {
-                return ExponentLootPerLevel(char_level, distance_bonus);
+                float min = Mathf.Pow((ValConfig.PerLevelLootScale.Value + distance_bonus.MinAmountScaleFactorBonus), char_level);
+                float max = Mathf.Pow((ValConfig.PerLevelLootScale.Value + distance_bonus.MaxAmountScaleFactorBonus), char_level);
+                return Mathf.RoundToInt(UnityEngine.Random.Range(min, max));
             }
         }
 
 
-
-        private static int MultiplyLootPerLevel(int level, DistanceLootModifier dmod, float scale_factor = 1f)
+        // This builds the total amount of loot from this style of loot modification
+        // Loot amount x level x modifiers 
+        private static int MultiplyLootPerLevel(int lootdrop_amount, int level, DistanceLootModifier dmod, float scale_factor = 1f)
         {
-            if (level == 1) { return 1; } // no scaling for level 1, just return the base loot amount
-            float dmod_max = dmod.MaxAmountScaleFactorBonus;
-            if (dmod_max <= 0) { dmod_max = 1; }
-            float dmod_min = dmod.MinAmountScaleFactorBonus;
-            if (dmod_min <= 0) { dmod_min = 1; }
-            float loot_scale_factor = ValConfig.PerLevelLootScale.Value * level;
-            int min_drop = (int)(loot_scale_factor * dmod_min * scale_factor);
-            int max_drop = (int)(loot_scale_factor * dmod_max * scale_factor);
-            Logger.LogDebug($"MultiplyLootPerLevel range: {min_drop}-{max_drop} using: loot_factor {loot_scale_factor} x {dmod_min} or {dmod_max} x {scale_factor}");
-            if (min_drop == max_drop) {
-                return min_drop;
+            if (level == 1) { return lootdrop_amount; } // no scaling for level 1, just return the base loot amount
+            float min_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + dmod.MinAmountScaleFactorBonus);
+            float max_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + dmod.MaxAmountScaleFactorBonus);
+            // If its the same no need to randomize
+            if (min_drop_scale == max_drop_scale) {
+                int result = Mathf.RoundToInt(min_drop_scale * lootdrop_amount);
+                Logger.LogDebug($"MultiplyLootPerLevel {result} = drop_base: {lootdrop_amount} * {min_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus:{dmod.MinAmountScaleFactorBonus})");
+                return result;
             }
-            return UnityEngine.Random.Range(min_drop, max_drop);
+            int min_drop = Mathf.RoundToInt(min_drop_scale * lootdrop_amount);
+            int max_drop = Mathf.RoundToInt(max_drop_scale * lootdrop_amount);
+            int randomized_result = UnityEngine.Random.Range(min_drop, max_drop);
+            Logger.LogDebug($"MultiplyLootPerLevel {randomized_result} from range: ({min_drop} <-> {max_drop}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus: min{dmod.MinAmountScaleFactorBonus}/max:{dmod.MaxAmountScaleFactorBonus})");
+
+            return randomized_result;
         }
 
-        private static int ExponentLootPerLevel(int level, DistanceLootModifier dmod, float scale_factor = 1)
+        private static int ExponentLootPerLevel(int lootdrop_amount, int level, DistanceLootModifier dmod, float scale_factor = 1)
         {
-            if (level == 1) { return 1; } // no scaling for level 1, just return the base loot amount
-            float dmod_max = dmod.MaxAmountScaleFactorBonus;
-            if (dmod_max <= 0) { dmod_max = 1; }
-            float dmod_min = dmod.MinAmountScaleFactorBonus;
-            if (dmod_min <= 0) { dmod_min = 1; }
-            float loot_scale_factor = Mathf.Pow(ValConfig.PerLevelLootScale.Value, level);
-            int min_drop = (int)(loot_scale_factor * dmod_min * scale_factor);
-            int max_drop = (int)(loot_scale_factor * dmod_max * scale_factor);
-            Logger.LogDebug($"ELPL range: {min_drop}-{max_drop} using: loot_factor {loot_scale_factor} x {dmod_min} or {dmod_max} x {scale_factor}");
-            if (min_drop == max_drop) {
-                return min_drop;
-            }
-            return UnityEngine.Random.Range(min_drop, max_drop);
+            if (level == 1) { return lootdrop_amount; } // no scaling for level 1, just return the base loot amount
+            
+            float min_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MinAmountScaleFactorBonus + scale_factor;
+            float max_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MaxAmountScaleFactorBonus + scale_factor;
+            float selectedMod = UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
+            float loot_scale_factor = Mathf.Pow(selectedMod, level);
+            int result = Mathf.RoundToInt(loot_scale_factor * lootdrop_amount);
+            Logger.LogDebug($"ExponentLootPerLevel {result} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){dmod.MinAmountScaleFactorBonus}/(max){dmod.MaxAmountScaleFactorBonus} perlevelscale:{dmod.MinAmountScaleFactorBonus})");
+            return result;
         }
 
         [HarmonyPatch]
@@ -472,6 +471,41 @@ namespace StarLevelSystem.modules
             }
 
             private static void DropItemsOnDestroy(DropOnDestroyed instance) {
+                int level = LevelSystem.DetermineisticDetermineObjectLevel(instance.transform.position);
+                SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);
+                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
+            }
+        }
+
+        [HarmonyPatch(typeof(TreeBase))]
+        public static class DropItemsTreeBasePerformancePatch {
+
+            //[HarmonyEmitIL(".dumps")]
+            //[HarmonyDebug]
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(TreeBase.RPC_Damage))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
+                var codeMatcher = new CodeMatcher(instructions);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                    ).Advance(1)
+                    .InsertAndAdvance(
+                        Transpilers.EmitDelegate(TreebaseDropDestroyedItems)
+                    )
+                    //.MatchStartForward(
+                    //new CodeMatch(OpCodes.)
+                    .RemoveInstructions(54)
+                    .Insert(
+                        new CodeInstruction(OpCodes.Ldarg_0)
+                    )
+                    .ThrowIfNotMatch("Unable to patch Treebase to handle large drops.");
+                return codeMatcher.Instructions();
+            }
+
+            private static void TreebaseDropDestroyedItems(TreeBase instance) {
                 int level = LevelSystem.DetermineisticDetermineObjectLevel(instance.transform.position);
                 SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
                 List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);

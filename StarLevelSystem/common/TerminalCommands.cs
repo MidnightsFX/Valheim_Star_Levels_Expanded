@@ -264,6 +264,31 @@ namespace StarLevelSystem.common
                     objectDrops.Add(name, extendedDrops);
                 }
 
+                Logger.LogDebug($"Checking TreeBase for loot tables");
+                foreach (TreeBase tdrop in Resources.FindObjectsOfTypeAll<TreeBase>().Where(cdrop => cdrop.name.EndsWith("(Clone)") != true && !cdrop.name.Contains(" ")).ToList()) {
+                    string name = Utils.GetPrefabName(tdrop.gameObject);
+                    Logger.LogDebug($"Checking {name} for loot tables");
+                    if (objectDrops.ContainsKey(name)) { continue; }
+                    List<ExtendedObjectDrop> extendedDrops = new List<ExtendedObjectDrop>();
+                    Logger.LogDebug($"drops {tdrop.m_dropWhenDestroyed.m_drops.Count}");
+                    foreach (DropTable.DropData drop in tdrop.m_dropWhenDestroyed.m_drops) {
+                        ExtendedObjectDrop eodrop = new ExtendedObjectDrop() {
+                            Drop = new DataObjects.Drop {
+                                Min = drop.m_stackMin,
+                                Max = drop.m_stackMax,
+                                Chance = tdrop.m_dropWhenDestroyed.m_dropChance,
+                                LevelMultiplier = false, // No static drop types use levels by default so this field does not exist
+                                DontScale = drop.m_dontScale,
+                            }
+                        };
+                        if (drop.m_item != null) {
+                            eodrop.Drop.Prefab = drop.m_item.name;
+                        }
+                        extendedDrops.Add(eodrop);
+                    }
+                    objectDrops.Add(name, extendedDrops);
+                }
+
                 Logger.LogDebug($"Serializing data");
                 LootSettings lootSettings = new LootSettings();
                 lootSettings.characterSpecificLoot = characterModDrops;

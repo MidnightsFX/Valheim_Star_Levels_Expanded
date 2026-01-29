@@ -1,3 +1,13 @@
+**0.17.0**
+ ---
+ ```
+ - Initial fix for riding issues with large or extremely large Lox and Askvin
+	- Changes are applied when the creature is loaded (or reloaded)
+ - Improves loot drop calculations to be more explicit in how each factor impacts the total loot
+ - Ensures that tamed creatures custom names are shown instead of name modifiers
+ - Enables performance modifications for treebase drops, along with custom loot table definitions
+ ```
+
 **0.16.2**
  ---
  ```

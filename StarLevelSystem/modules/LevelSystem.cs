@@ -650,8 +650,8 @@ namespace StarLevelSystem.modules
                     yield return new WaitForEndOfFrame();
                     Physics.SyncTransforms();
                 }
-                RandomFlyingBird treebase = bird.GetComponent<RandomFlyingBird>();
-                if (treebase == null || treebase.m_nview == null || treebase.m_nview.GetZDO() == null) { continue; }
+                RandomFlyingBird randombird = bird.GetComponent<RandomFlyingBird>();
+                if (randombird == null || randombird.m_nview == null || randombird.m_nview.GetZDO() == null) { continue; }
                 string birdname = Utils.GetPrefabName(bird.gameObject);
                 if (BirdSizeReferences.ContainsKey(birdname) == false)
                 {
@@ -659,16 +659,16 @@ namespace StarLevelSystem.modules
                 }
                 if (ValConfig.EnableScalingBirds.Value == false)
                 {
-                    treebase.transform.localScale = BirdSizeReferences[birdname];
+                    randombird.transform.localScale = BirdSizeReferences[birdname];
                     continue;
                 }
 
-                int storedLevel = treebase.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
+                int storedLevel = randombird.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
                 if (storedLevel > 1)
                 {
                     float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
                     //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
-                    treebase.transform.localScale = BirdSizeReferences[birdname] * scale;
+                    randombird.transform.localScale = BirdSizeReferences[birdname] * scale;
                 }
             }
             yield break;

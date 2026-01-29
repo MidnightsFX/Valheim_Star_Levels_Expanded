@@ -307,6 +307,11 @@ namespace StarLevelSystem.modules
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
                 if (cce == null || cce.CreatureNameLocalizable == null) { return true; }
                 __result = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                Tameable component = __instance.gameObject.GetComponent<Tameable>();
+                if (component && __instance.IsTamed()) {
+                    __result = component.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, __result);
+                }
+                
                 return false;
             }
         }

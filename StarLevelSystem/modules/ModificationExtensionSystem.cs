@@ -10,6 +10,7 @@ using System.Drawing;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static HitData;
 using static StarLevelSystem.common.DataObjects;
 using DamageType = StarLevelSystem.common.DataObjects.DamageType;
@@ -155,6 +156,37 @@ namespace StarLevelSystem.modules
                     ApplyDamageModifiers(hit, __instance, damagedCharacter.DamageRecievedModifiers);
                 }
             }
+        }
+
+        public static void UpdateRidingCreaturesForSizeScaling(GameObject creature, CharacterCacheEntry cDetails) {
+            if (ValConfig.EnableRidableCreatureSizeFixes.Value == false) { return; }
+            // Handle tame specific collider scaling
+            Tameable tame = creature.GetComponent<Tameable>();
+            if (tame != null && tame.IsTamed()) {
+                string name = Utils.GetPrefabName(creature.gameObject);
+                //Logger.LogDebug($"Checking Tame collider adjustment for {name} with for level {cDetails.Level}");
+                if (name == "Lox") {
+                    UpdateLoxCollider(creature.gameObject, cDetails);
+                }
+                if (name == "Askvin") {
+                    UpdateAskavinCollider(creature.gameObject);
+                }
+            }
+
+        }
+
+        internal static void UpdateLoxCollider(GameObject go, CharacterCacheEntry cDetails) {
+            CapsuleCollider loxcc = go.GetComponent<CapsuleCollider>();
+            float size_set = (cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cDetails.Level) + cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
+            float levelchange = (size_set - 1) * 0.1555f;
+            //float levelchange = cDetails.Level * 0.016f;  // 3.31 -lvl 20 (size 3), 3.15 -lvl 10 (size 2) or 0.016f per level at default sizing
+            loxcc.height = 3f + levelchange;
+            loxcc.radius = 0.5f; //1.22?
+        }
+
+        internal static void UpdateAskavinCollider(GameObject go) {
+            CapsuleCollider askcc = go.GetComponent<CapsuleCollider>();
+            askcc.radius = 0.842f;
         }
 
         // For debugging full details on damage calculations
@@ -436,7 +468,9 @@ namespace StarLevelSystem.modules
                 Vector3 sizeEstimate = creatureref.transform.localScale * scale;
                 creature.transform.localScale = sizeEstimate;
                 //Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
+                UpdateRidingCreaturesForSizeScaling(creature, cDetails);
             }
+            
             zview.GetZDO().Set(SLS_SIZE, scale);
             Physics.SyncTransforms();
         }
@@ -456,6 +490,8 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
                     creature.transform.localScale = sizeEstimate;
                     Physics.SyncTransforms();
+                    // Maybe check if the vector values are equal
+                    UpdateRidingCreaturesForSizeScaling(creature, cDetails);
                 }
                 return;
             }
@@ -467,6 +503,7 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Increasing character size from existing {current_size} + {bonus}.");
                 }
                 Physics.SyncTransforms();
+                UpdateRidingCreaturesForSizeScaling(creature, cDetails);
                 return;
             }
 

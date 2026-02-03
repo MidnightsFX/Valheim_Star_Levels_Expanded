@@ -1,3 +1,15 @@
+**0.17.2**
+ ---
+ ```
+ - Health coalesence multiplication fix
+ ```
+
+**0.17.1**
+ ---
+ ```
+ - Improves compatibility with Drop That
+ ```
+
 **0.17.0**
  ---
  ```

@@ -1,3 +1,9 @@
+**0.17.3**
+ ---
+ ```
+ - Improves performance when used with DropThat
+ ```
+
 **0.17.2**
  ---
  ```

@@ -181,33 +181,29 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeBase treeInstance, out DropTable modifiedDrops) {
+        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeBase treeInstance) {
             int level = CompositeLazyCache.GetOrAddCachedTreeEntry(treeInstance.m_nview);
             SelectObjectDistanceBonus(treeInstance.transform, out DistanceLootModifier distance_bonus);
-            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, out DropTable buildDropTable, DropType.Tree);
-            modifiedDrops = buildDropTable;
+            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
             return drops;
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeLog treeInstance, out DropTable modifiedDrops) {
+        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeLog treeInstance) {
             int level = CompositeLazyCache.GetOrAddCachedTreeEntry(treeInstance.m_nview);
             SelectObjectDistanceBonus(treeInstance.transform, out DistanceLootModifier distance_bonus);
-            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, out DropTable buildDropTable, DropType.Tree);
-            modifiedDrops = buildDropTable;
+            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
             return drops;
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyRockDropsOrDefault(Transform tform, DropTable droptable, string name, int level, out DropTable modifiedDrops) {
+        internal static List<KeyValuePair<GameObject, int>> ModifyRockDropsOrDefault(Transform tform, DropTable droptable, string name, int level) {
             SelectObjectDistanceBonus(tform, out DistanceLootModifier distance_bonus);
-            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(droptable, name, level, distance_bonus, out DropTable buildDropTable, DropType.Rock);
-            modifiedDrops = buildDropTable;
+            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(droptable, name, level, distance_bonus, DropType.Rock);
             return drops;
         }
 
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, out DropTable modifiedDrops, DropType type = DropType.Tree) {
+        internal static List<KeyValuePair<GameObject, int>> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree) {
             List<KeyValuePair<GameObject, int>> dropList = new List<KeyValuePair<GameObject, int>>();
-            modifiedDrops = new DropTable();
             Logger.LogDebug($"Checking for custom drop configuration for {lookupkey}");
             if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot.ContainsKey(lookupkey)) {
                 Logger.LogDebug($"Custom loot drops configured for:{lookupkey}");
@@ -272,8 +268,6 @@ namespace StarLevelSystem.modules
                     }
 
                     dropList.Add(new KeyValuePair<GameObject, int>(eod.DropGo, drop));
-
-                    modifiedDrops.m_drops.Add(new DropTable.DropData() { m_item = eod.DropGo, m_stackMax = drop, m_stackMin = drop, m_weight = 1, m_dontScale = true });
                 }
                 
             } else {
@@ -294,7 +288,6 @@ namespace StarLevelSystem.modules
                         updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
                         break;
                 }
-                modifiedDrops = updatedDropTable;
                 dropList = OptimizeToDropStacks(updatedDropTable.GetDropList());
             }
             return dropList;
@@ -396,9 +389,9 @@ namespace StarLevelSystem.modules
             }
             internal static void ModifyMinerockDrops(MineRock instance, HitData hit) {
                 // Modify Loot Drop for minerock5
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.gameObject.transform.position), out DropTable droptable);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.gameObject.transform.position));
                 Vector3 position = hit.m_point - hit.m_dir * 0.2f + UnityEngine.Random.insideUnitSphere * 0.3f;
-                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true, dropThatTable: droptable);
+                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
             }
         }
 
@@ -445,15 +438,15 @@ namespace StarLevelSystem.modules
 
             internal static void MineDrop(MineRock5 instance, Vector3 vector) {
                 int level = LevelSystem.DeterministicDetermineRockLevel(vector);
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level, out DropTable droptable);
-                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true, dropThatTable: droptable);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level);
+                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
             }
             
             // This is specifically used for compatibility with DropThat, as removing the loop will break DropThats functionality for Minerock5
             internal static List<GameObject> NonPerformanceBasedMineDrop(MineRock5 instance) {
                 // Modify Loot Drop for minerock5
                 List<GameObject> drops = new List<GameObject>();
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.transform.position), out DropTable _);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.transform.position));
                 foreach (KeyValuePair<GameObject, int> drop in optimizeDrops) {
                     drop.Value.Times(() => drops.Add(drop.Key));
                 }
@@ -489,8 +482,8 @@ namespace StarLevelSystem.modules
             private static void DropItemsOnDestroy(DropOnDestroyed instance) {
                 int level = LevelSystem.DetermineisticDetermineObjectLevel(instance.transform.position);
                 SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, out DropTable droptable, DropType.Destructible);
-                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true, dropThatTable: droptable);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);
+                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
             }
         }
 
@@ -539,14 +532,14 @@ namespace StarLevelSystem.modules
             }
 
             private static void TreebaseDropDestroyedItems(TreeBase instance) {
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyTreeDropsOrDefault(instance, out DropTable modifiedDrops);
-                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true, dropThatTable: modifiedDrops);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyTreeDropsOrDefault(instance);
+                LootLevelsExpanded.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
             }
 
             internal static List<GameObject> NonPerformanceBasedTreeBaseDrop(TreeBase instance) {
                 // Modify Loot Drop for TreeBase
                 List<GameObject> drops = new List<GameObject>();
-                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyTreeDropsOrDefault(instance, out DropTable modifiedDrops);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = ModifyTreeDropsOrDefault(instance);
                 foreach (KeyValuePair<GameObject, int> drop in optimizeDrops) {
                     drop.Value.Times(() => drops.Add(drop.Key));
                 }
@@ -589,15 +582,15 @@ namespace StarLevelSystem.modules
             return optimizeDrops;
         }
 
-        public static void DropItemsPreferAsync(Vector3 position, List<KeyValuePair<GameObject, int>> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false,  DropTable dropThatTable = null) {
+        public static void DropItemsPreferAsync(Vector3 position, List<KeyValuePair<GameObject, int>> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
             if (Player.m_localPlayer != null && immediate == false) {
                 Player.m_localPlayer.StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f, dropThatCharacterDrop));
             } else {
-                DropItemsImmediate(optimizeDrops, position, 0.5f, dropThatCharacterDrop, dropThatNonCharacterDrop, dropThatTable);
+                DropItemsImmediate(optimizeDrops, position, 0.5f, dropThatCharacterDrop, dropThatNonCharacterDrop);
             }
         }
 
-        internal static void DropItemsImmediate(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false, DropTable dropThatTable = null) {
+        internal static void DropItemsImmediate(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
             int dropindex = 0;
             foreach (var drop in drops) {
                 bool set_stack_size = false;
@@ -645,7 +638,7 @@ namespace StarLevelSystem.modules
                         Compatibility.DropThat_ModifyDrop(droppedItem, drops, dropindex);
                     }
                     if (dropThatNonCharacterDrop && Compatibility.IsDropThatEnabled && Compatibility.DropThatMethodsAvailable) {
-                        Compatibility.DropThat_ModifyInstantiatedObjectDrop(droppedItem, dropThatTable, dropindex);
+                        Compatibility.DropThat_ModifyInstantiatedObjectDrop(droppedItem, dropindex);
                     }
 
                     Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
@@ -664,7 +657,7 @@ namespace StarLevelSystem.modules
 
         
 
-        public static IEnumerator DropItemsAsync(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false, DropTable dropThatTable = null) {
+        public static IEnumerator DropItemsAsync(List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
             int obj_spawns = 0;
             int dropindex = 0;
             foreach (var drop in drops)
@@ -728,7 +721,7 @@ namespace StarLevelSystem.modules
                         Compatibility.DropThat_ModifyDrop(droppedItem, drops, dropindex);
                     }
                     if (dropThatNonCharacterDrop && Compatibility.IsDropThatEnabled && Compatibility.DropThatMethodsAvailable) {
-                        Compatibility.DropThat_ModifyInstantiatedObjectDrop(droppedItem, dropThatTable, dropindex);
+                        Compatibility.DropThat_ModifyInstantiatedObjectDrop(droppedItem, dropindex);
                     }
 
                     Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();

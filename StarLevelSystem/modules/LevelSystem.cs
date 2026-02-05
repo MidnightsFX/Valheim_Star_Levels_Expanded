@@ -493,11 +493,11 @@ namespace StarLevelSystem.modules
             //[HarmonyPriority(Priority.LowerThanNormal)] // We are skipping the original, give everyone else a chance to run first.
             static bool DropAndSpawnTreeLogs(TreeLog __instance) {
                 // Modify Tree Drops
-                List<KeyValuePair<GameObject, int>> optimizeDrops = LootLevelsExpanded.ModifyTreeDropsOrDefault(__instance, out DropTable droptable);
+                List<KeyValuePair<GameObject, int>> optimizeDrops = LootLevelsExpanded.ModifyTreeDropsOrDefault(__instance);
 
                 //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
                 Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
-                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true, dropThatTable: droptable);
+                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
 
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {

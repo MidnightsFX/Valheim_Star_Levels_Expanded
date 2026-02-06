@@ -24,17 +24,23 @@ namespace StarLevelSystem.modules
         private static MethodInfo DropThatModifyInstantiatedObjectDrop;
 
         internal static void CheckModCompat() {
-            if (BepInExUtils.GetPlugins().Keys.Contains("asharppen.valheim.drop_that")) {
-                IsDropThatEnabled = true;
-                DropThatCharacterDropSessionManager = Type.GetType("DropThat.Drop.DropTableSystem.Managers.DropTableSessionManager, DropThat");
-                DropThatDropTableSessionManager = Type.GetType("DropThat.Drop.CharacterDropSystem.Managers.CharacterDropSessionManager, DropThat");
-                if (DropThatMethodsAvailable) {
-                    DropThatModifyInstantiatedObjectDrop = DropThatDropTableSessionManager.GetMethod("ModifyDrop", BindingFlags.Public | BindingFlags.Static);
-                    DropThatModifyDrop = DropThatCharacterDropSessionManager.GetMethod("ModifyDrop", BindingFlags.Public | BindingFlags.Static);
-                } else {
-                    Logger.LogWarning("Warning: Compat methods for DropThat not found.");
+            try {
+                Dictionary<string, BepInEx.BaseUnityPlugin> plugins = BepInExUtils.GetPlugins();
+                if (plugins != null && plugins.Keys.Contains("asharppen.valheim.drop_that")) {
+                    IsDropThatEnabled = true;
+                    DropThatCharacterDropSessionManager = Type.GetType("DropThat.Drop.DropTableSystem.Managers.DropTableSessionManager, DropThat");
+                    DropThatDropTableSessionManager = Type.GetType("DropThat.Drop.CharacterDropSystem.Managers.CharacterDropSessionManager, DropThat");
+                    if (DropThatMethodsAvailable) {
+                        DropThatModifyInstantiatedObjectDrop = DropThatDropTableSessionManager.GetMethod("ModifyDrop", BindingFlags.Public | BindingFlags.Static);
+                        DropThatModifyDrop = DropThatCharacterDropSessionManager.GetMethod("ModifyDrop", BindingFlags.Public | BindingFlags.Static);
+                    } else {
+                        Logger.LogWarning("Warning: Compat methods for DropThat not found, strict compatibility patches will be used.");
+                    }
                 }
+            } catch {
+                Logger.LogWarning("Unable to check mod compatibility. Ensure that Bepinex can load.");
             }
+
         }
 
         public static bool DropThat_ModifyDrop(GameObject drop, List<KeyValuePair<GameObject, int>> drops, int index) {

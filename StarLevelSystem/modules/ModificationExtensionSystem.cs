@@ -429,10 +429,11 @@ namespace StarLevelSystem.modules
         }
 
         internal static void ApplyHealthModifications(Character chara, CharacterCacheEntry cDetails) {
-            float chealth = chara.m_health;
+            float chealth = chara.m_health; // base creature health not current total health
             if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
                 chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
             }
+
 
             if (cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] != 1 || cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] > 0) {
                 float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];

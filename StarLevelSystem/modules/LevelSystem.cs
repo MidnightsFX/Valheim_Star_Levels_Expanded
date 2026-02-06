@@ -497,7 +497,7 @@ namespace StarLevelSystem.modules
 
                 //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
                 Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
-                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops);
+                LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
 
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {

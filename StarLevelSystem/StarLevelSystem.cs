@@ -22,7 +22,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.17.0";
+        public const string PluginVersion = "0.17.3";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -31,7 +31,6 @@ namespace StarLevelSystem
         public static AssetBundle EmbeddedResourceBundle;
         public static Harmony HarmonyInstance { get; private set; }
         public static ManualLogSource Log;
-        public static bool IsDropThatEnabled = false;
 
         public void Awake()
         {
@@ -40,7 +39,7 @@ namespace StarLevelSystem
             cfg.SetupConfigRPCs();
             cfg.LoadYamlConfigs();
 
-            CheckModCompat();
+            Compatibility.CheckModCompat();
 
             EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
@@ -58,12 +57,6 @@ namespace StarLevelSystem
 
             TerminalCommands.AddCommands();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
-        }
-
-        internal static void CheckModCompat() {
-            if (BepInExUtils.GetPlugins().Keys.Contains("asharppen.valheim.drop_that")) {
-                IsDropThatEnabled = true;
-            }
         }
     }
 }

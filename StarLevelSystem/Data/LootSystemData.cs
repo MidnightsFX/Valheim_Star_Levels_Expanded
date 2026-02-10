@@ -111,44 +111,44 @@ namespace StarLevelSystem.Data
             {
                 { 1250, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.02f,
-                        MaxAmountScaleFactorBonus = 1.02f
+                        MinAmountScaleFactorBonus = 0.02f,
+                        MaxAmountScaleFactorBonus = 0.02f
                     }
                 },
                 { 2500, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.05f,
-                        MaxAmountScaleFactorBonus = 1.05f
+                        MinAmountScaleFactorBonus = 0.05f,
+                        MaxAmountScaleFactorBonus = 0.05f
                     }
                 },
                 { 3750, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.08f,
-                        MaxAmountScaleFactorBonus = 1.08f
+                        MinAmountScaleFactorBonus = 0.08f,
+                        MaxAmountScaleFactorBonus = 0.08f
                     }
                 },
                 { 5000, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.12f,
-                        MaxAmountScaleFactorBonus = 1.12f
+                        MinAmountScaleFactorBonus = 0.12f,
+                        MaxAmountScaleFactorBonus = 0.12f
                     }
                 },
                 { 6250, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.15f,
-                        MaxAmountScaleFactorBonus = 1.15f
+                        MinAmountScaleFactorBonus = 0.15f,
+                        MaxAmountScaleFactorBonus = 0.15f
                     }
                 },
                 { 7500, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.2f,
-                        MaxAmountScaleFactorBonus = 1.2f
+                        MinAmountScaleFactorBonus = 0.2f,
+                        MaxAmountScaleFactorBonus = 0.2f
                     }
                 },
                 { 8750, new DistanceLootModifier() {
                         ChanceScaleFactorBonus = 0f,
-                        MinAmountScaleFactorBonus = 1.35f,
-                        MaxAmountScaleFactorBonus = 1.35f
+                        MinAmountScaleFactorBonus = 0.35f,
+                        MaxAmountScaleFactorBonus = 0.35f
                     }
                 }
             }

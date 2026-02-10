@@ -1,3 +1,14 @@
+**0.17.4**
+ ---
+ ```
+ - New default configurations require that you delete your existing configuration if you want to use them!
+	- Fixes default loot distance modifiers providing too much loot
+	- Adjusts the default levelup chance to reduce high levels in the early game
+	- Adjusts level distance modifiers to allow for a wider range of levels at all distances
+ - Ensures per level damage modifiers are applied correctly to boss types
+ - Improves resiliance to invalid configurations
+ ```
+
 **0.17.3**
  ---
  ```

@@ -123,11 +123,19 @@ namespace StarLevelSystem.modules
         {
             public static bool Prefix(Attack __instance, ref float __result)
             {
-                if (__instance.m_character.IsBoss())
-                {
-                    __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.BossEnemyDamageMultiplier.Value;
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance.m_character);
+                if (__instance.m_character.IsBoss()) {
+                    if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
+                        __result = Mathf.Max(0, __instance.m_character.GetLevel() - 1) * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                    } else {
+                        __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.BossEnemyDamageMultiplier.Value;
+                    }
                 } else {
-                    __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.EnemyDamageLevelMultiplier.Value;
+                    if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
+                        __result = Mathf.Max(0, __instance.m_character.GetLevel() - 1) * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                    } else {
+                        __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.EnemyDamageLevelMultiplier.Value;
+                    }
                 }
                 if (ValConfig.EnableDebugOutputForDamage.Value) {
                     Logger.LogDebug($"Setting {__instance.m_character.name} lvl {__instance.m_character.GetLevel() - 1} dmg factor to {__result}");

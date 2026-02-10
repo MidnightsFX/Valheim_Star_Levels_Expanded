@@ -1,6 +1,4 @@
 ﻿using HarmonyLib;
-using Jotunn;
-using Jotunn.Extensions;
 using Jotunn.Managers;
 using MonoMod.Utils;
 using StarLevelSystem.common;
@@ -11,8 +9,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
 using Extensions = StarLevelSystem.common.Extensions;
 
@@ -80,15 +76,18 @@ namespace StarLevelSystem.modules
                 float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(center.x, center.z));
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
-                SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
+                SortedDictionary<int, float> levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
+                if (LevelSystemData.SLE_Level_Settings != null) {
+                    levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
+                    // If we are using distance level bonuses | Check if we are in a distance level bonus area
+                    if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
+                        distance_levelup_bonuses = LevelSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
+                    }
+                }
                 if (biome_settings != null) {
                     distance_level_modifier = biome_settings.DistanceScaleModifier;
                 }
-                // If we are using distance level bonuses | Check if we are in a distance level bonus area
-                if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null)
-                {
-                    distance_levelup_bonuses = LevelSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
-                }
+
                 // Apply Night level scalers
                 float nightScaleBonus = 1f;
                 if (biome_settings != null && biome_settings.NightSettings != null && biome_settings.NightSettings.NightLevelUpChanceScaler != 1) {
@@ -873,8 +872,9 @@ namespace StarLevelSystem.modules
             Heightmap.Biome biome = Heightmap.FindBiome(p);
             creature_biome = biome;
             biome_settings = null;
-            // TODO: Make trees less complex
-            //Logger.LogDebug($"{creature_name} {biome} {p}");
+            creature_settings = null;
+            // Guard clause for those that have empty or null configurations
+            if (LevelSystemData.SLE_Level_Settings == null) { return; }
 
             if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
                 bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
@@ -895,7 +895,6 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Merged biome configs");
             }
 
-            creature_settings = null;
             if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null) {
                 if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
                 //Logger.LogDebug($"Set character specific configs");

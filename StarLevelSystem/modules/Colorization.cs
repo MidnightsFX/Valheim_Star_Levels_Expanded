@@ -97,6 +97,8 @@ namespace StarLevelSystem.modules
                 }
             } catch (System.Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
+                StarLevelSystem.Log.LogError($"Colorization will use internal defaults.");
+                creatureColorizationSettings = defaultColorizationSettings;
                 return false;
             }
             return true;

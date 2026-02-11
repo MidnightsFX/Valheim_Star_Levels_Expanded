@@ -1,3 +1,9 @@
+**0.17.5**
+ ---
+ ```
+ - Fixes an issue where fish could cause stuttering when interacting with the prep table
+ ```
+
 **0.17.4**
  ---
  ```

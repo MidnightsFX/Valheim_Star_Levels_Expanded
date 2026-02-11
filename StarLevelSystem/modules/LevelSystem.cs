@@ -400,11 +400,12 @@ namespace StarLevelSystem.modules
         }
 
         public static void UpdateMaxLevel() {
+            if (ValConfig.EnableScalingFish.Value == false) { return; }
             IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
             foreach (GameObject fish in fishes) {
                 if (fish.GetComponent<Fish>() != null) {
                     //Logger.LogDebug($"Updating max quality {fish.gameObject.name}");
-                    fish.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = 999;
+                    fish.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
                 }
             }
         }
@@ -1057,7 +1058,7 @@ namespace StarLevelSystem.modules
                 LevelSystem.SelectCreatureBiomeSettings(item.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
                 int determinedLevel = LevelSystem.DetermineLevel(item.gameObject, creature_name, creature_settings, biome_settings, ValConfig.FishMaxLevel.Value);
                 // not sure we need max quality set high
-                item.m_itemData.m_shared.m_maxQuality = 999;
+                item.m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
                 item.SetQuality(determinedLevel);
                 item.m_itemData.m_shared.m_scaleByQuality = ValConfig.FishSizeScalePerLevel.Value;
                 item.Save();

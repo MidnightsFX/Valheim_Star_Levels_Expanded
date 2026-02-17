@@ -303,7 +303,7 @@ namespace StarLevelSystem.Data
             try {
                 SLE_Level_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
                 Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
-                LevelSystem.CreateLevelBonusRingMapOverlays();
+                LevelSystem.DelayedMinimapSetup();
                 foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
                     if (chara.m_level <= 1) { continue; }
 

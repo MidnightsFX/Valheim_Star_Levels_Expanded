@@ -16,7 +16,8 @@ namespace StarLevelSystem.modules
         public enum LootFactorType
         {
             PerLevel,
-            Exponential
+            Exponential,
+            ChancePerLevel
         }
 
         public static LootFactorType SelectedLootFactor = LootFactorType.PerLevel;
@@ -45,30 +46,30 @@ namespace StarLevelSystem.modules
                     new CodeMatch(OpCodes.Ldarg_0),
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop), nameof(CharacterDrop.m_character))),
                     new CodeMatch(OpCodes.Call)
-                    ).Advance(2).RemoveInstructions(15).InsertAndAdvance(
+                ).Advance(2).RemoveInstructions(15).InsertAndAdvance(
                     Transpilers.EmitDelegate(DetermineLootScale)
-                    ).ThrowIfNotMatch("Unable to patch Character drop generator, level scaling.");
-
-                return codeMatcher.Instructions();
-            }
-        }
-
-        [HarmonyPatch(typeof(CharacterDrop))]
-        public static class RemoveDropLimit
-        {
-            //[HarmonyDebug]
-            [HarmonyTranspiler]
-            [HarmonyPatch(nameof(CharacterDrop.GenerateDropList))]
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/)
-            {
-                var codeMatcher = new CodeMatcher(instructions);
-                codeMatcher.MatchStartForward(
+                ).ThrowIfNotMatch("Unable to patch Character drop generator, level scaling.")
+                .MatchForward(false,
+                    new CodeMatch(OpCodes.Ldloc_3),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop.Drop), nameof(CharacterDrop.Drop.m_levelMultiplier)))
+                ).Advance(1).MatchForward(false,
+                    new CodeMatch(OpCodes.Ldloc_3),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop.Drop), nameof(CharacterDrop.Drop.m_levelMultiplier)))
+                ).Advance(2).InsertAndAdvance(
+                    Transpilers.EmitDelegate(OverrideLootScalingEnabler)
+                ).MatchStartForward(
                     new CodeMatch(OpCodes.Ldloc_S),
                     new CodeMatch(OpCodes.Ldc_I4_S),
                     new CodeMatch(OpCodes.Ble)
-                    ).Advance(3).RemoveInstructions(2)
-                    .ThrowIfNotMatch("Unable to patch Character drop limit removal.");
+                ).Advance(3).RemoveInstructions(2)
+                .ThrowIfNotMatch("Unable to patch Character drop limit removal.");
+
                 return codeMatcher.Instructions();
+            }
+
+            private static bool OverrideLootScalingEnabler(bool defaultlootLevelMultiplier) {
+                if (ValConfig.ScaleAllLootByLevel.Value) { return true; }
+                return defaultlootLevelMultiplier;
             }
         }
 
@@ -255,10 +256,23 @@ namespace StarLevelSystem.modules
                     int drop = drop_base_amount;
                     float scale_factor = eod.AmountScaleFactor * scale_multiplier;
                     if (scale_factor <= 0f) { scale_factor = 1f; }
-                    if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
-                    } else {
-                        drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
+                    switch (SelectedLootFactor) {
+                        case LootFactorType.PerLevel:
+                            drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
+                            break;
+                        case LootFactorType.Exponential:
+                            drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
+                            break;
+                        case LootFactorType.ChancePerLevel:
+                            float luck_roll = UnityEngine.Random.value;
+                            float chance = eod.Drop.Chance;
+                            if (eod.ChanceScaleFactor > 0f) { chance *= 1 + (eod.ChanceScaleFactor * level); }
+                            // check the chance for this to be rolled
+                            if (luck_roll > chance) {
+                                Logger.LogDebug($"Drop {eod.Drop.Prefab} failed random drop chance ({luck_roll} < {chance}).");
+                                continue;
+                            }
+                            break;
                     }
 
                     // Enforce max drop cap
@@ -360,6 +374,20 @@ namespace StarLevelSystem.modules
             int result = Mathf.RoundToInt(loot_scale_factor * lootdrop_amount);
             Logger.LogDebug($"ExponentLootPerLevel {result} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){dmod.MinAmountScaleFactorBonus}/(max){dmod.MaxAmountScaleFactorBonus} perlevelscale:{dmod.MinAmountScaleFactorBonus})");
             return result;
+        }
+
+        private static int ChancePerLevel(int lootdrop_amount, int level, DistanceLootModifier dmod, float scale_factor = 1)
+        {
+            float min_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MinAmountScaleFactorBonus + scale_factor;
+            float max_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MaxAmountScaleFactorBonus + scale_factor;
+            float selectedMod = UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
+            float chance = Mathf.Pow(selectedMod, level);
+            float luck_roll = UnityEngine.Random.value;
+            Logger.LogDebug($"ChancePerLevel roll {luck_roll} vs chance {chance} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){dmod.MinAmountScaleFactorBonus}/(max){dmod.MaxAmountScaleFactorBonus} perlevelscale:{dmod.MinAmountScaleFactorBonus})");
+            if (luck_roll < chance) {
+                return lootdrop_amount;
+            }
+            return 0;
         }
 
         [HarmonyPatch]

@@ -13,6 +13,7 @@ namespace StarLevelSystem.modules
     {
         // Mod flags
         public static bool IsDropThatEnabled = false;
+        public static bool IsExpandWorldEnabled = false;
 
         private static Type DropThatDropTableSessionManager;
         private static Type DropThatCharacterDropSessionManager;
@@ -26,7 +27,9 @@ namespace StarLevelSystem.modules
         internal static void CheckModCompat() {
             try {
                 Dictionary<string, BepInEx.BaseUnityPlugin> plugins = BepInExUtils.GetPlugins();
-                if (plugins != null && plugins.Keys.Contains("asharppen.valheim.drop_that")) {
+                if (plugins == null) { return; }
+                //Logger.LogDebug($"Checking for mod compatibility... {string.Join(",", plugins.Keys)}");
+                if (plugins.Keys.Contains("asharppen.valheim.drop_that")) {
                     IsDropThatEnabled = true;
                     DropThatCharacterDropSessionManager = Type.GetType("DropThat.Drop.DropTableSystem.Managers.DropTableSessionManager, DropThat");
                     DropThatDropTableSessionManager = Type.GetType("DropThat.Drop.CharacterDropSystem.Managers.CharacterDropSessionManager, DropThat");
@@ -36,6 +39,9 @@ namespace StarLevelSystem.modules
                     } else {
                         Logger.LogWarning("Warning: Compat methods for DropThat not found, strict compatibility patches will be used.");
                     }
+                }
+                if (plugins.Keys.Contains("expand_world_size")) {
+                    IsExpandWorldEnabled = true;
                 }
             } catch {
                 Logger.LogWarning("Unable to check mod compatibility. Ensure that Bepinex can load.");

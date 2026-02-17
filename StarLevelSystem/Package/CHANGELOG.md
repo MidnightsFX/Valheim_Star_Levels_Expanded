@@ -1,3 +1,18 @@
+**0.17.7**
+ ---
+ ```
+ - Adds a configuration (off by default) to allow bred animals a chance (5%, configurable) of gaining an additional level compared to their parents (up to max)
+ - Delays minimap drawing till after configuration is synced from dedicated servers
+ ```
+
+**0.17.6**
+ ---
+ ```
+ - Changes Egg scaling to increase productivity instead of level (configurable)
+	- This means that higher level creatures will produce more eggs, but the eggs themselves will not be higher level
+ - Adds a configuration option to enable force level scaling for drops which normally do not scale (trophies)
+ ```
+
 **0.17.5**
  ---
  ```

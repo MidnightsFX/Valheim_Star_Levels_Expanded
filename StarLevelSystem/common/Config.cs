@@ -23,6 +23,8 @@ namespace StarLevelSystem
         internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LootSettingsFileName);
         internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
 
+        internal static bool RecievedConfigsFromServer = false;
+
         private static CustomRPC LevelSettingsRPC;
         private static CustomRPC ColorSettingsRPC;
         private static CustomRPC CreatureLootSettingsRPC;
@@ -44,8 +46,13 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
+        public static ConfigEntry<bool> ScaleAllLootByLevel;
         public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<string> LootDropCalculationType;
+        public static ConfigEntry<bool> LootEggsDropIncreaseStacks;
+        public static ConfigEntry<bool> EggLevelDeterminedByItemQuality;
+        public static ConfigEntry<bool> OffspringCanBeStrongerThanParents;
+        public static ConfigEntry<float> OffspringGainExtraLevelChance;
         public static ConfigEntry<float> EnemyHealthMultiplier;
         public static ConfigEntry<float> BossEnemyHealthMultiplier;
         public static ConfigEntry<float> EnemyHealthPerWorldLevel;
@@ -211,6 +218,11 @@ namespace StarLevelSystem
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
             LootDropCalculationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
+            ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");
+            LootEggsDropIncreaseStacks = BindServerConfig("LootSystem", "LootEggsDropIncreaseStacks", true, "This causes higher level chickens (and other egg producers) to drop MORE eggs instead of higher leveled ones.");
+            EggLevelDeterminedByItemQuality = BindServerConfig("LootSystem", "EggLevelDeterminedByItemQuality", false, "When enabled, the level of egg grown creatures is determined by the eggs quality level. Otherwise the grown creature uses its default level configuration.");
+            OffspringCanBeStrongerThanParents = BindServerConfig("LevelSystem", "OffspringCanBeStrongerThanParents", false, "When enabled, creatures that are bred can have higher levels than their parents. Otherwise, they will be capped at the highest parent level.");
+            OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
@@ -232,6 +244,10 @@ namespace StarLevelSystem
             InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
             
+        }
+
+        internal static void RecievedServerUpdates() {
+            RecievedConfigsFromServer = true;
         }
 
         internal void LoadYamlConfigs()

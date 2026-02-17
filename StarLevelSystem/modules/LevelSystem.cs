@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 using Extensions = StarLevelSystem.common.Extensions;
 
@@ -18,6 +19,7 @@ namespace StarLevelSystem.modules
     {
         public static Vector3 center = new Vector3(0, 0, 0);
         private static bool buildingMapRings = false;
+        private static bool ringAvailable = false;
 
         public static void SetAndUpdateCharacterLevel(Character character, int level) {
             if (character == null) { return; }
@@ -270,22 +272,52 @@ namespace StarLevelSystem.modules
             yield break;
         }
 
-        public static void CreateLevelBonusRingMapOverlays()
-        {
-            if (ZNetScene.instance == null) { return; }
+        public static void DelayedMinimapSetup() {
+            if (ZNet.instance == null) {
+                Logger.LogDebug("Starting immediate map overlay generation.");
+                CreateLevelBonusRingMapOverlays();
+            } else {
+                Logger.LogDebug("Starting delayed map overlay generation.");
+                ZNet.instance.StartCoroutine(CheckAndDrawMapRings());
+            }
+        }
+
+        private static IEnumerator CheckAndDrawMapRings() {
+            // Check to ensure that the config synchronziation has occured if we are on a dedicated server
+            Logger.LogDebug("Waiting to draw map");
+            yield return new WaitForSeconds(10f);
+            if (ZNet.instance.IsCurrentServerDedicated()) {
+                int iterations = 0;
+                while(ValConfig.RecievedConfigsFromServer == false) {
+                    Logger.LogDebug("Waiting for config sync to complete before drawing map rings on dedicated server.");
+                    yield return new WaitForSeconds(5f);
+                    iterations++;
+                    if (iterations >= 25) {
+                        Logger.LogWarning("Config sync not detected. Waiting timeframe expired.");
+                        break;
+                    }
+                }
+            }
+            CreateLevelBonusRingMapOverlays();
+            yield break;
+        }
+
+        private static void CreateLevelBonusRingMapOverlays() {
             if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
+            if (ZNet.instance == null || ZNet.instance.isActiveAndEnabled == false) { return; }
+            SetRingCenter();
             Logger.LogDebug("Creating Level Bonus Rings on Map");
             if (buildingMapRings == false) {
-                ZNetScene.instance.StartCoroutine(BuildMapRingOverlay());
+                buildingMapRings = true;
+                ZNet.instance.StartCoroutine(BuildMapRingOverlay());
             }
-            buildingMapRings = true;
         }
 
         public static void OnRingCenterChanged(object s, EventArgs e)
         {
             if (ZNet.instance.IsCurrentServerDedicated()) { return; }
             SetRingCenter();
-            CreateLevelBonusRingMapOverlays();
+            DelayedMinimapSetup();
         }
 
         public static void SetRingCenter() {
@@ -305,24 +337,25 @@ namespace StarLevelSystem.modules
         public static void UpdateMapColorSettingsOnChange(object s, EventArgs e)
         {
             Colorization.UpdateMapColorSelection();
-            CreateLevelBonusRingMapOverlays();
+            DelayedMinimapSetup();
         }
 
-        public static void UpdateMapRingEnableSettingOnChange(object s, EventArgs e)
-        {
-            if (ValConfig.EnableMapRingsForDistanceBonus.Value)
-            {
-                ZNetScene.instance.StartCoroutine(BuildMapRingOverlay());
+        public static void UpdateMapRingEnableSettingOnChange(object s, EventArgs e) {
+            if (ValConfig.EnableMapRingsForDistanceBonus.Value) {
+                DelayedMinimapSetup();
             } else {
-                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
-                if (ringbonuses == null) { return; }
-                ringbonuses.Enabled = false;
+                // prevent invoking the minimap manager if we don't need it
+                if (ringAvailable == true) {
+                    MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
+                    if (ringbonuses == null) { return; }
+                    ringbonuses.Enabled = false;
+                }
             }
         }
 
 
 
-        public static IEnumerator BuildMapRingOverlay()
+        private static IEnumerator BuildMapRingOverlay()
         {
             // Skip if distances are not defined.
             if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
@@ -332,8 +365,6 @@ namespace StarLevelSystem.modules
                 Logger.LogDebug("Server is headless, skipping minimap generation");
                 yield break;
             }
-            // Ensures that the previous ring overlay is removed first
-            //MinimapManager.Instance.RemoveMapOverlay("SLS-LevelBonus");
             MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
             ringbonuses.Enabled = true;
 
@@ -396,6 +427,7 @@ namespace StarLevelSystem.modules
             ringbonuses.OverlayTex.Apply();
             Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
             buildingMapRings = false;
+            ringAvailable = true;
             yield break;
         }
 
@@ -799,6 +831,7 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Procreation))]
         public static class SetChildLevel
         {
+            //[HarmonyEmitIL(".dumps")]
             //[HarmonyDebug]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(Procreation.Procreate))]
@@ -808,13 +841,42 @@ namespace StarLevelSystem.modules
                 codeMatcher.MatchForward(true,
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Tameable), nameof(Tameable.IsTamed))),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), nameof(Character.SetTamed)))
-                    ).RemoveInstructions(15).InsertAndAdvance(
+                ).RemoveInstructions(15).InsertAndAdvance(
                     new CodeInstruction(OpCodes.Ldloc, (byte)6),
                     new CodeInstruction(OpCodes.Ldarg_0),
                     Transpilers.EmitDelegate(SetupChildCharacter)
-                    ).ThrowIfNotMatch("Unable to patch child spawn level set.");
+                ).MatchStartForward(
+                    new CodeMatch(OpCodes.Ldloc_S),
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Procreation), nameof(Procreation.m_minOffspringLevel))),
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Procreation), nameof(Procreation.m_character)))
+                ).Advance(2)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(SetupEggItem)
+                )
+                .RemoveInstructions(13)
+                .ThrowIfNotMatch("Unable to patch child spawn level set.");
 
                 return codeMatcher.Instructions();
+            }
+
+            internal static void SetupEggItem(ItemDrop item, Procreation proclass) {
+                if (ValConfig.LootEggsDropIncreaseStacks.Value) {
+                    int leveled_loot = Mathf.RoundToInt(1 * (1 + ValConfig.PerLevelLootScale.Value * proclass.m_character.m_level));
+                    if (leveled_loot > item.m_itemData.m_shared.m_maxStackSize) { leveled_loot = item.m_itemData.m_shared.m_maxStackSize; }
+                    item.m_itemData.m_stack = leveled_loot;
+                } else {
+                    // This is effectively the current vanilla behavior
+                    int level = Mathf.Max(proclass.m_minOffspringLevel, proclass.m_character ? proclass.m_character.GetLevel() : proclass.m_minOffspringLevel);
+                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
+                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
+                            level += 1;
+                            Logger.LogDebug($"Child egg is stronger than parents and has a higher max level.");
+                        }
+                    }
+                    item.SetQuality(level);
+                }
             }
 
             internal static void SetupChildCharacter(Character chara, Procreation proc)
@@ -840,12 +902,24 @@ namespace StarLevelSystem.modules
                 if (cdc_parent != null && cdc_parent.Level != 0) {
                     inheritedLevel = cdc_parent.Level;
                 }
-                if (ValConfig.RandomizeTameChildrenLevels.Value == true)
-                {
+
+                if (ValConfig.RandomizeTameChildrenLevels.Value == true) {
                     int level = UnityEngine.Random.Range(1, inheritedLevel);
+                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
+                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
+                            level += 1;
+                            Logger.LogDebug($"Child is strong, but still random.");
+                        }
+                    }
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
                     ModificationExtensionSystem.CreatureSetup(chara, level, delay: 0.1f);
                 } else {
+                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
+                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
+                            inheritedLevel += 1;
+                            Logger.LogDebug($"Child is stronger than parents and has a higher max level.");
+                        }
+                    }
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
                     ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
                 }
@@ -1186,6 +1260,47 @@ namespace StarLevelSystem.modules
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
                     ModificationExtensionSystem.CreatureSetup(chara);
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(EggGrow))]
+        public static class EggGrowCompat {
+
+            [HarmonyTranspiler]
+            [HarmonyPatch(nameof(EggGrow.GrowUpdate))]
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldloc_1),
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(EggGrow), nameof(EggGrow.m_item))),
+                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(ItemDrop.ItemData), nameof(ItemDrop.m_itemData.m_quality)))
+                ).Advance(2)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(ControlEggSpawnLevelInheritance)
+                )
+                .RemoveInstructions(4)
+                .ThrowIfNotMatch("Unable to patch Egg.GrowUpdate");
+
+                return codeMatcher.Instructions();
+            }
+
+            private static void ControlEggSpawnLevelInheritance(Character spawnedChar, EggGrow egg) {
+                if (ValConfig.EggLevelDeterminedByItemQuality.Value) {
+                    int qualityLevel = egg.m_item.m_itemData.m_quality;
+                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
+                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
+                            qualityLevel += 1;
+                            Logger.LogDebug($"This egg is stronger than its parents.");
+                        }
+                    }
+                    Logger.LogDebug($"Setting egg spawn level based on item quality {qualityLevel}.");
+                    ModificationExtensionSystem.CreatureSetup(spawnedChar, qualityLevel);
+                } else {
+                    // Don't set the level, let it be determined by the creatures configuration
+                    ModificationExtensionSystem.CreatureSetup(spawnedChar);
                 }
             }
         }

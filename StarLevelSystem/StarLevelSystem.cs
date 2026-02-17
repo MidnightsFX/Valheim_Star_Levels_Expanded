@@ -22,7 +22,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.17.5";
+        public const string PluginVersion = "0.17.7";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -51,8 +51,8 @@ namespace StarLevelSystem
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
             PrefabManager.OnVanillaPrefabsAvailable += LevelSystem.UpdateMaxLevel;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
-            MinimapManager.OnVanillaMapAvailable += LevelSystem.CreateLevelBonusRingMapOverlays;
-            ZoneManager.OnVanillaLocationsAvailable += LevelSystem.SetRingCenter;
+            MinimapManager.OnVanillaMapDataLoaded += LevelSystem.DelayedMinimapSetup;
+            SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.RecievedServerUpdates();
 
 
             TerminalCommands.AddCommands();

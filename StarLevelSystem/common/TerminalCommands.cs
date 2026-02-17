@@ -21,6 +21,7 @@ namespace StarLevelSystem.common
             CommandManager.Instance.AddConsoleCommand(new ResetZOIDModifiers());
             CommandManager.Instance.AddConsoleCommand(new GiveCreatureModifier());
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
+            CommandManager.Instance.AddConsoleCommand(new KillAllCreaturesNearby());
         }
 
         internal class KillAllCreaturesNearby : ConsoleCommand {

@@ -1,3 +1,9 @@
+**0.17.8**
+ ---
+ ```
+ - Adds a configuration (off by default) to allow bred animals to be infertile (50% chance, configurable)
+ ```
+
 **0.17.7**
  ---
  ```

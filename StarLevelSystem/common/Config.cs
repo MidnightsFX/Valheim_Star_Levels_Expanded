@@ -53,6 +53,8 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EggLevelDeterminedByItemQuality;
         public static ConfigEntry<bool> OffspringCanBeStrongerThanParents;
         public static ConfigEntry<float> OffspringGainExtraLevelChance;
+        public static ConfigEntry<bool> OffspringCanBeInfertile;
+        public static ConfigEntry<float> OffspringChanceToBeInfertile;
         public static ConfigEntry<float> EnemyHealthMultiplier;
         public static ConfigEntry<float> BossEnemyHealthMultiplier;
         public static ConfigEntry<float> EnemyHealthPerWorldLevel;
@@ -223,6 +225,8 @@ namespace StarLevelSystem
             EggLevelDeterminedByItemQuality = BindServerConfig("LootSystem", "EggLevelDeterminedByItemQuality", false, "When enabled, the level of egg grown creatures is determined by the eggs quality level. Otherwise the grown creature uses its default level configuration.");
             OffspringCanBeStrongerThanParents = BindServerConfig("LevelSystem", "OffspringCanBeStrongerThanParents", false, "When enabled, creatures that are bred can have higher levels than their parents. Otherwise, they will be capped at the highest parent level.");
             OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
+            OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
+            OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f,1f);
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");

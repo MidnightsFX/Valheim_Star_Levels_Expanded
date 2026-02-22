@@ -923,6 +923,7 @@ namespace StarLevelSystem.modules
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
                     ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
                 }
+                CheckToMakeOffspringInfertile(chara);
             }
         }
 
@@ -937,6 +938,38 @@ namespace StarLevelSystem.modules
                 __result = __instance.m_character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
                 //Logger.LogDebug($"Damage Level Factor: {__result}");
                 return false;
+            }
+        }
+
+        internal static void CheckToMakeOffspringInfertile(Character chara) {
+            if (ValConfig.OffspringCanBeInfertile.Value) {
+                if (UnityEngine.Random.value <= ValConfig.OffspringChanceToBeInfertile.Value) {
+                    chara.m_nview.GetZDO().Set(SLS_INFERTILE, true);
+                    Logger.LogDebug($"Child is infertile.");
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(Procreation), nameof(Procreation.ReadyForProcreation))]
+        public static class ProcreationPrevention {
+            public static void Postfix(Procreation __instance, ref bool __result) {
+                if (__instance.m_character != null || __instance.m_character.m_nview != null || __instance.m_character.m_nview.GetZDO() != null && __result == true) {
+                    if (__instance.m_nview.GetZDO().GetBool(SLS_INFERTILE, false)) {
+                        __result = false;
+                        Logger.LogDebug($"Preventing procreation because child is infertile.");
+                    }
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(Tameable), nameof(Tameable.GetHoverText))]
+        public static class ProcreationPreventionDisplay {
+            public static void Postfix(Tameable __instance, ref string __result) {
+                if (__instance.m_character != null || __instance.m_character.m_nview != null || __instance.m_character.m_nview.GetZDO() != null) {
+                    if (__instance.m_nview.GetZDO().GetBool(SLS_INFERTILE, false)) {
+                        __result += Localization.instance.Localize("\n<color=red>$SLS_infertile</color>");
+                    }
+                }
             }
         }
 
@@ -1290,18 +1323,13 @@ namespace StarLevelSystem.modules
             private static void ControlEggSpawnLevelInheritance(Character spawnedChar, EggGrow egg) {
                 if (ValConfig.EggLevelDeterminedByItemQuality.Value) {
                     int qualityLevel = egg.m_item.m_itemData.m_quality;
-                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
-                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
-                            qualityLevel += 1;
-                            Logger.LogDebug($"This egg is stronger than its parents.");
-                        }
-                    }
                     Logger.LogDebug($"Setting egg spawn level based on item quality {qualityLevel}.");
                     ModificationExtensionSystem.CreatureSetup(spawnedChar, qualityLevel);
                 } else {
                     // Don't set the level, let it be determined by the creatures configuration
                     ModificationExtensionSystem.CreatureSetup(spawnedChar);
                 }
+                CheckToMakeOffspringInfertile(spawnedChar);
             }
         }
 

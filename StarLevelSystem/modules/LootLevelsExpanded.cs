@@ -124,7 +124,7 @@ namespace StarLevelSystem.modules
 
                     // Modify the multiplier for how many this drops based on local players
                     if (loot.Drop.OnePerPlayer) {
-                        scale_multiplier += Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
+                        scale_multiplier += (Player.GetPlayersInRangeXZ(__instance.transform.position, 500f) -1f);
                         // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
                     }
 
@@ -611,8 +611,8 @@ namespace StarLevelSystem.modules
         }
 
         public static void DropItemsPreferAsync(Vector3 position, List<KeyValuePair<GameObject, int>> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
-            if (Player.m_localPlayer != null && immediate == false) {
-                Player.m_localPlayer.StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f, dropThatCharacterDrop));
+            if (immediate == false) {
+                TaskRunner.Run().StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f, dropThatCharacterDrop));
             } else {
                 DropItemsImmediate(optimizeDrops, position, 0.5f, dropThatCharacterDrop, dropThatNonCharacterDrop);
             }

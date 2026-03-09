@@ -2,6 +2,9 @@
  ---
  ```
  - Adds a configuration (off by default) to allow bred animals to be infertile (50% chance, configurable)
+ - Fixes OnePerPlayer configuration giving one more piece of loot than intended
+ - Ensures trees destruction show their destruction effects
+ - Isolates Async code
  ```
 
 **0.17.7**

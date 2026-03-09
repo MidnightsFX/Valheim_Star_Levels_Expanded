@@ -167,7 +167,7 @@ namespace StarLevelSystem.Data
 
             // Destroy character if its selected for deletion
             if (characterEntry.ShouldDelete && chara.m_tamed == false) {
-                ZNetScene.instance.StartCoroutine(ModificationExtensionSystem.DestroyCoroutine(chara.gameObject));
+                TaskRunner.Run().StartCoroutine(ModificationExtensionSystem.DestroyCoroutine(chara.gameObject));
                 return;
             }
 

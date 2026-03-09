@@ -426,14 +426,8 @@ namespace StarLevelSystem.modules
 
 
             // Generally a bad idea to run setup immediately if this is a networked player and the owner hasn't setup the creature
-            if (ZNetScene.instance != null) {
-                ZNetScene.instance.StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, spawnMultiply: multiply, requiredModifiers: requiredModifiers));
-            } else {
-                Logger.LogDebug("FALLBACK setup of creature, does this client have network issues?");
-                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance, leveloverride, requiredModifiers);
-                CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce);
-                CharacterSetup(__instance, cce);
-            }
+            // we want to delay slightly to allow the ZOwner to setup the creature, send the values and then we can use those, no need to multiply work
+            TaskRunner.Run().StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, spawnMultiply: multiply, requiredModifiers: requiredModifiers));
         }
 
         internal static void ApplyHealthModifications(Character chara, CharacterCacheEntry cDetails) {
@@ -519,9 +513,8 @@ namespace StarLevelSystem.modules
             UpdateSizeZNet(creature, zview, cDetails, creatureref);
         }
 
-        public static void ApplySizeModificationToObjWhenZReady(GameObject obj, ZNetView zview)
-        {
-            ZNet.instance.StartCoroutine(WaitForZReadyAndApplySize(obj, zview));
+        public static void ApplySizeModificationToObjWhenZReady(GameObject obj, ZNetView zview) {
+            TaskRunner.Run().StartCoroutine(WaitForZReadyAndApplySize(obj, zview));
         }
 
         public static IEnumerator WaitForZReadyAndApplySize(GameObject obj, ZNetView zview, int max = 10)

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 using Extensions = StarLevelSystem.common.Extensions;
@@ -238,7 +239,7 @@ namespace StarLevelSystem.modules
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            ZNetScene.instance.StartCoroutine(ModifyLoadedCreaturesLevels());
+            TaskRunner.Run().StartCoroutine(ModifyLoadedCreaturesLevels());
         }
 
         public static IEnumerator ModifyLoadedCreaturesLevels()
@@ -273,13 +274,11 @@ namespace StarLevelSystem.modules
         }
 
         public static void DelayedMinimapSetup() {
-            if (ZNet.instance == null) {
-                Logger.LogDebug("Starting immediate map overlay generation.");
-                CreateLevelBonusRingMapOverlays();
-            } else {
-                Logger.LogDebug("Starting delayed map overlay generation.");
-                ZNet.instance.StartCoroutine(CheckAndDrawMapRings());
+            if (SceneManager.GetActiveScene().name != "main") {
+                // Dont try to draw the map when we are not in the game
+                return;
             }
+            TaskRunner.Run().StartCoroutine(CheckAndDrawMapRings());
         }
 
         private static IEnumerator CheckAndDrawMapRings() {
@@ -304,12 +303,11 @@ namespace StarLevelSystem.modules
 
         private static void CreateLevelBonusRingMapOverlays() {
             if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
-            if (ZNet.instance == null || ZNet.instance.isActiveAndEnabled == false) { return; }
             SetRingCenter();
             Logger.LogDebug("Creating Level Bonus Rings on Map");
             if (buildingMapRings == false) {
                 buildingMapRings = true;
-                ZNet.instance.StartCoroutine(BuildMapRingOverlay());
+                TaskRunner.Run().StartCoroutine(BuildMapRingOverlay());
             }
         }
 
@@ -529,6 +527,8 @@ namespace StarLevelSystem.modules
 
                 //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
                 Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
+
+                __instance.m_destroyedEffect.Create(position, __instance.transform.rotation);
                 LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
 
                 // Spawn logs if we should
@@ -602,7 +602,7 @@ namespace StarLevelSystem.modules
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            ZNetScene.instance.StartCoroutine(UpdateAllTreeSizesOnConfigChangeCoroutine());
+            TaskRunner.Run().StartCoroutine(UpdateAllTreeSizesOnConfigChangeCoroutine());
         }
 
         public static void UpdateBirdSizeOnConfigChange(object s, EventArgs e)
@@ -610,7 +610,7 @@ namespace StarLevelSystem.modules
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            ZNetScene.instance.StartCoroutine(UpdateAllBirdSizesOnConfigChangeCoroutine());
+            TaskRunner.Run().StartCoroutine(UpdateAllBirdSizesOnConfigChangeCoroutine());
         }
 
         public static void UpdateFishSizeOnConfigChange(object s, EventArgs e)
@@ -618,7 +618,7 @@ namespace StarLevelSystem.modules
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            ZNetScene.instance.StartCoroutine(UpdateAllFishOnConfigChangeCoroutine());
+            TaskRunner.Run().StartCoroutine(UpdateAllFishOnConfigChangeCoroutine());
         }
 
         public static IEnumerator UpdateAllTreeSizesOnConfigChangeCoroutine()

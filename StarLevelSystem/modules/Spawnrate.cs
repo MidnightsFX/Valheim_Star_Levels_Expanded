@@ -58,6 +58,7 @@ namespace StarLevelSystem.modules
                 // Chance to reduce spawnrate, if triggered this creature will be queued for deletion
                 if (randv >= spawnrate) {
                     Logger.LogDebug($"Spawn Reducer| Selecting {ccEntry.RefCreatureName} for deletion.");
+                    ZNetScene.instance.Destroy(chara.gameObject);
                     return true;
                 }
             }

@@ -1,3 +1,11 @@
+**0.17.9**
+ ---
+ ```
+ - Fixes creature spawn rate reduction, and allows it to properly operate up to 100% (completely removing creature from spawning)
+ - Added additional safety checks for creating rings outside the valid size ranges on the map (negative rings will be ignored)
+ - Modified how distance level bonus influence is applied to level calculations. It now only applies to the bonus exclusively, instead of the whole value
+ ```
+
 **0.17.8**
  ---
  ```

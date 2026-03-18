@@ -101,8 +101,7 @@ namespace StarLevelSystem.modules
                 }
 
                 // Ensure we use character / biome specific levelup chances if those are set
-                if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null)
-                {
+                if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null) {
                     levelup_chances = biome_settings.CustomCreatureLevelUpChance;
                 }
                 if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
@@ -195,38 +194,37 @@ namespace StarLevelSystem.modules
         // Consider decision tree for levelups to reduce iterations
         public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f) {
             int selected_level = 0;
-            creature_levelup_chance ??= LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
-
             // Build new levelup definitions with bonuses applied
             SortedDictionary<int, float> LevelUpWithBonus = new SortedDictionary<int, float>() { };
             LevelUpWithBonus.AddRange<int, float>(creature_levelup_chance);
             if (levelup_bonus != null) {
                 foreach (KeyValuePair<int, float> kvp in levelup_bonus) {
                     if (LevelUpWithBonus.ContainsKey(kvp.Key)) {
-                        LevelUpWithBonus[kvp.Key] += kvp.Value;
+                        LevelUpWithBonus[kvp.Key] += (kvp.Value * distance_influence);
                     } else {
-                        LevelUpWithBonus[kvp.Key] = kvp.Value;
+                        LevelUpWithBonus[kvp.Key] = (kvp.Value * distance_influence);
                     }
                 }
             }
 
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {
-                float levelup_req = kvp.Value * nightBonus * distance_influence;
+                float levelup_req = kvp.Value * nightBonus;
+                // Uncomment to debug level roll selection and values (warning verbose)
                 //if (ValConfig.EnableDebugOutputLevelRolls.Value) {
                 //    float bonus = 0;
                 //    if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                 //    float baseval = 0;
                 //    if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
-                //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(bonus) ] * {nightBonus} * {distance_influence} | {kvp.Key}");
+                //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
                 //}
+                selected_level = kvp.Key; // Always set the level, we return level 1 as the min, if nothing is matched- or the last entry in the level values if everything is matched
                 if (roll >= levelup_req || kvp.Key >= maxLevel) {
-                    selected_level = kvp.Key;
                     if (ValConfig.EnableDebugOutputLevelRolls.Value) {
                         float bonus = 0;
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                         float baseval = 0;
                         if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) ] * {nightBonus}(Night) * {distance_influence}(DistanceInfluence) | max-level used: {maxLevel} Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) | max-level used: {maxLevel} Selected Level: {selected_level}");
                     }
                     break;
                 }
@@ -411,11 +409,11 @@ namespace StarLevelSystem.modules
                     if (ringbonuses == null) { yield break; }
 
                     int index = (y * ringbonuses.TextureSize) + x;
-                    // Index must be less than pixels due to zero indexing
-                    if (index >= mainPixels.Length) {
+                    // Index must be less than pixels due to zero indexing and greater than zero
+                    if (index >= mainPixels.Length || index < 0) {
                         continue;
                     }
-                    //Logger.LogDebug($"Drawing ring for distance {ringDistance} pixels idx:{index} x:{x} y:{y}");
+                    //Logger.LogDebug($"Drawing ring for distance {ringDistance} pixels idx:{index}[{mainPixels.Length}] x:{x} y:{y}");
                     mainPixels[index] = selectedColor;
                 }
             }

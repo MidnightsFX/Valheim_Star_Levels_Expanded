@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+    <PropertyGroup Condition="$(OS) == 'Unix' OR $(OS) == 'OSX'">
+        <VALHEIM_INSTALL>$(HOME)/Library/Application Support/Steam/steamapps/common/Valheim</VALHEIM_INSTALL>
+        <VALHEIM_MANAGED>$(VALHEIM_INSTALL)/Valheim.app/Contents/Resources/Data/Managed</VALHEIM_MANAGED>
+        <BEPINEX_PATH>$(VALHEIM_INSTALL)/BepInEx</BEPINEX_PATH>
+        <BEPINEX_CORE>$(BEPINEX_PATH)/core</BEPINEX_CORE>
+        <BEPINEX_PLUGINS>$(BEPINEX_PATH)/plugins</BEPINEX_PLUGINS>
+        <PUBLICIZED_PATH>$(VALHEIM_MANAGED)/publicized_assemblies</PUBLICIZED_PATH>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="$(OS) == 'Windows_NT'">
+        <VALHEIM_INSTALL>C:\Program Files (x86)\Steam\steamapps\common\Valheim</VALHEIM_INSTALL>
+        <VALHEIM_MANAGED>$(VALHEIM_INSTALL)\valheim_Data\Managed</VALHEIM_MANAGED>
+        <BEPINEX_PATH>$(VALHEIM_INSTALL)\BepInEx</BEPINEX_PATH>
+        <BEPINEX_CORE>$(BEPINEX_PATH)\core</BEPINEX_CORE>
+        <BEPINEX_PLUGINS>$(BEPINEX_PATH)\plugins</BEPINEX_PLUGINS>
+        <PUBLICIZED_PATH>$(VALHEIM_MANAGED)\publicized_assemblies</PUBLICIZED_PATH>
+    </PropertyGroup>
+
+    <!-- BepInEx, Harmony, Jotunn -->
+    <ItemGroup>
+        <Reference Include="BepInEx">
+            <HintPath>$(BEPINEX_CORE)/BepInEx.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="0Harmony">
+            <HintPath>$(BEPINEX_CORE)/0Harmony.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Jotunn">
+            <HintPath>$(BEPINEX_CORE)/Jotunn.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="MonoMod.Utils">
+            <HintPath>$(BEPINEX_CORE)/MonoMod.Utils.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Mono.Cecil">
+            <HintPath>$(BEPINEX_CORE)/Mono.Cecil.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <!-- Valheim Platform -->
+    <ItemGroup>
+        <Reference Include="PlayFab">
+            <HintPath>$(VALHEIM_MANAGED)/PlayFab.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <!-- Unity Engine -->
+    <ItemGroup>
+        <Reference Include="UnityEngine">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.CoreModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.UI.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UIModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.UIModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.AssetBundleModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.AssetBundleModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.ImageConversionModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.ImageConversionModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.InputLegacyModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.InputLegacyModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.IMGUIModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.TextRenderingModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.ParticleSystemModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.ParticleSystemModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.PhysicsModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.AnimationModule">
+            <HintPath>$(VALHEIM_MANAGED)/UnityEngine.AnimationModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Unity.TextMeshPro">
+            <HintPath>$(VALHEIM_MANAGED)/Unity.TextMeshPro.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <!-- Valheim Game Assemblies (publicized) -->
+    <ItemGroup>
+        <Reference Include="assembly_valheim">
+            <HintPath>$(PUBLICIZED_PATH)/assembly_valheim_publicized.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="assembly_guiutils">
+            <HintPath>$(PUBLICIZED_PATH)/assembly_guiutils_publicized.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="assembly_utils">
+            <HintPath>$(PUBLICIZED_PATH)/assembly_utils_publicized.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="SoftReferenceableAssets">
+            <HintPath>$(PUBLICIZED_PATH)/SoftReferenceableAssets_publicized.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+</Project>

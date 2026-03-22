@@ -207,8 +207,10 @@ namespace StarLevelSystem.modules
                 }
             }
 
+            int index = 0;
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {
                 float levelup_req = kvp.Value * nightBonus;
+                index++;
                 // Uncomment to debug level roll selection and values (warning verbose)
                 //if (ValConfig.EnableDebugOutputLevelRolls.Value) {
                 //    float bonus = 0;
@@ -217,9 +219,12 @@ namespace StarLevelSystem.modules
                 //    if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
                 //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
                 //}
-                selected_level = kvp.Key; // Always set the level, we return level 1 as the min, if nothing is matched- or the last entry in the level values if everything is matched
-                if (roll >= levelup_req || kvp.Key >= maxLevel) {
+                if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count()) {
                     if (ValConfig.EnableDebugOutputLevelRolls.Value) {
+                        selected_level = kvp.Key;
+                        if (index == LevelUpWithBonus.Count()) {
+                            selected_level += 1; // Because we would normally select the NEXT key as our actual level (accounting for the N+1 level system)
+                        }
                         float bonus = 0;
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                         float baseval = 0;
@@ -229,6 +234,7 @@ namespace StarLevelSystem.modules
                     break;
                 }
             }
+            // Rolled level is always N+1 due to 1 star being level 2
             return selected_level;
         }
 

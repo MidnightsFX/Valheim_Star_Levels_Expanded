@@ -1,3 +1,11 @@
+**0.17.10**
+ ---
+ ```
+ - Fixes biome based configurations mutating the "all" biome configuration (Thanks Warp!)
+ - Ensure that custom levels beyond the default levelup can properly select the highest level (assuming it is under the global max level)
+ - Removes spirit, pickaxe, and chop from damage totals used to calculate modifier bonus damage
+ ```
+
 **0.17.9**
  ---
  ```

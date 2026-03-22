@@ -210,26 +210,19 @@ namespace StarLevelSystem.common
         {
             BiomeSpecificSetting biomecfg = new BiomeSpecificSetting
             {
-                CustomCreatureLevelUpChance = othercfg.CustomCreatureLevelUpChance != null
-                    ? new SortedDictionary<int, float>(othercfg.CustomCreatureLevelUpChance) : null,
+                CustomCreatureLevelUpChance = othercfg.CustomCreatureLevelUpChance != null ? new SortedDictionary<int, float>(othercfg.CustomCreatureLevelUpChance) : null,
                 BiomeMinLevelOverride = othercfg.BiomeMinLevelOverride,
                 BiomeMaxLevelOverride = othercfg.BiomeMaxLevelOverride,
                 DistanceScaleModifier = othercfg.DistanceScaleModifier,
                 SpawnRateModifier = othercfg.SpawnRateModifier,
-                CreatureBaseValueModifiers = othercfg.CreatureBaseValueModifiers != null
-                    ? new Dictionary<CreatureBaseAttribute, float>(othercfg.CreatureBaseValueModifiers) : null,
-                CreaturePerLevelValueModifiers = othercfg.CreaturePerLevelValueModifiers != null
-                    ? new Dictionary<CreaturePerLevelAttribute, float>(othercfg.CreaturePerLevelValueModifiers) : null,
-                DamageRecievedModifiers = othercfg.DamageRecievedModifiers != null
-                    ? new Dictionary<DamageType, float>(othercfg.DamageRecievedModifiers) : null,
-                creatureSpawnsDisabled = othercfg.creatureSpawnsDisabled != null
-                    ? new List<string>(othercfg.creatureSpawnsDisabled) : null,
-                NightSettings = othercfg.NightSettings != null
-                    ? new BiomeNightSettings {
+                CreatureBaseValueModifiers = othercfg.CreatureBaseValueModifiers != null ? new Dictionary<CreatureBaseAttribute, float>(othercfg.CreatureBaseValueModifiers) : null,
+                CreaturePerLevelValueModifiers = othercfg.CreaturePerLevelValueModifiers != null ? new Dictionary<CreaturePerLevelAttribute, float>(othercfg.CreaturePerLevelValueModifiers) : null,
+                DamageRecievedModifiers = othercfg.DamageRecievedModifiers != null ? new Dictionary<DamageType, float>(othercfg.DamageRecievedModifiers) : null,
+                creatureSpawnsDisabled = othercfg.creatureSpawnsDisabled != null ? new List<string>(othercfg.creatureSpawnsDisabled) : null,
+                NightSettings = othercfg.NightSettings != null ? new BiomeNightSettings {
                         NightLevelUpChanceScaler = othercfg.NightSettings.NightLevelUpChanceScaler,
                         SpawnRateModifier = othercfg.NightSettings.SpawnRateModifier,
-                        creatureSpawnsDisabled = othercfg.NightSettings.creatureSpawnsDisabled != null
-                            ? new List<string>(othercfg.NightSettings.creatureSpawnsDisabled) : null
+                        creatureSpawnsDisabled = othercfg.NightSettings.creatureSpawnsDisabled != null ? new List<string>(othercfg.NightSettings.creatureSpawnsDisabled) : null
                     } : null
             };
 
@@ -239,39 +232,27 @@ namespace StarLevelSystem.common
             biomecfg.DistanceScaleModifier = prioritycfg.DistanceScaleModifier;
             biomecfg.SpawnRateModifier = prioritycfg.SpawnRateModifier;
 
-            if (biomecfg.CreatureBaseValueModifiers != null && prioritycfg.CreatureBaseValueModifiers != null)
-            {
+            if (biomecfg.CreatureBaseValueModifiers != null && prioritycfg.CreatureBaseValueModifiers != null) {
                 foreach (var kv in prioritycfg.CreatureBaseValueModifiers) { biomecfg.CreatureBaseValueModifiers[kv.Key] = kv.Value; }
-            }
-            else if (prioritycfg.CreatureBaseValueModifiers != null)
-            {
+            } else if (prioritycfg.CreatureBaseValueModifiers != null) {
                 biomecfg.CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>(prioritycfg.CreatureBaseValueModifiers);
             }
 
-            if (biomecfg.CreaturePerLevelValueModifiers != null && prioritycfg.CreaturePerLevelValueModifiers != null)
-            {
+            if (biomecfg.CreaturePerLevelValueModifiers != null && prioritycfg.CreaturePerLevelValueModifiers != null) {
                 foreach (var kv in prioritycfg.CreaturePerLevelValueModifiers) { biomecfg.CreaturePerLevelValueModifiers[kv.Key] = kv.Value; }
-            }
-            else if (prioritycfg.CreaturePerLevelValueModifiers != null)
-            {
+            } else if (prioritycfg.CreaturePerLevelValueModifiers != null) {
                 biomecfg.CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>(prioritycfg.CreaturePerLevelValueModifiers);
             }
 
-            if (biomecfg.DamageRecievedModifiers != null && prioritycfg.DamageRecievedModifiers != null)
-            {
+            if (biomecfg.DamageRecievedModifiers != null && prioritycfg.DamageRecievedModifiers != null) {
                 foreach (var kv in prioritycfg.DamageRecievedModifiers) { biomecfg.DamageRecievedModifiers[kv.Key] = kv.Value; }
-            }
-            else if (prioritycfg.DamageRecievedModifiers != null)
-            {
+            } else if (prioritycfg.DamageRecievedModifiers != null) {
                 biomecfg.DamageRecievedModifiers = new Dictionary<DamageType, float>(prioritycfg.DamageRecievedModifiers);
             }
 
-            if (biomecfg.creatureSpawnsDisabled != null && prioritycfg.creatureSpawnsDisabled != null)
-            {
+            if (biomecfg.creatureSpawnsDisabled != null && prioritycfg.creatureSpawnsDisabled != null) {
                 biomecfg.creatureSpawnsDisabled = biomecfg.creatureSpawnsDisabled.Union(prioritycfg.creatureSpawnsDisabled).ToList();
-            }
-            else if (prioritycfg.creatureSpawnsDisabled != null)
-            {
+            } else if (prioritycfg.creatureSpawnsDisabled != null) {
                 biomecfg.creatureSpawnsDisabled = new List<string>(prioritycfg.creatureSpawnsDisabled);
             }
 

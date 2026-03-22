@@ -2,6 +2,7 @@
 using Jotunn.Managers;
 using PlayFab.EconomyModels;
 using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -154,7 +155,7 @@ namespace StarLevelSystem.modules
 
                 if (attackerCharacter != null && attackerCharacter.CreatureDamageBonus != null && attackerCharacter.CreatureDamageBonus.Count > 0) {
                     if (ValConfig.EnableDebugOutputForDamage.Value) {
-                        Logger.LogDebug($"{__instance.name} Hit:{hit.GetTotalDamage()} Adding {attackerCharacter.GetDamageBonusDescription()}");
+                        Logger.LogDebug($"{__instance.name} Hit:{hit.GetTotalDamageOptions()} Adding {attackerCharacter.GetDamageBonusDescription()}");
                     }
                     AddDamagesToHit(hit, attackerCharacter.CreatureDamageBonus);
                 }
@@ -277,7 +278,7 @@ namespace StarLevelSystem.modules
         }
 
         internal static void AddDamagesToHit(HitData hit, Dictionary<DamageType, float> damageBonuses) {
-            float hitdamage = hit.GetTotalDamage();
+            float hitdamage = hit.GetTotalDamageOptions();
             foreach (var dmg in damageBonuses) {
                 switch(dmg.Key) {
                     // Physical
@@ -315,6 +316,14 @@ namespace StarLevelSystem.modules
                         break;
                 }
             }
+        }
+
+        internal static float GetTotalDamageOptions(this HitData hit, bool include_poison = false, bool include_spirit = false, bool include_pickaxe_and_chop = false) {
+            float dmg = hit.m_damage.m_damage + hit.m_damage.m_blunt + hit.m_damage.m_slash + hit.m_damage.m_pierce + hit.m_damage.m_fire + hit.m_damage.m_frost + hit.m_damage.m_lightning;
+            if (include_poison) { dmg += hit.m_damage.m_poison; }
+            if (include_spirit) { dmg += hit.m_damage.m_spirit; }
+            if (include_pickaxe_and_chop) { dmg += hit.m_damage.m_pickaxe + hit.m_damage.m_chop; }
+            return dmg;
         }
 
         // Delayed destruction of an object so that it can finish being setup- otherwise there are lots of vanilla scripts that explode

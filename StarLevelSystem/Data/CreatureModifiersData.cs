@@ -56,12 +56,17 @@ namespace StarLevelSystem.Data
             ResistSlash = 21,
             ResistBlunt = 22,
             ResistPierce = 23,
+            ResistFire = 24,
+            ResistFrost = 25,
+            ResistPoison = 26,
+            ResistSpirit = 27,
             Alert = 51,
             Big = 52,
             Fast = 53,
             StaminaDrain = 54,
             EitrDrain = 55,
-            Brutal = 56
+            Brutal = 56,
+            ElementalChaos = 57,
         }
 
         public static Dictionary<string, CreatureModifierDefinition> ModifierDefinitions = new Dictionary<string, CreatureModifierDefinition>()

@@ -21,6 +21,18 @@ namespace StarLevelSystem.modules
         public static Vector3 center = new Vector3(0, 0, 0);
         private static bool buildingMapRings = false;
         private static bool ringAvailable = false;
+        private static readonly List<string> VanillaSpawnAreaControllers = new List<string>() {
+            "EvilHeart_Forest",
+            "Spawner_GreydwarfNest",
+            "Spawner_DraugrPile",
+            "BonePileSpawner",
+            "Spawner_CharredCross",
+            "Spawner_CharredStone_Elite",
+            "Spawner_Kvastur",
+            "Spawner_CharredStone",
+            "Spawner_CharredStone_event",
+            "EvilHeart_Swamp"
+        };
 
         public static void SetAndUpdateCharacterLevel(Character character, int level) {
             if (character == null) { return; }
@@ -34,7 +46,7 @@ namespace StarLevelSystem.modules
         public static void SetCharacterLevelControl(Character chara, int fallbackLevel) {
             if (chara == null) { return; }
             if (ValConfig.ControlSpawnerLevels.Value) {
-                ModificationExtensionSystem.CreatureSpawnerSetup(chara);
+                ModificationExtensionSystem.CreatureSpawnerSetup(chara, delay: 1f);
                 return;
             }
             // Fallback
@@ -220,8 +232,8 @@ namespace StarLevelSystem.modules
                 //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
                 //}
                 if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count()) {
+                    selected_level = kvp.Key;
                     if (ValConfig.EnableDebugOutputLevelRolls.Value) {
-                        selected_level = kvp.Key;
                         if (index == LevelUpWithBonus.Count()) {
                             selected_level += 1; // Because we would normally select the NEXT key as our actual level (accounting for the N+1 level system)
                         }
@@ -969,7 +981,7 @@ namespace StarLevelSystem.modules
         [HarmonyPatch(typeof(Tameable), nameof(Tameable.GetHoverText))]
         public static class ProcreationPreventionDisplay {
             public static void Postfix(Tameable __instance, ref string __result) {
-                if (__instance.m_character != null || __instance.m_character.m_nview != null || __instance.m_character.m_nview.GetZDO() != null) {
+                if (__instance.m_character != null && __instance.m_character.m_nview != null && __instance.m_character.m_nview.GetZDO() != null) {
                     if (__instance.m_nview.GetZDO().GetBool(SLS_INFERTILE, false)) {
                         __result += Localization.instance.Localize("\n<color=red>$SLS_infertile</color>");
                     }
@@ -998,7 +1010,7 @@ namespace StarLevelSystem.modules
                 bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
                 if (biome_setting_check && biome_all_setting_check)
                 {
-                    biome_settings = Extensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig);
+                    biome_settings = Extensions.MutatingMergeBiomeConfigs(biomeConfig, allBiomeConfig);
                 }
                 else if (biome_setting_check)
                 {
@@ -1079,25 +1091,33 @@ namespace StarLevelSystem.modules
                 .Advance(2)
                 .InsertAndAdvance(
                     new CodeInstruction(OpCodes.Ldloc_S, 5),
+                    new CodeInstruction(OpCodes.Ldarg_0),
                     new CodeInstruction(OpCodes.Ldloc_2),
                     Transpilers.EmitDelegate(SpawnAreaSetCharacterLevelControl)
                     )
                 .CreateLabelOffset(out System.Reflection.Emit.Label label, offset: 28)
                 .InsertAndAdvance(new CodeInstruction(OpCodes.Br, label))
-                .MatchStartForward(
-                    new CodeMatch(OpCodes.Ldloc_S),
-                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Character), "GetCenterPoint")),
-                    new CodeMatch(OpCodes.Stloc_S)
-                    )
                 .ThrowIfNotMatch("Unable to patch SpawnArea.SpawnOne.");
 
                 return codeMatcher.Instructions();
             }
 
-            private static void SpawnAreaSetCharacterLevelControl(Character chara, SpawnArea.SpawnData spawndata) {
-                int fallback_level = spawndata != null ? spawndata.m_minLevel : 1;
-                //Logger.LogDebug($"SpawnArea.SpawnOne setting {chara.m_name} {fallback_level}");
-                SetCharacterLevelControl(chara, fallback_level);
+            private static void SpawnAreaSetCharacterLevelControl(Character chara, SpawnArea spawnArea, SpawnArea.SpawnData spawndata) {
+                if (ValConfig.ControlSpawnerLevels.Value) {
+                    // Alternatively only control this spawner if it is a vanilla spawner and control spawners is enabled
+                    if (ValConfig.OnlyControlVanillaAreaSpawners.Value && VanillaSpawnAreaControllers.Contains(Utils.GetPrefabName(spawnArea.gameObject))) {
+                        //Logger.LogDebug($"SpawnArea.SpawnOne (SLS Controlled) leveling {chara.m_name}");
+                        ModificationExtensionSystem.CreatureSpawnerSetup(chara, delay: 0.1f);
+                        return;
+                    }
+
+                    ModificationExtensionSystem.CreatureSpawnerSetup(chara, delay: 0.1f);
+                } else {
+                    LevelGenerator LG = new LevelGenerator() { LevelUpChance = spawnArea.GetLevelUpChance(), MaxLevel = spawndata.m_maxLevel, MinLevel = spawndata.m_minLevel, PrefabName = spawndata.m_prefab.name };
+                    int level = LG.RollAndDetermineLevel();
+                    Logger.LogDebug($"SpawnArea.SpawnOne using provided {chara.m_name} level {level}");
+                    ModificationExtensionSystem.CreatureSpawnerSetup(chara, level, delay: 0.1f);
+                }
             }
 
             [HarmonyPatch(nameof(SpawnArea.SelectWeightedPrefab))]

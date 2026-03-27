@@ -19,7 +19,7 @@ namespace StarLevelSystem.Modifiers
                 Character attacker = hit.GetAttacker();
                 if (attacker == null || attacker.IsPlayer()) { return; }
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(attacker);
-                if ( mods == null) { return; }
+                if (mods == null) { return; }
                 if (mods.Keys.Contains(ModifierNames.StaminaDrain.ToString())) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), mods[ModifierNames.StaminaDrain.ToString()]);
                     __instance.UseStamina(cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));

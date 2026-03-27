@@ -3,6 +3,7 @@ using Jotunn.Entities;
 using Jotunn.Managers;
 using MonoMod.Utils;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -39,6 +40,8 @@ namespace StarLevelSystem.common
         public static readonly string SLS_FISH = "SLE_Fish";
         public static readonly string SLS_BIRD = "SLE_Bird";
         public static readonly string SLS_INFERTILE = "SLS_Infertile";
+
+        public static readonly string SLS_MOD_CAP = "EffectCap";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -157,6 +160,42 @@ namespace StarLevelSystem.common
             }
             public bool ContainsID(int id) {
                 return _enumReverseLookup.ContainsKey(id);
+            }
+        }
+
+        public class LevelGenerator {
+            public string PrefabName { get; set; }
+            [DefaultValue(1)]
+            public int MaxLevel { get; set; }
+            [DefaultValue(1)]
+            public int MinLevel { get; set; }
+            [DefaultValue(0f)]
+            public float LevelUpChance { get; set; }
+            [DefaultValue(1f)]
+            public float NightMultiplier { get; set; }
+            [DefaultValue(false)]
+
+            public SortedDictionary<int, float> GetLevelUpDefinition() {
+                int cLevel = MaxLevel - MinLevel;
+                SortedDictionary<int, float> LevelupChances = new SortedDictionary<int, float>();
+                // Fallthrough for invalid or Min=Max Level
+                if (cLevel >= 0) {
+                    LevelupChances.Add(MinLevel, LevelUpChance);
+                    return LevelupChances;
+                }
+
+                cLevel += MinLevel;
+                float levelupChance = LevelUpChance;
+                while (cLevel <= MaxLevel) {
+                    LevelupChances.Add(cLevel, levelupChance);
+                    levelupChance *= LevelUpChance;
+                }
+                return LevelupChances;
+            }
+
+            public int RollAndDetermineLevel() {
+                float levelup_roll = UnityEngine.Random.Range(0f, 100f);
+                return LevelSystem.DetermineLevelRollResult(levelup_roll, MaxLevel, GetLevelUpDefinition(), new SortedDictionary<int, float>(), 1f, NightMultiplier);
             }
         }
 
@@ -342,6 +381,7 @@ namespace StarLevelSystem.common
             public float PerlevelPower { get; set; }
             public float BasePower { get; set; }
             public Dictionary<Heightmap.Biome, List<string>> BiomeObjects { get; set; }
+            public Dictionary<string, float> Config { get; set; }
         }
 
         public class CreatureModifierCollection

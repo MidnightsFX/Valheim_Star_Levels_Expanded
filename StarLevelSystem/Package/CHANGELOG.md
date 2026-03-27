@@ -1,3 +1,29 @@
+**0.18.0**
+ ---
+ ```
+ - Redesigns Modifier icons to all follow star designs
+ - Adds new Modifiers:
+	- Fire Resistant
+	- Frost Resistant
+	- Poison Resistant
+	- Spirit Resistant
+	- Elemental Chaos
+ - Improves compatibility with mods that add custom spawners
+ ```
+
+**0.17.13**
+ ---
+ ```
+ - Fix for incorrect level selection
+ ```
+
+**0.17.12**
+ ---
+ ```
+ - Fix for incorrect level selection
+ - Fix for NPE when displaying creature breeding disabled
+ ```
+
 **0.17.10**
  ---
  ```

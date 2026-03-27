@@ -41,10 +41,10 @@ namespace StarLevelSystem.modules
                         GameObject targetclone = PrefabManager.Instance.GetPrefab(ccEntry.RefCreatureName);
                         GameObject spawnedCreature = GameObject.Instantiate(targetclone, position, rotation);
                         Character spawnedChara = spawnedCreature.GetComponent<Character>();
-                        if (chara.IsTamed()) {
-                            spawnedChara?.SetTamed(true);
+                        if (chara.IsTamed() && spawnedChara != null) {
+                            spawnedChara.SetTamed(true);
                         }
-                        Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject}");
+                        Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject} at {position}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         ModificationExtensionSystem.CreatureSetup(spawnedChara, multiply: false);
                         spawnedChara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
@@ -68,10 +68,10 @@ namespace StarLevelSystem.modules
 
         internal static Vector3 DetermineOffsetPosition(Vector3 sourcePosition, float radius)
         {
-            ZoneSystem.instance.FindFloor(sourcePosition, out float ysourceFloor);
+            ZoneSystem.instance.GetGroundHeight(sourcePosition, out float ysourceFloor);
             float yoffset = 0f; // This is to account for flying things
             if (ysourceFloor > sourcePosition.y + 2) {
-                yoffset = sourcePosition.y - ysourceFloor;
+                yoffset = Mathf.Abs(sourcePosition.y - ysourceFloor);
                 if (yoffset < 0f) { yoffset = 0f; } // Safety check to prevent spawning lower
             }
             int tries = 0; // If tries gets above 10 we default back to the source position
@@ -79,7 +79,7 @@ namespace StarLevelSystem.modules
                 var offset = UnityEngine.Random.insideUnitCircle * (radius * 0.8f);
                 Vector3 estimatedspawn = sourcePosition + new Vector3(offset.x, 0, offset.y);
                 tries++;
-                ZoneSystem.instance.FindFloor(new Vector3(estimatedspawn.x, estimatedspawn.y + 100f, estimatedspawn.z), out float estimatedFloor);
+                ZoneSystem.instance.GetGroundHeight(new Vector3(estimatedspawn.x, estimatedspawn.y + 100f, estimatedspawn.z), out float estimatedFloor);
                 estimatedspawn.y = estimatedFloor + yoffset;
                 return estimatedspawn;
             }

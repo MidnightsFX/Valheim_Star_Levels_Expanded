@@ -10,6 +10,7 @@ namespace StarLevelSystem.modules
     public static class APIReciever
     {
         public static bool UpdateCreatureLevel(Character chara, int level) {
+            Logger.LogDebug($"SLS-API: Update Creature level {chara} - {level}");
             LevelSystem.SetAndUpdateCharacterLevel(chara, level);
             return true;
         }
@@ -197,7 +198,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
-            ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, cdc, true);
+            ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, cdc);
             ModificationExtensionSystem.ApplyHealthModifications(chara, cdc);
             return true;
         }

@@ -415,11 +415,10 @@ namespace StarLevelSystem.modules
             return true;
         }
 
-        internal static void CreatureSpawnerSetup(Character chara, int leveloverride = 0, bool multiply = true)
-        {
+        internal static void CreatureSpawnerSetup(Character chara, int leveloverride = 0, bool multiply = true, float delay = 0.1f) {
             CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, leveloverride);
             CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, multiply);
-            CreatureSetup(chara, delay: 0.1f);
+            CreatureSetup(chara, delay: delay);
         }
 
 

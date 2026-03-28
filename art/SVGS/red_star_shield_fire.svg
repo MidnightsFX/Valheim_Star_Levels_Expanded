@@ -1,0 +1,76 @@
+<svg width="100%" viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="steelGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d8dde6"/>
+      <stop offset="40%" stop-color="#b0bac8"/>
+      <stop offset="75%" stop-color="#8a96a8"/>
+      <stop offset="100%" stop-color="#6b7585"/>
+    </linearGradient>
+    <linearGradient id="steelEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8ecf2"/>
+      <stop offset="100%" stop-color="#5e6878"/>
+    </linearGradient>
+    <linearGradient id="fire1" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#8b1a00"/>
+      <stop offset="30%" stop-color="#cc3a00"/>
+      <stop offset="65%" stop-color="#e87020"/>
+      <stop offset="100%" stop-color="#f5c040"/>
+    </linearGradient>
+    <linearGradient id="fire2" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#aa2800"/>
+      <stop offset="45%" stop-color="#e85a10"/>
+      <stop offset="85%" stop-color="#f5a020"/>
+      <stop offset="100%" stop-color="#fcd860"/>
+    </linearGradient>
+    <linearGradient id="fire3" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#e06000"/>
+      <stop offset="50%" stop-color="#f5b000"/>
+      <stop offset="100%" stop-color="#fff280"/>
+    </linearGradient>
+    <!-- Shield shifted down ~17px from v5 (5% of 340 canvas height) -->
+    <clipPath id="shieldClip">
+      <path d="M 277,201 Q 277,195 284,195 L 396,195 Q 403,195 403,201&#10;         L 403,303 Q 403,325 385,344 Q 366,362 340,371&#10;         Q 314,362 295,344 Q 277,325 277,303 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- RED STAR -->
+  <polygon points="340,80 387,215 530,218 417,305 457,442 340,360 223,442 263,305 150,218 293,215" fill="#cc1a1a" stroke="#6b0000" stroke-width="8" stroke-linejoin="miter" stroke-miterlimit="10" style="fill:rgb(204, 26, 26);stroke:rgb(107, 0, 0);color:rgb(255, 255, 255);stroke-width:8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <polygon points="340,80 293,215 150,218 263,305" fill="#e83030" opacity="0.35" style="fill:rgb(232, 48, 48);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.35;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <polygon points="387,215 530,218 417,305 457,442 340,360" fill="#7a0a0a" opacity="0.25" style="fill:rgb(122, 10, 10);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.25;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- STEEL SHIELD — lowered ~17px from v5 -->
+  <path d="M 272,197 Q 272,189 280,189 L 400,189 Q 408,189 408,197&#10;       L 408,305 Q 408,329 388,349 Q 368,367 340,377&#10;       Q 312,367 292,349 Q 272,329 272,305 Z" fill="url(#steelEdge)" stroke="#4a5568" stroke-width="2" style="stroke:rgb(74, 85, 104);color:rgb(255, 255, 255);stroke-width:2px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M 277,201 Q 277,195 284,195 L 396,195 Q 403,195 403,201&#10;       L 403,303 Q 403,325 385,344 Q 366,362 340,371&#10;       Q 314,362 295,344 Q 277,325 277,303 Z" fill="url(#steelGrad)" stroke="#9aa4b8" stroke-width="1" style="stroke:rgb(154, 164, 184);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="277" y1="265" x2="403" y2="265" stroke="#a0aabb" stroke-width="1" opacity="0.6" style="fill:rgb(0, 0, 0);stroke:rgb(160, 170, 187);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.6;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="340" y1="195" x2="340" y2="371" stroke="#a0aabb" stroke-width="1" opacity="0.4" style="fill:rgb(0, 0, 0);stroke:rgb(160, 170, 187);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.4;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M 290,205 Q 292,195 305,195 L 325,195 Q 312,209 290,227 Z" fill="white" opacity="0.22" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.22;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M 284,201 L 396,201 L 403,208 L 277,208 Z" fill="white" opacity="0.15" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.15;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- BONFIRE FLAME — centered in shield, no logs, no tip glow circle -->
+  <!-- Shield inner: y=195 to y=371, center y=283. Flame base y=337, tip y=227 -->
+
+  <!-- Outer flame -->
+  <path d="M 318,337&#10;       C 310,317 307,295 313,273&#10;       C 308,287 309,309 315,325&#10;       C 310,307 311,281 320,261&#10;       C 315,277 316,303 322,321&#10;       C 318,299 321,271 332,251&#10;       C 328,271 328,297 334,317&#10;       C 332,293 336,265 340,251&#10;       C 344,265 348,293 346,317&#10;       C 352,297 352,271 348,251&#10;       C 359,271 362,299 358,321&#10;       C 364,303 365,277 360,261&#10;       C 369,281 370,307 365,325&#10;       C 371,309 372,287 367,273&#10;       C 373,295 370,317 362,337 Z" fill="url(#fire1)" opacity="0.92" clip-path="url(#shieldClip)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.92;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Left wisp -->
+  <path d="M 320,337 C 312,319 309,295 316,271 C 311,287 312,313 318,331&#10;       C 314,309 315,281 323,261 C 318,279 319,307 324,327 Z" fill="url(#fire1)" opacity="0.55" clip-path="url(#shieldClip)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.55;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Right wisp -->
+  <path d="M 360,337 C 368,319 371,295 364,271 C 369,287 368,313 362,331&#10;       C 366,309 365,281 357,261 C 362,279 361,307 356,327 Z" fill="url(#fire1)" opacity="0.55" clip-path="url(#shieldClip)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.55;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Mid flame -->
+  <path d="M 324,337&#10;       C 318,317 316,293 322,271&#10;       C 317,287 318,311 324,329&#10;       C 320,307 321,279 330,259&#10;       C 326,277 327,303 332,323&#10;       C 329,299 332,269 340,253&#10;       C 348,269 351,299 348,323&#10;       C 353,303 354,277 350,259&#10;       C 359,279 360,307 356,329&#10;       C 362,311 363,287 358,271&#10;       C 364,293 362,317 356,337 Z" fill="url(#fire2)" opacity="0.88" clip-path="url(#shieldClip)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.88;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Inner tall flame -->
+  <path d="M 330,337&#10;       C 325,317 324,291 330,269&#10;       C 326,285 327,309 332,327&#10;       C 328,305 330,277 338,257&#10;       C 334,275 334,301 339,321&#10;       C 336,297 339,267 340,253&#10;       C 341,267 344,297 341,321&#10;       C 346,301 346,275 342,257&#10;       C 350,277 352,305 348,327&#10;       C 353,309 354,285 350,269&#10;       C 356,291 355,317 350,337 Z" fill="url(#fire2)" opacity="0.85" clip-path="url(#shieldClip)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.85;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Core bright flame -->
+  <path d="M 334,337&#10;       C 330,315 329,289 335,267&#10;       C 331,283 332,309 337,329&#10;       C 333,305 335,275 340,257&#10;       C 345,275 347,305 343,329&#10;       C 348,309 349,283 345,267&#10;       C 351,289 350,315 346,337 Z" fill="url(#fire3)" clip-path="url(#shieldClip)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Ember glow at base -->
+  <ellipse cx="340" cy="337" rx="20" ry="5" fill="#cc3000" opacity="0.5" clip-path="url(#shieldClip)" style="fill:rgb(204, 48, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.5;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <ellipse cx="340" cy="337" rx="10" ry="3" fill="#ff7020" opacity="0.5" clip-path="url(#shieldClip)" style="fill:rgb(255, 112, 32);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.5;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Floating sparks -->
+  <circle cx="328" cy="269" r="1.5" fill="#ffb030" opacity="0.8" clip-path="url(#shieldClip)" style="fill:rgb(255, 176, 48);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.8;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="353" cy="263" r="1.2" fill="#ffcc40" opacity="0.7" clip-path="url(#shieldClip)" style="fill:rgb(255, 204, 64);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.7;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="322" cy="289" r="1" fill="#ff8020" opacity="0.6" clip-path="url(#shieldClip)" style="fill:rgb(255, 128, 32);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.6;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="358" cy="283" r="1" fill="#ffaa30" opacity="0.6" clip-path="url(#shieldClip)" style="fill:rgb(255, 170, 48);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.6;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="316" cy="307" r="1" fill="#ffaa20" opacity="0.45" clip-path="url(#shieldClip)" style="fill:rgb(255, 170, 32);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.45;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="364" cy="301" r="1" fill="#ffaa20" opacity="0.45" clip-path="url(#shieldClip)" style="fill:rgb(255, 170, 32);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.45;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</svg>

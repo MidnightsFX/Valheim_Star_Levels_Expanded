@@ -15,14 +15,13 @@ namespace StarLevelSystem.Modifiers
     {
 
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
-        public static class SoulEaterOnDeath
+        public static class SoulEaterAndEvolveOnDeath
         {
             private static void Prefix(Character __instance) {
                 if (__instance == null || __instance.IsPlayer()) {
                     return;
                 }
                 
-
                 List<Character> characters = Extensions.GetCharactersInRange(__instance.transform.position, 5);
                 foreach (Character character in characters) {
                     // Logger.LogDebug($"Checking SoulEater on {character.name}");
@@ -34,7 +33,10 @@ namespace StarLevelSystem.Modifiers
                         float powerIncrease = cmcfg.PerlevelPower * character.m_level;
                         Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}");
                         ModificationExtensionSystem.ForceUpdateDamageMod(character, powerIncrease);
-                        ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, cDetails, true, true, 0.01f);
+                        int nearbyDeaths = character.m_nview.GetZDO().GetInt(SLS_SOULEATER, 0);
+                        nearbyDeaths += 1;
+                        character.m_nview.GetZDO().Set(SLS_SOULEATER, nearbyDeaths);
+                        ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, cDetails, true, true, 0.01f * nearbyDeaths);
                         character.Heal(character.GetMaxHealth() * cmcfg.PerlevelPower);
                     }
                 }

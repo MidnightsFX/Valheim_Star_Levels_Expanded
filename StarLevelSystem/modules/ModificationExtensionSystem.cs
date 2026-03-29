@@ -14,6 +14,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using static HitData;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.Data.CreatureModifiersData;
 using DamageType = StarLevelSystem.common.DataObjects.DamageType;
 
 namespace StarLevelSystem.modules
@@ -89,7 +90,7 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
                 CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
                 if (__instance.m_nview != null) {
-                    ApplySizeModificationZRefOnly(ragdoll.gameObject, __instance.m_nview);
+                    ApplySizeModificationZRefOnly(ragdoll.gameObject, cDetails, __instance.m_nview);
                 }
                 
                 if (__instance.m_level > 1 && cDetails != null && cDetails.Colorization != null) {
@@ -163,6 +164,10 @@ namespace StarLevelSystem.modules
                 // Apply damage recieved Modifiers for the target
                 if (damagedCharacter != null) {
                     ApplyDamageModifiers(hit, __instance, damagedCharacter.DamageRecievedModifiers);
+                }
+
+                if (attackerCharacter.CreatureModifiers.ContainsKey(ModifierNames.Evolving.ToString())) {
+
                 }
             }
         }
@@ -464,8 +469,24 @@ namespace StarLevelSystem.modules
         }
 
         internal static void SetCreatureSizeFromCCE(Character creature, CharacterCacheEntry cDetails) {
-            GameObject creatureref = PrefabManager.Instance.GetPrefab(cDetails.RefCreatureName);
-            UpdateSizeZNet(creature.gameObject, creature.m_nview, cDetails, creatureref);
+            GameObject creatureref = PrefabManager.Cache.GetPrefab<GameObject>(cDetails.RefCreatureName);
+            if (ValConfig.UseDeterministicSizeModifiers.Value) {
+                UpdateSizeFromCreatureReference(creature.gameObject, cDetails, creatureref);
+            } else {
+                UpdateSizeZNet(creature.gameObject, creature.m_nview, cDetails, creatureref);
+            }
+        }
+
+        internal static void UpdateSizeFromCreatureReference(GameObject creature, CharacterCacheEntry cDetails, GameObject creatureref, float bonus = 0f) {
+            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
+            float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
+
+            float creature_level_size = (per_level_mod * cDetails.Level);
+            float scale = base_size_mod + creature_level_size + bonus;
+
+            Vector3 sizeEstimate = creatureref.transform.localScale * scale;
+            creature.transform.localScale = sizeEstimate;
+            Physics.SyncTransforms();
         }
 
         internal static void UpdateSizeZNet(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, GameObject creatureref) {
@@ -491,9 +512,16 @@ namespace StarLevelSystem.modules
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false || cDetails == null) {
                 return;
             }
-            float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
+            
+            GameObject creatureref = PrefabManager.Cache.GetPrefab<GameObject>(cDetails.RefCreatureName);
 
-            GameObject creatureref = PrefabManager.Instance.GetPrefab(cDetails.RefCreatureName);
+            // If we are using deterministic size changes, set and skip ZDO changes
+            if (ValConfig.UseDeterministicSizeModifiers.Value) {
+                UpdateSizeFromCreatureReference(creature, cDetails, creatureref, bonus);
+                return;
+            }
+
+            float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
 
             if (current_size > 0f && force_update == false) {
                 if (creatureref) {
@@ -521,37 +549,17 @@ namespace StarLevelSystem.modules
             UpdateSizeZNet(creature, zview, cDetails, creatureref);
         }
 
-        public static void ApplySizeModificationToObjWhenZReady(GameObject obj, ZNetView zview) {
-            TaskRunner.Run().StartCoroutine(WaitForZReadyAndApplySize(obj, zview));
-        }
-
-        public static IEnumerator WaitForZReadyAndApplySize(GameObject obj, ZNetView zview, int max = 10)
-        {
-            int attemps = 0;
-            while(attemps < max)
-            {
-                yield return new WaitForSeconds(0.5f);
-                attemps++;
-                // no new sizes for dead things
-                if (obj == null || zview == null || zview.GetZDO() == null) { yield break; }
-                float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
-                // Don't scale in dungeons
-                if (obj.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) { yield break; }
-                if (current_size == 0f) { continue; }
-                obj.transform.localScale *= current_size;
-                Physics.SyncTransforms();
-                break;
-            }
-            yield break;
-        }
-
-        private static void ApplySizeModificationZRefOnly(GameObject obj, ZNetView zview) {
+        private static void ApplySizeModificationZRefOnly(GameObject obj, CharacterCacheEntry cce, ZNetView zview) {
             if (obj == null || zview == null || zview.GetZDO() == null) { return; }
             // Don't scale in dungeons
-            if (obj.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false)
-            {
+            if (obj.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
                 return;
             }
+            if (ValConfig.UseDeterministicSizeModifiers.Value) {
+                UpdateSizeFromCreatureReference(obj, cce, PrefabManager.Cache.GetPrefab<GameObject>(cce.RefCreatureName));
+                return;
+            }
+
             float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
             if (current_size == 0f) { return; }
             obj.transform.localScale *= current_size;
@@ -567,7 +575,7 @@ namespace StarLevelSystem.modules
 
             string creaturename = cDetails.RefCreatureName;
             creaturename ??= Utils.GetPrefabName(creature.gameObject);
-            GameObject creatureRef = PrefabManager.Instance.GetPrefab(creaturename);
+            GameObject creatureRef = PrefabManager.Cache.GetPrefab<GameObject>(creaturename);
             if (creatureRef == null)
             {
                 Logger.LogWarning($"Unable to find reference object for {creature.name}, not applying speed modifications");

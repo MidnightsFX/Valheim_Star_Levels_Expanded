@@ -40,6 +40,8 @@ namespace StarLevelSystem.common
         public static readonly string SLS_FISH = "SLE_Fish";
         public static readonly string SLS_BIRD = "SLE_Bird";
         public static readonly string SLS_INFERTILE = "SLS_Infertile";
+        public static readonly string SLS_SOULEATER = "SLS_SoulEater";
+        public static readonly string SLS_EVOLVE = "SLS_Evolve";
 
         public static readonly string SLS_MOD_CAP = "EffectCap";
 
@@ -327,14 +329,16 @@ namespace StarLevelSystem.common
             public GameObject VisualEffectAPI { get; set; }
             public GameObject SecondaryEffectAPI { get; set; }
 
-            // Add fallbacks to load prefabs that are not in the embedded resource bundle
+            // TODO: Add fallbacks to load prefabs that are not in the embedded resource bundle
             public void LoadAndSetGameObjects() {
                 if (FromAPI) {
                     LoadAPIGameObjects();
                     return;
                 }
                 if (StarVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(StarVisual)) {
-                    Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>($"assets/custom/starlevels/icons/{StarVisual}.png");
+                    string path = $"assets/custom/starlevels/icons/{StarVisual}.png";
+                    if (ValConfig.UseStarShapedModifierIcons.Value) { path = $"assets/custom/starlevels/icons2/{StarVisual}.png"; }
+                    Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>(path);
                     CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, game_obj);
                 }
                 if (VisualEffect != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(VisualEffect)) {

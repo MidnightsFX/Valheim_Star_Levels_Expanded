@@ -9549,6 +9549,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7648317224529754275}
+  - component: {fileID: 2974088188223633245}
   m_Layer: 1
   m_Name: creatureFrost
   m_TagString: Untagged
@@ -9572,6 +9573,35 @@ Transform:
   - {fileID: 2418779828197410410}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!205 &2974088188223633245
+LODGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1952574301317187906}
+  serializedVersion: 2
+  m_LocalReferencePoint: {x: 0, y: 0, z: 0}
+  m_Size: 1
+  m_FadeMode: 0
+  m_AnimateCrossFading: 0
+  m_LastLODIsBillboard: 0
+  m_LODs:
+  - screenRelativeHeight: 0.023445869
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+  - screenRelativeHeight: 0.023445869
+    fadeTransitionWidth: 0
+    renderers: []
+  - screenRelativeHeight: 0.023445869
+    fadeTransitionWidth: 0
+    renderers: []
+  m_Enabled: 1
 --- !u!1 &3570861533538904628
 GameObject:
   m_ObjectHideFlags: 0

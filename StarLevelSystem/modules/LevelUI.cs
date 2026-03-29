@@ -361,9 +361,11 @@ namespace StarLevelSystem.modules
                     if (entry.Key == CreatureModifiers.NoMods) { continue; }
                     //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
                     CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
-                    if (cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
-                        Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
-                        starReplacements.Add(star, starsprite);
+                    if (cmd.StarVisual != null) {
+                        if (CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
+                            Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
+                            starReplacements.Add(star, starsprite);
+                        }
                     }
                     star++;
                 }

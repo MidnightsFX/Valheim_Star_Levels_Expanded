@@ -2,13 +2,16 @@
  ---
  ```
  - Redesigns Modifier icons to all follow star designs
- - Adds new Modifiers:
+ - Adds new Modifiers: (Delete your modifiers.yaml if you want the new ones)
 	- Fire Resistant
 	- Frost Resistant
 	- Poison Resistant
 	- Spirit Resistant
 	- Elemental Chaos
+	- Evolving
  - Improves compatibility with mods that add custom spawners
+ - Fixes Zil & Thungr combo spawning too many Zils when killing Thungr
+ - Nerfed lifelink significantly
  ```
 
 **0.17.13**

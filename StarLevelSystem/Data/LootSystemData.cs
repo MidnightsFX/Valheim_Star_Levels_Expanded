@@ -55,6 +55,30 @@ namespace StarLevelSystem.Data
                         }
                     }
                 },
+                { "GoblinBruteBros",  new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop{
+                            Drop = new Drop {
+                                Prefab = "GoblinShaman_Hildir",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 1f,
+                                DontScale = true,
+                            },
+                            DoesNotScale = true
+                        },
+                    new ExtendedCharacterDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "TrophyGoblinBruteBrosBrute",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 1f,
+                                DontScale = true,
+                            },
+                            DoesNotScale = true,
+                        }
+                    }
+                },
                 { "Tick", new List<ExtendedCharacterDrop>() {
                     new ExtendedCharacterDrop{
                             Drop = new Drop

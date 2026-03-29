@@ -31,7 +31,7 @@ namespace StarLevelSystem.Modifiers
                     }
                     Logger.LogDebug($"Splitter on {__instance.name} total split potential:{totalsplits} split creature level: {level}");
                     while (totalsplits >= 1) {
-                        GameObject creatureToCreate = PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(__instance.gameObject));
+                        GameObject creatureToCreate = PrefabManager.Cache.GetPrefab<GameObject>(Utils.GetPrefabName(__instance.gameObject));
                         if (creatureToCreate == null) { break; }
                         GameObject sgo = GameObject.Instantiate(creatureToCreate, __instance.transform.position, __instance.transform.rotation);
                         totalsplits -= 1f;

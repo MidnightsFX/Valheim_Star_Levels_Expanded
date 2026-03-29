@@ -111,6 +111,8 @@ namespace StarLevelSystem
         public static ConfigEntry<float> InitialDelayBeforeSetup;
         public static ConfigEntry<bool> EnableDebugOutputForDamage;
         public static ConfigEntry<bool> EnableDebugOutputLevelRolls;
+        public static ConfigEntry<bool> UseStarShapedModifierIcons;
+        public static ConfigEntry<bool> UseDeterministicSizeModifiers;
 
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
 
@@ -245,11 +247,13 @@ namespace StarLevelSystem
             SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Wether or not creatures spawned from the Splitter modifier inherit the level of the parent creature.");
             LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
+            UseStarShapedModifierIcons = BindServerConfig("Modifiers", "UseStarShapedModifierIcons", true, "When enabled, uses modifier icons that are star shaped. When disabled, uses non-star shaped modifier icons. Requires a restart.", advanced: true);
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
             InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
+            UseDeterministicSizeModifiers = BindServerConfig("Misc", "UseDeterministicSizeModifiers", true, "When enabled, size modifications are deterministic");
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
         }

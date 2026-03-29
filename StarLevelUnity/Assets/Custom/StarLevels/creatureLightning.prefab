@@ -4875,6 +4875,7 @@ GameObject:
   - component: {fileID: 7648317224529754275}
   - component: {fileID: 3161473485127398397}
   - component: {fileID: 7207640728785225185}
+  - component: {fileID: 3582551371268963838}
   m_Layer: 1
   m_Name: creatureLightning
   m_TagString: Untagged
@@ -9699,6 +9700,35 @@ ParticleSystemRenderer:
   m_MeshWeighting2: 1
   m_MeshWeighting3: 1
   m_MaskInteraction: 0
+--- !u!205 &3582551371268963838
+LODGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1952574301317187906}
+  serializedVersion: 2
+  m_LocalReferencePoint: {x: 0, y: 0, z: 0}
+  m_Size: 1
+  m_FadeMode: 0
+  m_AnimateCrossFading: 0
+  m_LastLODIsBillboard: 0
+  m_LODs:
+  - screenRelativeHeight: 0.023445869
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+    - renderer: {fileID: 0}
+  - screenRelativeHeight: 0.023445869
+    fadeTransitionWidth: 0
+    renderers: []
+  - screenRelativeHeight: 0.023445869
+    fadeTransitionWidth: 0
+    renderers: []
+  m_Enabled: 1
 --- !u!1 &3193609208053833594
 GameObject:
   m_ObjectHideFlags: 0

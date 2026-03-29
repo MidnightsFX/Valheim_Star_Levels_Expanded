@@ -38,7 +38,7 @@ namespace StarLevelSystem.modules
                             position = DetermineOffsetPosition(position, 15f);
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
-                        GameObject targetclone = PrefabManager.Instance.GetPrefab(ccEntry.RefCreatureName);
+                        GameObject targetclone = PrefabManager.Cache.GetPrefab<GameObject>(ccEntry.RefCreatureName);
                         GameObject spawnedCreature = GameObject.Instantiate(targetclone, position, rotation);
                         Character spawnedChara = spawnedCreature.GetComponent<Character>();
                         if (chara.IsTamed() && spawnedChara != null) {

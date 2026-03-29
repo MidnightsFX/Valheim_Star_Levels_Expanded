@@ -53,6 +53,7 @@ namespace StarLevelSystem.Data
             FrostNova = 16,
             PoisonNova = 17,
             LightningNova = 18,
+            Evolving = 19,
             ResistSlash = 21,
             ResistBlunt = 22,
             ResistPierce = 23,
@@ -95,6 +96,14 @@ namespace StarLevelSystem.Data
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "LifeLink2",
                         SecondaryEffect = "LifelinkEffect",
+                    }
+                },
+                { ModifierNames.Evolving.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$Evolve_prefix1",
+                        namingConvention = NameSelectionStyle.RandomFirst,
+                        //VisualEffectStyle = VisualEffectStyle.bottom,
+                        StarVisual = "evolve",
                     }
                 },
                 { ModifierNames.Brutal.ToString(), new CreatureModifierDefinition()
@@ -148,6 +157,16 @@ namespace StarLevelSystem.Data
                         RunOnceEvent = Lightning.RunOnce,
                     }
                 },
+                { ModifierNames.ElementalChaos.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$ElementalChaos_prefix",
+                        NameSuffix = "$ElementalChaos_suffix",
+                        namingConvention = NameSelectionStyle.RandomBoth,
+                        VisualEffectStyle = VisualEffectStyle.objectCenter,
+                        VisualEffect = "creatureLightning",
+                        StarVisual = "eleChaos",
+                    }
+                },
                 { ModifierNames.Splitter.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$Splitter_prefix1",
@@ -182,6 +201,42 @@ namespace StarLevelSystem.Data
                         namingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "bluntresist",
                         RunOnceEvent = ResistBlunt.RunOnce
+                    }
+                },
+                { ModifierNames.ResistFire.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$ResistFire_prefix1",
+                        NameSuffix = "$ResistFire_suffix1",
+                        namingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "FireRes",
+                        RunOnceEvent = ResistFire.RunOnce
+                    }
+                },
+                { ModifierNames.ResistFrost.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$ResistFrost_prefix1",
+                        NameSuffix = "$ResistFrost_suffix1",
+                        namingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "FrostRes",
+                        RunOnceEvent = ResistFrost.RunOnce
+                    }
+                },
+                { ModifierNames.ResistPoison.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$ResistPoison_prefix1",
+                        NameSuffix = "$ResistPoison_suffix1",
+                        namingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "PoisonRes",
+                        RunOnceEvent = ResistPoison.RunOnce
+                    }
+                },
+                { ModifierNames.ResistSpirit.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$ResistSpirit_prefix1",
+                        NameSuffix = "$ResistSpirit_suffix1",
+                        namingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "SpiritRes",
+                        RunOnceEvent = ResistSpirit.RunOnce
                     }
                 },
                 { ModifierNames.FireNova.ToString(), new CreatureModifierDefinition()
@@ -279,7 +334,7 @@ namespace StarLevelSystem.Data
                     SelectionWeight = 10,
 
                     Config = new CreatureModConfig() {
-                        BasePower = 0.7f,
+                        BasePower = 0.30f,
                         PerlevelPower = 0.02f,
                         },
                     }
@@ -308,6 +363,15 @@ namespace StarLevelSystem.Data
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.0f,
                         BasePower = 0.07f
+                        },
+                    UnallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.ElementalChaos.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 0.01f,
+                        BasePower = 0.3f
                         },
                     UnallowedCreatures = NonCombatCreatures
                     }
@@ -392,6 +456,38 @@ namespace StarLevelSystem.Data
                 },
             },
             MinorModifiers = new Dictionary<string, CreatureModifierConfiguration>() {
+                {ModifierNames.ResistFire.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 5,
+                    Config = new CreatureModConfig() {
+                        BasePower = .5f,
+                        PerlevelPower = 0.02f,
+                        },
+                    }
+                },
+                {ModifierNames.ResistFrost.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 4,
+                    Config = new CreatureModConfig() {
+                        BasePower = .5f,
+                        PerlevelPower = 0.02f,
+                        },
+                    }
+                },
+                {ModifierNames.ResistPoison.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 3,
+                    Config = new CreatureModConfig() {
+                        BasePower = .5f,
+                        PerlevelPower = 0.02f,
+                        },
+                    }
+                },
+                {ModifierNames.ResistSpirit.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 2,
+                    Config = new CreatureModConfig() {
+                        BasePower = .5f,
+                        PerlevelPower = 0.02f,
+                        },
+                    }
+                },
                 {ModifierNames.FireNova.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {

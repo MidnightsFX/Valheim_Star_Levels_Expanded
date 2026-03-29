@@ -659,7 +659,7 @@ namespace StarLevelSystem.modules
                 }
                 // Falling back to the reference prefab scale will set tree size to be uniform, which will likely be adjusted when reloaded
                 if (baseSize == Vector3.zero) {
-                    baseSize = PrefabManager.Instance.GetPrefab(treename).gameObject.transform.localScale;
+                    baseSize = PrefabManager.Cache.GetPrefab<GameObject>(treename).gameObject.transform.localScale;
                 }
                 if (ValConfig.EnableTreeScaling.Value == false) {
                     treebase.transform.localScale = baseSize;
@@ -703,7 +703,7 @@ namespace StarLevelSystem.modules
                 string birdname = Utils.GetPrefabName(bird.gameObject);
                 if (BirdSizeReferences.ContainsKey(birdname) == false)
                 {
-                    BirdSizeReferences.Add(birdname, PrefabManager.Instance.GetPrefab(birdname).gameObject.transform.localScale);
+                    BirdSizeReferences.Add(birdname, PrefabManager.Cache.GetPrefab<GameObject>(birdname).gameObject.transform.localScale);
                 }
                 if (ValConfig.EnableScalingBirds.Value == false)
                 {
@@ -740,7 +740,7 @@ namespace StarLevelSystem.modules
                 string fishname = Utils.GetPrefabName(fish.gameObject);
                 if (FishSizeReference.ContainsKey(fishname) == false)
                 {
-                    FishSizeReference.Add(fishname, PrefabManager.Instance.GetPrefab(fishname).gameObject.transform.localScale);
+                    FishSizeReference.Add(fishname, PrefabManager.Cache.GetPrefab<GameObject>(fishname).gameObject.transform.localScale);
                 }
                 if (ValConfig.EnableScalingFish.Value == false)
                 {

@@ -12,6 +12,7 @@
  - Improves compatibility with mods that add custom spawners
  - Fixes Zil & Thungr combo spawning too many Zils when killing Thungr
  - Nerfed lifelink significantly
+ - Reduced particle visibility for distant modifiers
  ```
 
 **0.17.13**

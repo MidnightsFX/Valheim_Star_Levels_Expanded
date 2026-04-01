@@ -1,11 +1,15 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
+using MonoMod.Cil;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers.Control;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
@@ -27,24 +31,45 @@ namespace StarLevelSystem.modules
         public Image StarLevelNFrontImage { get; set; }
         public Image StarLevelNBackImage { get; set; }
         public Text StarLevelNText { get; set; }
-        public EnemyHud.HudData hudlink { get; set;
-        }
+        public EnemyHud.HudData Hudlink { get; set; }
+        public TextMeshProUGUI HealthText { get; set; }
     }
+
     public static class LevelUI
     {
         public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject star;
+        private static GameObject HealthText;
 
         public static void InvalidateCacheEntry(uint zdid)
         {
             if (characterExtendedHuds.ContainsKey(zdid)) {
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(zdid);
                 
-                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(characterExtendedHuds[zdid].hudlink.m_character);
-                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterExtendedHuds[zdid].hudlink.m_character, cce.CreatureModifiers);
-                characterExtendedHuds[zdid].hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(characterExtendedHuds[zdid].Hudlink.m_character);
+                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(characterExtendedHuds[zdid].Hudlink.m_character, cce.CreatureModifiers);
+                characterExtendedHuds[zdid].Hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 if (cce == null || cce.CreatureNameLocalizable == null) { return; }
             }
+        }
+
+        public static void RemoveExtenedHudFromCache(Character chara) {
+            uint id = chara.GetZDOID().ID;
+            RemoveExtendedHudFromCache(id);
+        }
+
+        internal static void RemoveExtendedHudFromCache(uint id) {
+
+            if (characterExtendedHuds.ContainsKey(id)) {
+                if (characterExtendedHuds[id].HealthText != null) {
+                    GameObject.Destroy(characterExtendedHuds[id].HealthText.gameObject);
+                }
+                characterExtendedHuds.Remove(id);
+            }
+        }
+
+        internal static void LoadAssets() {
+            HealthText = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>("HealthText.prefab");
         }
 
         public static void InvalidateCacheEntry(Character chara)
@@ -269,10 +294,6 @@ namespace StarLevelSystem.modules
 
                 return codeMatcher.Instructions();
             }
-
-            public static void RemoveExtenedHudFromCache(Character char3) {
-                characterExtendedHuds.Remove(char3.GetZDOID().ID);
-            }
         }
 
         [HarmonyPatch(typeof(EnemyHud))]
@@ -305,6 +326,11 @@ namespace StarLevelSystem.modules
         public static class DisplayCreatureNameChanges {
             public static bool Prefix(Character __instance, ref string __result) {
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
+                // Remove invalid or old entries which can occur over time if the ID namespace is busy
+                if (cce != null && __instance.m_name != cce.RefCreatureName) {
+                    CompositeLazyCache.ClearCachedCreature(__instance);
+                    cce = CompositeLazyCache.GetCacheEntry(__instance);
+                }
                 if (cce == null || cce.CreatureNameLocalizable == null) { return true; }
                 __result = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 Tameable component = __instance.gameObject.GetComponent<Tameable>();
@@ -320,7 +346,7 @@ namespace StarLevelSystem.modules
             if (ehud == null || ehud.m_character == null) return;
             if (ehud.m_character.IsPlayer()) return;
             int level = ehud.m_character.GetLevel();
-            if (level <= 1) return;
+            // if (level <= 1) return;
             // Logger.LogInfo($"Creature Level {level}");
             uint czid = ehud.m_character.GetZDOID().ID;
             if (czid == 0L) { return; }
@@ -333,7 +359,7 @@ namespace StarLevelSystem.modules
                 extended_hud = characterExtendedHuds[czid];
                 if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null) {
                     Logger.LogDebug($"UI Cache Invalid for {czid}, removing.");
-                    characterExtendedHuds.Remove(czid);
+                    RemoveExtendedHudFromCache(czid);
                     //CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     return;
                 }
@@ -342,15 +368,19 @@ namespace StarLevelSystem.modules
                 List<string> cmods = mods.Keys.ToList();
                 if (ehud.m_character.GetLevel() != extended_hud.Level || cmods.CompareListContents(mods.Keys.ToList()) == false) {
                     Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count}), updating cache.");
-                    characterExtendedHuds.Remove(czid);
+                    RemoveExtendedHudFromCache(czid);
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     //Colorization.ApplyColorizationWithoutLevelEffects();
                     // Re set up the character, to ensure it gets updated visual effects, and sizing
                     ModificationExtensionSystem.CreatureSetup(ehud.m_character);
                     return;
                 }
+
+                if (ValConfig.EnableEnemyHeathbarNumberDisplay.Value && extended_hud.HealthText != null) {
+                    extended_hud.HealthText.text = $"{ehud.m_character.GetHealth():N0}/{ehud.m_character.GetMaxHealth():N0}";
+                }
             } else {
-                extended_hud.hudlink = ehud;
+                extended_hud.Hudlink = ehud;
                 if (mods == null) { return; }
                 //Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
                 Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
@@ -373,9 +403,36 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Determined replacement stars {string.Join(",", starReplacements.Keys)}");
 
                 extended_hud.IsBoss = ehud.m_character.IsBoss();
+
+                // Modify the size of the health bar if its enabled
+                if ((ValConfig.EnemyHealthbarScalarX.Value != 1f || ValConfig.EnemyHealthbarScalarY.Value != 1f) && extended_hud.IsBoss == false) {
+                    RectTransform healthRect = ehud.m_gui.transform.Find("Health").GetComponent<RectTransform>();
+                    Vector2 newHudSize = new Vector2(100f * ValConfig.EnemyHealthbarScalarX.Value, 5 * ValConfig.EnemyHealthbarScalarY.Value);
+                    //Logger.LogDebug($"Resizing healthbar for {czid} from {healthRect.sizeDelta} to {newHudSize}");
+                    healthRect.sizeDelta = newHudSize;
+
+                    // Update the two health bars
+                    RectTransform hs_rct = healthRect.Find("health_slow").GetComponent<RectTransform>();
+                    hs_rct.GetComponent<GuiBar>().m_width = newHudSize.x;
+                    RectTransform hs_guib = hs_rct.Find("bar").GetComponent<RectTransform>();
+                    hs_guib.sizeDelta = newHudSize;
+
+                    RectTransform hf_rct = healthRect.Find("health_fast").GetComponent<RectTransform>();
+                    RectTransform hf_guib = hf_rct.Find("bar").GetComponent<RectTransform>();
+                    hf_rct.GetComponent<GuiBar>().m_width = newHudSize.x;
+                    hf_guib.sizeDelta = newHudSize;
+                }
+
+                // Setup the health text if enabled
+                if (ValConfig.EnableEnemyHeathbarNumberDisplay.Value && extended_hud.HealthText == null) {
+                    GameObject HealthTextHolder = GameObject.Instantiate(HealthText, ehud.m_gui.transform.Find("Health"));
+                    extended_hud.HealthText = HealthTextHolder.GetComponent<TextMeshProUGUI>();
+                    // Use a slightly diminishing scale as otherwise things get overscaled easily
+                    extended_hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
+                }
+
                 int star_index = 2;
-                while (star_index < 7)
-                {
+                while (star_index < 7) {
                     //Logger.LogDebug($"Assigning star level {star_index}");
                     extended_hud.Starlevel.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
                     extended_hud.StarLevelBack.Add(star_index, ehud.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
@@ -385,6 +442,7 @@ namespace StarLevelSystem.modules
                         if (extended_hud.StarLevelFront[star_index] != null) {
                             extended_hud.StarLevelFront[star_index].sprite = starReplacements[star_index];
                             extended_hud.StarLevelFront[star_index].rectTransform.sizeDelta = new Vector2(17, 17);
+                            extended_hud.StarLevelFront[star_index].color = Color.white;
                         }
                         if (extended_hud.StarLevelBack[star_index] != null) {
                             extended_hud.StarLevelBack[star_index].sprite = starReplacements[star_index];

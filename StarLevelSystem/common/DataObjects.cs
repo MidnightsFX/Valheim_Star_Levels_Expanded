@@ -29,7 +29,6 @@ namespace StarLevelSystem.common
         public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).JsonCompatible().Build();
 
         public static readonly string SLS_CREATURE = "SLS_CREATURE";
-        public static readonly string SLS_SIZE = "SLS_SIZE";
         public static readonly string SLS_DAMAGE_MODIFIER = "SLS_DMOD";
         public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
         public static readonly string SLS_SPAWN_MULT = "SLS_MULT";
@@ -404,6 +403,7 @@ namespace StarLevelSystem.common
         public class CharacterCacheEntry
         {
             public int Level { get; set; }
+            public ZDO ZDO { get; set; } = null;
             public bool ShouldDelete { get; set; } = false;
             public string CreatureNameLocalizable { get; set; } = null;
             public string RefCreatureName { get; set; } = null;

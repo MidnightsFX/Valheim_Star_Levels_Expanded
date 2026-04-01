@@ -248,6 +248,15 @@ namespace StarLevelSystem.Data
                         SecondaryEffect = "DeathFireNova",
                     }
                 },
+                { ModifierNames.PoisonNova.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$PoisonNova_prefix1",
+                        namingConvention = NameSelectionStyle.RandomFirst,
+                        //visualEffect = "creatureLightning",
+                        StarVisual = "poisonnova",
+                        SecondaryEffect = "DeathPoisonNova",
+                    }
+                },
                 { ModifierNames.Lootbags.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$Lootbags_prefix1",
@@ -493,6 +502,15 @@ namespace StarLevelSystem.Data
                     Config = new CreatureModConfig() {
                         BasePower = 2.0f,
                         PerlevelPower = 0.1f,
+                        },
+                    UnallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.PoisonNova.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        BasePower = 2.0f,
+                        PerlevelPower = 0.2f,
                         },
                     UnallowedCreatures = NonCombatCreatures
                     }

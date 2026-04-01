@@ -1,18 +1,14 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
-using PlayFab.EconomyModels;
 using StarLevelSystem.Data;
 using StarLevelSystem.Modifiers;
+using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Drawing;
-using System.Reflection;
 using System.Text;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static HitData;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
 using DamageType = StarLevelSystem.common.DataObjects.DamageType;
@@ -38,29 +34,6 @@ namespace StarLevelSystem.modules
             }
         }
 
-        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.EquipItem))]
-        public static class CreatureSizeSyncEquipItems
-        {
-            public static void Postfix(Character __instance)
-            {
-                if (__instance.IsPlayer()) { return; }
-                // Logger.LogDebug($"Character Awake called for {__instance.name} with level {__instance.m_level}");
-                CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
-                LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
-            }
-        }
-
-        // TODO: Address scaling issues
-        // This isn't needed with delayed setup due to the weapons already being assigned and present for the creature when the size is applied
-        //[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
-        //public static class VisualEquipmentScaleToFit
-        //{
-        //    public static void Postfix(VisEquipment __instance, GameObject __result) {
-        //        if (__instance.m_isPlayer == true) { return; }
-        //        ApplySizeModificationToObjWhenZReady(__result, __instance.m_nview);
-        //    }
-        //}
-
         [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
         public static class CreatureCharacterExtension
         {
@@ -80,24 +53,6 @@ namespace StarLevelSystem.modules
         //        }
         //    }
         //}
-
-        [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.OnRagdollCreated))]
-        public static class ModifyRagdollHumanoid
-        {
-            public static void Postfix(Character __instance, Ragdoll ragdoll)
-            {
-                if (__instance == null || __instance.IsPlayer()) { return; }
-                //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} with level {__instance.m_level}");
-                CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance);
-                if (__instance.m_nview != null) {
-                    ApplySizeModificationZRefOnly(ragdoll.gameObject, cDetails, __instance.m_nview);
-                }
-                
-                if (__instance.m_level > 1 && cDetails != null && cDetails.Colorization != null) {
-                    Colorization.ApplyColorizationWithoutLevelEffects(ragdoll.gameObject, cDetails.Colorization);
-                }
-            }
-        }
 
         [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
         public static class ModifyCharacterVisualsToLevel
@@ -165,43 +120,10 @@ namespace StarLevelSystem.modules
                 if (damagedCharacter != null) {
                     ApplyDamageModifiers(hit, __instance, damagedCharacter.DamageRecievedModifiers);
                 }
-
-                if (attackerCharacter.CreatureModifiers.ContainsKey(ModifierNames.Evolving.ToString())) {
-
-                }
             }
         }
 
-        public static void UpdateRidingCreaturesForSizeScaling(GameObject creature, CharacterCacheEntry cDetails) {
-            if (ValConfig.EnableRidableCreatureSizeFixes.Value == false) { return; }
-            // Handle tame specific collider scaling
-            Tameable tame = creature.GetComponent<Tameable>();
-            if (tame != null && tame.IsTamed()) {
-                string name = Utils.GetPrefabName(creature.gameObject);
-                //Logger.LogDebug($"Checking Tame collider adjustment for {name} with for level {cDetails.Level}");
-                if (name == "Lox") {
-                    UpdateLoxCollider(creature.gameObject, cDetails);
-                }
-                if (name == "Askvin") {
-                    UpdateAskavinCollider(creature.gameObject);
-                }
-            }
-
-        }
-
-        internal static void UpdateLoxCollider(GameObject go, CharacterCacheEntry cDetails) {
-            CapsuleCollider loxcc = go.GetComponent<CapsuleCollider>();
-            float size_set = (cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cDetails.Level) + cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
-            float levelchange = (size_set - 1) * 0.1555f;
-            //float levelchange = cDetails.Level * 0.016f;  // 3.31 -lvl 20 (size 3), 3.15 -lvl 10 (size 2) or 0.016f per level at default sizing
-            loxcc.height = 3f + levelchange;
-            loxcc.radius = 0.5f; //1.22?
-        }
-
-        internal static void UpdateAskavinCollider(GameObject go) {
-            CapsuleCollider askcc = go.GetComponent<CapsuleCollider>();
-            askcc.radius = 0.842f;
-        }
+        
 
         // For debugging full details on damage calculations
 
@@ -333,10 +255,10 @@ namespace StarLevelSystem.modules
 
         // Delayed destruction of an object so that it can finish being setup- otherwise there are lots of vanilla scripts that explode
         // Since apparently instanciating and destroying something in the same frame breaks vanilla assumptions :sigh:
-        internal static IEnumerator DestroyCoroutine(GameObject go, float delay = 0.2f) {
-            yield return new WaitForSeconds(delay);
+        internal static IEnumerator DestroyCoroutine(GameObject go) {
+            yield return new WaitForEndOfFrame();
             if (go != null) {
-                // recheck tame status
+                // recheck tame status | TODO: Config to override allowing deletion of tames?
                 Character chara = go.GetComponent<Character>();
                 if (chara != null && chara.m_tamed) { yield break; }
                 // Remove drops before destroying the creature to ensure that we don't litter drops everywhere
@@ -345,6 +267,7 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Destroying object {go.name}.");
                 ZNetScene.instance.Destroy(go);
             }
+            yield break;
         }
 
         static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)
@@ -406,7 +329,7 @@ namespace StarLevelSystem.modules
             CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
-            LoadApplySizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
+            SizeModifications.ApplySaveSizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
             ApplyHealthModifications(__instance, cDetails);
 
             // Rebuild UI since it may have been created before these changes were applied
@@ -468,103 +391,7 @@ namespace StarLevelSystem.modules
             }
         }
 
-        internal static void SetCreatureSizeFromCCE(Character creature, CharacterCacheEntry cDetails) {
-            GameObject creatureref = PrefabManager.Cache.GetPrefab<GameObject>(cDetails.RefCreatureName);
-            if (ValConfig.UseDeterministicSizeModifiers.Value) {
-                UpdateSizeFromCreatureReference(creature.gameObject, cDetails, creatureref);
-            } else {
-                UpdateSizeZNet(creature.gameObject, creature.m_nview, cDetails, creatureref);
-            }
-        }
-
-        internal static void UpdateSizeFromCreatureReference(GameObject creature, CharacterCacheEntry cDetails, GameObject creatureref, float bonus = 0f) {
-            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
-            float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
-
-            float creature_level_size = (per_level_mod * cDetails.Level);
-            float scale = base_size_mod + creature_level_size + bonus;
-
-            Vector3 sizeEstimate = creatureref.transform.localScale * scale;
-            creature.transform.localScale = sizeEstimate;
-            Physics.SyncTransforms();
-        }
-
-        internal static void UpdateSizeZNet(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, GameObject creatureref) {
-            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel];
-            float base_size_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
-
-            float creature_level_size = (per_level_mod * cDetails.Level);
-            float scale = base_size_mod + creature_level_size;
-
-            if (creatureref) {
-                Vector3 sizeEstimate = creatureref.transform.localScale * scale;
-                creature.transform.localScale = sizeEstimate;
-                //Logger.LogDebug($"Setting character size {scale} = {base_size_mod} + {creature_level_size}.");
-                UpdateRidingCreaturesForSizeScaling(creature, cDetails);
-            }
-            
-            zview.GetZDO().Set(SLS_SIZE, scale);
-            Physics.SyncTransforms();
-        }
-
-        internal static void LoadApplySizeModifications(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, bool force_update = false, bool include_existing = false, float bonus = 0f) {
-            // Don't scale in dungeons
-            if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false || cDetails == null) {
-                return;
-            }
-            
-            GameObject creatureref = PrefabManager.Cache.GetPrefab<GameObject>(cDetails.RefCreatureName);
-
-            // If we are using deterministic size changes, set and skip ZDO changes
-            if (ValConfig.UseDeterministicSizeModifiers.Value) {
-                UpdateSizeFromCreatureReference(creature, cDetails, creatureref, bonus);
-                return;
-            }
-
-            float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
-
-            if (current_size > 0f && force_update == false) {
-                if (creatureref) {
-                    Vector3 sizeEstimate = creatureref.transform.localScale * current_size;
-                    //Logger.LogDebug($"Setting character Size from existing {current_size} -> {sizeEstimate}.");
-                    creature.transform.localScale = sizeEstimate;
-                    Physics.SyncTransforms();
-                    // Maybe check if the vector values are equal
-                    UpdateRidingCreaturesForSizeScaling(creature, cDetails);
-                }
-                return;
-            }
-            if (include_existing && current_size > 0) {
-                zview.GetZDO().Set(SLS_SIZE, current_size + bonus);
-                if (creatureref) {
-                    Vector3 sizeEstimate = creatureref.transform.localScale * current_size;
-                    creature.transform.localScale = sizeEstimate;
-                    //Logger.LogDebug($"Increasing character size from existing {current_size} + {bonus}.");
-                }
-                Physics.SyncTransforms();
-                UpdateRidingCreaturesForSizeScaling(creature, cDetails);
-                return;
-            }
-
-            UpdateSizeZNet(creature, zview, cDetails, creatureref);
-        }
-
-        private static void ApplySizeModificationZRefOnly(GameObject obj, CharacterCacheEntry cce, ZNetView zview) {
-            if (obj == null || zview == null || zview.GetZDO() == null) { return; }
-            // Don't scale in dungeons
-            if (obj.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false) {
-                return;
-            }
-            if (ValConfig.UseDeterministicSizeModifiers.Value) {
-                UpdateSizeFromCreatureReference(obj, cce, PrefabManager.Cache.GetPrefab<GameObject>(cce.RefCreatureName));
-                return;
-            }
-
-            float current_size = zview.GetZDO().GetFloat(SLS_SIZE, 0f);
-            if (current_size == 0f) { return; }
-            obj.transform.localScale *= current_size;
-            Physics.SyncTransforms();
-        }
+        
 
         internal static void ApplySpeedModifications(Character creature, CharacterCacheEntry cDetails) {
             float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel];
@@ -575,7 +402,7 @@ namespace StarLevelSystem.modules
 
             string creaturename = cDetails.RefCreatureName;
             creaturename ??= Utils.GetPrefabName(creature.gameObject);
-            GameObject creatureRef = PrefabManager.Cache.GetPrefab<GameObject>(creaturename);
+            GameObject creatureRef = PrefabManager.Instance.GetPrefab(creaturename);
             if (creatureRef == null)
             {
                 Logger.LogWarning($"Unable to find reference object for {creature.name}, not applying speed modifications");

@@ -53,7 +53,7 @@ namespace StarLevelSystem
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
             MinimapManager.OnVanillaMapDataLoaded += LevelSystem.DelayedMinimapSetup;
             SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.RecievedServerUpdates();
-
+            LevelUI.LoadAssets();
 
             TerminalCommands.AddCommands();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");

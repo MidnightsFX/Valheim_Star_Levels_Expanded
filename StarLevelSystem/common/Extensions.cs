@@ -1,5 +1,5 @@
 ﻿using HarmonyLib;
-using StarLevelSystem.modules;
+using StarLevelSystem.Modifiers.Control;
 using System;
 using System.Collections;
 using System.Collections.Generic;

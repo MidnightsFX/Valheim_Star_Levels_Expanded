@@ -111,8 +111,14 @@ namespace StarLevelSystem
         public static ConfigEntry<float> InitialDelayBeforeSetup;
         public static ConfigEntry<bool> EnableDebugOutputForDamage;
         public static ConfigEntry<bool> EnableDebugOutputLevelRolls;
+        public static ConfigEntry<bool> EnableDebugLootDetails;
         public static ConfigEntry<bool> UseStarShapedModifierIcons;
         public static ConfigEntry<bool> UseDeterministicSizeModifiers;
+
+        public static ConfigEntry<float> EnemyHealthbarScalarX;
+        public static ConfigEntry<float> EnemyHealthbarScalarY;
+        public static ConfigEntry<bool> EnableEnemyHeathbarNumberDisplay;
+        public static ConfigEntry<float> HealthDisplayFontSizeAdjustment;
 
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
 
@@ -150,6 +156,10 @@ namespace StarLevelSystem
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             EnableDebugOutputLevelRolls = Config.Bind("Client config", "EnableDebugOutputLevelRolls", false,
                 new ConfigDescription("Enables Detailed logging for creature levelup rolls.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
+            EnableDebugLootDetails = Config.Bind("Client config", "EnableDebugLootDetails", false,
+                new ConfigDescription("Enables Detailed logging for loot generation.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
 
@@ -248,6 +258,11 @@ namespace StarLevelSystem
             LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
             UseStarShapedModifierIcons = BindServerConfig("Modifiers", "UseStarShapedModifierIcons", true, "When enabled, uses modifier icons that are star shaped. When disabled, uses non-star shaped modifier icons. Requires a restart.", advanced: true);
+
+            EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
+            EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
+            HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 1f, "Percentage modification for the font size on creature health.");
+            EnableEnemyHeathbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHeathbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");

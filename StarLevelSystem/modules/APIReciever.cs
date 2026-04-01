@@ -1,4 +1,6 @@
 ﻿using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -36,8 +38,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute] = value;
             if ((CreatureBaseAttribute)attribute == CreatureBaseAttribute.Size) {
-                // Size is persisted
-                ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, cdc);
+                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cdc, true);
             }
             return true;
         }
@@ -59,10 +60,10 @@ namespace StarLevelSystem.modules
                 scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, scd);
+            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, scd, true);
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
-            ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, scd, true);
+            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, scd, true);
             ModificationExtensionSystem.ApplyHealthModifications(chara, scd);
             return true;
         }
@@ -80,7 +81,7 @@ namespace StarLevelSystem.modules
             cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute] = value;
             if ((CreaturePerLevelAttribute)attribute == CreaturePerLevelAttribute.SizePerLevel) {
                 // Size is persisted
-                ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, cdc);
+                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cdc, true);
             }
             return true;
         }
@@ -106,7 +107,7 @@ namespace StarLevelSystem.modules
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
-            ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, scd, true);
+            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, scd, true);
             ModificationExtensionSystem.ApplyHealthModifications(chara, scd);
             return true;
         }
@@ -198,7 +199,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
-            ModificationExtensionSystem.SetCreatureSizeFromCCE(chara, cdc);
+            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cdc, true);
             ModificationExtensionSystem.ApplyHealthModifications(chara, cdc);
             return true;
         }

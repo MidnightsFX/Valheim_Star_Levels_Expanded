@@ -1,16 +1,19 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules;
+using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
-namespace StarLevelSystem.modules
+namespace StarLevelSystem.Modifiers.Control
 {
     public static class CreatureModifiers
     {
         internal static readonly string NoMods = "None";
+        internal static GameObject VisualEffectHolder = new GameObject("SLS_Visuals");
         static readonly List<NameSelectionStyle> prefixSelectors = new List<NameSelectionStyle>() {
             NameSelectionStyle.RandomFirst,
             NameSelectionStyle.RandomBoth
@@ -102,11 +105,16 @@ namespace StarLevelSystem.modules
             if (cmodifier.VisualEffect != null) {
 
                 GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
-                bool hasVFXAlready = character.transform.Find($"{effectPrefab.name}(Clone)");
+                bool hasVFXAlready = character.transform.Find($"SLS_Visuals(Clone)/{effectPrefab.name}(Clone)");
                 //Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {
+                    Transform visualHolder = character.transform.Find("SLS_Visuals(Clone)");
+                    if (visualHolder == null) {
+                        
+                        visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
+                    }
                     //Logger.LogDebug($"Adding visual effects for {character.name}");
-                    GameObject vfxadd = GameObject.Instantiate(effectPrefab, character.transform);
+                    GameObject vfxadd = GameObject.Instantiate(effectPrefab, visualHolder);
                     float height = character.GetHeight();
                     float scale = height / 5f;
                     float rscale = character.GetRadius() / 2f;
@@ -364,7 +372,7 @@ namespace StarLevelSystem.modules
             if (applyChanges == false) {
                 ModificationExtensionSystem.ApplySpeedModifications(character, scd);
                 ModificationExtensionSystem.ApplyDamageModification(character, scd);
-                ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, scd, true);
+                SizeModifications.ApplySaveSizeModifications(character.gameObject, character.m_nview, scd, true);
                 ModificationExtensionSystem.ApplyHealthModifications(character, scd);
                 return true;
             }

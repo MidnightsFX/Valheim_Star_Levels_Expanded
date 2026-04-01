@@ -2,7 +2,7 @@
 using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
-using StarLevelSystem.modules;
+using StarLevelSystem.Modifiers.Control;
 using System;
 using System.Collections.Generic;
 using System.IO;

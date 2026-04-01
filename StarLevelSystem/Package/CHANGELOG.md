@@ -1,6 +1,8 @@
 **0.18.0**
  ---
  ```
+- Added resizing options for enemy healthbars
+	- Added an option to enable health numbers on healthbars
  - Redesigns Modifier icons to all follow star designs
  - Adds new Modifiers: (Delete your modifiers.yaml if you want the new ones)
 	- Fire Resistant
@@ -9,10 +11,15 @@
 	- Spirit Resistant
 	- Elemental Chaos
 	- Evolving
+	- Poison Nova
  - Improves compatibility with mods that add custom spawners
  - Fixes Zil & Thungr combo spawning too many Zils when killing Thungr
  - Nerfed lifelink significantly
  - Reduced particle visibility for distant modifiers
+ - Increased the speed at which characters are deleted when they are selected for deletion
+ - Adds default spawn multipliers for all mini-bosses to prevent spawn multiplying
+ - Fixed a bug that would cause per player scaled drops to multiply too much
+ - Fixed a potential cache collision from re-used characters
  ```
 
 **0.17.13**

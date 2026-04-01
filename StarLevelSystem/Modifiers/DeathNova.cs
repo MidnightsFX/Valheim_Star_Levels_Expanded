@@ -44,10 +44,23 @@ namespace StarLevelSystem.Modifiers
                 //{
 
                 //}
-                //if (cDetails.Modifiers.Keys.Contains(ModifierNames.PoisonNova))
-                //{
+                if (mods.Keys.Contains(ModifierNames.PoisonNova.ToString())) {
+                    CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.PoisonNova.ToString(), mods[ModifierNames.PoisonNova.ToString()]);
+                    if (cmdef == null) { return; }
+                    GameObject go = GameObject.Instantiate(CreatureModifiersData.LoadedSecondaryEffects[ModifierDefinitions[ModifierNames.PoisonNova.ToString()].SecondaryEffect], __instance.transform.position, __instance.transform.rotation);
+                    go.SetActive(false);
+                    Aoe aoe = go.GetComponent<Aoe>();
+                    // Configure damage
+                    float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
+                    if (aoe) {
+                        float characterdmg = Extensions.EstimateCharacterDamage(__instance);
+                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 6f;
+                        aoe.m_damage.m_poison = (characterdmg * dmgmod);
+                        Logger.LogDebug($"Activating Poison Nova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
+                    }
 
-                //}
+                    go.SetActive(true);
+                }
             }
         }
     }

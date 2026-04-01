@@ -1,5 +1,8 @@
-﻿using StarLevelSystem.common;
+﻿using HarmonyLib;
+using StarLevelSystem.common;
+using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,33 +14,32 @@ namespace StarLevelSystem.Data
     {
         public static readonly Vector2 Center = new Vector2(0, 0);
 
-
         // Add check to delete creature from Znet that removes the creature from the cache
-        private static Dictionary<uint, CharacterCacheEntry> sessionCache = new Dictionary<uint, CharacterCacheEntry>();
+        private static Dictionary<uint, CharacterCacheEntry> SessionCache = new Dictionary<uint, CharacterCacheEntry>();
 
         // Session tree cache, to avoid recalculating tree levels multiple times
-        private static Dictionary<uint, int> treeSessionCache = new Dictionary<uint, int>();
+        private static Dictionary<uint, int> TreeSessionCache = new Dictionary<uint, int>();
 
         public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
             if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
             uint cid = zgo.GetZDO().m_uid.ID;
-            if (treeSessionCache.ContainsKey(cid)) { return treeSessionCache[cid]; }
+            if (TreeSessionCache.ContainsKey(cid)) { return TreeSessionCache[cid]; }
             int level = LevelSystem.DeterministicDetermineTreeLevel(zgo.gameObject);
-            treeSessionCache.Add(cid, level);
+            TreeSessionCache.Add(cid, level);
             return level;
         }
 
         public static void RemoveTreeCacheEntry(uint id) {
-            if (treeSessionCache.ContainsKey(id)) {
-                treeSessionCache.Remove(id);
+            if (TreeSessionCache.ContainsKey(id)) {
+                TreeSessionCache.Remove(id);
             }
         }
 
         public static CharacterCacheEntry GetCacheEntry(uint cid)
         {
-            if (sessionCache.ContainsKey(cid))
+            if (SessionCache.ContainsKey(cid))
             {
-                return sessionCache[cid];
+                return SessionCache[cid];
             }
             return null;
         }
@@ -53,7 +55,7 @@ namespace StarLevelSystem.Data
         {
             if (character == null || character.m_nview == null || character.IsPlayer() || character.m_nview.GetZDO() == null) { return; }
             uint cid = character.GetZDOID().ID;
-            sessionCache.Remove(cid);
+            SessionCache.Remove(cid);
         }
 
         public static CharacterCacheEntry GetAndSetLocalCache(Character character, int leveloverride = 0, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null, bool updateCache = false) {
@@ -64,10 +66,8 @@ namespace StarLevelSystem.Data
                 return cacheEntry;
             }
 
-            ZDO creatureZDO = character.m_nview.GetZDO();
-
             CharacterCacheEntry characterEntry = new CharacterCacheEntry() { };
-
+            characterEntry.ZDO = character.m_nview.GetZDO();
             // Get character based biome and creature configuration
             //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
@@ -134,7 +134,7 @@ namespace StarLevelSystem.Data
 
             // Check for level or set it
             //Logger.LogDebug("Setting creature level");
-            characterEntry.Level = LevelSystem.DetermineLevel(character, creatureZDO, creatureSettings, biomeSettings, leveloverride);
+            characterEntry.Level = LevelSystem.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, leveloverride);
 
 
             // Set creature Colorization pallete
@@ -149,12 +149,12 @@ namespace StarLevelSystem.Data
             // skip setting cache if the creature is gone already
             uint uid = character.GetZDOID().ID;
             //Logger.LogDebug($"Determined {creatureName} level {characterEntry.Level} Setting cache {uid}");
-            if (sessionCache.ContainsKey(uid)) {
+            if (SessionCache.ContainsKey(uid)) {
                 if (updateCache) {
-                    sessionCache[uid] = characterEntry;
+                    SessionCache[uid] = characterEntry;
                 }
             } else {
-                sessionCache.Add(uid, characterEntry);
+                SessionCache.Add(uid, characterEntry);
             }
 
             // Return the entry to the caller
@@ -192,7 +192,7 @@ namespace StarLevelSystem.Data
                 Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
                 chara.SetLevel(maxlevel);
                 chara.m_level = maxlevel;
-                ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, characterEntry, force_update: true);
+                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, characterEntry, force_update: true);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
                 LevelUI.InvalidateCacheEntry(chara);
             }
@@ -236,7 +236,7 @@ namespace StarLevelSystem.Data
 
             // Get/set check SLS_SPAWN_MULT - applies spawn if not already applied
             if (spawnratecheck == false) {
-                chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+                characterEntry.ZDO.Set(SLS_SPAWN_MULT, true);
             } else {
                 Spawnrate.CheckSetApplySpawnrate(chara, characterEntry);
             }
@@ -247,18 +247,18 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug($"Retrieving cached creature data for ( {character == null} || {character.m_nview == null} || {character.IsPlayer()} || {character.m_nview.GetZDO() == null})");
             if (character == null || character.GetZDOID() == ZDOID.None || character.IsPlayer()) { return null; }
             uint cid = character.GetZDOID().ID;
-            if (sessionCache.ContainsKey(cid)) { return sessionCache[cid]; }
+            if (SessionCache.ContainsKey(cid)) { return SessionCache[cid]; }
             return null;
         }
 
         public static void UpdateCharacterCacheEntry(Character character, CharacterCacheEntry scd)
         {
             uint cid = character.GetZDOID().ID;
-            if (sessionCache.ContainsKey(cid))
+            if (SessionCache.ContainsKey(cid))
             {
-                sessionCache[cid] = scd; 
+                SessionCache[cid] = scd; 
             } else {
-                sessionCache.Add(cid, scd);
+                SessionCache.Add(cid, scd);
             }
         }
 
@@ -285,6 +285,19 @@ namespace StarLevelSystem.Data
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;
                 UpdateCharacterCacheEntry(chara, cce);
+            }
+        }
+
+        [HarmonyPatch(typeof(ZNetScene), nameof(ZNetScene.Destroy))]
+        public static class CleanupDeletedCreatures {
+            private static void Prefix(ZNetScene __instance, GameObject go) {
+                ZNetView component = go.GetComponent<ZNetView>();
+                if (component == null || __instance == null || component.GetZDO() == null) { return; }
+                uint id = component.GetZDO().m_uid.ID;
+                if (SessionCache.ContainsKey(id)) {
+                    SessionCache.Remove(id);
+                    //Logger.LogDebug($"Removed deleted creature from cache {id}");
+                }
             }
         }
     }

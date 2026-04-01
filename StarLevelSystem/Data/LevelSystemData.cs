@@ -2,6 +2,7 @@
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -149,6 +150,36 @@ namespace StarLevelSystem.Data
                         CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
                             { DataObjects.CreaturePerLevelAttribute.SizePerLevel, 0.05f },
                         }
+                    }
+                },
+                { "GoblinBruteBros", new DataObjects.CreatureSpecificSetting()
+                    {
+                        SpawnRateModifier = 1f,
+                    }
+                },
+                { "GoblinShaman_Hildir", new DataObjects.CreatureSpecificSetting()
+                    {
+                        SpawnRateModifier = 1f,
+                    }
+                },
+                { "GoblinBrute_Hildir", new DataObjects.CreatureSpecificSetting()
+                    {
+                        SpawnRateModifier = 1f,
+                    }
+                },
+                { "Skeleton_Hildir", new DataObjects.CreatureSpecificSetting()
+                    {
+                        SpawnRateModifier = 1f,
+                    }
+                },
+                { "Fenring_Cultist_Hildir", new DataObjects.CreatureSpecificSetting()
+                    {
+                        SpawnRateModifier = 1f,
+                    }
+                },
+                { "Charred_Melee_Dyrnwyn", new DataObjects.CreatureSpecificSetting()
+                    {
+                        SpawnRateModifier = 1f,
                     }
                 },
             },
@@ -312,7 +343,7 @@ namespace StarLevelSystem.Data
                     // Modify the creatures stats by custom character/biome modifications
                     ModificationExtensionSystem.ApplySpeedModifications(chara, ccd);
                     ModificationExtensionSystem.ApplyDamageModification(chara, ccd, true);
-                    ModificationExtensionSystem.LoadApplySizeModifications(chara.gameObject, chara.m_nview, ccd, true);
+                    SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, ccd, true);
                     ModificationExtensionSystem.ApplyHealthModifications(chara, ccd);
                     //Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                     //Colorization.ApplyLevelVisual(chara);
@@ -339,7 +370,7 @@ namespace StarLevelSystem.Data
                 // Modify the creatures stats by custom character/biome modifications
                 ModificationExtensionSystem.ApplySpeedModifications(character, ccd);
                 ModificationExtensionSystem.ApplyDamageModification(character, ccd, true);
-                ModificationExtensionSystem.LoadApplySizeModifications(character.gameObject, character.m_nview, ccd, true);
+                SizeModifications.ApplySaveSizeModifications(character.gameObject, character.m_nview, ccd, true);
                 ModificationExtensionSystem.ApplyHealthModifications(character, ccd);
 
                 i++;

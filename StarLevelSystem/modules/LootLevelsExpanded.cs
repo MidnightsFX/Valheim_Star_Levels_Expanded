@@ -122,12 +122,6 @@ namespace StarLevelSystem.modules
                         // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified by chance and creature level.");
                     }
 
-                    // Modify the multiplier for how many this drops based on local players
-                    if (loot.Drop.OnePerPlayer) {
-                        scale_multiplier += (Player.GetPlayersInRangeXZ(__instance.transform.position, 500f) -1f);
-                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
-                    }
-
                     int drop_min = loot.Drop.Min;
                     int drop_max = loot.Drop.Max;
                     int drop_base_amount = drop_min;
@@ -139,40 +133,34 @@ namespace StarLevelSystem.modules
                         }
                     }
 
-                    if (loot.DoesNotScale == true) {
-                        // Apply Random change, and the range of the loot drop
-                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} does not scale and will drop {drop_base_amount}");
-                        drop_results.Add(new KeyValuePair<GameObject, int>(loot.GameDrop.m_prefab, drop_base_amount));
-                        continue;
-                    }
-
-                    // Determine the actual amount of the drop
                     int drop = drop_base_amount;
-                    float scale_factor = loot.AmountScaleFactor * scale_multiplier;
-                    if (scale_factor <= 0f) { scale_factor = 1f; }
-                    if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
-                    } else {
-                        drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
+
+                    // Skip level scaling if DoesNotScale or Drop.DontScale is set
+                    if (loot.DoesNotScale != true && loot.Drop.DontScale != true) {
+                        float scale_factor = loot.AmountScaleFactor * scale_multiplier;
+                        if (scale_factor <= 0f) { scale_factor = 1f; }
+                        if (SelectedLootFactor == LootFactorType.PerLevel) {
+                            drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
+                        } else {
+                            drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
+                        }
+
+                        // Enforce max drop cap
+                        if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) {
+                            drop = loot.MaxScaledAmount;
+                            Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
+                        }
                     }
 
-                    // Enforce max drop cap
-                    if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) { 
-                        drop = loot.MaxScaledAmount;
-                        Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
-                    }
-
-                    //Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
                     // Add the drop to the results
                     if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
-                        // Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
                         loot.ToCharacterDrop();
                     }
 
-                    // Modify the multiplier for how many this drops based on local players
+                    // Scale drop amount by nearby players
                     if (loot.Drop.OnePerPlayer) {
-                        scale_multiplier += Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
-                        // Logger.LogDebug($"Drop {loot.Drop.Prefab} modified players in local area.");
+                        int players = Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
+                        drop = drop * Mathf.Max(1, players);
                     }
 
                     drop_results.Add(new KeyValuePair<GameObject, int>(loot.GameDrop.m_prefab, drop));

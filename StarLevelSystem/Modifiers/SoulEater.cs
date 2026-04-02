@@ -37,7 +37,7 @@ namespace StarLevelSystem.Modifiers
                         int nearbyDeaths = character.m_nview.GetZDO().GetInt(SLS_SOULEATER, 0);
                         nearbyDeaths += 1;
                         character.m_nview.GetZDO().Set(SLS_SOULEATER, nearbyDeaths);
-                        SizeModifications.ApplySaveSizeModifications(character.gameObject, character.m_nview, cDetails, true, 0.01f * nearbyDeaths);
+                        SizeModifications.ApplySizeModifications(character.gameObject, cDetails, true, 0.01f * nearbyDeaths);
                         character.Heal(character.GetMaxHealth() * cmcfg.PerlevelPower);
                     }
                 }

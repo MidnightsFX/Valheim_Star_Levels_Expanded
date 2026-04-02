@@ -38,7 +38,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute] = value;
             if ((CreatureBaseAttribute)attribute == CreatureBaseAttribute.Size) {
-                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cdc, true);
+                SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
             }
             return true;
         }
@@ -60,10 +60,9 @@ namespace StarLevelSystem.modules
                 scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, scd, true);
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
-            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, scd, true);
+            SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
             ModificationExtensionSystem.ApplyHealthModifications(chara, scd);
             return true;
         }
@@ -80,8 +79,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute] = value;
             if ((CreaturePerLevelAttribute)attribute == CreaturePerLevelAttribute.SizePerLevel) {
-                // Size is persisted
-                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cdc, true);
+                SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
             }
             return true;
         }
@@ -107,7 +105,7 @@ namespace StarLevelSystem.modules
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
             ModificationExtensionSystem.ApplyDamageModification(chara, scd);
-            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, scd, true);
+            SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
             ModificationExtensionSystem.ApplyHealthModifications(chara, scd);
             return true;
         }
@@ -199,7 +197,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
             ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
-            SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cdc, true);
+            SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
             ModificationExtensionSystem.ApplyHealthModifications(chara, cdc);
             return true;
         }

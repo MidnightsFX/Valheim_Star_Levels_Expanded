@@ -343,7 +343,7 @@ namespace StarLevelSystem.Data
                     // Modify the creatures stats by custom character/biome modifications
                     ModificationExtensionSystem.ApplySpeedModifications(chara, ccd);
                     ModificationExtensionSystem.ApplyDamageModification(chara, ccd, true);
-                    SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, ccd, true);
+                    SizeModifications.ApplySizeModifications(chara.gameObject, ccd, true);
                     ModificationExtensionSystem.ApplyHealthModifications(chara, ccd);
                     //Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                     //Colorization.ApplyLevelVisual(chara);
@@ -370,7 +370,7 @@ namespace StarLevelSystem.Data
                 // Modify the creatures stats by custom character/biome modifications
                 ModificationExtensionSystem.ApplySpeedModifications(character, ccd);
                 ModificationExtensionSystem.ApplyDamageModification(character, ccd, true);
-                SizeModifications.ApplySaveSizeModifications(character.gameObject, character.m_nview, ccd, true);
+                SizeModifications.ApplySizeModifications(character.gameObject, ccd, true);
                 ModificationExtensionSystem.ApplyHealthModifications(character, ccd);
 
                 i++;

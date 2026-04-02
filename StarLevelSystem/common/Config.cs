@@ -113,7 +113,6 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableDebugOutputLevelRolls;
         public static ConfigEntry<bool> EnableDebugLootDetails;
         public static ConfigEntry<bool> UseStarShapedModifierIcons;
-        public static ConfigEntry<bool> UseDeterministicSizeModifiers;
 
         public static ConfigEntry<float> EnemyHealthbarScalarX;
         public static ConfigEntry<float> EnemyHealthbarScalarY;
@@ -260,15 +259,14 @@ namespace StarLevelSystem
             UseStarShapedModifierIcons = BindServerConfig("Modifiers", "UseStarShapedModifierIcons", true, "When enabled, uses modifier icons that are star shaped. When disabled, uses non-star shaped modifier icons. Requires a restart.", advanced: true);
 
             EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
-            EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
-            HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 1f, "Percentage modification for the font size on creature health.");
+            EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
+            HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.");
             EnableEnemyHeathbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHeathbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
             InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
-            UseDeterministicSizeModifiers = BindServerConfig("Misc", "UseDeterministicSizeModifiers", true, "When enabled, size modifications are deterministic");
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
         }

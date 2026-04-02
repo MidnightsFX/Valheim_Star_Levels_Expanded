@@ -136,17 +136,6 @@ namespace StarLevelSystem.modules
                         }
                     }
 
-                    // Modify the multiplier for how many this drops based on local players
-                    if (loot.Drop.OnePerPlayer) {
-                        int playersNearby = Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
-                        if (playersNearby > 1) {
-                            scale_multiplier += (playersNearby - 1f);
-                            if (ValConfig.EnableDebugLootDetails.Value) {
-                                sb.AppendLine($"Drop {loot.Drop.Prefab} modified players in local area (scale multiplier now: {scale_multiplier}).");
-                            }
-                        }
-                    }
-
                     int drop_min = loot.Drop.Min;
                     int drop_max = loot.Drop.Max;
                     int drop_base_amount = drop_min;
@@ -172,23 +161,29 @@ namespace StarLevelSystem.modules
 
                     // Determine the actual amount of the drop
                     int drop = drop_base_amount;
-                    float scale_factor = loot.AmountScaleFactor * scale_multiplier;
-                    if (scale_factor <= 0f) { scale_factor = 1f; }
-                    if (SelectedLootFactor == LootFactorType.PerLevel) {
-                        drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
-                    } else {
-                        drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
-                    }
-                    if (ValConfig.EnableDebugLootDetails.Value) {
-                        sb.AppendLine($"Drop {loot.Drop.Prefab} Using {SelectedLootFactor} factor {scale_factor} base {drop_base_amount} = {drop}");
+                    if (loot.DoesNotScale != true && loot.Drop.DontScale != true) {
+                        float scale_factor = loot.AmountScaleFactor * scale_multiplier;
+                        if (scale_factor <= 0f) { scale_factor = 1f; }
+                        if (SelectedLootFactor == LootFactorType.PerLevel) {
+                            drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
+                        } else {
+                            drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
+                        }
+                        if (ValConfig.EnableDebugLootDetails.Value) {
+                            sb.AppendLine($"Drop {loot.Drop.Prefab} Using {SelectedLootFactor} factor {scale_factor} base {drop_base_amount} = {drop}");
+                        }
+                        // Enforce max drop cap
+                        if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) {
+                            drop = loot.MaxScaledAmount;
+                            Logger.LogDebug($"Drop {loot.Drop.Prefab} capped to {drop}");
+                        }
                     }
 
-                    // Enforce max drop cap
-                    if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) { 
-                        drop = loot.MaxScaledAmount;
-                        if (ValConfig.EnableDebugLootDetails.Value) {
-                            sb.AppendLine($"Drop {loot.Drop.Prefab} capped to {drop}");
-                        }
+
+                    // Modify the multiplier for how many this drops based on local players
+                    if (loot.Drop.OnePerPlayer) {
+                        int playersNearby = Player.GetPlayersInRangeXZ(__instance.transform.position, 500f);
+                        drop *= Mathf.Max(1, playersNearby);
                     }
 
                     // Add the drop to the results
@@ -371,7 +366,7 @@ namespace StarLevelSystem.modules
             int result = Mathf.RoundToInt(UnityEngine.Random.Range(min, max));
             if (result < 1) { result = 1; }
             if (ValConfig.EnableDebugLootDetails.Value) {
-                Logger.LogDebug($"Scale {SelectedLootFactor} select {min} <-> {max} selected {result}.");
+                Logger.LogDebug($"Loot Scale {SelectedLootFactor} select {min} <-> {max} selected {result}.");
             }
             return result;
         }

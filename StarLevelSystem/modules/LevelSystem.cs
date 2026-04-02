@@ -64,6 +64,7 @@ namespace StarLevelSystem.modules
             if (leveloverride > 0) {
                 //character.m_level = leveloverride;
                 //character.SetLevel(leveloverride);
+                Logger.LogDebug($"Level override provided, setting level to {leveloverride}");
                 return leveloverride;
             }
 
@@ -283,7 +284,7 @@ namespace StarLevelSystem.modules
                 //cce.Level = LevelSystem.DetermineLevel(chara, chara.m_nview.GetZDO(), cce.CreatureSettings, cce.BiomeSettings);
                 //CompositeLazyCache.UpdateCharacterCacheEntry(chara, cce);
                 //CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, false);
-                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, cce, force_update: true);
+                SizeModifications.ApplySizeModifications(chara.gameObject, cce, force_update: true);
                 ModificationExtensionSystem.CreatureSetup(chara, cce.Level);
                 //LevelUI.InvalidateCacheEntry(chara);
             }

@@ -12,7 +12,7 @@ namespace StarLevelSystem.modules.Sizes {
 
         private static Dictionary<string, Vector3> SizeEstimateCache = new Dictionary<string, Vector3>();
 
-        internal static void ApplySaveSizeModifications(GameObject creature, ZNetView zview, CharacterCacheEntry cDetails, bool force_update = false, float bonus = 0f) {
+        internal static void ApplySizeModifications(GameObject creature, CharacterCacheEntry cDetails, bool force_update = false, float bonus = 0f) {
             // Don't scale in dungeons
             if (creature.transform.position.y > 3000f && ValConfig.EnableScalingInDungeons.Value == false || cDetails == null) {
                 return;
@@ -21,23 +21,37 @@ namespace StarLevelSystem.modules.Sizes {
             float current_size = creature.transform.localScale.x;
             float scale = bonus + cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + (cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cDetails.Level);
             if (force_update == true || scale != current_size) {
-                Vector3 creature_size;
-                string objectName = Utils.GetPrefabName(creature);
-                if (SizeEstimateCache.ContainsKey(objectName)) {
-                    creature_size = SizeEstimateCache[objectName];
-                } else {
-                    creature_size = PrefabManager.Instance.GetPrefab(objectName).transform.localScale;
-                    SizeEstimateCache.Add(objectName, creature_size);
-                }
-
+                Vector3 creature_size = GetSizeReferenceForObject(creature.name);
                 Vector3 sizeEstimate = creature_size * scale;
                 creature.transform.localScale = sizeEstimate;
-                //Logger.LogDebug($"Applying size modification {creature.name} {bonus} + {cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size]} + ({cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel]} * {cDetails.Level}) => {sizeEstimate} | saved: {current_size}");
+                //Logger.LogDebug($"Applying size modification {creature.name} refsize: {creature_size} | {bonus} + {cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size]} + ({cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel]} * {cDetails.Level}) => {sizeEstimate} | saved: {current_size}");
                 creature.transform.localScale = sizeEstimate;
                 UpdateRidingCreaturesForSizeScaling(creature, cDetails);
                 Physics.SyncTransforms();
                 return;
             }
+        }
+
+        internal static void ApplyWeaponSizeModifications(GameObject weapon, GameObject creature, CharacterCacheEntry cDetails) {
+            if (weapon == null || cDetails == null) { return; }
+            // We only want to apply scaling for weapons that are added AFTER the initial character size change
+            if (creature.transform.localScale == GetSizeReferenceForObject(cDetails.RefCreatureName)) { return; }
+            float scale = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + (cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cDetails.Level);
+            Vector3 sizeEstimate = weapon.transform.localScale * scale;
+            weapon.transform.localScale = sizeEstimate;
+            //Logger.LogDebug($"Applying weapon size modification {weapon.name} | {cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size]} + ({cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel]} * {cDetails.Level}) => {sizeEstimate}");
+        }
+
+        internal static Vector3 GetSizeReferenceForObject(string name) {
+            Vector3 objSize;
+            string objectName = Utils.GetPrefabName(name);
+            if (SizeEstimateCache.ContainsKey(objectName)) {
+                objSize = SizeEstimateCache[objectName];
+            } else {
+                objSize = PrefabManager.Instance.GetPrefab(objectName).transform.localScale;
+                SizeEstimateCache.Add(objectName, objSize);
+            }
+            return objSize;
         }
 
         internal static void UpdateRidingCreaturesForSizeScaling(GameObject creature, CharacterCacheEntry cDetails) {

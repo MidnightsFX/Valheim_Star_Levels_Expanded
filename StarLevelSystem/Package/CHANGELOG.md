@@ -20,6 +20,7 @@
  - Adds default spawn multipliers for all mini-bosses to prevent spawn multiplying
  - Fixed a bug that would cause per player scaled drops to multiply too much
  - Fixed a potential cache collision from re-used characters
+ - Fix for erratic level 1 spawning from the spawn command
  ```
 
 **0.17.13**

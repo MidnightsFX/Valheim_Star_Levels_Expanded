@@ -45,14 +45,12 @@ namespace StarLevelSystem.Data
         }
 
         // Check for cached creature data
-        public static CharacterCacheEntry GetCacheEntry(Character character)
-        {
+        public static CharacterCacheEntry GetCacheEntry(Character character) {
             CharacterCacheEntry characterCacheEntry = RetrieveStoredCreatureFromCache(character);
             return characterCacheEntry;
         }
 
-        public static void ClearCachedCreature(Character character)
-        {
+        public static void ClearCachedCreature(Character character) {
             if (character == null || character.m_nview == null || character.IsPlayer() || character.m_nview.GetZDO() == null) { return; }
             uint cid = character.GetZDOID().ID;
             SessionCache.Remove(cid);
@@ -163,7 +161,8 @@ namespace StarLevelSystem.Data
 
         // SAFE to re-run
         public static void StartZOwnerCreatureRoutines(Character chara, CharacterCacheEntry characterEntry, bool spawnratecheck = true) {
-            if (characterEntry == null || chara == null || characterEntry.Level == 0) { return; }
+            if (characterEntry == null || chara == null) { return; }
+            if (characterEntry.Level == 0) { characterEntry.Level = 1; }
 
             // Destroy character if its selected for deletion
             if (characterEntry.ShouldDelete && chara.m_tamed == false) {
@@ -173,8 +172,10 @@ namespace StarLevelSystem.Data
 
             int clevel = chara.GetLevel();
             // Set level ZDO, only if its not been set, and only if its not what the cache is expecting
-            if (clevel <= 1 && characterEntry.Level != clevel && characterEntry.Level != 0) {
-                chara.SetLevel(characterEntry.Level);
+            //Logger.LogDebug($"ZOwner Setup: {characterEntry.RefCreatureName} | {clevel} <= 1 && {characterEntry.Level} != {clevel} ({clevel <= 1 && characterEntry.Level != clevel})");
+            if (clevel <= 1 && characterEntry.Level != clevel) {
+                // Can't use the standard set level here- as we want to set the character level to 1 sometimes, and that will be ignored here.
+                chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
                 chara.m_level = characterEntry.Level;
                 LevelUI.InvalidateCacheEntry(chara);
                 //Logger.LogDebug($"{characterEntry.RefCreatureName} setting level to {characterEntry.Level} from {clevel}");
@@ -192,15 +193,14 @@ namespace StarLevelSystem.Data
                 Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
                 chara.SetLevel(maxlevel);
                 chara.m_level = maxlevel;
-                SizeModifications.ApplySaveSizeModifications(chara.gameObject, chara.m_nview, characterEntry, force_update: true);
+                SizeModifications.ApplySizeModifications(chara.gameObject, characterEntry, force_update: true);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
                 LevelUI.InvalidateCacheEntry(chara);
             }
 
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
-            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName))
-            {
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
                 chara.SetLevel(characterEntry.Level);
             }
 

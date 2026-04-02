@@ -55,8 +55,7 @@ namespace StarLevelSystem.modules
         //}
 
         [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
-        public static class ModifyCharacterVisualsToLevel
-        {
+        public static class ModifyCharacterVisualsToLevel {
             public static void Prefix(Character __instance, ref int level) {
                 if (level <= 1) { level = 1; }
             }
@@ -283,7 +282,7 @@ namespace StarLevelSystem.modules
                 // Logger.LogDebug($"{__instance.name} DSVZ owner:{__instance.m_nview.IsOwner()} - {__instance.m_nview.m_zdo.Owned} - {__instance.m_nview.m_zdo.GetOwner()} force:{force}");
                 if (__instance.m_nview.m_zdo.Owned == false) { __instance.m_nview.ClaimOwnership(); }
                 // Only the owner should setup a creature, OR if someone is controlling it and it was just spawned it is setup immediately
-                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
+                CharacterCacheEntry cce;
                 if (__instance.m_nview.IsOwner() || delay == 0) {
                     //SetupCreatureZOwner(__instance, level_override, spawnMultiply, requiredModifiers);
                     if (__instance.m_nview == null || __instance.m_nview.IsValid() == false) { continue; }
@@ -291,7 +290,9 @@ namespace StarLevelSystem.modules
                     cce = CompositeLazyCache.GetAndSetLocalCache(__instance, level_override, requiredModifiers);
                     CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce, spawnMultiply);
                 }
-                
+                // If already setup by the owner it should have the correct references
+                cce = CompositeLazyCache.GetCacheEntry(__instance);
+
                 status = CharacterSetup(__instance, cce);
                 //Logger.LogDebug($"Setup status: {status}");
                 times += 1;
@@ -329,7 +330,7 @@ namespace StarLevelSystem.modules
             CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
             ApplySpeedModifications(__instance, cDetails);
             ApplyDamageModification(__instance, cDetails);
-            SizeModifications.ApplySaveSizeModifications(__instance.gameObject, __instance.m_nview, cDetails);
+            SizeModifications.ApplySizeModifications(__instance.gameObject, cDetails);
             ApplyHealthModifications(__instance, cDetails);
 
             // Rebuild UI since it may have been created before these changes were applied
@@ -360,7 +361,7 @@ namespace StarLevelSystem.modules
             //CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, leveloverride);
             //if (cDetails == null) { return; } // For invalid things, skip. This happens when placing TWIG etc (not a valid or awake character)
 
-
+            Logger.LogDebug($"Setting up creature {__instance.gameObject.name} with delay {delay} and level override {leveloverride}");
             // Generally a bad idea to run setup immediately if this is a networked player and the owner hasn't setup the creature
             // we want to delay slightly to allow the ZOwner to setup the creature, send the values and then we can use those, no need to multiply work
             TaskRunner.Run().StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, spawnMultiply: multiply, requiredModifiers: requiredModifiers));
@@ -372,13 +373,12 @@ namespace StarLevelSystem.modules
                 chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
             }
 
-
             if (cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] != 1 || cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] > 0) {
                 float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
-                float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] * (chara.GetLevel() - 1));
+                float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
                 float hp = (basehp + perlvlhp);
                 chara.SetMaxHealth(hp);
-                //Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
+                Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
             } else {
                 if (chara.IsBoss()) {
                     chealth *= ValConfig.BossEnemyHealthMultiplier.Value;
@@ -440,7 +440,8 @@ namespace StarLevelSystem.modules
 
             // No changes, do nothing
             if (base_dmg_mod == 1 && per_level_mod == 0) { return; }
-            float dmgmod = base_dmg_mod + (per_level_mod * (creature.GetLevel() - 1));
+            int level = creature.GetLevel() - 1;
+            float dmgmod = base_dmg_mod + (per_level_mod * level);
 
             //// Debugging
             //foreach (var entry in cDetails.CreatureBaseValueModifiers)
@@ -461,7 +462,7 @@ namespace StarLevelSystem.modules
                 DamageBonuses.Set(cDetails.CreatureDamageBonus);
             }
             creature.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, dmgmod);
-            Logger.LogDebug($"Built damage buffs for {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)}  *{dmgmod}");
+            Logger.LogDebug($"Built damage buffs for {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)} *{dmgmod} [ base-{base_dmg_mod} + ({per_level_mod} * {level}) ]");
         }
 
         internal static Dictionary<CreaturePerLevelAttribute, float> DetermineCharacterPerLevelStats(BiomeSpecificSetting biome_settings, CreatureSpecificSetting creature_settings)

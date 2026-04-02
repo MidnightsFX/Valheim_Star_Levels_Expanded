@@ -372,7 +372,7 @@ namespace StarLevelSystem.Modifiers.Control
             if (applyChanges == false) {
                 ModificationExtensionSystem.ApplySpeedModifications(character, scd);
                 ModificationExtensionSystem.ApplyDamageModification(character, scd);
-                SizeModifications.ApplySaveSizeModifications(character.gameObject, character.m_nview, scd, true);
+                SizeModifications.ApplySizeModifications(character.gameObject, scd, true);
                 ModificationExtensionSystem.ApplyHealthModifications(character, scd);
                 return true;
             }

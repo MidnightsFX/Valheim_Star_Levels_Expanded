@@ -326,11 +326,6 @@ namespace StarLevelSystem.modules
         public static class DisplayCreatureNameChanges {
             public static bool Prefix(Character __instance, ref string __result) {
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
-                // Remove invalid or old entries which can occur over time if the ID namespace is busy
-                if (cce != null && __instance.m_name != cce.RefCreatureName) {
-                    CompositeLazyCache.ClearCachedCreature(__instance);
-                    cce = CompositeLazyCache.GetCacheEntry(__instance);
-                }
                 if (cce == null || cce.CreatureNameLocalizable == null) { return true; }
                 __result = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 Tameable component = __instance.gameObject.GetComponent<Tameable>();

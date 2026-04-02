@@ -185,7 +185,7 @@ namespace StarLevelSystem.Modifiers.Control
             {
                 creatureName += $" $suffix_moniker {string.Join(" ", suffix_names)}";
             }
-            //Logger.LogDebug($"Setting creature name for {chara.name} to {setName}");
+            Logger.LogDebug($"Setting creature name for {chara.name} to {creatureName}");
             return creatureName;
 
         }

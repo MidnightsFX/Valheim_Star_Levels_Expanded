@@ -378,7 +378,7 @@ namespace StarLevelSystem.modules
                 float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
                 float hp = (basehp + perlvlhp);
                 chara.SetMaxHealth(hp);
-                Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
+                //Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
             } else {
                 if (chara.IsBoss()) {
                     chealth *= ValConfig.BossEnemyHealthMultiplier.Value;

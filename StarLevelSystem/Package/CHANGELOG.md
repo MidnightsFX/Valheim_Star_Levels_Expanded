@@ -1,3 +1,9 @@
+**0.18.1**
+ ---
+ ```
+- Fix modifier name cache reset
+ ```
+
 **0.18.0**
  ---
  ```

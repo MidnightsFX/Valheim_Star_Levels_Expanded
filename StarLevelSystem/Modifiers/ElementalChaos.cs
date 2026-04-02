@@ -23,7 +23,7 @@ namespace StarLevelSystem.Modifiers {
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(attacker);
                 if (mods == null) { return; }
                 if (mods.Keys.Contains(ModifierNames.ElementalChaos.ToString())) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), mods[ModifierNames.StaminaDrain.ToString()]);
+                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.ElementalChaos.ToString(), mods[ModifierNames.ElementalChaos.ToString()]);
                     float value = cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level);
                     DamageType dmgT = RandomSelectDamageType();
                     Logger.LogDebug($"Elemental Chaos adding {dmgT} modifier {value}");

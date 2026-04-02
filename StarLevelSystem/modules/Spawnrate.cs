@@ -66,6 +66,23 @@ namespace StarLevelSystem.modules
             return false;
         }
 
+        // Delayed destruction of an object so that it can finish being setup- otherwise there are lots of vanilla scripts that explode
+        // Since apparently instanciating and destroying something in the same frame breaks vanilla assumptions :sigh:
+        internal static IEnumerator DestroyCoroutine(GameObject go) {
+            yield return new WaitForEndOfFrame();
+            if (go != null) {
+                // recheck tame status | TODO: Config to override allowing deletion of tames?
+                Character chara = go.GetComponent<Character>();
+                if (chara != null && chara.m_tamed) { yield break; }
+                // Remove drops before destroying the creature to ensure that we don't litter drops everywhere
+                CharacterDrop cd = go.GetComponent<CharacterDrop>();
+                if (cd != null) { GameObject.Destroy(cd); }
+                //Logger.LogDebug($"Destroying object {go.name}.");
+                ZNetScene.instance.Destroy(go);
+            }
+            yield break;
+        }
+
         internal static Vector3 DetermineOffsetPosition(Vector3 sourcePosition, float radius)
         {
             ZoneSystem.instance.GetGroundHeight(sourcePosition, out float ysourceFloor);

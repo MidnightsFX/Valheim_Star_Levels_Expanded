@@ -1,3 +1,10 @@
+**0.18.2**
+ ---
+ ```
+- Fix Elemental chaos config lookup
+
+ ```
+
 **0.18.1**
  ---
  ```

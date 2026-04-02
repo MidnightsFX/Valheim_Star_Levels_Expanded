@@ -1,12 +1,13 @@
-﻿using BepInEx.Configuration;
-using System.IO;
-using System;
-using BepInEx;
-using StarLevelSystem.modules;
-using Jotunn.Managers;
+﻿using BepInEx;
+using BepInEx.Configuration;
 using Jotunn.Entities;
-using System.Collections;
+using Jotunn.Managers;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules;
+using StarLevelSystem.modules.Loot;
+using System;
+using System.Collections;
+using System.IO;
 
 namespace StarLevelSystem
 {
@@ -231,8 +232,8 @@ namespace StarLevelSystem
             ModificationExtensionSystem.SetupForceLeveledCreatureList();
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
-            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootLevelsExpanded.AllowedLootFactors, false);
-            LootDropCalculationType.SettingChanged += LootLevelsExpanded.LootFactorChanged;
+            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootStyles.AllowedLootFactors, false);
+            LootDropCalculationType.SettingChanged += LootStyles.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
             ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");
             LootEggsDropIncreaseStacks = BindServerConfig("LootSystem", "LootEggsDropIncreaseStacks", true, "This causes higher level chickens (and other egg producers) to drop MORE eggs instead of higher leveled ones.");

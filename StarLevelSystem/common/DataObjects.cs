@@ -117,6 +117,12 @@ namespace StarLevelSystem.common
             Destructible
         }
 
+        public enum LootFactorType {
+            PerLevel,
+            Exponential,
+            ChancePerLevel
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();

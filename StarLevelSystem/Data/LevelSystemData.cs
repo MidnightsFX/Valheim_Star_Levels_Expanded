@@ -2,6 +2,7 @@
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Colorization;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;

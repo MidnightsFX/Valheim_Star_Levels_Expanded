@@ -2,7 +2,9 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Colorization;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -177,7 +179,7 @@ namespace StarLevelSystem.Data
                 // Can't use the standard set level here- as we want to set the character level to 1 sometimes, and that will be ignored here.
                 chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
                 chara.m_level = characterEntry.Level;
-                LevelUI.InvalidateCacheEntry(chara);
+                UIHudControl.InvalidateCacheEntry(chara);
                 //Logger.LogDebug($"{characterEntry.RefCreatureName} setting level to {characterEntry.Level} from {clevel}");
             }
 
@@ -195,7 +197,7 @@ namespace StarLevelSystem.Data
                 chara.m_level = maxlevel;
                 SizeModifications.ApplySizeModifications(chara.gameObject, characterEntry, force_update: true);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
-                LevelUI.InvalidateCacheEntry(chara);
+                UIHudControl.InvalidateCacheEntry(chara);
             }
 
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");

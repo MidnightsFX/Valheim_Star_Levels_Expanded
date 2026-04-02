@@ -7,6 +7,7 @@ using Jotunn.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.UI;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -53,7 +54,7 @@ namespace StarLevelSystem
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
             MinimapManager.OnVanillaMapDataLoaded += LevelSystem.DelayedMinimapSetup;
             SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.RecievedServerUpdates();
-            LevelUI.LoadAssets();
+            UIHudControl.LoadAssets();
             TerminalCommands.AddCommands();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
         }

@@ -1,5 +1,6 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
@@ -18,6 +19,17 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
             TaskRunner.Run().StartCoroutine(ModifyLoadedCreaturesLevels());
+        }
+
+        public static void UpdateFishmaxLevel() {
+            if (ValConfig.EnableScalingFish.Value == false) { return; }
+            IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
+            foreach (GameObject fish in fishes) {
+                if (fish.GetComponent<Fish>() != null) {
+                    //Logger.LogDebug($"Updating max quality {fish.gameObject.name}");
+                    fish.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
+                }
+            }
         }
 
         public static IEnumerator ModifyLoadedCreaturesLevels() {
@@ -42,7 +54,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //CompositeLazyCache.UpdateCharacterCacheEntry(chara, cce);
                 //CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, false);
                 SizeModifications.ApplySizeModifications(chara.gameObject, cce, force_update: true);
-                ModificationExtensionSystem.CreatureSetup(chara, cce.Level);
+                CreatureSetupControl.CreatureSetup(chara, cce.Level);
                 //LevelUI.InvalidateCacheEntry(chara);
             }
             yield break;

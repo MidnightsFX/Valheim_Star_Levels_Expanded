@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.LevelSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -132,7 +133,7 @@ namespace StarLevelSystem.modules.Loot {
             }
             internal static void ModifyMinerockDrops(MineRock instance, HitData hit) {
                 // Modify Loot Drop for minerock5
-                List<KeyValuePair<GameObject, int>> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.gameObject.transform.position));
+                List<KeyValuePair<GameObject, int>> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSelection.DeterministicDetermineRockLevel(instance.gameObject.transform.position));
                 Vector3 position = hit.m_point - hit.m_dir * 0.2f + UnityEngine.Random.insideUnitSphere * 0.3f;
                 LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
             }
@@ -178,7 +179,7 @@ namespace StarLevelSystem.modules.Loot {
             }
 
             internal static void MineDrop(MineRock5 instance, Vector3 vector) {
-                int level = LevelSystem.DeterministicDetermineRockLevel(vector);
+                int level = LevelSelection.DeterministicDetermineRockLevel(vector);
                 List<KeyValuePair<GameObject, int>> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level);
                 LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
             }
@@ -187,7 +188,7 @@ namespace StarLevelSystem.modules.Loot {
             internal static List<GameObject> NonPerformanceBasedMineDrop(MineRock5 instance) {
                 // Modify Loot Drop for minerock5
                 List<GameObject> drops = new List<GameObject>();
-                List<KeyValuePair<GameObject, int>> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSystem.DeterministicDetermineRockLevel(instance.transform.position));
+                List<KeyValuePair<GameObject, int>> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSelection.DeterministicDetermineRockLevel(instance.transform.position));
                 foreach (KeyValuePair<GameObject, int> drop in optimizeDrops) {
                     drop.Value.Times(() => drops.Add(drop.Key));
                 }
@@ -221,7 +222,7 @@ namespace StarLevelSystem.modules.Loot {
             }
 
             private static void DropItemsOnDestroy(DropOnDestroyed instance) {
-                int level = LevelSystem.DetermineisticDetermineObjectLevel(instance.transform.position);
+                int level = LevelSelection.DetermineisticDetermineObjectLevel(instance.transform.position);
                 LootStyles.SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
                 List<KeyValuePair<GameObject, int>> optimizeDrops = LootStyles.ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);
                 LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);

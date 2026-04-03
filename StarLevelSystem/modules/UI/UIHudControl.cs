@@ -2,6 +2,7 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -246,7 +247,7 @@ namespace StarLevelSystem.modules.UI {
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     //Colorization.ApplyColorizationWithoutLevelEffects();
                     // Re set up the character, to ensure it gets updated visual effects, and sizing
-                    ModificationExtensionSystem.CreatureSetup(ehud.m_character);
+                    CreatureSetupControl.CreatureSetup(ehud.m_character);
                     return;
                 }
 

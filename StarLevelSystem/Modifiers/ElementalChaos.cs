@@ -2,6 +2,7 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Damage;
 using System.Collections.Generic;
 using System.Linq;
 using static StarLevelSystem.common.DataObjects;
@@ -27,7 +28,7 @@ namespace StarLevelSystem.Modifiers {
                     float value = cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level);
                     DamageType dmgT = RandomSelectDamageType();
                     Logger.LogDebug($"Elemental Chaos adding {dmgT} modifier {value}");
-                    ModificationExtensionSystem.AddDamagesToHit(hit, new Dictionary<DamageType, float>() { { dmgT, value } });
+                    DamageModifications.AddDamagesToHit(hit, new Dictionary<DamageType, float>() { { dmgT, value } });
                 }
             }
 

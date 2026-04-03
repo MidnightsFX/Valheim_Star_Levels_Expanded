@@ -1,45 +1,21 @@
-﻿using HarmonyLib;
-using Jotunn.Managers;
-using MonoMod.Utils;
+﻿using MonoMod.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using StarLevelSystem.modules.Loot;
-using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.Emit;
+using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
+using UnityEngine.Analytics;
 using static StarLevelSystem.common.DataObjects;
-using Extensions = StarLevelSystem.common.Extensions;
 
-namespace StarLevelSystem.modules
-{
-    public static class LevelSystem
-    {
-        public static Vector3 center = new Vector3(0, 0, 0);
-        private static bool buildingMapRings = false;
-        private static bool ringAvailable = false;
-        private static readonly List<string> VanillaSpawnAreaControllers = new List<string>() {
-            "EvilHeart_Forest",
-            "Spawner_GreydwarfNest",
-            "Spawner_DraugrPile",
-            "BonePileSpawner",
-            "Spawner_CharredCross",
-            "Spawner_CharredStone_Elite",
-            "Spawner_Kvastur",
-            "Spawner_CharredStone",
-            "Spawner_CharredStone_event",
-            "EvilHeart_Swamp"
-        };
+namespace StarLevelSystem.modules.LevelSystem {
+    internal static class LevelSelection {
 
-
-
-        public static int DetermineLevel(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0)
-        {
+        public static int DetermineLevel(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
                 return 1;
@@ -65,7 +41,7 @@ namespace StarLevelSystem.modules
                     //Logger.LogDebug($"Max Level from: CreatureSpecific:{creature_settings.CreatureMaxLevelOverride}");
                     max_level = creature_settings.CreatureMaxLevelOverride;
                 }
-                
+
                 if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
                 min_level += 1;
@@ -73,7 +49,7 @@ namespace StarLevelSystem.modules
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 Vector3 p = character.transform.position;
-                float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(center.x, center.z));
+                float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
                 SortedDictionary<int, float> levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
@@ -81,7 +57,7 @@ namespace StarLevelSystem.modules
                     levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
                     // If we are using distance level bonuses | Check if we are in a distance level bonus area
                     if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
-                        distance_levelup_bonuses = LevelSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
+                        distance_levelup_bonuses = DistanceScaleSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
                     }
                 }
                 if (biome_settings != null) {
@@ -104,7 +80,7 @@ namespace StarLevelSystem.modules
                 if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
                     levelup_chances = creature_settings.CustomCreatureLevelUpChance;
                 }
-                int level = LevelSystem.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
+                int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
                 //Logger.LogDebug($"Determined level {level} min: {min_level} max {max_level}");
                 //character.m_level = level;
@@ -129,14 +105,14 @@ namespace StarLevelSystem.modules
             // Determine creature location to check its biome
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
-            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
-            SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() {};
+            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
+            SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
             SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
             if (levelup_chances == null) { levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance; }
 
             // If we are using distance level bonuses | Check if we are in a distance level bonus area
             if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
-                distance_levelup_bonuses = SelectDistanceFromCenterLevelBonus(distance_from_center);
+                distance_levelup_bonuses = DistanceScaleSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
             }
 
             float distance_level_modifier = 1;
@@ -161,31 +137,13 @@ namespace StarLevelSystem.modules
             return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
         }
 
-        internal static SortedDictionary<int, float> SelectDistanceFromCenterLevelBonus(float distance_from_center) {
-
-            //Logger.LogDebug($"Checking distance level bonus for distance {distance_from_center}");
-            SortedDictionary<int, float> highest_selected_area = new SortedDictionary<int, float>() { };
-            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
-                // Check if we are in a distance level bonus area
-                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus) {
-                    //Logger.LogDebug($"Checking distance level area: {distance_from_center} >= {kvp.Key}");
-                    if (distance_from_center >= kvp.Key) {
-                        highest_selected_area = kvp.Value;
-                    }
-                    // Early return if we arn't going to find a larger bonus area
-                    if (distance_from_center < kvp.Key) {
-                        //Logger.LogDebug($"Distance Level area: {kvp.Key} bonuses: {string.Join(",", kvp.Value.Select(x => x.Value).ToList())}");
-                        return highest_selected_area;
-                    }
-                }
-                // This is the fallthrough for we are in the largest area available
-                if (highest_selected_area.Count > 0) {
-                    //Logger.LogDebug($"Distance Level area max: {string.Join(",", highest_selected_area.Select(x => x.Value).ToList())}");
-                    return highest_selected_area;
-                }
+        public static void SetAndUpdateCharacterLevel(Character character, int level) {
+            if (character == null) { return; }
+            character.m_level = level;
+            character.SetupMaxHealth();
+            if (character.m_nview != null && character.m_nview.GetZDO() != null) {
+                character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
             }
-            // No bonuses distance found
-            return new SortedDictionary<int, float>() { };
         }
 
         // Consider decision tree for levelups to reduce iterations
@@ -233,23 +191,12 @@ namespace StarLevelSystem.modules
             }
             // Rolled level is always N+1 due to 1 star being level 2
             return selected_level;
-        } 
-
-        public static void UpdateMaxLevel() {
-            if (ValConfig.EnableScalingFish.Value == false) { return; }
-            IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
-            foreach (GameObject fish in fishes) {
-                if (fish.GetComponent<Fish>() != null) {
-                    //Logger.LogDebug($"Updating max quality {fish.gameObject.name}");
-                    fish.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
-                }
-            }
         }
 
         public static int DeterministicDetermineTreeLevel(GameObject go) {
             if (ValConfig.EnableTreeScaling.Value == false) { return 1; }
             Vector3 p = go.transform.position;
-            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(center.x, center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;
@@ -257,21 +204,63 @@ namespace StarLevelSystem.modules
 
         public static int DeterministicDetermineRockLevel(Vector3 pos) {
             if (ValConfig.EnableRockLevels.Value == false) { return 1; }
-            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(center.x, center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.RockMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;
         }
 
         public static int DetermineisticDetermineObjectLevel(Vector3 pos) {
-            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(center.x, center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.DestructibleMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;
         }
 
-        public static IEnumerator ModifyTreeWithLevel(TreeBase tree, int level)
-        {
+        internal static void SetCharacterLevelControl(Character chara, int fallbackLevel) {
+            if (chara == null) { return; }
+            if (ValConfig.ControlSpawnerLevels.Value) {
+                CreatureSetupControl.CreatureSpawnerSetup(chara, delay: 1f);
+                return;
+            }
+            // Fallback
+            Logger.LogDebug($"Setting creature level from fallback provided {fallbackLevel}");
+            chara.SetLevel(fallbackLevel);
+        }
+
+        public static void SelectCreatureBiomeSettings(GameObject creature, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome creature_biome) {
+            // Determine creature max level from biome
+            Vector3 p = creature.transform.position;
+            creature_name = Utils.GetPrefabName(creature.gameObject);
+            Heightmap.Biome biome = Heightmap.FindBiome(p);
+            creature_biome = biome;
+            biome_settings = null;
+            creature_settings = null;
+            // Guard clause for those that have empty or null configurations
+            if (LevelSystemData.SLE_Level_Settings == null) { return; }
+
+            if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
+                bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
+                if (biome_all_setting_check) {
+                    biome_settings = allBiomeConfig;
+                }
+                //Logger.LogDebug($"Biome all config checked");
+                bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
+                if (biome_setting_check && biome_all_setting_check) {
+                    biome_settings = SLSExtensions.MutatingMergeBiomeConfigs(biomeConfig, allBiomeConfig);
+                } else if (biome_setting_check) {
+                    biome_settings = biomeConfig;
+                }
+                //Logger.LogDebug($"Merged biome configs");
+            }
+
+            if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null) {
+                if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
+                //Logger.LogDebug($"Set character specific configs");
+            }
+        }
+
+        public static IEnumerator ModifyTreeWithLevel(TreeBase tree, int level) {
             yield return new WaitForSeconds(1f);
             if (tree == null) { yield break; }
             //Logger.LogDebug($"Tree level set to: {level}");
@@ -280,8 +269,7 @@ namespace StarLevelSystem.modules
             // Logger.LogDebug($"Setting Tree size {scale}.");
             tree.transform.localScale *= scale;
             List<DropTable.DropData> drops = new List<DropTable.DropData>();
-            foreach (var drop in tree.m_dropWhenDestroyed.m_drops)
-            {
+            foreach (var drop in tree.m_dropWhenDestroyed.m_drops) {
                 DropTable.DropData lvlupdrop = new DropTable.DropData();
                 // Scale the amount of drops based on level
                 lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelTreeLootScale.Value * level));
@@ -294,9 +282,5 @@ namespace StarLevelSystem.modules
 
             yield break;
         }
-
-        
-
-        
     }
 }

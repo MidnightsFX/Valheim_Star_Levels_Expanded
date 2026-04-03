@@ -1,4 +1,5 @@
 ﻿using StarLevelSystem.Data;
+using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -58,7 +59,7 @@ namespace StarLevelSystem.modules.Loot {
                         }
                         if (chara != null) {
                             CompositeLazyCache.GetAndSetLocalCache(chara);
-                            ModificationExtensionSystem.CreatureSetup(chara, multiply: false);
+                            CreatureSetupControl.CreatureSetup(chara, multiply: false);
                         }
                     }
 
@@ -135,7 +136,7 @@ namespace StarLevelSystem.modules.Loot {
                         }
 
                         if (chara != null) {
-                            ModificationExtensionSystem.CreatureSetup(chara, delay: 0.5f);
+                            CreatureSetupControl.CreatureSetup(chara, delay: 0.5f);
                         }
                     }
 

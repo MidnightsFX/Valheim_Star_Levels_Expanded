@@ -11,7 +11,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
         [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
         public static class CreatureCharacterExtension {
             public static void Postfix(Character __instance) {
-                CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value);
+                CreatureSetupControl.CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value);
             }
         }
 

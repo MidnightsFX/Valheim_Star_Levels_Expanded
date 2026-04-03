@@ -1,6 +1,7 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -46,7 +47,7 @@ namespace StarLevelSystem.modules
                         }
                         Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject} at {position}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
-                        ModificationExtensionSystem.CreatureSetup(spawnedChara, multiply: false);
+                        CreatureSetupControl.CreatureSetup(spawnedChara, multiply: false);
                         spawnedChara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
                     }
                     spawnrate -= 1f;

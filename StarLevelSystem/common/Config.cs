@@ -4,6 +4,7 @@ using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Loot;
 using System;
 using System.Collections;
@@ -165,17 +166,17 @@ namespace StarLevelSystem
 
 
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 200);
-            MaxLevel.SettingChanged += LevelSystem.ModifyLoadedCreatureLevels;
+            MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
             OverlevedCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up overleveled creatures if you reduce the max level.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
 
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
-            EnableMapRingsForDistanceBonus.SettingChanged += LevelSystem.UpdateMapRingEnableSettingOnChange;
+            EnableMapRingsForDistanceBonus.SettingChanged += DistanceScaleSystem.UpdateMapRingEnableSettingOnChange;
             DistanceBonusIsFromStarterTemple = BindServerConfig("LevelSystem", "DistanceBonusIsFromStarterTemple", false, "When enabled the distance bonus is calculated from the starter temple instead of world center, typically this makes little difference. But can help ensure your starting area is more correctly calculated.");
-            DistanceBonusIsFromStarterTemple.SettingChanged += LevelSystem.OnRingCenterChanged;
+            DistanceBonusIsFromStarterTemple.SettingChanged += DistanceScaleSystem.OnRingCenterChanged;
             DistanceRingColorOptions = BindServerConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
-            DistanceRingColorOptions.SettingChanged += LevelSystem.UpdateMapColorSettingsOnChange;
+            DistanceRingColorOptions.SettingChanged += DistanceScaleSystem.UpdateMapColorSettingsOnChange;
             MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRingGeneratorUpdatesPerFrame", 1000, "The number of ring points to calculate per frame when generating the minimap rings. Higher values make this go faster, but can get it killed or cause instability.", true);
             PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 2f);
             PerLevelScaleBonus.SettingChanged += Colorization.StarLevelScaleChanged;
@@ -193,11 +194,11 @@ namespace StarLevelSystem
             EnableRidableCreatureSizeFixes = BindServerConfig("LevelSystem", "EnableRidableCreatureSizeFixes", true, "Enables collider fixes for ridable creatures (lox and Askavin).");
 
             EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
-            EnableScalingBirds.SettingChanged += LevelSystem.UpdateBirdSizeOnConfigChange;
+            EnableScalingBirds.SettingChanged += UpdateLevelsOnChange.UpdateBirdSizeOnConfigChange;
             BirdSizeScalePerLevel = BindServerConfig("ObjectLevels", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
-            BirdSizeScalePerLevel.SettingChanged += LevelSystem.UpdateBirdSizeOnConfigChange;
+            BirdSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateBirdSizeOnConfigChange;
             EnableScalingFish = BindServerConfig("ObjectLevels", "EnableScalingFish", true, "Enables star scaling for fish. This does potentially allow huge fish.");
-            EnableScalingFish.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
+            EnableScalingFish.SettingChanged += UpdateLevelsOnChange.UpdateFishSizeOnConfigChange;
             EnableRockLevels = BindServerConfig("ObjectLevels", "EnableRockLevels", false, "Enables level scaling for rocks.");
             FishMaxLevel = BindServerConfig("ObjectLevels", "FishMaxLevel", 20, "Sets the max level that fish can scale up to.", true, 1, 150);
             BirdMaxLevel = BindServerConfig("ObjectLevels", "BirdMaxLevel", 10, "Sets the max level that birds can scale up to.", true, 1, 150);
@@ -205,12 +206,12 @@ namespace StarLevelSystem
             RockMaxLevel = BindServerConfig("ObjectLevels", "RockMaxLevel", 10, "Sets the max level that rocks can scale up to.", true, 1, 150);
             DestructibleMaxLevel = BindServerConfig("ObjectLevels", "DestructibleMaxLevel", 1, "Sets the max level that generic destructibles can be leveled to", true, 1, 150);
             FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
-            FishSizeScalePerLevel.SettingChanged += LevelSystem.UpdateFishSizeOnConfigChange;
+            FishSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateFishSizeOnConfigChange;
             EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
-            EnableTreeScaling.SettingChanged += LevelSystem.UpdateTreeSizeOnConfigChange;
+            EnableTreeScaling.SettingChanged += UpdateLevelsOnChange.UpdateTreeSizeOnConfigChange;
             UseDeterministicTreeScaling = BindServerConfig("ObjectLevels", "UseDeterministicTreeScaling", true, "Scales the level of trees based on biome and distance from the center/spawn. This does not randomize tree levels, but reduces network usage.");
             TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
-            TreeSizeScalePerLevel.SettingChanged += LevelSystem.UpdateTreeSizeOnConfigChange;
+            TreeSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateTreeSizeOnConfigChange;
             PerLevelTreeLootScale = BindServerConfig("ObjectLevels", "PerLevelTreeLootScale", 0.2f, "The amount of additional wood that each level grants for a tree.", true);
             PerLevelBirdLootScale = BindServerConfig("ObjectLevels", "PerLevelBirdLootScale", 0.3f, "Per level additional loot that birds gain.", true);
             PerLevelMineRockLootScale = BindServerConfig("ObjectLevels", "PerLevelMineRockLootScale", 0.2f, "The amount of additional stones and ores that each level grants for a rock", true);

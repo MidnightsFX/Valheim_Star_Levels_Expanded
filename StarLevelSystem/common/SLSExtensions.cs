@@ -12,7 +12,7 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.common
 {
-    public static class Extensions
+    public static class SLSExtensions
     {
         /// <summary>
         /// Take any list of Objects and return it with Fischer-Yates shuffle

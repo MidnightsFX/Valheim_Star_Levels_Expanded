@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
@@ -78,7 +79,7 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Setting {chara.name} to lvl: {level}");
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, level, updateCache: true);
                 chara.m_nview.GetZDO().Set(ZDOVars.s_level, level);
-                ModificationExtensionSystem.CreatureSetup(chara, leveloverride: level, multiply: false, delay: 0.01f);
+                CreatureSetupControl.CreatureSetup(chara, leveloverride: level, multiply: false, delay: 0.01f);
             }
         }
     }

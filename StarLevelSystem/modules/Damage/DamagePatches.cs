@@ -77,12 +77,12 @@ namespace StarLevelSystem.modules.Damage {
                     if (ValConfig.EnableDebugOutputForDamage.Value) {
                         Logger.LogDebug($"{__instance.name} Hit:{hit.GetTotalDamageOptions()} Adding {attackerCharacter.GetDamageBonusDescription()}");
                     }
-                    AddDamagesToHit(hit, attackerCharacter.CreatureDamageBonus);
+                    DamageModifications.AddDamagesToHit(hit, attackerCharacter.CreatureDamageBonus);
                 }
 
                 // Apply damage recieved Modifiers for the target
                 if (damagedCharacter != null) {
-                    ApplyDamageModifiers(hit, __instance, damagedCharacter.DamageRecievedModifiers);
+                    DamageModifications.ApplyDamageModifiers(hit, __instance, damagedCharacter.DamageRecievedModifiers);
                 }
             }
         }

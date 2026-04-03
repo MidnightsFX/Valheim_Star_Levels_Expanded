@@ -3,6 +3,7 @@ using JetBrains.Annotations;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Sizes;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,7 +24,7 @@ namespace StarLevelSystem.Modifiers
                     return;
                 }
                 
-                List<Character> characters = Extensions.GetCharactersInRange(__instance.transform.position, 5);
+                List<Character> characters = SLSExtensions.GetCharactersInRange(__instance.transform.position, 5);
                 foreach (Character character in characters) {
                     // Logger.LogDebug($"Checking SoulEater on {character.name}");
                     if (character == null || character.IsPlayer()) { continue; }
@@ -33,7 +34,7 @@ namespace StarLevelSystem.Modifiers
                         CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater.ToString(), mods[ModifierNames.SoulEater.ToString()]);
                         float powerIncrease = cmcfg.PerlevelPower * character.m_level;
                         Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}");
-                        ModificationExtensionSystem.ForceUpdateDamageMod(character, powerIncrease);
+                        DamageModifications.ForceUpdateDamageMod(character, powerIncrease);
                         int nearbyDeaths = character.m_nview.GetZDO().GetInt(SLS_SOULEATER, 0);
                         nearbyDeaths += 1;
                         character.m_nview.GetZDO().Set(SLS_SOULEATER, nearbyDeaths);

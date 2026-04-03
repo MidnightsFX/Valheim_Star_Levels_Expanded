@@ -1,5 +1,8 @@
 ﻿using StarLevelSystem.Data;
 using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
 using System;
@@ -12,7 +15,7 @@ using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.CreatureSetup {
-    internal static class CreatureSetupFlow {
+    internal static class CreatureSetupControl {
 
         static public IEnumerator DelayedSetupValidateZnet(Character __instance, int level_override = 0, float delay = 1f, bool spawnMultiply = true, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
             int times = 0;
@@ -71,10 +74,10 @@ namespace StarLevelSystem.modules.CreatureSetup {
 
             // Modify the creatures stats by custom character/biome modifications
             CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
-            ApplySpeedModifications(__instance, cDetails);
-            ApplyDamageModification(__instance, cDetails);
+            SpeedModifications.ApplySpeedModifications(__instance, cDetails);
+            DamageModifications.ApplyDamageModification(__instance, cDetails);
             SizeModifications.ApplySizeModifications(__instance.gameObject, cDetails);
-            ApplyHealthModifications(__instance, cDetails);
+            HealthModifications.ApplyHealthModifications(__instance, cDetails);
 
             // Rebuild UI since it may have been created before these changes were applied
             UIHudControl.InvalidateCacheEntry(__instance.GetZDOID().ID);

@@ -1,5 +1,6 @@
 ﻿using BepInEx.Configuration;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.LevelSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -352,7 +353,7 @@ namespace StarLevelSystem.modules.Loot {
             Vector3 p = creature.gameObject.transform.position;
             //ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
             //creature_biome = biome;
-            float distance_from_center = Vector2.Distance(p, LevelSystem.center);
+            float distance_from_center = Vector2.Distance(p, DistanceScaleSystem.center);
             distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
             //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
         }
@@ -360,7 +361,7 @@ namespace StarLevelSystem.modules.Loot {
         public static void SelectObjectDistanceBonus(Transform tform, out DistanceLootModifier distance_bonus) {
             Vector3 p = tform.position;
             //ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
-            float distance_from_center = Vector2.Distance(p, LevelSystem.center);
+            float distance_from_center = Vector2.Distance(p, DistanceScaleSystem.center);
             distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
             //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
         }

@@ -11,7 +11,7 @@ using UnityEngine.Analytics;
 using UnityEngine.SceneManagement;
 
 namespace StarLevelSystem.modules.LevelSystem {
-    internal static class MapRings {
+    internal static class DistanceScaleSystem {
         public static Vector3 center = new Vector3(0, 0, 0);
         private static bool buildingMapRings = false;
         private static bool ringAvailable = false;
@@ -42,6 +42,33 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             CreateLevelBonusRingMapOverlays();
             yield break;
+        }
+
+        internal static SortedDictionary<int, float> SelectDistanceFromCenterLevelBonus(float distance_from_center) {
+
+            //Logger.LogDebug($"Checking distance level bonus for distance {distance_from_center}");
+            SortedDictionary<int, float> highest_selected_area = new SortedDictionary<int, float>() { };
+            if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
+                // Check if we are in a distance level bonus area
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus) {
+                    //Logger.LogDebug($"Checking distance level area: {distance_from_center} >= {kvp.Key}");
+                    if (distance_from_center >= kvp.Key) {
+                        highest_selected_area = kvp.Value;
+                    }
+                    // Early return if we arn't going to find a larger bonus area
+                    if (distance_from_center < kvp.Key) {
+                        //Logger.LogDebug($"Distance Level area: {kvp.Key} bonuses: {string.Join(",", kvp.Value.Select(x => x.Value).ToList())}");
+                        return highest_selected_area;
+                    }
+                }
+                // This is the fallthrough for we are in the largest area available
+                if (highest_selected_area.Count > 0) {
+                    //Logger.LogDebug($"Distance Level area max: {string.Join(",", highest_selected_area.Select(x => x.Value).ToList())}");
+                    return highest_selected_area;
+                }
+            }
+            // No bonuses distance found
+            return new SortedDictionary<int, float>() { };
         }
 
         private static void CreateLevelBonusRingMapOverlays() {

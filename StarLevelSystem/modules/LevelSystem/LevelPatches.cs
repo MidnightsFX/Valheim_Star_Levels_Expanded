@@ -26,13 +26,13 @@ namespace StarLevelSystem.modules.LevelSystem {
                 } else {
                     storedLevel = __instance.m_nview.GetZDO().GetInt(SLS_TREE, 0);
                     if (storedLevel == 0) {
-                        LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                        storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.TreeMaxLevel.Value);
+                        LevelSelection.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+                        storedLevel = LevelSelection.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.TreeMaxLevel.Value);
                         __instance.m_nview.GetZDO().Set(SLS_TREE, storedLevel);
                     }
                 }
                 if (storedLevel >= 1) {
-                    __instance.StartCoroutine(LevelSystem.ModifyTreeWithLevel(__instance, storedLevel));
+                    __instance.StartCoroutine(LevelSelection.ModifyTreeWithLevel(__instance, storedLevel));
                 }
             }
         }
@@ -123,8 +123,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (ValConfig.EnableScalingBirds.Value == false) { return; }
                 int storedLevel = __instance.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
                 if (storedLevel == 0) {
-                    LevelSystem.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                    storedLevel = LevelSystem.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.BirdMaxLevel.Value);
+                    LevelSelection.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+                    storedLevel = LevelSelection.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.BirdMaxLevel.Value);
                     __instance.m_nview.GetZDO().Set(SLS_BIRD, storedLevel);
                 }
                 if (storedLevel > 1) {
@@ -178,18 +178,18 @@ namespace StarLevelSystem.modules.LevelSystem {
                 cdc_grownup.Level = cdc_child.Level;
                 //CompositeLazyCache.UpdateCharacterCacheEntry(grownup, cdc_child);
                 CompositeLazyCache.SetCreatureModifiers(grownup, cdc_child.CreatureModifiers);
-                ModificationExtensionSystem.CreatureSpawnerSetup(grownup, level, multiply: false);
+                CreatureSetupControl.CreatureSpawnerSetup(grownup, level, multiply: false);
             }
         }
 
 
-        [HarmonyPatch(typeof(Procreation))]
+        [HarmonyPatch]
         public static class SetChildLevel {
             //[HarmonyEmitIL(".dumps")]
             //[HarmonyDebug]
             [HarmonyTranspiler]
-            [HarmonyPatch(nameof(Procreation.Procreate))]
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
+            [HarmonyPatch(typeof(Procreation),nameof(Procreation.Procreate))]
+            static IEnumerable<CodeInstruction> SetChildLevelProcreateTranspiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
                 var codeMatcher = new CodeMatcher(instructions);
                 codeMatcher.MatchForward(true,
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Tameable), nameof(Tameable.IsTamed))),
@@ -212,6 +212,46 @@ namespace StarLevelSystem.modules.LevelSystem {
                 .ThrowIfNotMatch("Unable to patch child spawn level set.");
 
                 return codeMatcher.Instructions();
+            }
+
+            [HarmonyTranspiler]
+            [HarmonyPatch(typeof(EggGrow), nameof(EggGrow.GrowUpdate))]
+            static IEnumerable<CodeInstruction> EggSetChildLevelTranspiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldloc_1),
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(EggGrow), nameof(EggGrow.m_item))),
+                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(ItemDrop.ItemData), nameof(ItemDrop.m_itemData.m_quality)))
+                ).Advance(2)
+                .InsertAndAdvance(
+                    Transpilers.EmitDelegate(ControlEggSpawnLevelInheritance)
+                )
+                .RemoveInstructions(4)
+                .ThrowIfNotMatch("Unable to patch Egg.GrowUpdate");
+
+                return codeMatcher.Instructions();
+            }
+            private static void ControlEggSpawnLevelInheritance(Character spawnedChar, EggGrow egg) {
+                if (ValConfig.EggLevelDeterminedByItemQuality.Value) {
+                    int qualityLevel = egg.m_item.m_itemData.m_quality;
+                    Logger.LogDebug($"Setting egg spawn level based on item quality {qualityLevel}.");
+                    CreatureSetupControl.CreatureSetup(spawnedChar, qualityLevel);
+                } else {
+                    // Don't set the level, let it be determined by the creatures configuration
+                    CreatureSetupControl.CreatureSetup(spawnedChar);
+                }
+                CheckToMakeOffspringInfertile(spawnedChar);
+            }
+
+            private static void CheckToMakeOffspringInfertile(Character chara) {
+                if (ValConfig.OffspringCanBeInfertile.Value) {
+                    if (UnityEngine.Random.value <= ValConfig.OffspringChanceToBeInfertile.Value) {
+                        chara.m_nview.GetZDO().Set(SLS_INFERTILE, true);
+                        Logger.LogDebug($"Child is infertile.");
+                    }
+                }
             }
 
             internal static void SetupEggItem(ItemDrop item, Procreation proclass) {
@@ -263,7 +303,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                         }
                     }
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
-                    ModificationExtensionSystem.CreatureSetup(chara, level, delay: 0.1f);
+                    CreatureSetupControl.CreatureSetup(chara, level, delay: 0.1f);
                 } else {
                     if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
                         if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
@@ -272,7 +312,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                         }
                     }
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
-                    ModificationExtensionSystem.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
+                    CreatureSetupControl.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
                 }
                 CheckToMakeOffspringInfertile(chara);
             }
@@ -337,7 +377,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             private static void CreatureSpawnerCharacterLevelControl(Character chara, int providedLevel) {
                 //Logger.LogDebug($"CreatureSpawner.Spawn setting {chara.m_name} {providedLevel}");
-                SetCharacterLevelControl(chara, providedLevel);
+                LevelSelection.SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(CreatureSpawner.Awake))]
@@ -349,6 +389,19 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         [HarmonyPatch(typeof(SpawnArea))]
         public static class SpawnAreaSpawnOnePatch {
+            private static readonly List<string> VanillaSpawnAreaControllers = new List<string>() {
+                "EvilHeart_Forest",
+                "Spawner_GreydwarfNest",
+                "Spawner_DraugrPile",
+                "BonePileSpawner",
+                "Spawner_CharredCross",
+                "Spawner_CharredStone_Elite",
+                "Spawner_Kvastur",
+                "Spawner_CharredStone",
+                "Spawner_CharredStone_event",
+                "EvilHeart_Swamp"
+            };
+
             //[HarmonyEmitIL(".dumps")]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(SpawnArea.SpawnOne))]
@@ -377,16 +430,16 @@ namespace StarLevelSystem.modules.LevelSystem {
                     // Alternatively only control this spawner if it is a vanilla spawner and control spawners is enabled
                     if (ValConfig.OnlyControlVanillaAreaSpawners.Value && VanillaSpawnAreaControllers.Contains(Utils.GetPrefabName(spawnArea.gameObject))) {
                         //Logger.LogDebug($"SpawnArea.SpawnOne (SLS Controlled) leveling {chara.m_name}");
-                        ModificationExtensionSystem.CreatureSpawnerSetup(chara, delay: 0.1f);
+                        CreatureSetupControl.CreatureSpawnerSetup(chara, delay: 0.1f);
                         return;
                     }
 
-                    ModificationExtensionSystem.CreatureSpawnerSetup(chara, delay: 0.1f);
+                    CreatureSetupControl.CreatureSpawnerSetup(chara, delay: 0.1f);
                 } else {
                     LevelGenerator LG = new LevelGenerator() { LevelUpChance = spawnArea.GetLevelUpChance(), MaxLevel = spawndata.m_maxLevel, MinLevel = spawndata.m_minLevel, PrefabName = spawndata.m_prefab.name };
                     int level = LG.RollAndDetermineLevel();
                     Logger.LogDebug($"SpawnArea.SpawnOne using provided {chara.m_name} level {level}");
-                    ModificationExtensionSystem.CreatureSpawnerSetup(chara, level, delay: 0.1f);
+                    CreatureSetupControl.CreatureSpawnerSetup(chara, level, delay: 0.1f);
                 }
             }
 
@@ -447,12 +500,12 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Character chara = go.GetComponent<Character>();
                 if (chara == null) { return; }
                 //Logger.LogDebug($"SpawnSystem.Spawn setting without zone control {chara.m_name}");
-                LevelSection.SetCharacterLevelControl(chara, 1);
+                LevelSelection.SetCharacterLevelControl(chara, 1);
             }
 
             private static void SetItemLevelFish(ItemDrop item, int _providedLevel) {
-                LevelSystem.SelectCreatureBiomeSettings(item.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                int determinedLevel = LevelSystem.DetermineLevel(item.gameObject, creature_name, creature_settings, biome_settings, ValConfig.FishMaxLevel.Value);
+                LevelSelection.SelectCreatureBiomeSettings(item.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
+                int determinedLevel = LevelSelection.DetermineLevel(item.gameObject, creature_name, creature_settings, biome_settings, ValConfig.FishMaxLevel.Value);
                 // not sure we need max quality set high
                 item.m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
                 item.SetQuality(determinedLevel);
@@ -462,7 +515,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             private static void SpawnSystemSetCharacterLevelControl(Character chara, int providedLevel) {
                 //Logger.LogDebug($"SpawnSystem.Spawn setting {chara.m_name} {providedLevel}");
-                LevelSection.SetCharacterLevelControl(chara, providedLevel);
+                LevelSelection.SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(SpawnSystem.Spawn))]
@@ -507,7 +560,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             private static void TriggerSpawnerSetCharacterLevelControl(Character chara, int providedLevel) {
                 //Logger.LogDebug($"TriggerSpawner.Spawn setting {chara.m_name} {providedLevel}");
-                LevelSection.SetCharacterLevelControl(chara, providedLevel);
+                LevelSelection.SetCharacterLevelControl(chara, providedLevel);
             }
 
             [HarmonyPatch(nameof(TriggerSpawner.Awake))]
@@ -537,7 +590,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             public static void SetSpawnAbilityLevelControl(Character chara, int providedLevel) {
                 if (ValConfig.ControlAbilitySpawnedCreatures.Value) {
-                    CreatureSetupFlow.CreatureSpawnerSetup(chara);
+                    CreatureSetupControl.CreatureSpawnerSetup(chara);
                     return;
                 }
                 // Fallback
@@ -555,7 +608,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 GameObject go = UnityEngine.Object.Instantiate(__instance.m_spawnPrefab, __instance.transform.TransformPoint(__instance.m_spawnOffset), Quaternion.Euler(0f, UnityEngine.Random.Range(0, 360), 0f));
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
-                    CreatureSetupFlow.CreatureSetup(chara);
+                    CreatureSetupControl.CreatureSetup(chara);
                 }
                 __instance.m_nview.Destroy();
                 return false;
@@ -570,51 +623,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             static void Postfix(GameObject go) {
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {
-                    CreatureSetupFlow.CreatureSetup(chara);
-                }
-            }
-        }
-
-        [HarmonyPatch(typeof(EggGrow))]
-        public static class EggGrowCompat {
-
-            [HarmonyTranspiler]
-            [HarmonyPatch(nameof(EggGrow.GrowUpdate))]
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
-                var codeMatcher = new CodeMatcher(instructions, generator);
-                codeMatcher.MatchStartForward(
-                    new CodeMatch(OpCodes.Ldloc_1),
-                    new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(EggGrow), nameof(EggGrow.m_item))),
-                    new CodeMatch(OpCodes.Ldfld),
-                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(ItemDrop.ItemData), nameof(ItemDrop.m_itemData.m_quality)))
-                ).Advance(2)
-                .InsertAndAdvance(
-                    Transpilers.EmitDelegate(ControlEggSpawnLevelInheritance)
-                )
-                .RemoveInstructions(4)
-                .ThrowIfNotMatch("Unable to patch Egg.GrowUpdate");
-
-                return codeMatcher.Instructions();
-            }
-            private static void ControlEggSpawnLevelInheritance(Character spawnedChar, EggGrow egg) {
-                if (ValConfig.EggLevelDeterminedByItemQuality.Value) {
-                    int qualityLevel = egg.m_item.m_itemData.m_quality;
-                    Logger.LogDebug($"Setting egg spawn level based on item quality {qualityLevel}.");
-                    CreatureSetupFlow.CreatureSetup(spawnedChar, qualityLevel);
-                } else {
-                    // Don't set the level, let it be determined by the creatures configuration
-                    CreatureSetupFlow.CreatureSetup(spawnedChar);
-                }
-                CheckToMakeOffspringInfertile(spawnedChar);
-            }
-
-            private static void CheckToMakeOffspringInfertile(Character chara) {
-                if (ValConfig.OffspringCanBeInfertile.Value) {
-                    if (UnityEngine.Random.value <= ValConfig.OffspringChanceToBeInfertile.Value) {
-                        chara.m_nview.GetZDO().Set(SLS_INFERTILE, true);
-                        Logger.LogDebug($"Child is infertile.");
-                    }
+                    CreatureSetupControl.CreatureSetup(chara);
                 }
             }
         }

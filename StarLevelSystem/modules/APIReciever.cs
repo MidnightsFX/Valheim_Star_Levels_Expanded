@@ -1,5 +1,9 @@
 ﻿using StarLevelSystem.Data;
 using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.Health;
+using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
@@ -13,7 +17,7 @@ namespace StarLevelSystem.modules
     {
         public static bool UpdateCreatureLevel(Character chara, int level) {
             Logger.LogDebug($"SLS-API: Update Creature level {chara} - {level}");
-            LevelSystem.SetAndUpdateCharacterLevel(chara, level);
+            LevelSelection.SetAndUpdateCharacterLevel(chara, level);
             return true;
         }
 
@@ -60,10 +64,10 @@ namespace StarLevelSystem.modules
                 scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
-            ModificationExtensionSystem.ApplyDamageModification(chara, scd);
+            SpeedModifications.ApplySpeedModifications(chara, scd);
+            DamageModifications.ApplyDamageModification(chara, scd);
             SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
-            ModificationExtensionSystem.ApplyHealthModifications(chara, scd);
+            HealthModifications.ApplyHealthModifications(chara, scd);
             return true;
         }
 
@@ -103,10 +107,10 @@ namespace StarLevelSystem.modules
                 scd.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            ModificationExtensionSystem.ApplySpeedModifications(chara, scd);
-            ModificationExtensionSystem.ApplyDamageModification(chara, scd);
+            SpeedModifications.ApplySpeedModifications(chara, scd);
+            DamageModifications.ApplyDamageModification(chara, scd);
             SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
-            ModificationExtensionSystem.ApplyHealthModifications(chara, scd);
+            HealthModifications.ApplyHealthModifications(chara, scd);
             return true;
         }
 
@@ -142,7 +146,7 @@ namespace StarLevelSystem.modules
                 scd.DamageRecievedModifiers[(DamageType)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            ModificationExtensionSystem.ApplyDamageModification(chara, scd);
+            DamageModifications.ApplyDamageModification(chara, scd);
             return true;
         }
 
@@ -186,7 +190,7 @@ namespace StarLevelSystem.modules
                 scd.CreatureDamageBonus[(DamageType)kvp.Key] = kvp.Value;
             }
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            ModificationExtensionSystem.ApplyDamageModification(chara, scd);
+            DamageModifications.ApplyDamageModification(chara, scd);
             return true;
         }
 
@@ -195,10 +199,10 @@ namespace StarLevelSystem.modules
         public static bool ApplyUpdatesToCreature(Character chara) {
             CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
-            ModificationExtensionSystem.ApplySpeedModifications(chara, cdc);
-            ModificationExtensionSystem.ApplyDamageModification(chara, cdc);
+            SpeedModifications.ApplySpeedModifications(chara, cdc);
+            DamageModifications.ApplyDamageModification(chara, cdc);
             SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
-            ModificationExtensionSystem.ApplyHealthModifications(chara, cdc);
+            HealthModifications.ApplyHealthModifications(chara, cdc);
             return true;
         }
 

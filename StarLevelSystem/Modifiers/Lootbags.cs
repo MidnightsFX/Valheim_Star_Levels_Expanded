@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Loot;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -32,7 +33,7 @@ namespace StarLevelSystem.Modifiers
                     foreach (var kvp in __result) {
                         ExtraLoot.Add(new KeyValuePair<GameObject, int>(key: kvp.Key, value: Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier)));
                     }
-                    LootLevelsExpanded.DropItemsImmediate(ExtraLoot, __instance.gameObject.transform.position, 1f);
+                    LootPerformanceChanges.DropItemsPreferAsync(__instance.gameObject.transform.position, ExtraLoot, true);
                 }
             }
         }

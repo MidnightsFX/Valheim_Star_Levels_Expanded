@@ -41,7 +41,7 @@ namespace StarLevelSystem.common
                         Logger.LogWarning(e.Message);
                     }
                 }
-                List<Character> nearbyCreatures = Extensions.GetCharactersInRange(Player.m_localPlayer.transform.position, range);
+                List<Character> nearbyCreatures = SLSExtensions.GetCharactersInRange(Player.m_localPlayer.transform.position, range);
                 foreach (Character chara in nearbyCreatures) {
                     if (chara.IsPlayer() || chara.IsTamed()) { continue; }
 
@@ -79,7 +79,7 @@ namespace StarLevelSystem.common
                 }
 
                 
-                List<Character> nearbyCreatures = Extensions.GetCharactersInRange(Player.m_localPlayer.transform.position, 5f);
+                List<Character> nearbyCreatures = SLSExtensions.GetCharactersInRange(Player.m_localPlayer.transform.position, 5f);
                 Logger.LogInfo($"Adding {modtype} {modname} to {nearbyCreatures.Count}");
                 foreach (Character chara in nearbyCreatures) {
                     if (chara.IsPlayer()) { continue; }

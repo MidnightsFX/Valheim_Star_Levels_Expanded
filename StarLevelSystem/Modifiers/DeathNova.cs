@@ -29,7 +29,7 @@ namespace StarLevelSystem.Modifiers
                     // Configure damage
                     float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                     if (aoe) {
-                        float characterdmg = Extensions.EstimateCharacterDamage(__instance);
+                        float characterdmg = SLSExtensions.EstimateCharacterDamage(__instance);
                         aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 4f;
                         aoe.m_damage.m_fire = (characterdmg * dmgmod);
                         Logger.LogDebug($"Activating FireNova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
@@ -53,7 +53,7 @@ namespace StarLevelSystem.Modifiers
                     // Configure damage
                     float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                     if (aoe) {
-                        float characterdmg = Extensions.EstimateCharacterDamage(__instance);
+                        float characterdmg = SLSExtensions.EstimateCharacterDamage(__instance);
                         aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 6f;
                         aoe.m_damage.m_poison = (characterdmg * dmgmod);
                         Logger.LogDebug($"Activating Poison Nova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");

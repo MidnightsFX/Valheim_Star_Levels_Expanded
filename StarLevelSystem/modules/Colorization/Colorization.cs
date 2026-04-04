@@ -13,7 +13,6 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules
 {
-
     public static class Colorization
     {
         public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;

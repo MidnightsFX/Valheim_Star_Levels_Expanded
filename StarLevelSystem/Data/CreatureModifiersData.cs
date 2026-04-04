@@ -556,6 +556,15 @@ namespace StarLevelSystem.Data
                     UnallowedCreatures = NonCombatCreatures
                     }
                 },
+                {ModifierNames.Evolving.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 5,
+                    Config = new CreatureModConfig() {
+                        PerlevelPower = 1.0f,
+                        BasePower = 10.0f
+                        },
+                    UnallowedCreatures = NonCombatCreatures
+                    }
+                },
                 {ModifierNames.EitrDrain.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {

@@ -23,7 +23,7 @@ namespace StarLevelSystem.Modifiers
                     HitData transferHit = new HitData() { m_attacker = hit.m_attacker, m_damage = hit.m_damage };
                     transferHit.m_damage.Modify(1 - damage_reduction);
 
-                    List<Character> CharactersNearby = Extensions.GetCharactersInRange(__instance.transform.position, 15f);
+                    List<Character> CharactersNearby = SLSExtensions.GetCharactersInRange(__instance.transform.position, 15f);
                     bool transferred = false;
                     foreach (Character character in CharactersNearby) {
                         // No players, and not self

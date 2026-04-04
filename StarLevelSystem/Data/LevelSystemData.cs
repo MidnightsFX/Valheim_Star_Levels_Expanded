@@ -2,6 +2,10 @@
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.Health;
+using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
@@ -334,20 +338,8 @@ namespace StarLevelSystem.Data
             try {
                 SLE_Level_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
                 Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
-                LevelSystem.DelayedMinimapSetup();
-                foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
-                    if (chara.m_level <= 1) { continue; }
-
-                    CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(chara);
-                    if (ccd == null) { continue; }
-                    // Modify the creatures stats by custom character/biome modifications
-                    ModificationExtensionSystem.ApplySpeedModifications(chara, ccd);
-                    ModificationExtensionSystem.ApplyDamageModification(chara, ccd, true);
-                    SizeModifications.ApplySizeModifications(chara.gameObject, ccd, true);
-                    ModificationExtensionSystem.ApplyHealthModifications(chara, ccd);
-                    //Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
-                    //Colorization.ApplyLevelVisual(chara);
-                }
+                DistanceScaleSystem.DelayedMinimapSetup();
+                CompositeLazyCache.FlushCache();
             }
             catch (Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");
@@ -368,10 +360,10 @@ namespace StarLevelSystem.Data
                 CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(character);
                 if (ccd == null) { continue; }
                 // Modify the creatures stats by custom character/biome modifications
-                ModificationExtensionSystem.ApplySpeedModifications(character, ccd);
-                ModificationExtensionSystem.ApplyDamageModification(character, ccd, true);
+                SpeedModifications.ApplySpeedModifications(character, ccd);
+                DamageModifications.ApplyDamageModification(character, ccd, true);
                 SizeModifications.ApplySizeModifications(character.gameObject, ccd, true);
-                ModificationExtensionSystem.ApplyHealthModifications(character, ccd);
+                HealthModifications.ApplyHealthModifications(character, ccd);
 
                 i++;
             }

@@ -1,7 +1,11 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -336,7 +340,7 @@ namespace StarLevelSystem.Modifiers.Control
                 if (characterMods.Remove(modifier)) {
                     CompositeLazyCache.SetCreatureModifiers(character, characterMods);
                 }
-                LevelUI.InvalidateCacheEntry(character);
+                UIHudControl.InvalidateCacheEntry(character);
             }
         }
 
@@ -366,14 +370,14 @@ namespace StarLevelSystem.Modifiers.Control
             SetupCreatureVFX(character, CreatureModifiersData.ModifierDefinitions[newModifier]);
 
             // Note the character name needs to be rerolled
-            LevelUI.InvalidateCacheEntry(character);
+            UIHudControl.InvalidateCacheEntry(character);
 
             // Not applying the update immediately
             if (applyChanges == false) {
-                ModificationExtensionSystem.ApplySpeedModifications(character, scd);
-                ModificationExtensionSystem.ApplyDamageModification(character, scd);
+                SpeedModifications.ApplySpeedModifications(character, scd);
+                DamageModifications.ApplyDamageModification(character, scd);
                 SizeModifications.ApplySizeModifications(character.gameObject, scd, true);
-                ModificationExtensionSystem.ApplyHealthModifications(character, scd);
+                HealthModifications.ApplyHealthModifications(character, scd);
                 return true;
             }
 

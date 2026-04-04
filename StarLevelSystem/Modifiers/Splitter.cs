@@ -3,6 +3,7 @@ using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -40,7 +41,7 @@ namespace StarLevelSystem.Modifiers
                         Character sChar = sgo.GetComponent<Character>();
                         if (sChar != null) {
                             CompositeLazyCache.GetAndSetLocalCache(sChar, level, updateCache: true, notAllowedModifiers: new List<string>() { ModifierNames.Splitter.ToString() });
-                            ModificationExtensionSystem.CreatureSetup(sChar, level, multiply: false, delay: 0.1f);
+                            CreatureSetupControl.CreatureSetup(sChar, level, multiply: false, delay: 0.1f);
                             CreatureModifiers.RemoveCreatureModifier(sChar, ModifierNames.Splitter.ToString());
                         }
                         

@@ -2,7 +2,10 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -24,7 +27,7 @@ namespace StarLevelSystem.Data
             if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
             uint cid = zgo.GetZDO().m_uid.ID;
             if (TreeSessionCache.ContainsKey(cid)) { return TreeSessionCache[cid]; }
-            int level = LevelSystem.DeterministicDetermineTreeLevel(zgo.gameObject);
+            int level = LevelSelection.DeterministicDetermineTreeLevel(zgo.gameObject);
             TreeSessionCache.Add(cid, level);
             return level;
         }
@@ -35,10 +38,14 @@ namespace StarLevelSystem.Data
             }
         }
 
+        internal static void FlushCache() {
+            Logger.LogDebug("Flushing creature cache...");
+            SessionCache.Clear();
+        }
+
         public static CharacterCacheEntry GetCacheEntry(uint cid)
         {
-            if (SessionCache.ContainsKey(cid))
-            {
+            if (SessionCache.ContainsKey(cid)) {
                 return SessionCache[cid];
             }
             return null;
@@ -68,7 +75,7 @@ namespace StarLevelSystem.Data
             characterEntry.ZDO = character.m_nview.GetZDO();
             // Get character based biome and creature configuration
             //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
-            LevelSystem.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
+            LevelSelection.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
 
             characterEntry.creatureSettings = creatureSettings;
 
@@ -132,7 +139,7 @@ namespace StarLevelSystem.Data
 
             // Check for level or set it
             //Logger.LogDebug("Setting creature level");
-            characterEntry.Level = LevelSystem.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, leveloverride);
+            characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, leveloverride);
 
 
             // Set creature Colorization pallete
@@ -140,9 +147,9 @@ namespace StarLevelSystem.Data
             characterEntry.Colorization = Colorization.DetermineCharacterColorization(character, characterEntry.Level);
 
             //Logger.LogDebug("Selecting creature Damage Recieved, Per Level and base values.");
-            characterEntry.DamageRecievedModifiers = ModificationExtensionSystem.DetermineCreatureDamageRecievedModifiers(biomeSettings, creatureSettings);
-            characterEntry.CreaturePerLevelValueModifiers = ModificationExtensionSystem.DetermineCharacterPerLevelStats(biomeSettings, creatureSettings);
-            characterEntry.CreatureBaseValueModifiers = ModificationExtensionSystem.DetermineCreatureBaseStats(biomeSettings, creatureSettings);
+            characterEntry.DamageRecievedModifiers = DamageModifications.DetermineCreatureDamageRecievedModifiers(biomeSettings, creatureSettings);
+            characterEntry.CreaturePerLevelValueModifiers = DamageModifications.DetermineCharacterPerLevelStats(biomeSettings, creatureSettings);
+            characterEntry.CreatureBaseValueModifiers = DamageModifications.DetermineCreatureBaseStats(biomeSettings, creatureSettings);
 
             // skip setting cache if the creature is gone already
             uint uid = character.GetZDOID().ID;
@@ -166,7 +173,7 @@ namespace StarLevelSystem.Data
 
             // Destroy character if its selected for deletion
             if (characterEntry.ShouldDelete && chara.m_tamed == false) {
-                TaskRunner.Run().StartCoroutine(ModificationExtensionSystem.DestroyCoroutine(chara.gameObject));
+                TaskRunner.Run().StartCoroutine(Spawnrate.DestroyCoroutine(chara.gameObject));
                 return;
             }
 
@@ -177,7 +184,7 @@ namespace StarLevelSystem.Data
                 // Can't use the standard set level here- as we want to set the character level to 1 sometimes, and that will be ignored here.
                 chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
                 chara.m_level = characterEntry.Level;
-                LevelUI.InvalidateCacheEntry(chara);
+                UIHudControl.InvalidateCacheEntry(chara);
                 //Logger.LogDebug($"{characterEntry.RefCreatureName} setting level to {characterEntry.Level} from {clevel}");
             }
 
@@ -195,12 +202,12 @@ namespace StarLevelSystem.Data
                 chara.m_level = maxlevel;
                 SizeModifications.ApplySizeModifications(chara.gameObject, characterEntry, force_update: true);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
-                LevelUI.InvalidateCacheEntry(chara);
+                UIHudControl.InvalidateCacheEntry(chara);
             }
 
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
-            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || LevelSelection.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
                 chara.SetLevel(characterEntry.Level);
             }
 

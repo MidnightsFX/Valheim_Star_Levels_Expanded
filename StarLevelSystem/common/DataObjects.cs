@@ -4,6 +4,7 @@ using Jotunn.Managers;
 using MonoMod.Utils;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.LevelSystem;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -117,6 +118,12 @@ namespace StarLevelSystem.common
             Destructible
         }
 
+        public enum LootFactorType {
+            PerLevel,
+            Exponential,
+            ChancePerLevel
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -196,7 +203,7 @@ namespace StarLevelSystem.common
 
             public int RollAndDetermineLevel() {
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
-                return LevelSystem.DetermineLevelRollResult(levelup_roll, MaxLevel, GetLevelUpDefinition(), new SortedDictionary<int, float>(), 1f, NightMultiplier);
+                return LevelSelection.DetermineLevelRollResult(levelup_roll, MaxLevel, GetLevelUpDefinition(), new SortedDictionary<int, float>(), 1f, NightMultiplier);
             }
         }
 

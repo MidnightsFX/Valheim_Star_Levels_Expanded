@@ -107,7 +107,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
             //CreatureDetailCache cDetails = CompositeLazyCache.GetAndSetDetailCache(__instance, leveloverride);
             //if (cDetails == null) { return; } // For invalid things, skip. This happens when placing TWIG etc (not a valid or awake character)
 
-            Logger.LogDebug($"Setting up creature {__instance.gameObject.name} with delay {delay} and level override {leveloverride}");
+            // Logger.LogDebug($"Setting up creature {__instance.gameObject.name} with delay {delay} and level override {leveloverride}");
             // Generally a bad idea to run setup immediately if this is a networked player and the owner hasn't setup the creature
             // we want to delay slightly to allow the ZOwner to setup the creature, send the values and then we can use those, no need to multiply work
             TaskRunner.Run().StartCoroutine(DelayedSetupValidateZnet(__instance, leveloverride, delay: delay, spawnMultiply: multiply, requiredModifiers: requiredModifiers));

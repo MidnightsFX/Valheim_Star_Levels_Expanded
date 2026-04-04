@@ -339,19 +339,7 @@ namespace StarLevelSystem.Data
                 SLE_Level_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
                 Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
                 DistanceScaleSystem.DelayedMinimapSetup();
-                foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
-                    if (chara.m_level <= 1) { continue; }
-
-                    CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(chara);
-                    if (ccd == null) { continue; }
-                    // Modify the creatures stats by custom character/biome modifications
-                    SpeedModifications.ApplySpeedModifications(chara, ccd);
-                    DamageModifications.ApplyDamageModification(chara, ccd, true);
-                    SizeModifications.ApplySizeModifications(chara.gameObject, ccd, true);
-                    HealthModifications.ApplyHealthModifications(chara, ccd);
-                    //Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
-                    //Colorization.ApplyLevelVisual(chara);
-                }
+                CompositeLazyCache.FlushCache();
             }
             catch (Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");

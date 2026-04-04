@@ -2,7 +2,11 @@
  ---
  ```
 - Fix Elemental chaos config lookup
-
+- Disable some debug logging
+- Clears cache when networked creature changes are sent to prevent stale caches
+- Adds additional optional logging for combat details
+- Adds default config for Evolving modifier
+- Fixes per-level damage modifiers not applying properly for level 0
  ```
 
 **0.18.1**

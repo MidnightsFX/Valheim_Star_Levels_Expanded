@@ -11,7 +11,7 @@ using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.modules.Sizes.SizeModifications;
 
 namespace StarLevelSystem.modules.Sizes {
-    internal static class Patches {
+    internal static class SizePatches {
 
         //[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.EquipItem))]
         //public static class CreatureSizeSyncEquipItems {

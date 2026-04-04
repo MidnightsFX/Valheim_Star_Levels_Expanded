@@ -15,22 +15,23 @@ namespace StarLevelSystem.modules.Damage {
         [HarmonyPatch(typeof(Attack), nameof(Attack.GetLevelDamageFactor))]
         public static class ModifyDamagePerLevel {
             public static bool Prefix(Attack __instance, ref float __result) {
-                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance.m_character);
+                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance.m_character);
+                int level = Mathf.Max(0, Mathf.Max(__instance.m_character.GetLevel(), 1) - 1);
                 if (__instance.m_character.IsBoss()) {
                     if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
-                        __result = Mathf.Max(0, __instance.m_character.GetLevel() - 1) * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                        __result = level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
                     } else {
-                        __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.BossEnemyDamageMultiplier.Value;
+                        __result = 1f + level * ValConfig.BossEnemyDamageMultiplier.Value;
                     }
                 } else {
                     if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
-                        __result = Mathf.Max(0, __instance.m_character.GetLevel() - 1) * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                        __result = level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
                     } else {
-                        __result = 1f + (float)Mathf.Max(0, __instance.m_character.GetLevel() - 1) * ValConfig.EnemyDamageLevelMultiplier.Value;
+                        __result = 1f + level * ValConfig.EnemyDamageLevelMultiplier.Value;
                     }
                 }
                 if (ValConfig.EnableDebugOutputForDamage.Value) {
-                    Logger.LogDebug($"Setting {__instance.m_character.name} lvl {__instance.m_character.GetLevel() - 1} dmg factor to {__result}");
+                    Logger.LogDebug($"Setting {__instance.m_character.name} lvl {level} dmg factor to {__result}");
                 }
                 return false;
             }
@@ -63,7 +64,7 @@ namespace StarLevelSystem.modules.Damage {
         public static class ApplyResistance {
             private static void Postfix(HitData __instance, DamageModifiers modifiers) {
                 if (ValConfig.EnableDebugOutputForDamage.Value == false) { return; }
-                Logger.LogDebug($"Applying {modifiers} Modifiers: D:{__instance.m_damage.m_damage} fi:{__instance.m_damage.m_fire} fr:{__instance.m_damage.m_frost} s:{__instance.m_damage.m_spirit} po:{__instance.m_damage.m_poison} b:{__instance.m_damage.m_blunt} p:{__instance.m_damage.m_pierce} s:{__instance.m_damage.m_slash}");
+                Logger.LogDebug($"Applying Damage Modifiers {modifiers}, result after modifiers: D:{__instance.m_damage.m_damage} fi:{__instance.m_damage.m_fire} fr:{__instance.m_damage.m_frost} s:{__instance.m_damage.m_spirit} po:{__instance.m_damage.m_poison} b:{__instance.m_damage.m_blunt} p:{__instance.m_damage.m_pierce} s:{__instance.m_damage.m_slash}");
             }
         }
 

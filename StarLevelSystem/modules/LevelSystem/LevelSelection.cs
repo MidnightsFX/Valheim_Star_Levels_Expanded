@@ -15,6 +15,7 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class LevelSelection {
 
+        public static List<string> ForceLeveledCreatures = new List<string>();
         public static int DetermineLevel(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
@@ -281,6 +282,19 @@ namespace StarLevelSystem.modules.LevelSystem {
             Physics.SyncTransforms();
 
             yield break;
+        }
+
+
+
+        internal static void LeveledCreatureListChanged(object s, EventArgs e) {
+            SetupForceLeveledCreatureList();
+        }
+
+        internal static void SetupForceLeveledCreatureList() {
+            ForceLeveledCreatures.Clear();
+            foreach (var item in ValConfig.SpawnsAlwaysControlled.Value.Split(',')) {
+                ForceLeveledCreatures.Add(item);
+            }
         }
     }
 }

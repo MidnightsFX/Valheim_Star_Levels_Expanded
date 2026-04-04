@@ -5,10 +5,7 @@ using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Loot;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection.Emit;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 

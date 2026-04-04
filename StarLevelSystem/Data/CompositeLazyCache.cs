@@ -38,10 +38,14 @@ namespace StarLevelSystem.Data
             }
         }
 
+        internal static void FlushCache() {
+            Logger.LogDebug("Flushing creature cache...");
+            SessionCache.Clear();
+        }
+
         public static CharacterCacheEntry GetCacheEntry(uint cid)
         {
-            if (SessionCache.ContainsKey(cid))
-            {
+            if (SessionCache.ContainsKey(cid)) {
                 return SessionCache[cid];
             }
             return null;
@@ -203,7 +207,7 @@ namespace StarLevelSystem.Data
 
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
-            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || ModificationExtensionSystem.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || LevelSelection.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
                 chara.SetLevel(characterEntry.Level);
             }
 

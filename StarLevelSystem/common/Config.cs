@@ -229,8 +229,8 @@ namespace StarLevelSystem
             ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");
             //DistanceBonusMapsCanIncludeLowerLevels = BindServerConfig("LevelSystem", "DistanceBonusMapsCanIncludeLowerLevels", true, "When enabled makes the distance bonus configuration include the highest previously lower level defined keys, if they are not defined in the current level.");
             SpawnsAlwaysControlled = BindServerConfig("LevelSystem", "SpawnsAlwaysControlled", "piece_TrainingDummy", "A list of creatures which always get their level set");
-            SpawnsAlwaysControlled.SettingChanged += ModificationExtensionSystem.LeveledCreatureListChanged;
-            ModificationExtensionSystem.SetupForceLeveledCreatureList();
+            SpawnsAlwaysControlled.SettingChanged += LevelSelection.LeveledCreatureListChanged;
+            LevelSelection.SetupForceLeveledCreatureList();
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootStyles.AllowedLootFactors, false);

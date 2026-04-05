@@ -1,3 +1,9 @@
+**0.18.3**
+ ---
+ ```
+- Fixes infinite damage redirection loop with multiple lifelink bosses
+ ```
+
 **0.18.2**
  ---
  ```

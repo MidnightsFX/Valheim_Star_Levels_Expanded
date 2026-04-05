@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.Damage;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -12,6 +13,8 @@ namespace StarLevelSystem.Modifiers
     {
         [HarmonyPatch(typeof(Character), nameof(Character.RPC_Damage))]
         public static class LifeLinkDamageDistributionPatch {
+            static float NextAllowedRedirection = 0;
+
             public static void Prefix(Character __instance, HitData hit) {
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                 if (mods != null && mods.ContainsKey(ModifierNames.LifeLink.ToString())) {
@@ -22,6 +25,17 @@ namespace StarLevelSystem.Modifiers
 
                     HitData transferHit = new HitData() { m_attacker = hit.m_attacker, m_damage = hit.m_damage };
                     transferHit.m_damage.Modify(1 - damage_reduction);
+
+                    // Minimum damage to transfer is 20
+                    if (transferHit.GetTotalDamageOptions() < 20f) {
+                        return;
+                    }
+
+                    // Not allowed to redirect damage more than once every second, to prevent infinite loops and excessive damage transfer
+                    if (Time.realtimeSinceStartup < NextAllowedRedirection) {
+                        return;
+                    }
+                    NextAllowedRedirection = Time.realtimeSinceStartup + 1f;
 
                     List<Character> CharactersNearby = SLSExtensions.GetCharactersInRange(__instance.transform.position, 15f);
                     bool transferred = false;

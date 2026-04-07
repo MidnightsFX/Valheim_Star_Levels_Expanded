@@ -1,3 +1,13 @@
+**0.18.4**
+ ---
+ ```
+- Reblances levelup requirements for Evolving modifier
+	- Increased requirement for creatures to level up
+	- Heal creatures when they do level up
+- Fixes UI cache not updating when a creatures modifiers are removed
+- Fixes UI cache not transitioning from level 5 to level 6 display properly
+ ```
+
 **0.18.3**
  ---
  ```

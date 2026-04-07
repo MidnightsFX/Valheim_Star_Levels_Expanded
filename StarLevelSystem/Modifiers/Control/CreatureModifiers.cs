@@ -109,6 +109,7 @@ namespace StarLevelSystem.Modifiers.Control
             if (cmodifier.VisualEffect != null) {
 
                 GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
+                if (effectPrefab == null) { return; }
                 bool hasVFXAlready = character.transform.Find($"SLS_Visuals(Clone)/{effectPrefab.name}(Clone)");
                 //Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
                 if (hasVFXAlready == false) {

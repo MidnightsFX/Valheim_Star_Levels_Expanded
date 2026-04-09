@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Modifiers.Control
@@ -106,7 +107,7 @@ namespace StarLevelSystem.Modifiers.Control
         }
 
         internal static void SetupCreatureVFX(Character character, CreatureModifierDefinition cmodifier) {
-            if (cmodifier.VisualEffect != null) {
+            if (cmodifier.VisualEffect != null || character == null) {
 
                 GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
                 if (effectPrefab == null) { return; }
@@ -115,7 +116,6 @@ namespace StarLevelSystem.Modifiers.Control
                 if (hasVFXAlready == false) {
                     Transform visualHolder = character.transform.Find("SLS_Visuals(Clone)");
                     if (visualHolder == null) {
-                        
                         visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
                     }
                     //Logger.LogDebug($"Adding visual effects for {character.name}");
@@ -124,8 +124,7 @@ namespace StarLevelSystem.Modifiers.Control
                     float scale = height / 5f;
                     float rscale = character.GetRadius() / 2f;
 
-                    switch (cmodifier.VisualEffectStyle)
-                    {
+                    switch (cmodifier.VisualEffectStyle) {
                         case VisualEffectStyle.top:
                             vfxadd.transform.localPosition = new Vector3(0, height, 0);
                             break;
@@ -140,6 +139,15 @@ namespace StarLevelSystem.Modifiers.Control
                     vfxadd.transform.localScale = new Vector3(vfxadd.transform.localScale.x * scale, vfxadd.transform.localScale.y * rscale, vfxadd.transform.localScale.z * scale);
                 }
             }
+        }
+
+        internal static GameObject ApplySecondaryVFX(string effectName, Vector3 position, Quaternion rotation) {
+            if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(effectName)) {
+                GameObject go = CreatureModifiersData.LoadedSecondaryEffects[effectName];
+                if (go == null) { return null; }
+                return GameObject.Instantiate(go, position, rotation);
+            }
+            return null;
         }
 
         internal static string BuildCreatureLocalizableName(Character chara, Dictionary<string, ModifierType> modifiers) {

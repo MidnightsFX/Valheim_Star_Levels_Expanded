@@ -31,26 +31,11 @@ namespace StarLevelSystem.Modifiers
             static bool setup = false;
             static bool started = false;
 
-            public void Update()
-            {
-                if (!setup) return;
-                if (!creature_znet.IsOwner()) return;
-                if (creature_znet == null) {
-                    creature_znet = this.gameObject.GetComponent<ZNetView>();
-                }
-
-                if (started == false) {
-                    InvokeRepeating("SpawnCreaturesBatch", timeBetweenSummons, timeBetweenSummons);
-                    started = true;
-                }
-            }
-
             public void SpawnCreaturesBatch() {
                 summonBatchSize.Times(() => SpawnCreatureRandomly());
             }
 
-            public void SpawnCreatureRandomly()
-            {
+            public void SpawnCreatureRandomly() {
                 if (summonableCreatures.Count == 0) return;
                 if (spawned.Count >= maxSummoned) {
                     // Check if any of the spawned are still alive
@@ -84,6 +69,14 @@ namespace StarLevelSystem.Modifiers
                     }
                 }
                 setup = true;
+                if (creature_znet == null) {
+                    creature_znet = this.gameObject.GetComponent<ZNetView>();
+                }
+
+                if (started == false) {
+                    InvokeRepeating("SpawnCreaturesBatch", timeBetweenSummons, timeBetweenSummons);
+                    started = true;
+                }
             }
         }
 

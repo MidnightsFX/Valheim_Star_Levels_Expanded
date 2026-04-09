@@ -184,18 +184,57 @@ namespace StarLevelSystem.common
             return characters;
         }
 
-        public static float EstimateCharacterDamage(Character chara, bool highest = true) {
+        internal static float GetTotalDamageOptions(this HitData.DamageTypes hitdmg, bool include_poison = false, bool include_spirit = false, bool include_pickaxe_and_chop = false, float modElement = 1f, float modPhysical = 1f) {
+            float physical = (hitdmg.m_damage + hitdmg.m_blunt + hitdmg.m_slash + hitdmg.m_pierce) * modPhysical;
+            float elemental = (hitdmg.m_fire + hitdmg.m_frost + hitdmg.m_lightning) * modElement;
+            float dmg = physical + elemental;
+            if (include_poison) { dmg += (hitdmg.m_poison * modElement); }
+            if (include_spirit) { dmg += (hitdmg.m_spirit* modElement); }
+            if (include_pickaxe_and_chop) { dmg += hitdmg.m_pickaxe + hitdmg.m_chop; }
+            //Logger.LogDebug($"Total Damage calc: {dmg} (with modifiers E:{modElement}, P:{modPhysical}) = true:{hitdmg.m_damage} + blunt:{hitdmg.m_blunt} + slash:{hitdmg.m_slash} + pierce:{hitdmg.m_pierce} + fire:{hitdmg.m_fire} + frost:{hitdmg.m_frost} + Lightning:{hitdmg.m_lightning}");
+            //Logger.LogDebug($"Optionals: Poison:{hitdmg.m_poison} Spirit:{hitdmg.m_spirit} Pickaxe:{hitdmg.m_pickaxe} Chop:{hitdmg.m_chop}");
+            return dmg;
+        }
+
+        public static float EstimateCharacterDamage(Character chara, DamageEstimateType det) {
             if (chara == null || chara.IsPlayer()) return 0;
             Humanoid noid = chara as Humanoid;
             if (noid == null) return 0;
             float dmg = 0;
-            ItemDrop.ItemData item = noid.GetCurrentWeapon();
-            if (highest && noid.m_defaultItems != null) { 
-                foreach(var defweapon in noid.m_defaultItems) {
-                    float wepdmg = defweapon.GetComponent<ItemDrop>().m_itemData.m_shared.m_damages.GetTotalDamage();
-                    if (wepdmg > dmg) { dmg = wepdmg; }
-                }
-            } else {
+            float elementMod = 0.5f;
+
+            switch (det) {
+                case DamageEstimateType.Highest:
+                    foreach (var defweapon in noid.m_defaultItems) {
+                        float wepdmg = defweapon.GetComponent<ItemDrop>().m_itemData.m_shared.m_damages.GetTotalDamageOptions(true, true, false, modElement: elementMod);
+                        //Logger.LogDebug($"Checking damage of {defweapon.name} - dmg:{wepdmg}");
+                        if (wepdmg > dmg) { dmg = wepdmg; }
+                    }
+                    break;
+
+                case DamageEstimateType.Average:
+                    float dmgsum = 0;
+                    foreach (var defweapon in noid.m_defaultItems) {
+                        float wepdmg = defweapon.GetComponent<ItemDrop>().m_itemData.m_shared.m_damages.GetTotalDamageOptions(true, true, false, modElement: elementMod);
+                        dmgsum += wepdmg;
+                        //Logger.LogDebug($"Checking damage of {defweapon.name} - dmg:{wepdmg}");
+                    }
+                    dmg = dmgsum / noid.m_defaultItems.Count();
+                    break;
+
+                case DamageEstimateType.Lowest:
+                    foreach (var defweapon in noid.m_defaultItems) {
+                        float wepdmg = defweapon.GetComponent<ItemDrop>().m_itemData.m_shared.m_damages.GetTotalDamageOptions(true, true, false, modElement: elementMod);
+                        //Logger.LogDebug($"Checking damage of {defweapon.name} - dmg:{wepdmg}");
+                        if (wepdmg < dmg) { dmg = wepdmg; }
+                    }
+                    break;
+            }
+
+            // Fallback
+            if (dmg == 0) {
+                Logger.LogDebug("");
+                ItemDrop.ItemData item = noid.GetCurrentWeapon();
                 if (item != null) {
                     HitData.DamageTypes dmgs = item.GetDamage();
                     // Spirit and Poison get reduced weights here because they are dmg over time primarily and taking into account the whole value immediately results in a dmg spike

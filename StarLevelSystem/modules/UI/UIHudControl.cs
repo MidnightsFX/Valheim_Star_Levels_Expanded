@@ -55,22 +55,7 @@ namespace StarLevelSystem.modules.UI {
             defaultStar = PrefabManager.Cache.GetPrefab<Sprite>("craft_icon");
         }
 
-        public static void InvalidateCacheEntry(uint zdid) {
-            if (characterExtendedHuds.ContainsKey(zdid)) {
-                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(zdid);
-                StarLevelHud exthud = characterExtendedHuds[zdid];
-                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
-                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(exthud.Hudlink.m_character, cce.CreatureModifiers);
-                
-                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
-                UpdateHudModifiers(exthud, mods);
-                exthud.Hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
-                if (cce == null || cce.CreatureNameLocalizable == null) { return; }
-            }
-        }
-
         internal static void RemoveExtendedHudFromCache(uint id) {
-
             if (characterExtendedHuds.ContainsKey(id)) {
                 if (characterExtendedHuds[id].HealthText != null) {
                     GameObject.Destroy(characterExtendedHuds[id].HealthText.gameObject);
@@ -81,7 +66,20 @@ namespace StarLevelSystem.modules.UI {
 
         public static void InvalidateCacheEntry(Character chara) {
             uint id = chara.GetZDOID().ID;
-            InvalidateCacheEntry(id);
+            CompositeLazyCache.GetAndSetLocalCache(chara);
+
+            if (characterExtendedHuds.ContainsKey(id)) {
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
+                StarLevelHud exthud = characterExtendedHuds[id];
+                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
+                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
+                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(exthud.Hudlink.m_character, mods);
+                cce.CreatureModifiers = mods;
+
+                UpdateHudModifiers(id, exthud, mods);
+                exthud.Hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                if (cce == null || cce.CreatureNameLocalizable == null) { return; }
+            }
         }
 
         internal static void StarLevelHudDisplay(GameObject star, Transform basehud, Transform bosshud) {
@@ -246,11 +244,12 @@ namespace StarLevelSystem.modules.UI {
                 List<string> cmods = mods.Keys.ToList();
                 if (cmods.CompareListContents(mods.Keys.ToList()) == false) {
                     Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count}), updating cache.");
-                    InvalidateCacheEntry(czid);
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
+                    InvalidateCacheEntry(ehud.m_character);
+                    
                     //Colorization.ApplyColorizationWithoutLevelEffects();
                     // Re set up the character, to ensure it gets updated visual effects, and sizing
-                    CreatureSetupControl.CreatureSetup(ehud.m_character);
+                    
                     return;
                 }
 
@@ -291,7 +290,7 @@ namespace StarLevelSystem.modules.UI {
                     extended_hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
                 }
 
-                UpdateHudModifiers(extended_hud, mods);
+                UpdateHudModifiers(czid, extended_hud, mods);
 
                 // Need to find and add the N level text for updating here
                 characterExtendedHuds.Add(czid, extended_hud);
@@ -356,7 +355,12 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
-        public static void UpdateHudModifiers(StarLevelHud extended_hud, Dictionary<string, ModifierType> mods) {
+        public static void UpdateHudModifiers(uint zdid, StarLevelHud extended_hud, Dictionary<string, ModifierType> mods) {
+            if (extended_hud.Hudlink == null || extended_hud.Hudlink.m_gui == null) {
+                RemoveExtendedHudFromCache(zdid);
+                return;
+            }
+            
             Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
             int star = 2;
             if (mods == null) { mods = new Dictionary<string, ModifierType>(); }

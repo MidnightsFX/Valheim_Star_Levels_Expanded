@@ -80,7 +80,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
             HealthModifications.ApplyHealthModifications(__instance, cDetails);
 
             // Rebuild UI since it may have been created before these changes were applied
-            UIHudControl.InvalidateCacheEntry(__instance.GetZDOID().ID);
+            UIHudControl.InvalidateCacheEntry(__instance);
 
             if (__instance.m_level <= 1) { return true; }
             // Colorization and visual adjustments
@@ -96,6 +96,12 @@ namespace StarLevelSystem.modules.CreatureSetup {
             CreatureSetup(chara, delay: delay);
         }
 
+        internal static void CreatureSetupNoDelay(Character __instance) {
+            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance);
+            CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce);
+            cce = CompositeLazyCache.GetCacheEntry(__instance); // refresh after running zsetup
+            CharacterSetup(__instance, cce);
+        }
 
         // This is the primary flow setup for setting up a character
         internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {

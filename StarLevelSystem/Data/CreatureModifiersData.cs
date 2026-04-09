@@ -5,10 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using StarLevelSystem.Modifiers;
 using UnityEngine;
-using YamlDotNet.Serialization;
 using static Heightmap;
 using static StarLevelSystem.common.DataObjects;
-using static StarLevelSystem.Data.CreatureModifiersData;
 
 namespace StarLevelSystem.Data
 {

@@ -34,7 +34,7 @@ namespace StarLevelSystem.modules.UI {
             public static void Postfix(Tameable __instance) {
                 //Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
                 //__instance.m_character.m_nview.GetZDO().Set(SLS_CHARNAME, CreatureModifiers.BuildCreatureLocalizableName(__instance.m_character, mods)); 
-                UIHudControl.InvalidateCacheEntry(__instance.m_character.GetZDOID().ID);
+                UIHudControl.InvalidateCacheEntry(__instance.m_character);
             }
         }
 

@@ -1,3 +1,11 @@
+**0.18.5**
+ ---
+ ```
+- More safety checks for modifier effects
+- Adds an activation sound effect for FireNova and PoisonNova
+- Improves consistency of FireNova and PoisonNova damage
+ ```
+
 **0.18.4**
  ---
  ```

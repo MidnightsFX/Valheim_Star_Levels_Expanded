@@ -124,6 +124,12 @@ namespace StarLevelSystem.common
             ChancePerLevel
         }
 
+        public enum DamageEstimateType {
+            Average,
+            Highest,
+            Lowest
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();

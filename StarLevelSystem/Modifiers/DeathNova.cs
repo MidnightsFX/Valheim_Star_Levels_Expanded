@@ -32,8 +32,11 @@ namespace StarLevelSystem.Modifiers
                     float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                     if (aoe) {
                         float characterdmg = SLSExtensions.EstimateCharacterDamage(__instance, DamageEstimateType.Average);
-                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 4f;
-                        aoe.m_damage.m_fire = (characterdmg * dmgmod) / 2f; // Fire is applied multiple times so we need to ensure this is a dimished return
+                        if (characterdmg <= 0) {
+                            characterdmg = 10 * __instance.m_level; // fallback to a base damage if for some reason we can't get an estimate
+                        }
+                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) * 0.25f;
+                        aoe.m_damage.m_fire = (characterdmg * dmgmod) * 0.5f; // Fire is applied multiple times so we need to ensure this is a dimished return
                         Logger.LogDebug($"Activating FireNova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)} | blunt: {aoe.m_damage.m_blunt} fire: {aoe.m_damage.m_fire}");
                     }
                     
@@ -57,7 +60,10 @@ namespace StarLevelSystem.Modifiers
                     float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
                     if (aoe) {
                         float characterdmg = SLSExtensions.EstimateCharacterDamage(__instance, DamageEstimateType.Average);
-                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) / 6f;
+                        if (characterdmg <= 0) {
+                            characterdmg = 10 * __instance.m_level; // fallback to a base damage if for some reason we can't get an estimate
+                        }
+                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) * 0.16f;
                         aoe.m_damage.m_poison = (characterdmg * dmgmod);
                         Logger.LogDebug($"Activating Poison Nova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
                     }

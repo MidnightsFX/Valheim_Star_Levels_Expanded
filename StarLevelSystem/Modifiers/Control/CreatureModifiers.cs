@@ -211,7 +211,7 @@ namespace StarLevelSystem.Modifiers.Control
             {
                 if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true)
                 {
-                    int numBossMods = ValConfig.MaxMajorModifiersPerCreature.Value;
+                    int numBossMods = ValConfig.MaxBossModifiersPerBoss.Value;
                     if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
                     float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
                     if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }

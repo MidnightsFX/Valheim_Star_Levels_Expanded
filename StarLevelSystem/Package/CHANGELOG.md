@@ -1,3 +1,15 @@
+**0.18.7**
+ ---
+ ```
+- Volatile damage calculation safeguards
+ ```
+
+**0.18.6**
+ ---
+ ```
+- Fixes boss modifier limit not being applied correctly (could inherit the major modifier limit instead)
+ ```
+
 **0.18.5**
  ---
  ```

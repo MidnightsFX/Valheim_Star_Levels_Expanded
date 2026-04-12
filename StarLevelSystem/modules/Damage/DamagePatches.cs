@@ -21,6 +21,7 @@ namespace StarLevelSystem.modules.Damage {
             }
 
             private static float DetermineDamageFactor(Character character) {
+                if (character.IsPlayer()) { return 1f; } // Players are not leveled, so return 1
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(character);
                 int level = Mathf.Max(0, Mathf.Max(character.GetLevel(), 1) - 1);
                 float result;

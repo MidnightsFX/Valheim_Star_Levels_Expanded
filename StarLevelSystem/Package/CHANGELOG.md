@@ -1,3 +1,11 @@
+**0.18.10**
+ ---
+ ```
+- Default player per level damage modifier fallback to 1
+	Note: it is still not recommended to modify player attributes as it is not fully supported yet 
+	if you do modify player attributes and need to revert consider running `sls-reset-player-modifiers`
+ ```
+
 **0.18.9**
  ---
  ```

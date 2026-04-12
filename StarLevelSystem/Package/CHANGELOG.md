@@ -1,3 +1,9 @@
+**0.18.9**
+ ---
+ ```
+- Damage calculation range fix for FireNova and PoisonNova
+ ```
+
 **0.18.8**
  ---
  ```

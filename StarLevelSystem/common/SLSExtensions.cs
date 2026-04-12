@@ -233,7 +233,6 @@ namespace StarLevelSystem.common
 
             // Fallback
             if (dmg == 0) {
-                Logger.LogDebug("");
                 ItemDrop.ItemData item = noid.GetCurrentWeapon();
                 if (item != null) {
                     HitData.DamageTypes dmgs = item.GetDamage();
@@ -241,6 +240,8 @@ namespace StarLevelSystem.common
                     dmg = dmgs.m_fire + dmgs.m_frost + dmgs.m_lightning + (dmgs.m_spirit / 2) + (dmgs.m_poison / 6) + dmgs.m_blunt + dmgs.m_pierce + dmgs.m_slash;
                 }
             }
+            dmg = Mathf.Clamp(dmg, 0, 500f);
+            if (float.IsNaN(dmg)) { dmg = 100f; }
             Logger.LogDebug($"Estimated {chara.m_name} damage as: {dmg}");
             return dmg;
         }

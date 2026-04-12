@@ -16,7 +16,7 @@ namespace StarLevelSystem.Modifiers
         public static class DeathNovaOnDeathPatch
         {
             private static void Prefix(Character __instance) {
-                if (__instance == null || __instance.IsPlayer()) {
+                if (__instance == null || __instance.IsPlayer() || __instance.m_nview.IsOwner() == false) {
                     return;
                 }
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);

@@ -1,3 +1,10 @@
+**0.18.8**
+ ---
+ ```
+- Fixes per level damage not being applied correctly, race conditional
+- Adds additional safety checks for Lifelink, Elemental Chaos and Fire/Poison Nova
+ ```
+
 **0.18.7**
  ---
  ```

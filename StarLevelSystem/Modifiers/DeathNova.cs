@@ -35,8 +35,8 @@ namespace StarLevelSystem.Modifiers
                         if (characterdmg <= 0) {
                             characterdmg = 10 * __instance.m_level; // fallback to a base damage if for some reason we can't get an estimate
                         }
-                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) * 0.25f;
-                        aoe.m_damage.m_fire = (characterdmg * dmgmod) * 0.5f; // Fire is applied multiple times so we need to ensure this is a dimished return
+                        aoe.m_damage.m_blunt = Mathf.Clamp((characterdmg * dmgmod) * 0.25f, 0f, 5000f);
+                        aoe.m_damage.m_fire = Mathf.Clamp((characterdmg * dmgmod) * 0.5f, 0f, 5000f); // Fire is applied multiple times so we need to ensure this is a dimished return
                         Logger.LogDebug($"Activating FireNova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)} | blunt: {aoe.m_damage.m_blunt} fire: {aoe.m_damage.m_fire}");
                     }
                     
@@ -63,8 +63,8 @@ namespace StarLevelSystem.Modifiers
                         if (characterdmg <= 0) {
                             characterdmg = 10 * __instance.m_level; // fallback to a base damage if for some reason we can't get an estimate
                         }
-                        aoe.m_damage.m_blunt = (characterdmg * dmgmod) * 0.16f;
-                        aoe.m_damage.m_poison = (characterdmg * dmgmod);
+                        aoe.m_damage.m_blunt = Mathf.Clamp((characterdmg * dmgmod) * 0.16f, 0f, 5000f);
+                        aoe.m_damage.m_poison = Mathf.Clamp((characterdmg * dmgmod), 0f, 5000f);
                         Logger.LogDebug($"Activating Poison Nova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
                     }
 

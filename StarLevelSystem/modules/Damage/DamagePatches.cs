@@ -15,50 +15,44 @@ namespace StarLevelSystem.modules.Damage {
         [HarmonyPatch(typeof(Attack), nameof(Attack.GetLevelDamageFactor))]
         public static class ModifyDamagePerLevel {
             public static bool Prefix(Attack __instance, ref float __result) {
-                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance.m_character);
-                int level = Mathf.Max(0, Mathf.Max(__instance.m_character.GetLevel(), 1) - 1);
-                if (__instance.m_character.IsBoss()) {
+                __result = DetermineDamageFactor(__instance.m_character);
+                __result *= __instance.m_character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
+                return false;
+            }
+
+            private static float DetermineDamageFactor(Character character) {
+                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(character);
+                int level = Mathf.Max(0, Mathf.Max(character.GetLevel(), 1) - 1);
+                float result;
+                if (character.IsBoss()) {
                     if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
-                        __result = level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                        result = level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
                     } else {
-                        __result = 1f + level * ValConfig.BossEnemyDamageMultiplier.Value;
+                        result = 1f + level * ValConfig.BossEnemyDamageMultiplier.Value;
                     }
                 } else {
                     if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
-                        __result = level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                        result = (level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel]);
                     } else {
-                        __result = 1f + level * ValConfig.EnemyDamageLevelMultiplier.Value;
+                        result = 1f + (level * ValConfig.EnemyDamageLevelMultiplier.Value);
                     }
                 }
                 if (ValConfig.EnableDebugOutputForDamage.Value) {
-                    Logger.LogDebug($"Setting {__instance.m_character.name} lvl {level} dmg factor to {__result}");
+                    Logger.LogDebug($"Setting {character.name} lvl {level} dmg factor to {result}");
                 }
-                return false;
-            }
-        }
-
-        [HarmonyPatch(typeof(Attack), nameof(Attack.GetLevelDamageFactor))]
-        public static class SetupMaxLevelDamagePatch {
-            public static bool Prefix(Attack __instance, ref float __result) {
-                // We do not want to skip to return 1 if the character is not leveled because this might need to apply base damage changes too
-                if (__instance.m_character == null || __instance.m_character.m_nview == null || __instance.m_character.m_nview.GetZDO() == null) {
-                    __result = 1f;
-                    return false;
-                }
-                __result = __instance.m_character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
-                //Logger.LogDebug($"Damage Level Factor: {__result}");
-                return false;
+                return result;
             }
         }
 
         // For debugging full details on damage calculations
         [HarmonyPatch(typeof(Character), nameof(Character.ApplyDamage))]
         public static class CharacterApplyDamage {
-            private static void Prefix(HitData hit, Character __instance) {
+            private static void Prefix(HitData hit) {
                 if (ValConfig.EnableDebugOutputForDamage.Value == false) { return; }
                 Logger.LogDebug($"Applying Damage: D:{hit.m_damage.m_damage} fi:{hit.m_damage.m_fire} fr:{hit.m_damage.m_frost} s:{hit.m_damage.m_spirit} po:{hit.m_damage.m_poison} b:{hit.m_damage.m_blunt} p:{hit.m_damage.m_pierce} s:{hit.m_damage.m_slash}");
             }
         }
+
         // For debugging full details on damage calculations
         [HarmonyPatch(typeof(HitData), nameof(HitData.ApplyResistance))]
         public static class ApplyResistance {

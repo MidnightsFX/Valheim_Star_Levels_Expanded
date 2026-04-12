@@ -90,7 +90,7 @@ MonoBehaviour:
   m_blockable: 0
   m_toolTier: 0
   m_attackForce: 0
-  m_backstabBonus: 4
+  m_backstabBonus: 0
   m_statusEffect: 
   m_statusEffectIfBoss: 
   m_statusEffectIfPlayer: 

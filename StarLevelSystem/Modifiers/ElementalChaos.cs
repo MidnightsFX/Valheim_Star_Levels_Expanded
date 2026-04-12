@@ -5,6 +5,7 @@ using StarLevelSystem.modules;
 using StarLevelSystem.modules.Damage;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
 
@@ -25,7 +26,7 @@ namespace StarLevelSystem.Modifiers {
                 if (mods == null) { return; }
                 if (mods.Keys.Contains(ModifierNames.ElementalChaos.ToString())) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.ElementalChaos.ToString(), mods[ModifierNames.ElementalChaos.ToString()]);
-                    float value = cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level);
+                    float value = Mathf.Clamp(cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level), 0, 500f);
                     DamageType dmgT = RandomSelectDamageType();
                     Logger.LogDebug($"Elemental Chaos adding {dmgT} modifier {value}");
                     DamageModifications.AddDamagesToHit(hit, new Dictionary<DamageType, float>() { { dmgT, value } });

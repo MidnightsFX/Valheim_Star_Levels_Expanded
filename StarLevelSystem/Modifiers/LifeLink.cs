@@ -20,12 +20,11 @@ namespace StarLevelSystem.Modifiers
                 if (mods != null && mods.ContainsKey(ModifierNames.LifeLink.ToString())) {
                     //Logger.LogDebug($"Lifelink triggered for {__instance.name}");
                     CreatureModifierConfiguration cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink.ToString(), mods[ModifierNames.LifeLink.ToString()]);
-                    float damage_reduction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower* __instance.m_level));
-                    if (damage_reduction < 0) { damage_reduction = 0f; }
+                    float damage_reduction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower * __instance.m_level));
+                    damage_reduction = Mathf.Clamp(damage_reduction, 0.1f, 1f);
 
                     HitData transferHit = new HitData() { m_attacker = hit.m_attacker, m_damage = hit.m_damage };
-                    transferHit.m_damage.Modify(1 - damage_reduction);
-
+                    
                     // Minimum damage to transfer is 20
                     if (transferHit.GetTotalDamageOptions() < 20f) {
                         return;
@@ -35,6 +34,8 @@ namespace StarLevelSystem.Modifiers
                     if (Time.realtimeSinceStartup < NextAllowedRedirection) {
                         return;
                     }
+
+                    transferHit.m_damage.Modify(damage_reduction);
                     NextAllowedRedirection = Time.realtimeSinceStartup + 1f;
 
                     List<Character> CharactersNearby = SLSExtensions.GetCharactersInRange(__instance.transform.position, 15f);

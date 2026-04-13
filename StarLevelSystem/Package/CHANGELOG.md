@@ -1,3 +1,10 @@
+**0.18.11**
+ ---
+ ```
+- Fix for the `sls-kill-all` command to behave closer to vanilla
+- Fix for infinitely high HP creatures not being killable
+ ```
+
 **0.18.10**
  ---
  ```

@@ -50,7 +50,7 @@ namespace StarLevelSystem.common
                         GameObject.Destroy(cdrop);
                     }
                     if (chara != null) {
-                        GameObject.Destroy(chara.gameObject);
+                        ZNet.Destroy(chara.gameObject);
                     }
                 }
             }

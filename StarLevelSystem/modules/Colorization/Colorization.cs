@@ -244,18 +244,6 @@ namespace StarLevelSystem.modules
         //    Logger.LogInfo(YamlDefaultConfig());
         //}
 
-
-        internal static void StarLevelScaleChanged(object s, EventArgs e) {
-            // This might need to be async
-            foreach(var chara in Resources.FindObjectsOfTypeAll<Character>()) {
-                chara.transform.localScale = Vector3.one;
-                float scale = 1+ (ValConfig.PerLevelScaleBonus.Value * (chara.m_level -1 ));
-                Logger.LogDebug($"Setting {chara.name} size {scale}.");
-                chara.transform.localScale *= scale;
-            }
-            Physics.SyncTransforms();
-        }
-
         internal static ColorDef GetDefaultColorization(int level) {
             if (creatureColorizationSettings.defaultLevelColorization.ContainsKey(level)) {
                 return creatureColorizationSettings.defaultLevelColorization[level];

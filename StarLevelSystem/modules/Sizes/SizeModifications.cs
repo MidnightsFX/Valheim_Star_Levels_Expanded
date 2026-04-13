@@ -83,5 +83,17 @@ namespace StarLevelSystem.modules.Sizes {
             CapsuleCollider askcc = go.GetComponent<CapsuleCollider>();
             askcc.radius = 0.842f;
         }
+
+        internal static void StarLevelScaleChanged(object s, EventArgs e) {
+            // This might need to be async
+            Logger.LogInfo($"Updating size scale: {ValConfig.PerLevelScaleBonus.Value}");
+            foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
+                chara.transform.localScale = Vector3.one;
+                float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * (chara.m_level - 1));
+                //Logger.LogDebug($"Setting {chara.name} size {scale}.");
+                chara.transform.localScale *= scale;
+            }
+            Physics.SyncTransforms();
+        }
     }
 }

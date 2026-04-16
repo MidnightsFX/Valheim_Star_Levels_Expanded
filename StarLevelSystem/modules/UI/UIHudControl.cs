@@ -16,10 +16,8 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.UI {
     internal static class UIHudControl {
         public class StarLevelHud {
-            public bool IsBoss {
-                get; set;
-            }
-
+            public bool IsBoss { get; set; }
+            public string CreatureNameLocalized { get; set; }
             public int Level { get; set; } = 1;
 
             public List<string> DisplayedMods { get; set; } = new List<string>();
@@ -57,6 +55,7 @@ namespace StarLevelSystem.modules.UI {
 
         internal static void RemoveExtendedHudFromCache(uint id) {
             if (characterExtendedHuds.ContainsKey(id)) {
+                //Logger.LogDebug($"Removing extended hud from cache for {id}");
                 if (characterExtendedHuds[id].HealthText != null) {
                     GameObject.Destroy(characterExtendedHuds[id].HealthText.gameObject);
                 }
@@ -70,6 +69,7 @@ namespace StarLevelSystem.modules.UI {
 
             if (characterExtendedHuds.ContainsKey(id)) {
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
+                Logger.LogDebug($"Invalidating cache entry for {id} - lvl:{cce.Level} name:{cce.CreatureNameLocalizable}");
                 StarLevelHud exthud = characterExtendedHuds[id];
                 cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
@@ -77,7 +77,6 @@ namespace StarLevelSystem.modules.UI {
                 cce.CreatureModifiers = mods;
 
                 UpdateHudModifiers(id, exthud, mods);
-                exthud.Hudlink.m_name.text = Localization.instance.Localize(cce.CreatureNameLocalizable);
                 if (cce == null || cce.CreatureNameLocalizable == null) { return; }
             }
         }
@@ -240,10 +239,10 @@ namespace StarLevelSystem.modules.UI {
                     return;
                 }
 
-                // Mod count check here could be replaced by a Z request to refresh the cache by the controlling player
                 List<string> cmods = mods.Keys.ToList();
-                if (cmods.CompareListContents(mods.Keys.ToList()) == false) {
-                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count}), updating cache.");
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
+                if (cmods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || cce.Level != extended_hud.Level || extended_hud.Hudlink.m_name.text != extended_hud.CreatureNameLocalized) {
+                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.Hudlink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     InvalidateCacheEntry(ehud.m_character);
                     
@@ -253,13 +252,15 @@ namespace StarLevelSystem.modules.UI {
                     return;
                 }
 
+                extended_hud.Hudlink.m_name.text = extended_hud.CreatureNameLocalized;
+
                 if (ValConfig.EnableEnemyHeathbarNumberDisplay.Value && extended_hud.HealthText != null) {
                     extended_hud.HealthText.text = $"{ehud.m_character.GetHealth():N0}/{ehud.m_character.GetMaxHealth():N0}";
                 }
             } else {
                 extended_hud.Hudlink = ehud;
                 // if (mods == null) { return; }
-                //Logger.LogDebug($"Creating new hud for {czoid} with level {level} and modifiers {ccd.Modifiers.Count()}");
+                Logger.LogDebug($"Creating new hud for {ehud.m_character} with level {level}");
 
                 extended_hud.IsBoss = ehud.m_character.IsBoss();
 
@@ -291,12 +292,10 @@ namespace StarLevelSystem.modules.UI {
                 }
 
                 UpdateHudModifiers(czid, extended_hud, mods);
-
                 // Need to find and add the N level text for updating here
                 characterExtendedHuds.Add(czid, extended_hud);
             }
             // Show the creatures health value
-
 
             // Set star level, this can change if the characters level gets modified
             switch (level) {
@@ -360,7 +359,19 @@ namespace StarLevelSystem.modules.UI {
                 RemoveExtendedHudFromCache(zdid);
                 return;
             }
-            
+
+            CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(extended_hud.Hudlink.m_character);
+            if (cce != null) {
+                if (cce.CreatureModifiers == null || cce.CreatureModifiers.Keys.ToList().CompareListContents(mods.Keys.ToList()) == false) {
+                    //Logger.LogDebug($"Creature cache is outdated for {zdid}-{cce.RefCreatureName}-{cce.Level}");
+                    CompositeLazyCache.ClearCachedCreature(extended_hud.Hudlink.m_character);
+                    cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.Hudlink.m_character);
+                }
+                //Logger.LogDebug($"Updating hud Name for {zdid} with modifiers {string.Join(", ", mods.Keys)}");
+                extended_hud.CreatureNameLocalized = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                extended_hud.Hudlink.m_name.text = extended_hud.CreatureNameLocalized;
+            }
+
             Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
             int star = 2;
             if (mods == null) { mods = new Dictionary<string, ModifierType>(); }

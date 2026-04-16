@@ -137,6 +137,7 @@ namespace StarLevelSystem.Data
             characterEntry.ModifiersNotAllowed = notAllowedModifiers;
             characterEntry.ModifiersRequired = requiredModifiers;
 
+            characterEntry.CreatureModifiers = GetCreatureModifiers(character);
             // Check for level or set it
             //Logger.LogDebug("Setting creature level");
             characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, leveloverride);
@@ -211,8 +212,6 @@ namespace StarLevelSystem.Data
                 chara.SetLevel(characterEntry.Level);
             }
 
-            // Set or load creature modifiers
-            characterEntry.CreatureModifiers = GetCreatureModifiers(chara);
             //Logger.LogDebug($"Checking stored mods {characterEntry.CreatureModifiers.Count}");
             //if (characterEntry.CreatureModifiers.Count > 0) {
             //    Logger.LogDebug($"  Stored mods {characterEntry.CreatureModifiers.Keys}");

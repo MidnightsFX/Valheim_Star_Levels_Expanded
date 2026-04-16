@@ -678,9 +678,9 @@ namespace StarLevelSystem.Data
                     { 4, new ColorDef() { hue = 0f, saturation = -0.1f, value = 0.15f }},
                     { 5, new ColorDef() { hue = 0f, saturation = -0.1f, value = 0.25f }},
                     { 6, new ColorDef() { hue = 0f, saturation = 0.2f, value = 0.25f }},
-                    { 7, new ColorDef() { hue = 0.6f, saturation = 0.2f, value = 0.25f }},
-                    { 8, new ColorDef() { hue = 0.6f, saturation = 0.5f, value = 0.25f }},
-                    { 9, new ColorDef() { hue = 0.45f, saturation = 0.5f, value = 0.3f }},
+                    { 7, new ColorDef() { hue = 0.5f, saturation = 0.2f, value = 0.1f }},
+                    { 8, new ColorDef() { hue = 0.6f, saturation = 0.3f, value = 0f }},
+                    { 9, new ColorDef() { hue = 0.3f, saturation = 0.3f, value = -0.1f }},
                     { 10, new ColorDef() { hue = 0.9f, saturation = 0.3f, value = -0.4f }}
                 }},
                 {"Charred_Melee", new Dictionary<int, ColorDef>() {

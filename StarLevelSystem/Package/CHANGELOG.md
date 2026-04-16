@@ -1,3 +1,10 @@
+**0.18.12**
+ ---
+ ```
+- Updated default colorization for FallenValkyrie level 7-10 to be darker and less bright
+- HUDS not showing creature modifiers in the creature name when being regenerated after moving out of range and back
+ ```
+
 **0.18.11**
  ---
  ```

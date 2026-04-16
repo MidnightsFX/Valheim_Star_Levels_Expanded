@@ -304,7 +304,7 @@ Star Levels Systems modifiers are designed to be extremely flexible, both in con
 There are however a number of modifiers and it can be a bit unclear what each does. So to start off here is a table of all current modifiers and how they work.
 
 Modifiers are split into three categories. `Boss`, `Major`, and `Minor`. Which allows customization into the random selection process for modifiers, 
-along with seperate tuning for modifiers that appear on bosses vs minor creatures.
+along with separate tuning for modifiers that appear on bosses vs minor creatures.
 
 #### Boss Modifiers
 These modifiers are by default only available on bosses.
@@ -396,7 +396,7 @@ Once you are ready to install mods, they must be unzipped first and go into the 
 - Download and install [Yaml.net](https://thunderstore.io/c/valheim/p/ValheimModding/YamlDotNet/) and [Jotunn](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/)
 - Download this mod and install it!
 
-## Comptabilities
+## Compatibility
 - This mod is incompatible with Creature Level and Loot Control (they do the same things)
 
 Compatibility is being worked on for the following mods:

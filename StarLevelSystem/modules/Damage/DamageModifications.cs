@@ -16,13 +16,11 @@ namespace StarLevelSystem.modules.Damage {
 
         internal static void ApplyDamageModification(Character creature, CharacterCacheEntry cDetails, bool updateCache = false) {
             if (creature.m_nview == null || cDetails == null) { return; }
-            float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
-            float base_dmg_mod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];
+            //float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+            float dmgmod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];
 
             // No changes, do nothing
-            if (base_dmg_mod == 1 && per_level_mod == 0) { return; }
-            int level = creature.GetLevel() - 1;
-            float dmgmod = base_dmg_mod + (per_level_mod * level);
+            if (dmgmod == 1) { return; }
 
             DictionaryDmgNetProperty DamageBonuses = new DictionaryDmgNetProperty(SLS_DAMAGE_BONUSES, creature.m_nview, new Dictionary<DamageType, float>());
             Dictionary<DamageType, float> dmgBonuses = DamageBonuses.Get();
@@ -30,7 +28,7 @@ namespace StarLevelSystem.modules.Damage {
                 DamageBonuses.Set(cDetails.CreatureDamageBonus);
             }
             creature.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, dmgmod);
-            Logger.LogDebug($"Built damage buffs for {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)} *{dmgmod} [ base-{base_dmg_mod} + ({per_level_mod} * {level}) ]");
+            Logger.LogDebug($"Built damage buffs for {creature.name} +{string.Join(",", cDetails.CreatureDamageBonus)} *{dmgmod}");
         }
 
         internal static void ApplyDamageModifiers(HitData hit, Character chara, Dictionary<DamageType, float> damageMods) {

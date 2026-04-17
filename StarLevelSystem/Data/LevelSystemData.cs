@@ -3,6 +3,7 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
@@ -340,6 +341,7 @@ namespace StarLevelSystem.Data
                 Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
                 DistanceScaleSystem.DelayedMinimapSetup();
                 CompositeLazyCache.FlushCache();
+                TaskRunner.Run().StartCoroutine(UpdateCreatureAttributes(new List<Character>(Resources.FindObjectsOfTypeAll<Character>())));
             }
             catch (Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");
@@ -356,15 +358,8 @@ namespace StarLevelSystem.Data
                     yield return sleep;
                     i = 0;
                 }
-                if (character.m_level <= 1) { continue; }
-                CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(character);
-                if (ccd == null) { continue; }
-                // Modify the creatures stats by custom character/biome modifications
-                SpeedModifications.ApplySpeedModifications(character, ccd);
-                DamageModifications.ApplyDamageModification(character, ccd, true);
-                SizeModifications.ApplySizeModifications(character.gameObject, ccd, true);
-                HealthModifications.ApplyHealthModifications(character, ccd);
-
+                if (character == null || character.m_nview == null || character.m_nview.IsValid() == false) { continue; }
+                CreatureSetupControl.CreatureSetupNoDelay(character);
                 i++;
             }
         }

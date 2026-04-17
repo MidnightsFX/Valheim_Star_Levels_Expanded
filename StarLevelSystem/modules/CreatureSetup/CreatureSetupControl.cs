@@ -97,6 +97,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
         }
 
         internal static void CreatureSetupNoDelay(Character __instance) {
+            if (__instance == null) { return; }
             CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(__instance);
             CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cce);
             cce = CompositeLazyCache.GetCacheEntry(__instance); // refresh after running zsetup

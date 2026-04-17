@@ -1,3 +1,12 @@
+**0.18.13**
+ ---
+ ```
+- Level damage adjustment for custom damage per level settings now properly accounts for 0 stars and does not double count for higher stars
+- Reduced logging for HUD changes
+- Base damage modifiers are now included in logged calculations if you have DamageLogging enabled
+- Improves cache rebuild when levelsettings.yaml is changed
+ ```
+
 **0.18.12**
  ---
  ```

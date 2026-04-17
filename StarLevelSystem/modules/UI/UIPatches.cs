@@ -58,7 +58,8 @@ namespace StarLevelSystem.modules.UI {
 
         [HarmonyPatch(typeof(EnemyHud))]
         public static class SetupCreatureLevelDisplay {
-            // [HarmonyDebug]
+            //[HarmonyDebug]
+            //[HarmonyEmitIL(".dump")]
             [HarmonyTranspiler]
             [HarmonyPatch(nameof(EnemyHud.UpdateHuds))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {

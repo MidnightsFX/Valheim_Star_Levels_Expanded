@@ -16,34 +16,54 @@ namespace StarLevelSystem.modules.Damage {
         public static class ModifyDamagePerLevel {
             public static bool Prefix(Attack __instance, ref float __result) {
                 __result = DetermineDamageFactor(__instance.m_character);
-                __result *= __instance.m_character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
                 return false;
             }
 
             private static float DetermineDamageFactor(Character character) {
                 if (character.IsPlayer()) { return 1f; } // Players are not leveled, so return 1
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(character);
-                int level = Mathf.Max(0, Mathf.Max(character.GetLevel(), 1) - 1);
-                float result;
+                int level = Mathf.Max(0, character.GetLevel() - 1);
+                float result = 1f;
                 if (character.IsBoss()) {
                     if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
-                        result = level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
+                        result += (level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel]);
                     } else {
-                        result = 1f + level * ValConfig.BossEnemyDamageMultiplier.Value;
+                        result += (level * ValConfig.BossEnemyDamageMultiplier.Value);
                     }
                 } else {
                     if (cce != null && cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel] != 0) {
-                        result = (level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel]);
+                        result += (level * cce.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel]);
                     } else {
-                        result = 1f + (level * ValConfig.EnemyDamageLevelMultiplier.Value);
+                        result += (level * ValConfig.EnemyDamageLevelMultiplier.Value);
                     }
                 }
+                float dmgMod = character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
+
                 if (ValConfig.EnableDebugOutputForDamage.Value) {
-                    Logger.LogDebug($"Setting {character.name} lvl {level} dmg factor to {result}");
+                    Logger.LogDebug($"Setting {character.name} lvl {level} dmg factor to {result} * {dmgMod} = {result * dmgMod}");
                 }
+                result *= dmgMod;
                 return result;
             }
         }
+
+        //// For debugging full details on damage calculations
+        //[HarmonyPatch(typeof(Attack), nameof(Attack.ModifyDamage))]
+        //public static class ModifyDamagePrefix {
+        //    private static void Prefix(HitData hitData) {
+        //        if (ValConfig.EnableDebugOutputForDamage.Value == false) { return; }
+        //        Logger.LogDebug($"Before Damage modification: D:{hitData.m_damage.m_damage} fi:{hitData.m_damage.m_fire} fr:{hitData.m_damage.m_frost} s:{hitData.m_damage.m_spirit} po:{hitData.m_damage.m_poison} b:{hitData.m_damage.m_blunt} p:{hitData.m_damage.m_pierce} s:{hitData.m_damage.m_slash}");
+        //    }
+        //}
+
+        //// For debugging full details on damage calculations
+        //[HarmonyPatch(typeof(Attack), nameof(Attack.ModifyDamage))]
+        //public static class ModifyDamagePostfix {
+        //    private static void Postfix(HitData hitData) {
+        //        if (ValConfig.EnableDebugOutputForDamage.Value == false) { return; }
+        //        Logger.LogDebug($"After Damage modification: D:{hitData.m_damage.m_damage} fi:{hitData.m_damage.m_fire} fr:{hitData.m_damage.m_frost} s:{hitData.m_damage.m_spirit} po:{hitData.m_damage.m_poison} b:{hitData.m_damage.m_blunt} p:{hitData.m_damage.m_pierce} s:{hitData.m_damage.m_slash}");
+        //    }
+        //}
 
         // For debugging full details on damage calculations
         [HarmonyPatch(typeof(Character), nameof(Character.ApplyDamage))]

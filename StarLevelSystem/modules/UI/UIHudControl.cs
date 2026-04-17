@@ -5,6 +5,7 @@ using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -69,7 +70,7 @@ namespace StarLevelSystem.modules.UI {
 
             if (characterExtendedHuds.ContainsKey(id)) {
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
-                Logger.LogDebug($"Invalidating cache entry for {id} - lvl:{cce.Level} name:{cce.CreatureNameLocalizable}");
+                //Logger.LogDebug($"Invalidating cache entry for {id} - lvl:{cce.Level} name:{cce.CreatureNameLocalizable}");
                 StarLevelHud exthud = characterExtendedHuds[id];
                 cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
@@ -241,7 +242,7 @@ namespace StarLevelSystem.modules.UI {
 
                 List<string> cmods = mods.Keys.ToList();
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
-                if (cmods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || cce.Level != extended_hud.Level || extended_hud.Hudlink.m_name.text != extended_hud.CreatureNameLocalized) {
+                if (cmods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || cce.Level != extended_hud.Level) {
                     Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.Hudlink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     InvalidateCacheEntry(ehud.m_character);
@@ -368,7 +369,7 @@ namespace StarLevelSystem.modules.UI {
                     cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.Hudlink.m_character);
                 }
                 //Logger.LogDebug($"Updating hud Name for {zdid} with modifiers {string.Join(", ", mods.Keys)}");
-                extended_hud.CreatureNameLocalized = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                extended_hud.CreatureNameLocalized = extended_hud.Hudlink.m_character.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, Localization.instance.Localize(cce.CreatureNameLocalizable));
                 extended_hud.Hudlink.m_name.text = extended_hud.CreatureNameLocalized;
             }
 

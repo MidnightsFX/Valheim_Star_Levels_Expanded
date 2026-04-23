@@ -77,6 +77,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableColorization;
         public static ConfigEntry<bool> EnableRockLevels;
         public static ConfigEntry<bool> EnableRidableCreatureSizeFixes;
+        public static ConfigEntry<bool> MultipliedNightSpawnsRemovedDuringDay;
 
         public static ConfigEntry<float> PerLevelTreeLootScale;
         public static ConfigEntry<float> PerLevelBirdLootScale;
@@ -123,6 +124,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> HealthDisplayFontSizeAdjustment;
 
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
+        public static ConfigEntry<bool> OverrideCreatureModifiedHealth;
 
         public ValConfig(ConfigFile cf)
         {
@@ -193,6 +195,7 @@ namespace StarLevelSystem
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
             EnableRidableCreatureSizeFixes = BindServerConfig("LevelSystem", "EnableRidableCreatureSizeFixes", true, "Enables collider fixes for ridable creatures (lox and Askavin).");
+            MultipliedNightSpawnsRemovedDuringDay = BindServerConfig("LevelSystem", "MultipliedNightSpawnsRemovedDuringDay", true, "When true, night spawns will be flagged to despawn during the day, which will result in them running away and despawning. This can be disabled if desired.");
 
             EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             EnableScalingBirds.SettingChanged += UpdateLevelsOnChange.UpdateBirdSizeOnConfigChange;
@@ -272,6 +275,7 @@ namespace StarLevelSystem
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
+            OverrideCreatureModifiedHealth = BindServerConfig("ModCompat", "OverrideCreatureModifiedHealth", false, "When enabled, will always set creatures health based on the SLS settings for the creature. This overrides other mods changes to creatures.");
         }
 
         internal static void RecievedServerUpdates() {

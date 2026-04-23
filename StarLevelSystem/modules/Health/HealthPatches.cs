@@ -28,5 +28,14 @@ namespace StarLevelSystem.modules.Health {
                 return true; // Continue with original method
             }
         }
+
+        //[HarmonyPatch(typeof(Character), nameof(Character.SetMaxHealth))]
+        //public static class CharacterSetMaxHealth {
+        //    private static void Postfix(Character __instance, float health) {
+        //        // Skip if this is the player, as the player constantly has its max health updated to reflect the active state of used food
+        //        if (__instance.IsPlayer()) { return; }
+        //        Logger.LogDebug($"SetMaxHealth called on {__instance.name} with value: {health}");
+        //    }
+        //}
     }
 }

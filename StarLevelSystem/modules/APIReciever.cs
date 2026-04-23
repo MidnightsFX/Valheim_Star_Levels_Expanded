@@ -67,7 +67,7 @@ namespace StarLevelSystem.modules
             SpeedModifications.ApplySpeedModifications(chara, scd);
             DamageModifications.ApplyDamageModification(chara, scd);
             SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
-            HealthModifications.ApplyHealthModifications(chara, scd);
+            HealthModifications.ForceApplyHealthModifications(chara, scd);
             return true;
         }
 
@@ -110,7 +110,7 @@ namespace StarLevelSystem.modules
             SpeedModifications.ApplySpeedModifications(chara, scd);
             DamageModifications.ApplyDamageModification(chara, scd);
             SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
-            HealthModifications.ApplyHealthModifications(chara, scd);
+            HealthModifications.ForceApplyHealthModifications(chara, scd);
             return true;
         }
 
@@ -202,7 +202,7 @@ namespace StarLevelSystem.modules
             SpeedModifications.ApplySpeedModifications(chara, cdc);
             DamageModifications.ApplyDamageModification(chara, cdc);
             SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
-            HealthModifications.ApplyHealthModifications(chara, cdc);
+            HealthModifications.ForceApplyHealthModifications(chara, cdc);
             return true;
         }
 

@@ -198,7 +198,7 @@ namespace StarLevelSystem.Modifiers.Control
             {
                 creatureName += $" $suffix_moniker {string.Join(" ", suffix_names)}";
             }
-            Logger.LogDebug($"Setting creature name for {chara.name} to {creatureName}");
+            // Logger.LogDebug($"Setting creature name for {chara.name} to {creatureName}");
             return creatureName;
 
         }
@@ -386,7 +386,7 @@ namespace StarLevelSystem.Modifiers.Control
                 SpeedModifications.ApplySpeedModifications(character, scd);
                 DamageModifications.ApplyDamageModification(character, scd);
                 SizeModifications.ApplySizeModifications(character.gameObject, scd, true);
-                HealthModifications.ApplyHealthModifications(character, scd);
+                HealthModifications.ForceApplyHealthModifications(character, scd);
                 return true;
             }
 

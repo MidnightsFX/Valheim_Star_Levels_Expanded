@@ -49,6 +49,14 @@ namespace StarLevelSystem.modules
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         CreatureSetupControl.CreatureSetup(spawnedChara, multiply: false);
                         spawnedChara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+
+                        // Creatures spawn multiplied as part of the night time spawn modifier will despawn during the day, if enabled in the config
+                        if (ValConfig.MultipliedNightSpawnsRemovedDuringDay.Value && EnvMan.IsNight()) {
+                            MonsterAI mai = spawnedChara.GetComponent<MonsterAI>();
+                            if (mai != null) {
+                                mai.SetDespawnInDay(true);
+                            }
+                        }
                     }
                     spawnrate -= 1f;
                 }

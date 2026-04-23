@@ -353,6 +353,7 @@ namespace StarLevelSystem.Data
         internal static IEnumerator UpdateCreatureAttributes(List<Character> characters) {
             int i = 0;
             WaitForSeconds sleep = new WaitForSeconds(0.1f);
+            HealthModifications.ForceUpdateHealth = true;
             foreach (var character in characters) {
                 if (i >= ValConfig.NumberOfCacheUpdatesPerFrame.Value) {
                     yield return sleep;
@@ -362,6 +363,7 @@ namespace StarLevelSystem.Data
                 CreatureSetupControl.CreatureSetupNoDelay(character);
                 i++;
             }
+            HealthModifications.ForceUpdateHealth = false;
         }
     }
 }

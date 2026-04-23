@@ -1,3 +1,11 @@
+**0.19.0**
+ ---
+ ```
+- Adds health modification change detection
+- Improves creature health change application on configuration changes
+- Night multiplied spawns can be configured to despawn during the day (default true)
+ ```
+
 **0.18.13**
  ---
  ```

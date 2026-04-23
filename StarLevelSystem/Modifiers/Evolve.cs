@@ -39,7 +39,7 @@ namespace StarLevelSystem.Modifiers {
                         SpeedModifications.ApplySpeedModifications(chara, scd);
                         DamageModifications.ApplyDamageModification(chara, scd);
                         SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
-                        HealthModifications.ApplyHealthModifications(chara, scd);
+                        HealthModifications.ForceApplyHealthModifications(chara, scd);
                         chara.Heal(chara.GetMaxHealth() * 5f);
                         Logger.LogDebug($"Evolve: {chara} level: {level} -> {level + 1}");
                     }

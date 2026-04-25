@@ -8,6 +8,7 @@ using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.UI;
 using System.Linq;
 using System.Reflection;
@@ -49,6 +50,7 @@ namespace StarLevelSystem
             LevelSystemData.Init();
             LootSystemData.Init();
             CreatureModifiersData.Init();
+            RaidsData.Init();
             LocalizationLoader.AddLocalizations();
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
             PrefabManager.OnVanillaPrefabsAvailable += UpdateLevelsOnChange.UpdateFishmaxLevel;

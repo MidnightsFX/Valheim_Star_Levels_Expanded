@@ -412,6 +412,133 @@ namespace StarLevelSystem.common
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
+        public class RaidConfiguration {
+            public GlobalRaidSettings GlobalSettings { get; set; } = new GlobalRaidSettings();
+            public Dictionary<string, RaidDefinition> Raids { get; set; } = new Dictionary<string, RaidDefinition>();
+        }
+
+        public class GlobalRaidSettings {
+            [DefaultValue(false)]
+            public bool DisableAllRaids { get; set; } = false;
+            [DefaultValue(false)]
+            public bool PlayerBasedRaids { get; set; } = false;
+            [DefaultValue(1f)]
+            public float PlayerBasedRaidsCoolDownScalar { get; set; } = 1f;
+            [DefaultValue(1f)]
+            public float GlobalRaidIntervalScalar { get; set; } = 1f;
+            [DefaultValue(1f)]
+            public float GlobalRaidChanceScalar { get; set; } = 1f;
+        }
+
+        public class RaidDefinition {
+            [DefaultValue(true)]
+            public bool Enabled { get; set; } = true;
+            [DefaultValue(60f)]
+            public float Duration { get; set; } = 60f;
+            public RaidActivation Activation { get; set; } = new RaidActivation();
+            public List<RaidSpawnEntry> Spawns { get; set; } = new List<RaidSpawnEntry>();
+            [DefaultValue(-1)]
+            public int MaxLevelOverride { get; set; } = -1;
+            public Dictionary<string, ModifierType> RequiredModifiers { get; set; }
+            public List<string> ModifiersNotAllowed { get; set; }
+            [DefaultValue(0f)]
+            public float SpawnerDelay { get; set; } = 0f;
+            [DefaultValue(96f)]
+            public float EventRange { get; set; } = 96f;
+            [DefaultValue("")]
+            public string StartMessage { get; set; } = "";
+            [DefaultValue("")]
+            public string EndMessage { get; set; } = "";
+            [DefaultValue("")]
+            public string ForceEnvironment { get; set; } = "";
+            [DefaultValue("")]
+            public string ForceMusic { get; set; } = "";
+            [DefaultValue(true)]
+            public bool IsRandom { get; set; } = true;
+
+            public RandomEvent ToRaid(string Name, Vector3 position) {
+               RandomEvent raid = new RandomEvent();
+                raid.m_name = Name;
+                raid.m_duration = Duration;
+                if (Activation != null) {
+                    if (Activation.RequiredGlobalKeys != null) {
+                        raid.m_requiredGlobalKeys = Activation.RequiredGlobalKeys;
+                    }
+                    if (Activation.NotRequiredGlobalKeys != null) {
+                        raid.m_notRequiredGlobalKeys = Activation.NotRequiredGlobalKeys;
+                    }
+                    if (Activation.RequiredPlayerKeys != null) {
+                        raid.m_altRequiredPlayerKeysAll = Activation.RequiredPlayerKeys;
+                    }
+                    if (Activation.NotRequiredPlayerKeys != null) {
+                        raid.m_altNotRequiredPlayerKeys = Activation.NotRequiredPlayerKeys;
+                    }
+                    if (Activation.AnyRequiredPlayerKeys != null) {
+                        raid.m_altRequiredPlayerKeysAny = Activation.AnyRequiredPlayerKeys;
+                    }
+
+                    raid.m_standaloneChance = Activation.StandaloneChance;
+                    raid.m_standaloneInterval = Activation.StandaloneInterval;
+                    raid.m_pauseIfNoPlayerInArea = Activation.PauseIfNoPlayerInArea;
+                    raid.m_nearBaseOnly = Activation.NearBaseOnly;
+                }
+                raid.m_spawnerDelay = SpawnerDelay;
+                raid.m_eventRange = EventRange;
+                raid.m_startMessage = Localization.instance.Localize(StartMessage);
+                raid.m_endMessage = Localization.instance.Localize(EndMessage);
+                raid.m_forceEnvironment = ForceEnvironment;
+                raid.m_biome = Heightmap.FindBiome(position);
+                raid.m_forceMusic = ForceMusic;
+                raid.m_random = IsRandom;
+                raid.m_time = 0; // This is used to track event times
+
+                return raid;
+            }
+        }
+
+        public class RaidActivation {
+            public List<Heightmap.Biome> Biomes { get; set; }
+            [DefaultValue(true)]
+            public bool NearBaseOnly { get; set; } = true;
+            [DefaultValue(true)]
+            public bool PauseIfNoPlayerInArea { get; set; } = true;
+            [DefaultValue(100f)]
+            public float StandaloneChance { get; set; } = 100f;
+            [DefaultValue(100f)]
+            public float StandaloneInterval { get; set; } = 100f;
+            public List<string> RequiredGlobalKeys { get; set; }
+            public List<string> NotRequiredGlobalKeys { get; set; }
+            public List<string> RequiredPlayerKeys { get; set; }
+            public List<string> NotRequiredPlayerKeys { get; set; }
+            public List<string> AnyRequiredPlayerKeys { get; set; }
+        }
+
+        public class RaidSpawnEntry {
+            public string PrefabName { get; set; }
+            [DefaultValue(10f)]
+            public float SpawnInterval { get; set; } = 10f;
+            [DefaultValue(100f)]
+            public float SpawnChance { get; set; } = 100f;
+            [DefaultValue(0)]
+            public int MaxSpawned { get; set; } = 0;
+            [DefaultValue(1)]
+            public int LevelMin { get; set; } = 1;
+            public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;
+            public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+            [DefaultValue(30f)]
+            public float SpawnDistance { get; set; } = 30f;
+            [DefaultValue(15f)]
+            public float SpawnRadiusMin { get; set; } = 15f;
+            [DefaultValue(30f)]
+            public float SpawnRadiusMax { get; set; } = 30f;
+            [DefaultValue(1)]
+            public int GroupSizeMin { get; set; } = 1;
+            [DefaultValue(1)]
+            public int GroupSizeMax { get; set; } = 1;
+            [DefaultValue(3f)]
+            public float GroupRadius { get; set; } = 3f;
+        }
+
         [Serializable]
         public class CharacterCacheEntry
         {

@@ -20,11 +20,13 @@ namespace StarLevelSystem
         internal const string ColorSettingsFileName = "ColorSettings.yaml";
         internal const string LootSettingsFileName = "LootSettings.yaml";
         internal const string ModifiersFileName = "Modifiers.yaml";
+        internal const string RaidSettingsFileName = "RaidSettings.yaml";
         internal const string StarLevelSystem = "StarLevelSystem";
         internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LevelSettingsFileName);
         internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ColorSettingsFileName);
         internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LootSettingsFileName);
         internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
+        internal static String raidsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, RaidSettingsFileName);
 
         internal static bool RecievedConfigsFromServer = false;
 
@@ -32,6 +34,7 @@ namespace StarLevelSystem
         private static CustomRPC ColorSettingsRPC;
         private static CustomRPC CreatureLootSettingsRPC;
         private static CustomRPC ModifiersRPC;
+        private static CustomRPC RaidsRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -126,6 +129,8 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
         public static ConfigEntry<bool> OverrideCreatureModifiedHealth;
 
+        public static ConfigEntry<bool> UseVanillaRaidConfiguration;
+
         public ValConfig(ConfigFile cf)
         {
             // ensure all the config values are created
@@ -139,11 +144,13 @@ namespace StarLevelSystem
             ColorSettingsRPC = NetworkManager.Instance.AddRPC("SLS_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
             CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
             ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
+            RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerRecieveConfigs, OnClientReceiveRaidConfigs);
 
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(CreatureLootSettingsRPC, SendCreatureLootConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
+            SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -248,6 +255,8 @@ namespace StarLevelSystem
             OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
             OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f,1f);
 
+            UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
+
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
@@ -276,6 +285,8 @@ namespace StarLevelSystem
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
             OverrideCreatureModifiedHealth = BindServerConfig("ModCompat", "OverrideCreatureModifiedHealth", false, "When enabled, will always set creatures health based on the SLS settings for the creature. This overrides other mods changes to creatures.");
+
+
         }
 
         internal static void RecievedServerUpdates() {
@@ -290,6 +301,7 @@ namespace StarLevelSystem
             bool foundColorFile = false;
             bool foundLootFile = false;
             bool foundModifierFile = false;
+            bool foundRaidFile = false;
 
             foreach (string configFile in presentFiles) {
                 if (configFile.Contains(LevelSettingsFileName))
@@ -317,6 +329,12 @@ namespace StarLevelSystem
                     Logger.LogDebug($"Found modifier configuration: {configFile}");
                     creatureModifierFilePath = configFile;
                     foundModifierFile = true;
+                }
+                if (configFile.Contains(RaidSettingsFileName))
+                {
+                    Logger.LogDebug($"Found raid configuration: {configFile}");
+                    raidsFilePath = configFile;
+                    foundRaidFile = true;
                 }
             }
 
@@ -373,10 +391,24 @@ namespace StarLevelSystem
                 }
             }
 
+            if (foundRaidFile == false)
+            {
+                Logger.LogDebug("Raid config file missing, recreating.");
+                using (StreamWriter writetext = new StreamWriter(raidsFilePath)) {
+                    String header = @"#################################################
+# Star Level System Expanded - Raid Settings
+#################################################
+";
+                    writetext.WriteLine(header);
+                    writetext.WriteLine(RaidsData.YamlDefaultConfig());
+                }
+            }
+
             SetupFileWatcher(ColorSettingsFileName);
             SetupFileWatcher(LevelSettingsFileName);
             SetupFileWatcher(ModifiersFileName);
             SetupFileWatcher($"*{LootSettingsFileName}");
+            SetupFileWatcher(RaidSettingsFileName);
         }
 
         private void SetupFileWatcher(string filtername)
@@ -425,6 +457,11 @@ namespace StarLevelSystem
                     CreatureModifiersData.UpdateModifierConfig(filetext);
                     ModifiersRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
                     break;
+                case RaidSettingsFileName:
+                    Logger.LogDebug("Triggering Raid Settings update.");
+                    RaidsData.UpdateYamlConfig(filetext);
+                    RaidsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
+                    break;
             }
         }
 
@@ -452,6 +489,11 @@ namespace StarLevelSystem
         private static ZPackage SendModifierConfigs()
         {
             return SendFileAsZPackage(creatureModifierFilePath);
+        }
+
+        private static ZPackage SendRaidConfigs()
+        {
+            return SendFileAsZPackage(raidsFilePath);
         }
 
         public static IEnumerator OnServerRecieveConfigs(long sender, ZPackage package)
@@ -490,6 +532,14 @@ namespace StarLevelSystem
             CreatureModifiersData.UpdateModifierConfig(yaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveRaidConfigs(long sender, ZPackage package)
+        {
+            var yaml = package.ReadString();
+            RaidsData.UpdateYamlConfig(yaml);
+
             yield return null;
         }
 

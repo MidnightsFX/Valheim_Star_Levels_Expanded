@@ -138,6 +138,9 @@ _TeamCity*
 # DotCover is a Code Coverage Tool
 *.dotCover
 
+# Please do not include AI settings in PRs
+.claude*
+
 # AxoCover is a Code Coverage Tool
 .axoCover/*
 !.axoCover/settings.json

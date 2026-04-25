@@ -412,6 +412,11 @@ namespace StarLevelSystem.common
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
+        public class ActiveRaid {
+            public Vector3 Position { get; set; }
+            public RaidDefinition Definition { get; set; }
+        }
+
         public class RaidConfiguration {
             public GlobalRaidSettings GlobalSettings { get; set; } = new GlobalRaidSettings();
             public Dictionary<string, RaidDefinition> Raids { get; set; } = new Dictionary<string, RaidDefinition>();

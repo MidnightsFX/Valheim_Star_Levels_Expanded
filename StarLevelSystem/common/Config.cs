@@ -130,6 +130,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> OverrideCreatureModifiedHealth;
 
         public static ConfigEntry<bool> UseVanillaRaidConfiguration;
+        public static ConfigEntry<float> RaidEventRate;
 
         public ValConfig(ConfigFile cf)
         {
@@ -256,6 +257,8 @@ namespace StarLevelSystem
             OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f,1f);
 
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
+            RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
+
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");

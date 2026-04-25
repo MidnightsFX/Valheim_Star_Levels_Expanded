@@ -8,6 +8,8 @@ namespace StarLevelSystem.modules.Raids
 {
     internal static class RaidPatches
     {
+        internal static 
+
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
         public static class RandEventSystemAwakePatch {
             public static void Postfix(RandEventSystem __instance) {

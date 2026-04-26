@@ -35,6 +35,7 @@ namespace StarLevelSystem
         private static CustomRPC CreatureLootSettingsRPC;
         private static CustomRPC ModifiersRPC;
         private static CustomRPC RaidsRPC;
+        private static CustomRPC ServerRequestPlayerPrivateKeysRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -131,6 +132,8 @@ namespace StarLevelSystem
 
         public static ConfigEntry<bool> UseVanillaRaidConfiguration;
         public static ConfigEntry<float> RaidEventRate;
+        public static ConfigEntry<int> MaxActiveRaids;
+        public static ConfigEntry<float> MaxPercentageOfPlayersToRaid;
 
         public ValConfig(ConfigFile cf)
         {
@@ -146,6 +149,7 @@ namespace StarLevelSystem
             CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
             ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
             RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerRecieveConfigs, OnClientReceiveRaidConfigs);
+            //ServerRequestPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_ReqPlayerKeysRPC", );
 
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
@@ -258,7 +262,7 @@ namespace StarLevelSystem
 
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
-
+            MaxPercentageOfPlayersToRaid = BindServerConfig("Raids", "MaxPercentageOfPlayersToRaid", 0.5f, "Maximum percentage of players online that can recieve a raid at the same time", false, 0, 1f);
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");

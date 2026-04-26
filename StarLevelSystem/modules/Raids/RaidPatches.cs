@@ -8,14 +8,20 @@ namespace StarLevelSystem.modules.Raids
 {
     internal static class RaidPatches
     {
-        internal static 
+        internal static List<ActiveRaid> ActiveRaids = new List<ActiveRaid>();
 
-        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
-        public static class RandEventSystemAwakePatch {
-            public static void Postfix(RandEventSystem __instance) {
-                RaidControl.ApplyRaidConfiguration(__instance);
-            }
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.GetPossibleRandomEvents))]
+        internal static class RaidSelectionSystem {
+        
         }
+
+        // Maybe we just disable this whole class?
+        //[HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
+        //public static class RandEventSystemAwakePatch {
+        //    public static void Postfix(RandEventSystem __instance) {
+        //        RaidControl.ApplyRaidConfiguration(__instance);
+        //    }
+        //}
 
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.StartRandomEvent))]
         public static class RandEventSystemStartEvent {

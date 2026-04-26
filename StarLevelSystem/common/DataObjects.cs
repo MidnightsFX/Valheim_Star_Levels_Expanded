@@ -412,9 +412,21 @@ namespace StarLevelSystem.common
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
+        public class PlayerPrivatekeys {
+            public List<string> PrivateKeys { get; set; } = new List<string>();
+            public float LastUpdatedAt { get; set; } = 0f;
+        }
+
+        public class PlayerRaidHistory {
+            public float NextRaidableTime { get; set; }
+            public Dictionary<string, float> LastRaidByName { get; set; }
+        }
+
         public class ActiveRaid {
             public Vector3 Position { get; set; }
             public RaidDefinition Definition { get; set; }
+            public float StartTime { get; set; }
+            public ZNetPeer TargetPlayer { get; set; }
         }
 
         public class RaidConfiguration {
@@ -440,6 +452,7 @@ namespace StarLevelSystem.common
             public bool Enabled { get; set; } = true;
             [DefaultValue(60f)]
             public float Duration { get; set; } = 60f;
+            public float RaidCoolDownMinutes { get; set; } = 120f;
             public RaidActivation Activation { get; set; } = new RaidActivation();
             public List<RaidSpawnEntry> Spawns { get; set; } = new List<RaidSpawnEntry>();
             [DefaultValue(-1)]
@@ -482,8 +495,8 @@ namespace StarLevelSystem.common
                         raid.m_altRequiredPlayerKeysAny = Activation.AnyRequiredPlayerKeys;
                     }
 
-                    raid.m_standaloneChance = Activation.StandaloneChance;
-                    raid.m_standaloneInterval = Activation.StandaloneInterval;
+                    raid.m_standaloneChance = Activation.Chance;
+                    raid.m_standaloneInterval = 100f;
                     raid.m_pauseIfNoPlayerInArea = Activation.PauseIfNoPlayerInArea;
                     raid.m_nearBaseOnly = Activation.NearBaseOnly;
                 }
@@ -508,9 +521,7 @@ namespace StarLevelSystem.common
             [DefaultValue(true)]
             public bool PauseIfNoPlayerInArea { get; set; } = true;
             [DefaultValue(100f)]
-            public float StandaloneChance { get; set; } = 100f;
-            [DefaultValue(100f)]
-            public float StandaloneInterval { get; set; } = 100f;
+            public float Chance { get; set; } = 100f;
             public List<string> RequiredGlobalKeys { get; set; }
             public List<string> NotRequiredGlobalKeys { get; set; }
             public List<string> RequiredPlayerKeys { get; set; }

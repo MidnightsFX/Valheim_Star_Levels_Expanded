@@ -29,6 +29,8 @@ namespace StarLevelSystem.common
         //public static IDeserializer yamldeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).JsonCompatible().Build();
 
+        public static BinaryFormatter binFormatter = new BinaryFormatter();
+
         public static readonly string SLS_CREATURE = "SLS_CREATURE";
         public static readonly string SLS_DAMAGE_MODIFIER = "SLS_DMOD";
         public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
@@ -128,6 +130,12 @@ namespace StarLevelSystem.common
             Average,
             Highest,
             Lowest
+        }
+
+        public enum AI {
+            HuntPlayer,
+            Alerted,
+            AgitatedByBuild
         }
 
         public class DNum {
@@ -412,14 +420,22 @@ namespace StarLevelSystem.common
             public List<string> GlobalIgnorePrefabList = new List<string>();
         }
 
+        public class PlayerRaidData {
+            public RaidDefinition ActiveRaid { get; set; } = null;
+            public List<string> PlayerPrivatekeys { get; set; } = new List<string>();
+            public List<RaidDefinition> PlayerAvailableRaids { get; set; } = new List<RaidDefinition>();
+            public double NextRaidableTime { get; set; } = 0f;
+            public Dictionary<string, double> LastRaidByName { get; set; } = new Dictionary<string, double>();
+        }
+
         public class PlayerPrivatekeys {
             public List<string> PrivateKeys { get; set; } = new List<string>();
-            public float LastUpdatedAt { get; set; } = 0f;
+            public double LastUpdatedAt { get; set; } = 0f;
         }
 
         public class PlayerRaidHistory {
-            public float NextRaidableTime { get; set; }
-            public Dictionary<string, float> LastRaidByName { get; set; }
+            public double NextRaidableTime { get; set; }
+            public Dictionary<string, double> LastRaidByName { get; set; }
         }
 
         public class ActiveRaid {
@@ -437,29 +453,28 @@ namespace StarLevelSystem.common
         public class GlobalRaidSettings {
             [DefaultValue(false)]
             public bool DisableAllRaids { get; set; } = false;
-            [DefaultValue(false)]
-            public bool PlayerBasedRaids { get; set; } = false;
-            [DefaultValue(1f)]
-            public float PlayerBasedRaidsCoolDownScalar { get; set; } = 1f;
+            [DefaultValue(true)]
+            public bool PlayerBasedRaids { get; set; } = true;
             [DefaultValue(1f)]
             public float GlobalRaidIntervalScalar { get; set; } = 1f;
             [DefaultValue(1f)]
             public float GlobalRaidChanceScalar { get; set; } = 1f;
         }
 
+        [Serializable]
         public class RaidDefinition {
+            public string Name { get; set; }
             [DefaultValue(true)]
             public bool Enabled { get; set; } = true;
             [DefaultValue(60f)]
             public float Duration { get; set; } = 60f;
+            [DefaultValue(12)]
+            public int SpawnPoints { get; set; } = 12;
             public float RaidCoolDownMinutes { get; set; } = 120f;
             public RaidActivation Activation { get; set; } = new RaidActivation();
             public List<RaidSpawnEntry> Spawns { get; set; } = new List<RaidSpawnEntry>();
             [DefaultValue(-1)]
             public int MaxLevelOverride { get; set; } = -1;
-            public Dictionary<string, ModifierType> RequiredModifiers { get; set; }
-            public List<string> ModifiersNotAllowed { get; set; }
-            [DefaultValue(0f)]
             public float SpawnerDelay { get; set; } = 0f;
             [DefaultValue(96f)]
             public float EventRange { get; set; } = 96f;
@@ -474,7 +489,7 @@ namespace StarLevelSystem.common
             [DefaultValue(true)]
             public bool IsRandom { get; set; } = true;
 
-            public RandomEvent ToRaid(string Name, Vector3 position) {
+            public RandomEvent ToRaid(Vector3 position) {
                RandomEvent raid = new RandomEvent();
                 raid.m_name = Name;
                 raid.m_duration = Duration;
@@ -509,11 +524,13 @@ namespace StarLevelSystem.common
                 raid.m_forceMusic = ForceMusic;
                 raid.m_random = IsRandom;
                 raid.m_time = 0; // This is used to track event times
+                raid.m_pos = position;
 
                 return raid;
             }
         }
 
+        [Serializable]
         public class RaidActivation {
             public List<Heightmap.Biome> Biomes { get; set; }
             [DefaultValue(true)]
@@ -529,8 +546,10 @@ namespace StarLevelSystem.common
             public List<string> AnyRequiredPlayerKeys { get; set; }
         }
 
+        [Serializable]
         public class RaidSpawnEntry {
             public string PrefabName { get; set; }
+            public AI CreatureAI { get; set; } = AI.AgitatedByBuild;
             [DefaultValue(10f)]
             public float SpawnInterval { get; set; } = 10f;
             [DefaultValue(100f)]
@@ -540,19 +559,33 @@ namespace StarLevelSystem.common
             [DefaultValue(1)]
             public int LevelMin { get; set; } = 1;
             public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;
+            public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
+            public List<string> ModifiersNotAllowed { get; set; }
+            [DefaultValue(0f)]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
-            [DefaultValue(30f)]
-            public float SpawnDistance { get; set; } = 30f;
-            [DefaultValue(15f)]
-            public float SpawnRadiusMin { get; set; } = 15f;
-            [DefaultValue(30f)]
-            public float SpawnRadiusMax { get; set; } = 30f;
-            [DefaultValue(1)]
-            public int GroupSizeMin { get; set; } = 1;
-            [DefaultValue(1)]
-            public int GroupSizeMax { get; set; } = 1;
-            [DefaultValue(3f)]
-            public float GroupRadius { get; set; } = 3f;
+        }
+
+        [Serializable]
+        public class RaidMonitor {
+            public RaidSpawnEntry RaidSpawnDef { get; set; }
+            public double NextSpawn { get; set; } = 0;
+            public List<string> SpawnedCreatures { get; set; } = new List<string>();
+
+            public List<ZDOID> GetSpawnedZDOIDs() {
+                List<ZDOID> connected = new List<ZDOID>();
+                foreach(var creature in SpawnedCreatures) {
+                    var parts = creature.Split(':');
+                    connected.Add(new ZDOID(long.Parse(parts[0]), uint.Parse(parts[1])));
+                }
+                return connected;
+            }
+
+            public void StoreZDOIDS(List<ZDOID> connected) {
+                SpawnedCreatures.Clear();
+                foreach (var creature in connected) {
+                    SpawnedCreatures.Add(creature.ToString());
+                }
+            }
         }
 
         [Serializable]
@@ -917,6 +950,128 @@ namespace StarLevelSystem.common
                 binFormatter.Serialize(mStream, value);
 
                 zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class RaidZNetProperty : ZNetProperty<RaidDefinition> {
+            public RaidZNetProperty(string key, ZNetView zNetView, RaidDefinition defaultValue) : base(key, zNetView, defaultValue) {
+            }
+
+            public override RaidDefinition Get() {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return null; }
+                MemoryStream mStream = new MemoryStream(stored);
+                return (RaidDefinition)binFormatter.Deserialize(mStream);
+            }
+
+            protected override void SetValue(RaidDefinition value) {
+                MemoryStream mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
+
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class IntZNetProperty : ZNetProperty<int> {
+            public IntZNetProperty(string key, ZNetView zNetView, int defaultValue) : base(key, zNetView, defaultValue) {
+            }
+
+            public override int Get() {
+                return zNetView.GetZDO().GetInt(Key, DefaultValue);
+            }
+
+            protected override void SetValue(int value) {
+                zNetView.GetZDO().Set(Key, value);
+            }
+        }
+
+        public class DoubleZNetProperty : ZNetProperty<double> {
+            public DoubleZNetProperty(string key, ZNetView zNetView, double defaultValue) : base(key, zNetView, defaultValue) {
+            }
+
+            public override double Get() {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return 0; }
+                MemoryStream mStream = new MemoryStream(stored);
+                return (double)binFormatter.Deserialize(mStream);
+            }
+
+            protected override void SetValue(double value) {
+                MemoryStream mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
+
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class RaidMonitorListZNetProperty : ZNetProperty<List<RaidMonitor>> {
+            public RaidMonitorListZNetProperty(string key, ZNetView zNetView, List<RaidMonitor> defaultValue) : base(key, zNetView, defaultValue) {
+            }
+
+            public override List<RaidMonitor> Get() {
+                var stored = zNetView.GetZDO().GetByteArray(Key);
+                // we can't deserialize a null buffer
+                if (stored == null) { return new List<RaidMonitor>(); }
+                MemoryStream mStream = new MemoryStream(stored);
+                return (List<RaidMonitor>)binFormatter.Deserialize(mStream);
+            }
+
+            protected override void SetValue(List<RaidMonitor> value) {
+                MemoryStream mStream = new MemoryStream();
+                binFormatter.Serialize(mStream, value);
+
+                zNetView.GetZDO().Set(Key, mStream.ToArray());
+            }
+        }
+
+        public class ListVectorZNetProperty : ZNetProperty<List<Vector3>> {
+            public ListVectorZNetProperty(string key, ZNetView zNetView, List<Vector3> defaultValue)
+                : base(key, zNetView, defaultValue) {
+            }
+
+            public override List<Vector3> Get() {
+                byte[] bytes = zNetView.GetZDO().GetByteArray(Key);
+                if (bytes is null) { return null; }
+                
+                List<Vector3> result = new List<Vector3>();
+
+                int length = bytes.Length / 12;
+
+                for (int i = 0; i < length; ++i) {
+                    result.Add(new Vector3(
+                        BitConverter.ToSingle(bytes, i * 12 + 0), 
+                        BitConverter.ToSingle(bytes, i * 12 + 4), 
+                        BitConverter.ToSingle(bytes, i * 12 + 8)
+                        ));
+                }
+                return result;
+            }
+
+            protected override void SetValue(List<Vector3> value) {
+                byte[] bytes = new byte[value.Count * 12];
+
+                for (int i = 0; i < value.Count; ++i) {
+                    BitConverter.GetBytes(value[i].x).CopyTo(bytes, i * 12 + 0);
+                    BitConverter.GetBytes(value[i].y).CopyTo(bytes, i * 12 + 4);
+                    BitConverter.GetBytes(value[i].z).CopyTo(bytes, i * 12 + 8);
+                }
+
+                zNetView.GetZDO().Set(Key, bytes);
+            }
+        }
+
+        public class BoolZNetProperty : ZNetProperty<bool> {
+            public BoolZNetProperty(string key, ZNetView zNetView, bool defaultValue) : base(key, zNetView, defaultValue) {
+            }
+
+            public override bool Get() {
+                return zNetView.GetZDO().GetBool(Key, DefaultValue);
+            }
+
+            protected override void SetValue(bool value) {
+                zNetView.GetZDO().Set(Key, value);
             }
         }
 

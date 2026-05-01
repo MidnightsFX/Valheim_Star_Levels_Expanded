@@ -1,9 +1,17 @@
 **0.19.0**
  ---
  ```
+- Custom Raids!
+	- Adds a completely overhauled raid system
+	- Concurrent raids are now supported (multiple raids can happen at the same time in different locations)
+	- Raids can be configured to be triggered off Private Keys, Global Keys, and various other factors
+	- Raid spawns can be heavily customized, level (and ranges of levels), modifiers, creatures etc
+	- Raid announcements, durations etc can all be customized
+	- Cooldown, time between raids, concurrent number of raids, max raids active on the server are all customizable
 - Adds health modification change detection
 - Improves creature health change application on configuration changes
 - Night multiplied spawns can be configured to despawn during the day (default true)
+- Improves value merging for distance_level_modifier when set specifically on a per-creature basis
  ```
 
 **0.18.13**

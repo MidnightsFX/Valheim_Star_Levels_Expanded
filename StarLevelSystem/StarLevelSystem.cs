@@ -59,6 +59,7 @@ namespace StarLevelSystem
             MinimapManager.OnVanillaMapDataLoaded += DistanceScaleSystem.DelayedMinimapSetup;
             SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.RecievedServerUpdates();
             UIHudControl.LoadAssets();
+            RaidControl.LoadAssets();
             TerminalCommands.AddCommands();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
         }

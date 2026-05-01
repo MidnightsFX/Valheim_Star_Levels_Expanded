@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using Splatform;
 using StarLevelSystem.Modifiers.Control;
 using System;
 using System.Collections;
@@ -9,6 +10,7 @@ using System.Reflection.Emit;
 using System.Text;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
+using static ZNet;
 
 namespace StarLevelSystem.common
 {
@@ -305,5 +307,24 @@ namespace StarLevelSystem.common
             }
             return biomecfg;
         }
+
+        public static PlatformUserID GetPlatformUserID(long peerID) {
+            ZNetPeer peer = ZNet.instance.GetPeer(peerID);
+            if (peer == null || !peer.IsReady()) { return PlatformUserID.None; }
+
+            foreach(PlayerInfo playerInfo in ZNet.instance.GetPlayerList())  {
+                if (playerInfo.m_characterID == peer.m_characterID) {
+                    return playerInfo.m_userInfo.m_id;
+                }
+            }
+            return PlatformUserID.None;
+        }
+
+        public static List<string> GetPrivateKeysSanitize(this Player player) {
+            List<string> keys = player.GetUniqueKeys();
+            keys = keys.Where(x => string.IsNullOrEmpty(x) == false).ToList();
+            return keys;
+        }
+
     }
 }

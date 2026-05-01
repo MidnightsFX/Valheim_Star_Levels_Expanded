@@ -107,37 +107,39 @@ namespace StarLevelSystem.Modifiers.Control
         }
 
         internal static void SetupCreatureVFX(Character character, CreatureModifierDefinition cmodifier) {
-            if (cmodifier.VisualEffect != null || character == null) {
+            if (character == null || cmodifier == null || cmodifier.VisualEffect == null) { return; }
 
-                GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
-                if (effectPrefab == null) { return; }
-                bool hasVFXAlready = character.transform.Find($"SLS_Visuals(Clone)/{effectPrefab.name}(Clone)");
-                //Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
-                if (hasVFXAlready == false) {
-                    Transform visualHolder = character.transform.Find("SLS_Visuals(Clone)");
-                    if (visualHolder == null) {
-                        visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
-                    }
-                    //Logger.LogDebug($"Adding visual effects for {character.name}");
-                    GameObject vfxadd = GameObject.Instantiate(effectPrefab, visualHolder);
-                    float height = character.GetHeight();
-                    float scale = height / 5f;
-                    float rscale = character.GetRadius() / 2f;
+            // Check to ensure that the effect prefab specified actually exists
+            GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
+            if (effectPrefab == null) { return; }
 
-                    switch (cmodifier.VisualEffectStyle) {
-                        case VisualEffectStyle.top:
-                            vfxadd.transform.localPosition = new Vector3(0, height, 0);
-                            break;
-                        case VisualEffectStyle.bottom:
-                            vfxadd.transform.localPosition = new Vector3(0, 0, 0);
-                            break;
-                        case VisualEffectStyle.objectCenter:
-                            vfxadd.transform.localPosition = new Vector3(0, height / 2, 0);
-                            break;
-                    }
-                    // Scale the visual effect based on the creatures height/width
-                    vfxadd.transform.localScale = new Vector3(vfxadd.transform.localScale.x * scale, vfxadd.transform.localScale.y * rscale, vfxadd.transform.localScale.z * scale);
+            // Check to see if the creature already has the specific VFX
+            bool hasVFXAlready = character.transform.Find($"SLS_Visuals(Clone)/{effectPrefab.name}(Clone)");
+            //Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
+            if (hasVFXAlready == false) {
+                Transform visualHolder = character.transform.Find("SLS_Visuals(Clone)");
+                if (visualHolder == null) {
+                    visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
                 }
+                //Logger.LogDebug($"Adding visual effects for {character.name}");
+                GameObject vfxadd = GameObject.Instantiate(effectPrefab, visualHolder);
+                float height = character.GetHeight();
+                float scale = height / 5f;
+                float rscale = character.GetRadius() / 2f;
+
+                switch (cmodifier.VisualEffectStyle) {
+                    case VisualEffectStyle.top:
+                        vfxadd.transform.localPosition = new Vector3(0, height, 0);
+                        break;
+                    case VisualEffectStyle.bottom:
+                        vfxadd.transform.localPosition = new Vector3(0, 0, 0);
+                        break;
+                    case VisualEffectStyle.objectCenter:
+                        vfxadd.transform.localPosition = new Vector3(0, height / 2, 0);
+                        break;
+                }
+                // Scale the visual effect based on the creatures height/width
+                vfxadd.transform.localScale = new Vector3(vfxadd.transform.localScale.x * scale, vfxadd.transform.localScale.y * rscale, vfxadd.transform.localScale.z * scale);
             }
         }
 

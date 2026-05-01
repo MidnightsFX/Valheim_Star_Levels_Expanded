@@ -76,8 +76,11 @@ namespace StarLevelSystem.modules.UI {
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
                 cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(exthud.Hudlink.m_character, mods);
                 cce.CreatureModifiers = mods;
-
+                
+                // Update UI name, star count, and modifiers
+                exthud.Level = cce.Level;
                 UpdateHudModifiers(id, exthud, mods);
+                
                 if (cce == null || cce.CreatureNameLocalizable == null) { return; }
             }
         }
@@ -242,7 +245,8 @@ namespace StarLevelSystem.modules.UI {
 
                 List<string> cmods = mods.Keys.ToList();
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
-                if (cmods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || cce.Level != extended_hud.Level) {
+                int levelcheck = ehud.m_character.GetLevel();
+                if (cmods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelcheck != extended_hud.Level) {
                     Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.Hudlink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     InvalidateCacheEntry(ehud.m_character);
@@ -286,6 +290,7 @@ namespace StarLevelSystem.modules.UI {
 
                 // Setup the health text if enabled
                 if (ValConfig.EnableEnemyHeathbarNumberDisplay.Value && extended_hud.HealthText == null) {
+                    if (HealthText == null) { LoadAssets(); }
                     GameObject HealthTextHolder = GameObject.Instantiate(HealthText, ehud.m_gui.transform.Find("Health"));
                     extended_hud.HealthText = HealthTextHolder.GetComponent<TextMeshProUGUI>();
                     // Use a slightly diminishing scale as otherwise things get overscaled easily

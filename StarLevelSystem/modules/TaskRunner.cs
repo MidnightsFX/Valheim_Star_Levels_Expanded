@@ -9,7 +9,7 @@ using UnityEngine;
 namespace StarLevelSystem.modules {
 
     internal static class TaskRunner {
-        private static GameObject RunnerGO;
+        internal static GameObject RunnerGO;
         internal static Orchestrator Instance = null;
 
         internal static void Setup() {

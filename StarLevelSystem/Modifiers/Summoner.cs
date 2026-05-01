@@ -28,7 +28,6 @@ namespace StarLevelSystem.Modifiers
             static int summonBatchSize = 2;
             static float timeBetweenSummons = 30;
             static Character bossCharacter;
-            static bool setup = false;
             static bool started = false;
 
             public void SpawnCreaturesBatch() {
@@ -68,7 +67,6 @@ namespace StarLevelSystem.Modifiers
                         summonableCreatures.Add(prefab);
                     }
                 }
-                setup = true;
                 if (creature_znet == null) {
                     creature_znet = this.gameObject.GetComponent<ZNetView>();
                 }

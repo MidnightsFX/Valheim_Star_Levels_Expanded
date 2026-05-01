@@ -1,8 +1,12 @@
 using HarmonyLib;
+using Splatform;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.modules.Raids.RaidControl;
 
 namespace StarLevelSystem.modules.Raids
 {
@@ -10,36 +14,88 @@ namespace StarLevelSystem.modules.Raids
     {
         internal static List<ActiveRaid> ActiveRaids = new List<ActiveRaid>();
 
-        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.GetPossibleRandomEvents))]
-        internal static class RaidSelectionSystem {
-        
+        [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
+        internal static class UpdatePlayerPrivateKeys {
+            public static void Postfix() {
+                //if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
+                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
+            }
+        }
+
+        [HarmonyPatch(typeof(Player), nameof(Player.RemoveUniqueKey))]
+        internal static class RemovePlayerPrivateKey {
+            public static void Postfix() {
+                //if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
+                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
+            }
+        }
+
+        [HarmonyPatch(typeof(Player), nameof(Player.Load))]
+        internal static class SyncPlayerPrivateKeysOnLoad {
+            public static void Postfix() {
+                //if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
+                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
+            }
         }
 
         // Maybe we just disable this whole class?
-        //[HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
-        //public static class RandEventSystemAwakePatch {
-        //    public static void Postfix(RandEventSystem __instance) {
-        //        RaidControl.ApplyRaidConfiguration(__instance);
-        //    }
-        //}
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
+        public static class RandEventSystemAwakePatch {
+            public static void Postfix(RandEventSystem __instance) {
+                //if (ZNet.instance.IsServer() == false) { return; }
+                Logger.LogDebug("Adding custom raid manager");
+                RaidControl.RaidMan = __instance.gameObject.AddComponent<RaidManager>();
+                RaidControl.RaidMan.Setup();
+            }
+        }
+
+        // Both need to be patched to use the new monobehavior controller instead of the vanilla methods- if enabled.
+        // ConsoleStartRandomEvent
+        // ConsoleResetRandomEvent
+
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.FixedUpdate))]
+        public static class ToggleCustomRaids {
+            // Skip the update loop for the randEvent system if we are using the custom raid system
+            public static bool Prefix() {
+                if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.SetRandomEvent))]
+        public static class SetRandomCustomEvent {
+            public static bool Prefix(RandEventSystem __instance, RandomEvent ev, Vector3 pos) {
+                Logger.LogDebug($"Checking for random Raid {ev.m_name}");
+                RaidsData.SLE_Raid_Settings.Raids.TryGetValue(ev.m_name, out RaidDefinition raidDef);
+                if (raidDef == null) { return false; }
+
+                StartRaidRunner(raidDef, pos);
+
+                if (Player.m_localPlayer) {
+                    Player.m_localPlayer.ShowTutorial("randomevent", false);
+                }
+                return false;
+            }
+        }
 
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.StartRandomEvent))]
         public static class RandEventSystemStartEvent {
-            public static bool Prefix(RandEventSystem __instance) {
+            public static bool Prefix() {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
 
-                if (ZNet.instance.IsServer() == false) {
-                    return false;
-                }
-                List<KeyValuePair<RandomEvent, Vector3>> possibleRandomEvents = __instance.GetPossibleRandomEvents();
-                if (possibleRandomEvents.Count == 0) {
-                    Logger.LogDebug("No valid raid events found for current player positions.");
-                    return false;
-                }
+                // This should connect to the custom event system and start an event?
+                
 
-                KeyValuePair<RandomEvent, Vector3> keyValuePair = possibleRandomEvents[UnityEngine.Random.Range(0, possibleRandomEvents.Count)];
-                __instance.SetRandomEvent(keyValuePair.Key, keyValuePair.Value);
-                Logger.LogDebug("Starting event: " + keyValuePair.Key.m_name);
+                if (Player.m_localPlayer == null) {
+                    Logger.LogInfo("Random Event start requires a local player. Use sls-start-event to trigger an event for a specific user instead");
+                    return false;
+                }
+                Player.m_localPlayer.ShowTutorial("randomevent", false);
+                PlatformUserID id = PlatformManager.DistributionPlatform.LocalUser.PlatformUserID;
+                StartRaidRunner(RandomSelectValidRaidForPlayer(id.m_userID), Player.m_localPlayer.transform.position);
 
                 return false;
             }
@@ -48,39 +104,8 @@ namespace StarLevelSystem.modules.Raids
 
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.UpdateRandomEvent))]
         public static class OverrideRaidSelectionSystem {
-            public static bool Prefix(RandEventSystem __instance, float dt) {
+            public static bool Prefix() {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
-                // Do not run on clients, unless this is the server client
-                if (ZNet.instance.IsServer() == false) { return false; }
-
-                __instance.m_eventTimer += dt;
-                if (ValConfig.RaidEventRate.Value > 0f && __instance.m_eventTimer > __instance.m_eventIntervalMin * 60f * ValConfig.RaidEventRate.Value) {
-                    __instance.m_eventTimer = 0f;
-                    if (Random.Range(0f, 100f) <= __instance.m_eventChance) {
-                        __instance.StartRandomEvent();
-                    }
-                }
-                if (RandEventSystem.s_randomEventNeedsRefresh) { RandEventSystem.RefreshPlayerEventData(); }
-                foreach (RandomEvent randomEvent in __instance.m_events) {
-                    if (randomEvent.m_enabled && randomEvent.m_standaloneInterval > 0f && __instance.m_activeEvent != randomEvent) {
-                        randomEvent.m_time += dt;
-                        if (randomEvent.m_time > randomEvent.m_standaloneInterval * Game.m_eventRate) {
-                            if (__instance.HaveGlobalKeys(randomEvent, RandEventSystem.s_playerEventDatas)) {
-                                List<Vector3> validEventPoints = __instance.GetValidEventPoints(randomEvent, RandEventSystem.s_playerEventDatas);
-                                if (validEventPoints.Count > 0 && Random.Range(0f, 100f) <= randomEvent.m_standaloneChance / Game.m_eventRate) {
-                                    __instance.SetRandomEvent(randomEvent, validEventPoints[Random.Range(0, validEventPoints.Count)]);
-                                }
-                            }
-                            randomEvent.m_time = 0f;
-                        }
-                    }
-                }
-                __instance.m_sendTimer += dt;
-                if (__instance.m_sendTimer > 2f) {
-                    __instance.m_sendTimer = 0f;
-                    __instance.SendCurrentRandomEvent();
-                }
-
                 // We override the entire raid selection process if SLS raids are enabled
                 return false;
             }

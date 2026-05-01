@@ -16,7 +16,7 @@ namespace StarLevelSystem.modules.LevelSystem {
     internal static class LevelSelection {
 
         public static List<string> ForceLeveledCreatures = new List<string>();
-        public static int DetermineLevel(Character character, ZDO cZDO, DataObjects.CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0) {
+        public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
                 return 1;
@@ -49,20 +49,15 @@ namespace StarLevelSystem.modules.LevelSystem {
                 max_level += 1;
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
-                Vector3 p = character.transform.position;
-                float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
                 float distance_level_modifier = 1;
-                SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
-                SortedDictionary<int, float> levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
-                if (LevelSystemData.SLE_Level_Settings != null) {
-                    levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
-                    // If we are using distance level bonuses | Check if we are in a distance level bonus area
-                    if (ValConfig.EnableDistanceLevelScalingBonus.Value && LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
-                        distance_levelup_bonuses = DistanceScaleSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
-                    }
-                }
+                SortedDictionary<int, float> distance_levelup_bonuses = DetermineDistanceBonus(character.transform.position);
+                SortedDictionary<int, float> levelup_chances = DetermineLevelupChance(creature_settings, biome_settings);
+
                 if (biome_settings != null) {
                     distance_level_modifier = biome_settings.DistanceScaleModifier;
+                }
+                if (creature_settings != null && creature_settings.DistanceScaleModifier != 1f) {
+                    distance_level_modifier = creature_settings.DistanceScaleModifier;
                 }
 
                 // Apply Night level scalers
@@ -74,13 +69,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                     nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
                 }
 
-                // Ensure we use character / biome specific levelup chances if those are set
-                if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null) {
-                    levelup_chances = biome_settings.CustomCreatureLevelUpChance;
-                }
-                if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
-                    levelup_chances = creature_settings.CustomCreatureLevelUpChance;
-                }
                 int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
                 //Logger.LogDebug($"Determined level {level} min: {min_level} max {max_level}");
@@ -136,6 +124,32 @@ namespace StarLevelSystem.modules.LevelSystem {
                 return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
             }
             return DetermineLevelRollResult(levelup_roll, maxLevel, levelup_chances, distance_levelup_bonuses, distance_level_modifier);
+        }
+
+        public static SortedDictionary<int, float> DetermineLevelupChance(CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null, SortedDictionary<int, float> customLevelup = null) {
+            SortedDictionary<int, float> levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
+            if (customLevelup != null) { levelup_chances = customLevelup; }
+
+            if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null) {
+                levelup_chances = biome_settings.CustomCreatureLevelUpChance;
+            }
+            if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
+                levelup_chances = creature_settings.CustomCreatureLevelUpChance;
+            }
+            return levelup_chances;
+        }
+
+        public static SortedDictionary<int, float> DetermineDistanceBonus(Vector3 pos) {
+            SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
+            if (ValConfig.EnableDistanceLevelScalingBonus.Value == false) {
+                return distance_levelup_bonuses;
+            }
+
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
+            if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus != null) {
+                distance_levelup_bonuses = DistanceScaleSystem.SelectDistanceFromCenterLevelBonus(distance_from_center);
+            }
+            return distance_levelup_bonuses;
         }
 
         public static void SetAndUpdateCharacterLevel(Character character, int level) {

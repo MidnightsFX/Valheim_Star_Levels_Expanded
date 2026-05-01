@@ -2,14 +2,19 @@
 using BepInEx.Configuration;
 using Jotunn.Entities;
 using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Loot;
+using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using UnityEngine;
+using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem
 {
@@ -22,11 +27,14 @@ namespace StarLevelSystem
         internal const string ModifiersFileName = "Modifiers.yaml";
         internal const string RaidSettingsFileName = "RaidSettings.yaml";
         internal const string StarLevelSystem = "StarLevelSystem";
+        internal const string ServerRaidSavedData = "ServerRaidSavedData.yaml";
+        internal const string SavedData = "SavedData";
         internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LevelSettingsFileName);
         internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ColorSettingsFileName);
         internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LootSettingsFileName);
         internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
         internal static String raidsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, RaidSettingsFileName);
+        internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
 
         internal static bool RecievedConfigsFromServer = false;
 
@@ -35,7 +43,8 @@ namespace StarLevelSystem
         private static CustomRPC CreatureLootSettingsRPC;
         private static CustomRPC ModifiersRPC;
         private static CustomRPC RaidsRPC;
-        private static CustomRPC ServerRequestPlayerPrivateKeysRPC;
+        private static CustomRPC ClientSendPlayerPrivateKeysRPC;
+        internal static CustomRPC ClientStartRaidRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -133,7 +142,9 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> UseVanillaRaidConfiguration;
         public static ConfigEntry<float> RaidEventRate;
         public static ConfigEntry<int> MaxActiveRaids;
-        public static ConfigEntry<float> MaxPercentageOfPlayersToRaid;
+        public static ConfigEntry<int> MaxRaidAttemptsPerPlayer;
+        public static ConfigEntry<float> RaidPerPlayerUpdateCheck;
+        public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
 
         public ValConfig(ConfigFile cf)
         {
@@ -149,8 +160,10 @@ namespace StarLevelSystem
             CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
             ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
             RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerRecieveConfigs, OnClientReceiveRaidConfigs);
-            //ServerRequestPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_ReqPlayerKeysRPC", );
+            ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerRecievePlayerPrivateKeys, OnClientRecieveRequestForPrivatekeys);
+            ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerRecieveConfigs, OnClientRecieveRaidStart);
 
+            SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(CreatureLootSettingsRPC, SendCreatureLootConfigs);
@@ -262,7 +275,10 @@ namespace StarLevelSystem
 
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
-            MaxPercentageOfPlayersToRaid = BindServerConfig("Raids", "MaxPercentageOfPlayersToRaid", 0.5f, "Maximum percentage of players online that can recieve a raid at the same time", false, 0, 1f);
+            MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
+            RaidPerPlayerUpdateCheck = BindServerConfig("Raids", "RaidPerPlayerUpdateCheck", 10f, "The Interval in minutes between updating the valid raids for each player. Reduce if you want new raids to become available faster for players, increase to reduce pressure on server.", true, 1f, 120f);
+            ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 5, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
+            MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
@@ -290,10 +306,9 @@ namespace StarLevelSystem
             InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
 
+
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
             OverrideCreatureModifiedHealth = BindServerConfig("ModCompat", "OverrideCreatureModifiedHealth", false, "When enabled, will always set creatures health based on the SLS settings for the creature. This overrides other mods changes to creatures.");
-
-
         }
 
         internal static void RecievedServerUpdates() {
@@ -472,8 +487,7 @@ namespace StarLevelSystem
             }
         }
 
-        private static ZPackage SendFileAsZPackage(string filepath)
-        {
+        private static ZPackage SendFileAsZPackage(string filepath) {
             string filecontents = File.ReadAllText(filepath);
             ZPackage package = new ZPackage();
             package.Write(filecontents);
@@ -484,8 +498,7 @@ namespace StarLevelSystem
             return SendFileAsZPackage(levelsFilePath);
         }
 
-        private static ZPackage SendCreatureLootConfigs()
-        {
+        private static ZPackage SendCreatureLootConfigs() {
             return SendFileAsZPackage(creatureLootFilePath);
         }
 
@@ -493,18 +506,20 @@ namespace StarLevelSystem
             return SendFileAsZPackage(colorsFilePath);
         }
 
-        private static ZPackage SendModifierConfigs()
-        {
+        private static ZPackage SendModifierConfigs() {
             return SendFileAsZPackage(creatureModifierFilePath);
         }
 
-        private static ZPackage SendRaidConfigs()
-        {
+        private static ZPackage SendRaidConfigs() {
             return SendFileAsZPackage(raidsFilePath);
         }
 
-        public static IEnumerator OnServerRecieveConfigs(long sender, ZPackage package)
-        {
+        private static ZPackage SendRequestForPrivateKeys() {
+           ZPackage package = new ZPackage();
+            return package;
+        }
+
+        public static IEnumerator OnServerRecieveConfigs(long sender, ZPackage package) {
             Logger.LogDebug("Server recieved config from client, rejecting due to being the server.");
             yield return null;
         }
@@ -524,8 +539,7 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientReceiveCreatureLootConfigs(long sender, ZPackage package)
-        {
+        private static IEnumerator OnClientReceiveCreatureLootConfigs(long sender, ZPackage package) {
             var colorsyaml = package.ReadString();
             LootSystemData.UpdateYamlConfig(colorsyaml);
 
@@ -533,8 +547,7 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientReceiveModifiersConfigs(long sender, ZPackage package)
-        {
+        private static IEnumerator OnClientReceiveModifiersConfigs(long sender, ZPackage package) {
             var yaml = package.ReadString();
             CreatureModifiersData.UpdateModifierConfig(yaml);
 
@@ -542,19 +555,61 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientReceiveRaidConfigs(long sender, ZPackage package)
-        {
+        private static IEnumerator OnClientRecieveRaidStart(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            RaidDefinition raiddef = DataObjects.yamldeserializer.Deserialize<RaidDefinition>(yaml);
+
+            RaidControl.StartRaidRunner(raiddef, Player.m_localPlayer.transform.position);
+
+            // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
+        internal static IEnumerator OnClientRecieveRequestForPrivatekeys(long sender, ZPackage _) {
+            if (Player.m_localPlayer == null) { yield break; }
+            Logger.LogDebug("Collecting players private keys");
+            List<string> playerKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
+            string filecontents = DataObjects.yamlserializerJsonCompat.Serialize(playerKeys);
+            ZPackage package = new ZPackage();
+            package.Write(filecontents);
+            if (string.IsNullOrEmpty(filecontents) || playerKeys.Count <= 0) {
+                Logger.LogDebug($"No private keys recieved from player: {Player.m_localPlayer.m_name}, skipping update to the server.");
+                yield break;
+            }
+            Logger.LogDebug($"Sending private keys to server: {filecontents}");
+            if (ZNet.instance.GetServerPeer() != null) {
+                ClientSendPlayerPrivateKeysRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, package);
+            } else {
+                // This is to handle integrated servers (singleplayer) where the server is the same as the client
+                //TaskRunner.Run().StartCoroutine(OnServerRecievePlayerPrivateKeys(0, package));
+                RaidControl.UpdateOrAddPlayerPrivateKeys(sender, playerKeys);
+            }
+        }
+
+        private static IEnumerator OnServerRecievePlayerPrivateKeys(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            List<string> playerKeys = DataObjects.yamldeserializer.Deserialize<List<string>>(yaml);
+            RaidControl.UpdateOrAddPlayerPrivateKeys(sender, playerKeys);
+            yield break;
+        }
+
+        private static IEnumerator OnClientReceiveRaidConfigs(long sender, ZPackage package) {
             var yaml = package.ReadString();
             RaidsData.UpdateYamlConfig(yaml);
 
             yield return null;
         }
 
-        public static string GetSecondaryConfigDirectoryPath()
-        {
-            var patchesFolderPath = Path.Combine(Paths.ConfigPath, "StarLevelSystem");
-            var dirInfo = Directory.CreateDirectory(patchesFolderPath);
+        public static string GetSecondaryConfigDirectoryPath() {
+            string path = Path.Combine(Paths.ConfigPath, StarLevelSystem);
+            DirectoryInfo dirInfo = Directory.CreateDirectory(path);
 
+            return dirInfo.FullName;
+        }
+
+        public static string GetSavedDataSecondaryConfigDirectoryPath() {
+            string savedDataFolder = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData);
+            DirectoryInfo dirInfo = Directory.CreateDirectory(savedDataFolder);
             return dirInfo.FullName;
         }
 
@@ -569,8 +624,7 @@ namespace StarLevelSystem
         /// <param name="acceptableValues"></param>>
         /// <param name="advanced"></param>
         /// <returns></returns>
-        public static ConfigEntry<bool> BindServerConfig(string catagory, string key, bool value, string description, AcceptableValueBase acceptableValues = null, bool advanced = false)
-        {
+        public static ConfigEntry<bool> BindServerConfig(string catagory, string key, bool value, string description, AcceptableValueBase acceptableValues = null, bool advanced = false) {
             return cfg.Bind(catagory, key, value,
                 new ConfigDescription(description,
                     acceptableValues,
@@ -590,8 +644,7 @@ namespace StarLevelSystem
         /// <param name="valmin"></param>
         /// <param name="valmax"></param>
         /// <returns></returns>
-        public static ConfigEntry<int> BindServerConfig(string catagory, string key, int value, string description, bool advanced = false, int valmin = 0, int valmax = 150)
-        {
+        public static ConfigEntry<int> BindServerConfig(string catagory, string key, int value, string description, bool advanced = false, int valmin = 0, int valmax = 150) {
             return cfg.Bind(catagory, key, value,
                 new ConfigDescription(description,
                 new AcceptableValueRange<int>(valmin, valmax),
@@ -611,8 +664,7 @@ namespace StarLevelSystem
         /// <param name="valmin"></param>
         /// <param name="valmax"></param>
         /// <returns></returns>
-        public static ConfigEntry<float> BindServerConfig(string catagory, string key, float value, string description, bool advanced = false, float valmin = 0, float valmax = 150)
-        {
+        public static ConfigEntry<float> BindServerConfig(string catagory, string key, float value, string description, bool advanced = false, float valmin = 0, float valmax = 150) {
             return cfg.Bind(catagory, key, value,
                 new ConfigDescription(description,
                 new AcceptableValueRange<float>(valmin, valmax),
@@ -630,8 +682,7 @@ namespace StarLevelSystem
         /// <param name="description"></param>
         /// <param name="advanced"></param>
         /// <returns></returns>
-        public static ConfigEntry<string> BindServerConfig(string catagory, string key, string value, string description, AcceptableValueList<string> acceptableValues = null, bool advanced = false)
-        {
+        public static ConfigEntry<string> BindServerConfig(string catagory, string key, string value, string description, AcceptableValueList<string> acceptableValues = null, bool advanced = false) {
             return cfg.Bind(catagory, key, value,
                 new ConfigDescription(
                     description,

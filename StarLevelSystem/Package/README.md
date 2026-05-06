@@ -7,6 +7,8 @@ Star Level Systems expands upon the Valheim star system and allows extensive cus
 Features:
 - Expand Creature Star levels (as high as you want)
 	- Sizing configuration for all creatures and their equipment
+- Customize Raids, complete control over creatures, activation mechanics etc
+    - Raids will be tailed to each players progress and multiple raids can occur at the same time 
 - Fine grained control of all creature aspects
 	- Health, damage, size, speed, attack speed, base and per level
 	- Resistance or weakness to all elements
@@ -295,6 +297,61 @@ distanceLootModifier:
   1250:
     minAmountScaleFactorBonus: 1.02
     maxAmountScaleFactorBonus: 1.02
+```
+
+### Raids
+SLS supports significantly overhauled and configurable raids. These can be disabled if you wish to revert to vanilla style raids.
+
+By default all raids are per-player, server controlled and concurrent raids are enabled. This means with SLS it is possible that every player on a server gets an appropriate raid
+during an event.
+
+The number of players, frequency, and most all details of each raid is configurable through `RaidSettings.yaml`.
+
+Below is an example of many of the details that can be configured for a given raid
+```
+- Name: foresttrolls              # Each raid has its own name, these should be unique or can be incorrectly selected
+  Duration: 180                   # Duration of the raid, in seconds
+  RaidCoolDownMinutes: 120        # The number of minutes between when this raid triggers and the player becomes eligble for a new raid
+  ForceEnvironment: Crypt         # Environment that will be set when the raid starts available options: Clear, Misty, Darklands_dark, DeepForest_Mist, Heath_clear, InfectedMine, GDKing, Rain, LightRain, ThunderStorm, Eikthyr, Fader, 
+                                  #  GoblinKing, nofogts, SwampRain, Bonemass, Snow, SnowStorm, Twilight_Clear, Twilight_Snow, Twilight_SnowStorm, Moder, Crypt, CryptHildir, Ghosts, Queen, SunkenCrypt, Mistlands_clear, Mistlands_rain, 
+  Activation:                     #  Mistlands_thunder, Ashlands_ashrain, Ashlands_ashrain_clear, Ashlands_CinderRain, Ashlands_meteorshower, Ashlands_misty, Ashlands_SeaStorm, Ashlands_storm, Caves, CavesHildir
+    Chance: 50                    # Chance that this raid is selected when it is a valid option, only one raid can be selected for a given player at a time
+    RequiredGlobalKeys:           # The global keys required for this raid to activate
+    - defeated_eikthyr       
+    NotRequiredGlobalKeys:        # The global keys that must be missing for this raid to activate
+    - defeated_bonemass
+    RequiredPlayerKeys:           # Player keys that must be set to activate
+    - Deathlink
+    AnyRequiredPlayerKeys:        # Player must have at least ONE of the listed player keys for the raid to be selected for them
+    - Deathlink Deathbringer
+    - Deathlink Hardcore
+    NotRequiredPlayerKeys:        # Player must not have any of the following player keys for the raid to be selected for them
+    - Deathlink Vanilla
+  Spawns:
+  - PrefabName: Troll             # Prefab name of a creature to spawn in the raid
+    CreatureAI: AgitatedByBuild   # Type of creature AI setting to apply, valid values are: Alert, AgitatedByBuild, HuntPlayer
+    SpawnInterval: 30             # Number of seconds between when another of this monster can spawn
+    Faction: Demon                # Faction this creature will be assigned to Valid options: Players, AnimalsVeg, ForestMonsters, Undead, Demon, MountainMonsters, SeaMonsters, PlainsMonsters, Boss, MistlandsMonsters, Dverger, PlayerSpawned
+    MaxSpawned: 3                 # Maximum number of this creature that can be alive (from this specific spawn group)
+    SpawnGroupSize: 2             # Number of creatures to spawn at once
+    LevelMax: 3                   # Max level, if using RaidLevelSystem
+    UseRaidLevelSystem: true      # Wether to use the default leveling system or the custom level defintion defined here
+    ModifiersNotAllowed:          # Modifiers the creature can't get
+    - Poison
+    RequiredModifiers:            # Modifiers that the creature must spawn with, this also requires the modifier type (Boss, Major, Minor)
+      Fire: Major
+    CustomCreatureLevelUpChance:  # Custom level chances for this creature
+      1: 50
+      2: 25
+      3: 20
+      4: 15
+      5: 7
+      6: 3
+      7: 1
+  StartMessage: $event_foresttrolls_start # Start of the raid message
+  EndMessage: $event_foresttrolls_end     # End of the raid message
+  ForceMusic: Zblackforest                # Music that starts when the raid happens eg: ZCombatEventL1, ZCombatEventL2, ZCombatEventL3, ZCombatEventL4, Zboss_eikthyr, Zboss_gdking, Zboss_bonemass, Zboss_moder, Zboss_goblinking, Zboss_queen, Zboss_queen_ambience, Zboss_fader, 
+                                          #   Zblackforest, Zmeadows, Zswamp, Zmountain, Zplains, Zplainstower, Zmistlands, Zashlands,
 ```
 
 ### Modifiers

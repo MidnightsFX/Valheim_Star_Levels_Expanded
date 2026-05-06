@@ -48,7 +48,7 @@ namespace StarLevelSystem.modules.Raids
                 //if (ZNet.instance.IsServer() == false) { return; }
                 Logger.LogDebug("Adding custom raid manager");
                 RaidControl.RaidMan = __instance.gameObject.AddComponent<RaidManager>();
-                RaidControl.RaidMan.Setup();
+                RaidControl.RaidMan.Setup();   
             }
         }
 
@@ -69,7 +69,7 @@ namespace StarLevelSystem.modules.Raids
         public static class SetRandomCustomEvent {
             public static bool Prefix(RandEventSystem __instance, RandomEvent ev, Vector3 pos) {
                 Logger.LogDebug($"Checking for random Raid {ev.m_name}");
-                RaidsData.SLE_Raid_Settings.Raids.TryGetValue(ev.m_name, out RaidDefinition raidDef);
+                RaidsData.RaidsByName.TryGetValue(ev.m_name, out RaidDefinition raidDef);
                 if (raidDef == null) { return false; }
 
                 StartRaidRunner(raidDef, pos);
@@ -83,24 +83,49 @@ namespace StarLevelSystem.modules.Raids
 
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.StartRandomEvent))]
         public static class RandEventSystemStartEvent {
-            public static bool Prefix() {
+            public static bool Prefix(RandEventSystem __instance) {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
 
-                // This should connect to the custom event system and start an event?
-                
-
-                if (Player.m_localPlayer == null) {
-                    Logger.LogInfo("Random Event start requires a local player. Use sls-start-event to trigger an event for a specific user instead");
-                    return false;
+                if (RaidMan != null) {
+                    RaidMan.ForceRaidStart();
+                } else {
+                    RaidManager rm = __instance.GetComponent<RaidManager>();
+                    if (rm != null) {
+                        RaidMan = rm;
+                        RaidMan.ForceRaidStart();
+                        return false;
+                    }
+                    RaidControl.RaidMan = __instance.gameObject.AddComponent<RaidManager>();
+                    RaidControl.RaidMan.Setup();
+                    RaidMan.ForceRaidStart();
                 }
-                Player.m_localPlayer.ShowTutorial("randomevent", false);
-                PlatformUserID id = PlatformManager.DistributionPlatform.LocalUser.PlatformUserID;
-                StartRaidRunner(RandomSelectValidRaidForPlayer(id.m_userID), Player.m_localPlayer.transform.position);
 
                 return false;
             }
         }
 
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.ResetRandomEvent))]
+        public static class ResetRandomEvents {
+            public static bool Prefix() {
+                if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                // We override the entire raid selection process if SLS raids are enabled
+
+                foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
+                    if (peer == null || peer.IsReady() == false) { continue; }
+
+                    ZPackage package = new ZPackage();
+                    Logger.LogDebug($"Sending reset event RPC to {peer.m_playerName}");
+                    ValConfig.ClientClearNearbyEventsRPC.SendPackage(peer.m_uid, package);
+                }
+
+                if (ZNet.instance.IsDedicated() == false) {
+                    Logger.LogDebug("Running integrated server removal");
+                    RaidControl.RemoveNearbyRunningEvents();
+                }
+
+                return false;
+            }
+        }
 
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.UpdateRandomEvent))]
         public static class OverrideRaidSelectionSystem {

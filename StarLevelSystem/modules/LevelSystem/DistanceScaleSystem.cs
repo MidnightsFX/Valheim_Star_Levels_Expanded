@@ -144,6 +144,10 @@ namespace StarLevelSystem.modules.LevelSystem {
             Minimap.instance.WorldToPixel(center, out int world_x, out int world_y);
             Logger.LogDebug($"Map centered: x:{world_x} y:{world_y}");
 
+            if (LevelSystemData.SLE_Level_Settings == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || Colorization.mapRingColors == null || Colorization.mapRingColors.Count == 0) {
+                yield break;
+            }
+
             int updates = 0;
             int levelring_color_index = 0;
             foreach (int ringDistance in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {

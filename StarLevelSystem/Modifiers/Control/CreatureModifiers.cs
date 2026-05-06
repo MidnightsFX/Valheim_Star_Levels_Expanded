@@ -110,19 +110,26 @@ namespace StarLevelSystem.Modifiers.Control
             if (character == null || cmodifier == null || cmodifier.VisualEffect == null) { return; }
 
             // Check to ensure that the effect prefab specified actually exists
+            //Logger.LogDebug($"Checking for visual effect {cmodifier.VisualEffect}");
             GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
             if (effectPrefab == null) { return; }
 
             // Check to see if the creature already has the specific VFX
+            //Logger.LogDebug($"Checking for existing visual effects holder");
             bool hasVFXAlready = character.transform.Find($"SLS_Visuals(Clone)/{effectPrefab.name}(Clone)");
             //Logger.LogDebug($"Setting up visual effect for {character.name} {character.GetZDOID().ID} - {hasVFXAlready}");
             if (hasVFXAlready == false) {
+                //Logger.LogDebug($"Checking of character has VFX already: {hasVFXAlready}");
                 Transform visualHolder = character.transform.Find("SLS_Visuals(Clone)");
                 if (visualHolder == null) {
+                    //Logger.LogDebug($"Setting up new visual effect holder for {character.name} {character.GetZDOID().ID}");
+                    if (VisualEffectHolder == null || character.gameObject == null) { return; }
                     visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
                 }
                 //Logger.LogDebug($"Adding visual effects for {character.name}");
                 GameObject vfxadd = GameObject.Instantiate(effectPrefab, visualHolder);
+                if (vfxadd == null) { return; }
+
                 float height = character.GetHeight();
                 float scale = height / 5f;
                 float rscale = character.GetRadius() / 2f;

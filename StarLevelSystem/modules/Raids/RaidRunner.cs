@@ -40,7 +40,13 @@ namespace StarLevelSystem.modules.Raids {
 
 
         public void Update() {
-            if (RunningRaid == null || Znet.IsValid() == false || Znet.IsOwner() == false) { return; }
+            if (RunningRaid == null || Znet.IsValid() == false) { return; }
+
+            // Clients all get this to set their music
+            RaidDefinition raid = RunningRaid.Get();
+            EnvMan.instance.m_forceEnv = raid.ForceEnvironment.ToString();
+
+            if (Znet.IsOwner() == false) { return; }
 
             // Network data is required before we start performing actions
             if (networkReady == false) { ConnectZData(); }
@@ -79,7 +85,9 @@ namespace StarLevelSystem.modules.Raids {
                     if (connectedSpawns.Count <= rmonitor.RaidSpawnDef.MaxSpawned) {
                         List<Vector3> spawnPoints = RaidSpawnPoints.Get();
                         GameObject creaturePrefab = PrefabManager.Instance.GetPrefab(rmonitor.RaidSpawnDef.PrefabName);
-                        
+                        if (creaturePrefab == null) {
+                            Logger.LogWarning($"The creature defined for this wave is invalid and will be skipped. |{rmonitor.RaidSpawnDef.PrefabName}|");
+                        }
 
                         // Check spawn chance
                         float chance = UnityEngine.Random.Range(0, 100f);
@@ -91,37 +99,51 @@ namespace StarLevelSystem.modules.Raids {
                         // Do custom level if custom level chances are set
                         SortedDictionary<int, float> levelupChance = LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
                         SortedDictionary<int, float> levelupDistanceBonus = LevelSelection.DetermineDistanceBonus(selectedSpawn);
-                        int level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1);
-                        Logger.LogDebug($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
-                        GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, UnityEngine.Random.rotation);
-                        MonsterAI mAI = spawnedCreature.GetComponent<MonsterAI>();
-                        switch (rmonitor.RaidSpawnDef.CreatureAI) {
-                            case AI.HuntPlayer:
-                                mAI.SetHuntPlayer(true);
-                                break;
-                            case AI.Alerted:
-                                mAI.SetAlerted(true);
-                                break;
-                            case AI.AgitatedByBuild:
-                                mAI.SetAggravated(true, BaseAI.AggravatedReason.Building);
-                                break;
-                            default:
-                                mAI.SetAlerted(true);
-                                break;
-                        }
-                        
-                        Character chara = spawnedCreature.GetComponent<Character>();
-                        CreatureSetupControl.CreatureSpawnerSetup(chara, level, false, requiredModifiers: rmonitor.RaidSpawnDef.RequiredModifiers);
 
-                        connectedSpawns.Add(spawnedCreature.GetComponent<ZNetView>().GetZDO().m_uid);
-                        rmonitor.StoreZDOIDS(connectedSpawns);
+                        int spawns = 0;
+                        while(spawns < rmonitor.RaidSpawnDef.SpawnGroupSize) {
+                            int level = 0;
+                            if (rmonitor.RaidSpawnDef.UseRaidLevelSystem) {
+                                level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1);
+                                Logger.LogDebug($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
+                            } else {
+                                Logger.LogDebug($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");
+                            }
+                            GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, UnityEngine.Random.rotation);
+                            spawns += 1;
+                            MonsterAI mAI = spawnedCreature.GetComponent<MonsterAI>();
+                            switch (rmonitor.RaidSpawnDef.CreatureAI) {
+                                case AI.HuntPlayer:
+                                    mAI.SetHuntPlayer(true);
+                                    break;
+                                case AI.Alerted:
+                                    mAI.SetAlerted(true);
+                                    break;
+                                case AI.AgitatedByBuild:
+                                    mAI.SetAggravated(true, BaseAI.AggravatedReason.Building);
+                                    break;
+                                default:
+                                    mAI.SetAlerted(true);
+                                    break;
+                            }
+
+                            Character chara = spawnedCreature.GetComponent<Character>();
+                            if (rmonitor.RaidSpawnDef.Faction != Character.Faction.TrainingDummy) {
+                                chara.m_faction = rmonitor.RaidSpawnDef.Faction;
+                            }
+
+                            CreatureSetupControl.CreatureSpawnerSetup(chara, level, false, requiredModifiers: rmonitor.RaidSpawnDef.RequiredModifiers, notAllowedModifiers: rmonitor.RaidSpawnDef.ModifiersNotAllowed);
+
+                            connectedSpawns.Add(spawnedCreature.GetComponent<ZNetView>().GetZDO().m_uid);
+                            rmonitor.StoreZDOIDS(connectedSpawns);
+                        }
                     }
                 }
 
                 // Raid is over
                 if (Endtime < ZNet.instance.GetTimeSeconds()) {
                     RemoveExistingMapPins();
-                    Player.MessageAllInRange(this.transform.position, RunningRaid.Get().EventRange * 1.5f, MessageHud.MessageType.Center, Localization.instance.Localize(RunningRaid.Get().EndMessage));
+                    Player.MessageAllInRange(this.transform.position, RunningRaid.Get().EventRange * 1.5f, MessageHud.MessageType.Center, RunningRaid.Get().EndMessage);
                     ZNetScene.Destroy(this);
                 }
 
@@ -130,18 +152,44 @@ namespace StarLevelSystem.modules.Raids {
             }
 
             // Spawn is setup, let the raid commence
-            RaidDefinition raid = RunningRaid.Get();
             RaitStartTime.Set(ZNet.instance.GetTimeSeconds());
             Endtime = RaitStartTime.Get() + raid.Duration;
             AddMapPins(this.transform.position, raid);
-            Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, Localization.instance.Localize(raid.StartMessage));
+            Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.StartMessage);
 
             // Start all of the spawners
             RaidSpawners.Clear();
             foreach (var spawner in raid.Spawns) {
-                RaidSpawners.Add(new RaidMonitor() { RaidSpawnDef = spawner, NextSpawn = 0 });
+                RaidSpawners.Add(new RaidMonitor() { RaidSpawnDef = spawner, NextSpawn = ZNet.instance.GetTimeSeconds() + spawner.InitalSpawnDelay });
             }
             ActiveRaidSpawns.Set(RaidSpawners);
+
+            foreach(Player player in SLSExtensions.GetPlayersInRange(this.transform.position, raid.EventRange * 1.5f)) {
+                player.ShowTutorial("randomevent", false);
+            }
+        }
+
+        public void OnDestroy() {
+            // Remove existing pins
+            RemoveExistingMapPins();
+
+            // Stop the music
+            MusicMan.instance.StopMusic();
+
+            // Clear the environment
+            EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
+
+            // Clean up any spawns
+            foreach (var raidmon in RaidSpawners) {
+                foreach (ZDOID spawned in raidmon.GetSpawnedZDOIDs() ) {
+                    ZDO zdo = ZDOMan.instance.GetZDO(spawned);
+                    ZNetView nv = ZNetScene.instance.FindInstance(zdo);
+                    if (nv != null) {
+                        nv.ClaimOwnership();
+                        ZNetScene.instance.Destroy(nv.gameObject); 
+                    }
+                }
+            }
         }
 
         private void ConnectZData() {
@@ -175,8 +223,14 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void RemoveExistingMapPins() {
-            if (AreaPin != null) { Minimap.instance.RemovePin(AreaPin.m_pos, AreaPin.m_worldSize); }
-            if (IconPin != null) { Minimap.instance.RemovePin(IconPin.m_pos, IconPin.m_worldSize); }
+            if (AreaPin != null) {
+                Minimap.instance.RemovePin(AreaPin);
+                AreaPin = null;
+            }
+            if (IconPin != null) {
+                Minimap.instance.RemovePin(IconPin);
+                IconPin = null;
+            }
         }
     }
 }

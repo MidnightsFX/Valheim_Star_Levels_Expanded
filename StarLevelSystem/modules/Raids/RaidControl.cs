@@ -1,5 +1,6 @@
 using HarmonyLib;
 using Jotunn.Managers;
+using Mono.Security.Authenticode;
 using PlayFab.ClientModels;
 using Splatform;
 using StarLevelSystem.common;
@@ -43,39 +44,44 @@ namespace StarLevelSystem.modules.Raids
 
             if (ServerPlayerRaidData.ContainsKey(playerPlatformID) == false) {
                 Logger.LogWarning($"Player {playerPlatformID} was not found and an appropriate raid can't be determined, a random one will be selected. \n  Currently tracked: {string.Join(",", ServerPlayerRaidData.Keys.ToList())}");
-                return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count - 1)).Value;
+                return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count - 1));
             }
 
             return ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.ElementAt(UnityEngine.Random.Range(0, ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.Count - 1));
         }
 
+        internal static void UpdateOrAddPlayerPrivateKeys(string playerPlatformID, List<string> privatekeys) {
+            UpdateOrAddPlayerPrivateKeysToRegistry(playerPlatformID, privatekeys);
+        }
+
         internal static void UpdateOrAddPlayerPrivateKeys(long playerID, List<string> privatekeys) {
             string playerPlatformID = SLSExtensions.GetPlatformUserID(playerID).ToString();
+            UpdateOrAddPlayerPrivateKeysToRegistry(playerPlatformID, privatekeys);
+        }
+
+        private static void UpdateOrAddPlayerPrivateKeysToRegistry(string playerPlatformID, List<string> privatekeys) {
             if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
                 ServerPlayerRaidData[playerPlatformID].PlayerPrivatekeys = privatekeys;
             } else {
                 ServerPlayerRaidData.Add(playerPlatformID, new DataObjects.PlayerRaidData() { PlayerPrivatekeys = privatekeys });
             }
+            //Logger.LogDebug("Player Private key data updated, preparing to persist to disk.");
             RaidsData.SaveServerRaidData(DataObjects.yamlserializer.Serialize(RaidControl.ServerPlayerRaidData));
         }
 
-        internal static void UpdatePlayerRaidHistory(PlayerRaidData playerRaidData, RaidDefinition raidDef) {
+        internal static void UpdatePlayerRaidHistory(PlayerRaidData playerRaidData, RaidDefinition raidDef, string key) {
             // Update history of this raid happening
-            if (playerRaidData.LastRaidByName.ContainsKey(raidDef.Name)) {
-                playerRaidData.LastRaidByName[raidDef.Name] = ZNet.instance.GetTimeSeconds();
+            if (playerRaidData.LastRaidByName.ContainsKey(key)) {
+                playerRaidData.LastRaidByName[key] = ZNet.instance.GetTimeSeconds();
             } else {
-                playerRaidData.LastRaidByName.Add(raidDef.Name, ZNet.instance.GetTimeSeconds());
+                playerRaidData.LastRaidByName.Add(key, ZNet.instance.GetTimeSeconds());
             }
             // Update cooldown
-            playerRaidData.NextRaidableTime = (raidDef.RaidCoolDownMinutes * 60) + ZNet.instance.GetTimeSeconds() * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar;
+            playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (raidDef.RaidCoolDownMinutes * 60 * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar);
         }
 
         internal static void ApplyRaidConfiguration(RandEventSystem res) {
             if (res == null) { return; }
-            if (ValConfig.UseVanillaRaidConfiguration != null && ValConfig.UseVanillaRaidConfiguration.Value) {
-                Logger.LogDebug("UseVanillaRaidConfiguration is true; leaving vanilla raid list untouched.");
-                return;
-            }
 
             RaidConfiguration cfg = RaidsData.SLE_Raid_Settings ?? RaidsData.DefaultConfiguration;
 
@@ -97,7 +103,7 @@ namespace StarLevelSystem.modules.Raids
             foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
                 if (peer.IsReady() == false) { continue; }
                 string playerPlatformID = SLSExtensions.GetPlatformUserID(peer.m_uid).ToString();
-                List<RaidDefinition> playerAvailableRaids = GetValidRaidsForPlayer(peer, playerPlatformID);
+                List<RaidDefinition> playerAvailableRaids = GetValidRaidsForPlayer(peer.GetRefPos(), playerPlatformID);
                 if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
                     ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids = playerAvailableRaids;
                 } else {
@@ -106,43 +112,49 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
-        internal static List<RaidDefinition> GetValidRaidsForPlayer(ZNetPeer peer, string playerPlatformID) {
+        internal static List<RaidDefinition> GetValidRaidsForPlayer(Vector3 position, string playerPlatformID) {
+            //Logger.LogDebug("Starting valid raid check");
             List<RaidDefinition> playerAvailableRaids = new List<RaidDefinition>();
-            Vector3 position = peer.GetRefPos();
+            //Logger.LogDebug("Base area check");
             bool inBase = EffectArea.IsPointInsideArea(position, EffectArea.Type.PlayerBase, 30f);
-            Heightmap heightmap = Heightmap.FindHeightmap(position);
-            Heightmap.Biome biome = heightmap.GetBiome(position);
-            
+            //Logger.LogDebug("Biome check ");
+            Heightmap.Biome biome = WorldGenerator.instance.GetBiome(position);
 
-            foreach(KeyValuePair<string, RaidDefinition> raid in RaidsData.SLE_Raid_Settings.Raids) {
-                if (raid.Value.Activation == null || raid.Value.Enabled == false) { continue; }
+            foreach (RaidDefinition raid in RaidsData.SLE_Raid_Settings.Raids) {
+                //Logger.LogDebug($"Starting check for {raid.Name}");
+
+                if (raid.Activation == null || raid.Enabled == false) { continue; }
 
                 // Biome Check
-                if (raid.Value.Activation.Biomes != null && raid.Value.Activation.Biomes.Contains(biome) == false) {
-                    Logger.LogDebug($"Player is not in a target biome, skipping selection of Raid: {raid.Key}");
+                //Logger.LogDebug($"Checking for Raid biome requirements");
+                if (raid.Activation.Biomes != null && raid.Activation.Biomes.Contains(biome) == false) {
+                    Logger.LogDebug($"Player is not in a target biome, skipping selection of Raid: {raid.Name}");
                     continue;
                 }
                 // BaseCheck
-                if (raid.Value.Activation.NearBaseOnly && inBase == false ) {
-                    Logger.LogDebug($"Player is not in base, skipping selection of Raid: {raid.Key}");
+                //Logger.LogDebug($"Checking for Raid player base requirements");
+                if (raid.Activation.NearBaseOnly && inBase == false ) {
+                    Logger.LogDebug($"Player is not in base, skipping selection of Raid: {raid.Name}");
                     continue;
                 }
                 // Required Global Key Check
-                if (raid.Value.Activation.RequiredGlobalKeys != null) {
+                //Logger.LogDebug($"Checking for global key requirements");
+                if (raid.Activation.RequiredGlobalKeys != null) {
                     bool hasRequiredGlobalKeys = true;
                     List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
-                    foreach (string gkey in raid.Value.Activation.RequiredGlobalKeys) {
+                    foreach (string gkey in raid.Activation.RequiredGlobalKeys) {
                         if (currentGlobalKeys.Contains(gkey) == false) {
                             hasRequiredGlobalKeys = false;
                             break;
                         }
                     }
                     if (hasRequiredGlobalKeys == false) {
-                        Logger.LogDebug($"Server does not have a required global key, skipping Raid: {raid.Key}");
+                        Logger.LogDebug($"Server does not have a required global key, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
 
+                //Logger.LogDebug($"Finding Player Raid Data");
                 PlayerRaidData playerData = new PlayerRaidData();
                 if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
                     playerData = ServerPlayerRaidData[playerPlatformID];
@@ -153,53 +165,81 @@ namespace StarLevelSystem.modules.Raids
 
                 // Player Private keys will require an RPC requeast from the client for the data, since it is not stored server side.
                 // Required private key check
-                if (raid.Value.Activation.RequiredPlayerKeys != null && playerPrivateKeys.Count > 0) {
+                //Logger.LogDebug($"Checking for required private keys");
+                if (raid.Activation.RequiredPlayerKeys != null) {
                     bool hasRequiredPlayerKeys = true;
-                    foreach (string pkey in raid.Value.Activation.RequiredPlayerKeys) {
+                    foreach (string pkey in raid.Activation.RequiredPlayerKeys) {
                         if (playerPrivateKeys.Contains(pkey) == false) {
                             hasRequiredPlayerKeys = false;
                             break;
                         }
                     }
                     if (hasRequiredPlayerKeys == false) {
-                        Logger.LogDebug($"Player {peer.m_playerName} does not have a required private key, skipping Raid: {raid.Key}");
+                        Logger.LogDebug($"Player {playerPlatformID} does not have a required private key, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
 
                 // Check for partial match player keys
-                if (raid.Value.Activation.AnyRequiredPlayerKeys != null) {
+                if (raid.Activation.AnyRequiredPlayerKeys != null) {
                     bool hasAnyRequiredPlayerKeys = false;
-                    foreach (string pkey in raid.Value.Activation.RequiredPlayerKeys) {
+                    foreach (string pkey in raid.Activation.RequiredPlayerKeys) {
                         if (playerPrivateKeys.Contains(pkey)) {
                             hasAnyRequiredPlayerKeys = true;
                             break;
                         }
                     }
                     if (hasAnyRequiredPlayerKeys == false) {
-                        Logger.LogDebug($"Player {peer.m_playerName} does not have any of the required private keys, skipping Raid: {raid.Key}");
+                        Logger.LogDebug($"Player {playerPlatformID} does not have any of the required private keys, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
 
                 // Check if the raid has been activated too recently
+                //Logger.LogDebug($"Checking recent activations of specified raid");
                 if (playerData.LastRaidByName.Count > 0) {
                     if (playerData.NextRaidableTime > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogDebug($"Player {peer.m_playerName} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Key}");
+                        Logger.LogDebug($"Player {playerPlatformID} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Name}");
                         continue;
                     }
-                    if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Key) && (playerData.LastRaidByName[raid.Key] + raid.Value.RaidCoolDownMinutes) > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogDebug($"Player {peer.m_playerName} has activated Raid {raid.Key} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Key] + raid.Value.RaidCoolDownMinutes}");
+                    if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + raid.RaidCoolDownMinutes) > ZNet.instance.GetTimeSeconds()) {
+                        Logger.LogDebug($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + raid.RaidCoolDownMinutes}");
                         continue;
                     }
                 }
 
-                Logger.LogDebug($"Raid {raid.Key} valid for player {peer.m_playerName}");
-                playerAvailableRaids.Add(raid.Value);
+                Logger.LogDebug($"Raid {raid.Name} valid for player {playerPlatformID}");
+                playerAvailableRaids.Add(raid);
             }
 
 
             return playerAvailableRaids;
+        }
+
+        public static void ForceMusicForClientsInArea(Music music, Vector3 position, float range) {
+            // Validate the requested music is valid
+            // if music is invalid return
+            // if this is not a server, dedicated or integrated, return
+
+            List<ZNetPeer> peersInArea = SLSExtensions.ServerGetPeersInArea(position, range);
+            ZPackage package = new ZPackage();
+            package.Write(music.ToString());
+            foreach (ZNetPeer peer in peersInArea) {
+                ValConfig.ClientForcePlayMusicRPC.SendPackage(peer.m_uid, package);
+            }
+        }
+
+        public static void RemoveNearbyRunningEvents() {
+            Logger.LogDebug($"Client recieved remove nearby event command.");
+            
+            // Avoid the original
+            IEnumerable<RaidRunner> objects = Resources.FindObjectsOfTypeAll<RaidRunner>();
+            //Logger.LogDebug($"Removing {objects.Count()} nearby events.");
+            foreach (RaidRunner obj in objects) {
+                if (obj.name == "RaidRunner") { continue; } // skip the original
+                Logger.LogDebug($"Removing {obj.name}");
+                ZNetScene.instance.Destroy(obj.gameObject);
+            }
         }
 
         public static IEnumerator DetermineRemoteSpawnLocations(Vector3 origin, ListVectorZNetProperty resultset,  int numTargets, BoolZNetProperty pointsReady, float maxDistance = 300f, Heightmap.Biome targetBiome = Heightmap.Biome.None) {

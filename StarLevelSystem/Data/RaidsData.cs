@@ -12,6 +12,8 @@ namespace StarLevelSystem.Data
     {
         public static RaidConfiguration SLE_Raid_Settings = DefaultConfiguration;
 
+        internal static Dictionary<string, RaidDefinition> RaidsByName = new Dictionary<string, RaidDefinition>();
+
         public static readonly RaidConfiguration DefaultConfiguration = new RaidConfiguration()
         {
             GlobalSettings = new GlobalRaidSettings()
@@ -20,220 +22,395 @@ namespace StarLevelSystem.Data
                 GlobalRaidIntervalScalar = 1f,
                 GlobalRaidChanceScalar = 1f,
             },
-            Raids = new Dictionary<string, RaidDefinition>()
+            Raids = new List<RaidDefinition>()
             {
-                { "army_eikthyr", new RaidDefinition() {
-                    Duration = 60f,
-                    StartMessage = "$event_eikthyr_start",
-                    EndMessage = "$event_eikthyr_over",
-                    ForceMusic = "RaidMeadows",
+                { new RaidDefinition() {
+                    Name = "army_eikthyr",
+                    Duration = 180f,
+                    StartMessage = "$event_eikthyrarmy_start",
+                    EndMessage = "$event_eikthyrarmy_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.Misty,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Meadows },
                         NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_eikthyr" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_gdking" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Greyling", MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Neck",    MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
-                        new RaidSpawnEntry() { PrefabName = "Boar",    MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
+                        new RaidSpawnEntry() { PrefabName = "Greyling", MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 5, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Neck",    MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 5, CreatureAI = AI.Alerted },
+                        new RaidSpawnEntry() { PrefabName = "Boar",    MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 5, CreatureAI = AI.Alerted },
                     },
                 }},
-                { "foresttrolls", new RaidDefinition() {
-                    Duration = 60f,
-                    StartMessage = "$event_forest_start",
-                    EndMessage = "$event_forest_over",
-                    ForceMusic = "RaidBlackForest",
+                { new RaidDefinition() {
+                    Name = "foresttrolls",
+                    Duration = 180f,
+                    StartMessage = "$event_foresttrolls_start",
+                    EndMessage = "$event_foresttrolls_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.DeepForest_Mist,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.BlackForest },
                         NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_eikthyr" },
-                        NotRequiredGlobalKeys = new List<string>() { "defeated_gdking" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Troll", MaxSpawned = 2, SpawnInterval = 30f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Troll", MaxSpawned = 3, SpawnInterval = 30f, SpawnChance = 100f, LevelMin = 1, LevelMax = 3, CreatureAI = AI.AgitatedByBuild, SpawnGroupSize = 2, 
+                            CustomCreatureLevelUpChance = new SortedDictionary<int, float>() {
+                                { 1, 50f },
+                                { 2, 25f },
+                                { 3, 20f },
+                                { 4, 15f },
+                                { 5, 7f },
+                                { 6, 3f },
+                                { 7, 1f },
+                            } },
                     },
                 }},
-                { "army_theelder", new RaidDefinition() {
+                { new RaidDefinition() {
+                    Name = "army_theelder",
+                    Duration = 180f,
+                    StartMessage = "$event_gdkingarmy_start",
+                    EndMessage = "$event_gdkingarmy_end",
+                    ForceEnvironment = DataObjects.Environment.DeepForest_Mist,
+                    ForceMusic = Music.Zcombat,
+                    Activation = new RaidActivation() {
+                        NearBaseOnly = true,
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_gdking" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Greydwarf",        MaxSpawned = 6, SpawnInterval = 3f, SpawnChance = 100f, LevelMin = 1, LevelMax = 5, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3},
+                        new RaidSpawnEntry() { PrefabName = "Greydwarf_Elite",  MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 5, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Greydwarf_Shaman", MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 5, CreatureAI = AI.Alerted },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "skeletons",
                     Duration = 90f,
-                    StartMessage = "$event_theelder_start",
-                    EndMessage = "$event_theelder_over",
-                    ForceMusic = "RaidBlackForest",
-                    Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Meadows, Heightmap.Biome.BlackForest },
-                        NearBaseOnly = true,
-                        RequiredGlobalKeys = new List<string>() { "defeated_gdking" },
-                        NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
-                    },
-                    Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Greydwarf",        MaxSpawned = 6, SpawnInterval = 3f, SpawnChance = 100f, LevelMin = 1, LevelMax = 3, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Greydwarf_Elite",  MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.AgitatedByBuild },
-                        new RaidSpawnEntry() { PrefabName = "Greydwarf_Shaman", MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
-                    },
-                }},
-                { "skeletons", new RaidDefinition() {
-                    Duration = 60f,
                     StartMessage = "$event_skeletons_start",
-                    EndMessage = "$event_skeletons_over",
-                    ForceMusic = "RaidBlackForest",
+                    EndMessage = "$event_skeletons_end",
+                    ForceEnvironment = DataObjects.Environment.Crypt,
+                    ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.BlackForest, Heightmap.Biome.Swamp },
-                        NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_gdking" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Skeleton",        MaxSpawned = 6, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
-                        new RaidSpawnEntry() { PrefabName = "Skeleton_Poison", MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton",        MaxSpawned = 6, SpawnInterval = 4f, SpawnChance = 100f, UseRaidLevelSystem = false, CreatureAI = AI.Alerted, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton_Poison", MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, UseRaidLevelSystem = false, CreatureAI = AI.Alerted },
                     },
                 }},
-                { "blobs", new RaidDefinition() {
-                    Duration = 60f,
+                { new RaidDefinition() {
+                    Name = "blobs",
+                    Duration = 90f,
                     StartMessage = "$event_blobs_start",
                     EndMessage = "$event_blobs_over",
-                    ForceMusic = "RaidSwamp",
+                    ForceEnvironment = DataObjects.Environment.SwampRain,
+                    ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Swamp },
                         NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_gdking" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Blob",      MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "BlobElite", MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Blob",      MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2 },
+                        new RaidSpawnEntry() { PrefabName = "BlobElite", MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.HuntPlayer },
                     },
                 }},
-                { "surtlings", new RaidDefinition() {
+                { new RaidDefinition() {
+                    Name = "ghosts",
+                    Duration = 180f,
+                    StartMessage = "$event_ghosts_start",
+                    EndMessage = "$event_ghosts_end",
+                    ForceEnvironment = DataObjects.Environment.Ghosts,
+                    ForceMusic = Music.Zcombat,
+                    Activation = new RaidActivation() {
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Ghost", MaxSpawned = 3, SpawnInterval = 30f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Wraith", MaxSpawned = 3, SpawnInterval = 30f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.AgitatedByBuild },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "surtlings",
                     Duration = 60f,
                     StartMessage = "$event_surtlings_start",
-                    EndMessage = "$event_surtlings_over",
-                    ForceMusic = "RaidSwamp",
+                    EndMessage = "$event_surtlings_end",
+                    ForceEnvironment = DataObjects.Environment.Ashlands_CinderRain,
+                    ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Swamp },
+                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Swamp, Heightmap.Biome.Meadows, Heightmap.Biome.BlackForest },
                         NearBaseOnly = true,
                         RequiredGlobalKeys = new List<string>() { "defeated_gdking" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Surtling", MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Surtling", MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, UseRaidLevelSystem = false, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2,
+                            RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } }
+                        },
                     },
                 }},
-                { "army_bonemass", new RaidDefinition() {
-                    Duration = 90f,
-                    StartMessage = "$event_bonemass_start",
-                    EndMessage = "$event_bonemass_over",
-                    ForceMusic = "RaidSwamp",
+                { new RaidDefinition() {
+                    Name =  "army_bonemass",
+                    Duration = 180f,
+                    StartMessage = "$event_bonemassarmy_start",
+                    EndMessage = "$event_bonemassarmy_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.SwampRain,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Swamp },
                         NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_dragon" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Skeleton",      MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
-                        new RaidSpawnEntry() { PrefabName = "Blob",          MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
-                        new RaidSpawnEntry() { PrefabName = "Draugr",        MaxSpawned = 3, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.AgitatedByBuild },
-                        new RaidSpawnEntry() { PrefabName = "Draugr_Elite",  MaxSpawned = 1, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Draugr_Ranged", MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton",      MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.Alerted, SpawnGroupSize = 2 },
+                        new RaidSpawnEntry() { PrefabName = "Blob",          MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.Alerted },
+                        new RaidSpawnEntry() { PrefabName = "Draugr",        MaxSpawned = 3, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.AgitatedByBuild, SpawnGroupSize = 2 },
+                        new RaidSpawnEntry() { PrefabName = "Draugr_Elite",  MaxSpawned = 1, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Draugr_Ranged", MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 12, CreatureAI = AI.HuntPlayer },
                     },
                 }},
-                { "wolves", new RaidDefinition() {
+                { new RaidDefinition() {
+                    Name = "wolves",
                     Duration = 60f,
                     StartMessage = "$event_wolves_start",
-                    EndMessage = "$event_wolves_over",
-                    ForceMusic = "RaidMountain",
+                    EndMessage = "$event_wolves_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.SnowStorm,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mountain },
-                        NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_dragon" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Wolf",    MaxSpawned = 5, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Fenring", MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Wolf",    MaxSpawned = 5, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Fenring", MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.HuntPlayer },
                     },
                 }},
-                { "army_moder", new RaidDefinition() {
-                    Duration = 90f,
-                    StartMessage = "$event_moder_start",
-                    EndMessage = "$event_moder_over",
-                    ForceMusic = "RaidMountain",
+                { new RaidDefinition() {
+                    Name = "cultists",
+                    Duration = 180f,
+                    StartMessage = "$event_caves_start",
+                    EndMessage = "$event_caves_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.SnowStorm,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mountain },
                         NearBaseOnly = true,
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_dragon" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_queen" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Ulv",    MaxSpawned = 5, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 20, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Fenring_Cultist", MaxSpawned = 2, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 20, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "army_moder",
+                    Duration = 180f,
+                    StartMessage = "$event_moderarmy_start",
+                    EndMessage = "$event_moderarmy_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.Twilight_Snow,
+                    Activation = new RaidActivation() {
+                        NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_dragon" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_goblinking" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Hatchling",        MaxSpawned = 3, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Wolf",             MaxSpawned = 3, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Fenring_Cultist",  MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Hatchling",        MaxSpawned = 3, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2 },
+                        new RaidSpawnEntry() { PrefabName = "Wolf",             MaxSpawned = 3, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Fenring_Cultist",  MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 16, CreatureAI = AI.AgitatedByBuild },
                     },
                 }},
-                { "army_goblin", new RaidDefinition() {
-                    Duration = 90f,
-                    StartMessage = "$event_goblins_start",
-                    EndMessage = "$event_goblins_over",
-                    ForceMusic = "RaidPlains",
+                { new RaidDefinition() {
+                    Name = "army_goblin",
+                    Duration = 180f,
+                    StartMessage = "$event_goblinarmy_start",
+                    EndMessage = "$event_goblinarmy_end",
+                    ForceEnvironment = DataObjects.Environment.GoblinKing,
+                    ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Plains },
                         NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_goblinking" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_queen" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Goblin",        MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "GoblinArcher",  MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "GoblinShaman",  MaxSpawned = 1, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.Alerted },
-                        new RaidSpawnEntry() { PrefabName = "GoblinBrute",   MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Goblin",        MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 20, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2 },
+                        new RaidSpawnEntry() { PrefabName = "GoblinArcher",  MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 20, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "GoblinShaman",  MaxSpawned = 1, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 20, CreatureAI = AI.Alerted },
+                        new RaidSpawnEntry() { PrefabName = "GoblinBrute",   MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 20, CreatureAI = AI.AgitatedByBuild },
                     },
                 }},
-                { "bats", new RaidDefinition() {
+                { new RaidDefinition() {
+                    Name = "bats",
                     Duration = 60f,
                     StartMessage = "$event_bats_start",
-                    EndMessage = "$event_bats_over",
-                    ForceMusic = "RaidMistlands",
+                    EndMessage = "$event_bats_end",
+                    ForceEnvironment = DataObjects.Environment.GoblinKing,
+                    ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands },
-                        NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_goblinking" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_queen" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Bat", MaxSpawned = 6, SpawnInterval = 3f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Bat", MaxSpawned = 12, SpawnInterval = 3f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
                     },
                 }},
-                { "army_seekers", new RaidDefinition() {
+                { new RaidDefinition() {
+                    Name = "gjall_ambush",
                     Duration = 90f,
-                    StartMessage = "$event_seekers_start",
-                    EndMessage = "$event_seekers_over",
-                    ForceMusic = "RaidMistlands",
+                    StartMessage = "$event_gjallarmy_start",
+                    EndMessage = "$event_gjallarmy_end",
+                    ForceMusic = Music.Zcombat,
+                    ForceEnvironment = DataObjects.Environment.Mistlands_thunder,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands },
                         NearBaseOnly = true,
+                        Chance = 50f,
                         RequiredGlobalKeys = new List<string>() { "defeated_queen" },
                         NotRequiredGlobalKeys = new List<string>() { "defeated_fader" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Seeker",       MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "SeekerBrute",  MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.AgitatedByBuild },
-                        new RaidSpawnEntry() { PrefabName = "Tick",         MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Gjall",  MaxSpawned = 2, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 26, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Tick",   MaxSpawned = 8, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 26, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2, ModifiersNotAllowed = new List<string>() { "FireNova" } },
                     },
                 }},
-                { "army_charred", new RaidDefinition() {
-                    Duration = 90f,
-                    StartMessage = "$event_charred_start",
-                    EndMessage = "$event_charred_over",
-                    ForceMusic = "RaidAshLands",
+                { new RaidDefinition() {
+                    Name = "army_seekers",
+                    Duration = 180f,
+                    StartMessage = "$event_seekerarmy_start",
+                    EndMessage = "$event_seekerarmy_end",
+                    ForceEnvironment = DataObjects.Environment.Mistlands_thunder,
+                    ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
-                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands },
                         NearBaseOnly = true,
-                        RequiredGlobalKeys = new List<string>() { "defeated_fader" },
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_queen" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_fader" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
-                        new RaidSpawnEntry() { PrefabName = "Charred_Melee",  MaxSpawned = 3, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Charred_Archer", MaxSpawned = 2, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
-                        new RaidSpawnEntry() { PrefabName = "Charred_Mage",   MaxSpawned = 1, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 2, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Seeker",       MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 26, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "SeekerBrute",  MaxSpawned = 1, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 26, CreatureAI = AI.AgitatedByBuild },
+                        new RaidSpawnEntry() { PrefabName = "Tick",         MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 26, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "army_charred",
+                    Duration = 180f,
+                    StartMessage = "$event_charredarmy_start",
+                    EndMessage = "$event_charredarmy_end",
+                    ForceEnvironment = DataObjects.Environment.Ashlands_storm,
+                    ForceMusic = Music.Zcombat,
+                    Activation = new RaidActivation() {
+                        NearBaseOnly = true,
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_queen" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_fader" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Charred_Twitcher", MaxSpawned = 6, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Charred_Archer",   MaxSpawned = 2, SpawnInterval = 12f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Charred_Melee",    MaxSpawned = 2, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "army_charred_spawners",
+                    Duration = 90f,
+                    StartMessage = "event_charredspawnerarmy_start",
+                    EndMessage = "event_charrespawnerarmy_end",
+                    ForceEnvironment = DataObjects.Environment.Ashlands_ashrain,
+                    ForceMusic = Music.Zcombat,
+                    Activation = new RaidActivation() {
+                        NearBaseOnly = true,
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_queen" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_fader" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Spawner_CharredStone", MaxSpawned = 4, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "hildir_boss_revenge1",
+                    Duration = 180f,
+                    StartMessage = "$event_hildirboss1_start",
+                    EndMessage = "$event_hildirboss1_end",
+                    ForceMusic = Music.ZCombatEventL2,
+                    ForceEnvironment = DataObjects.Environment.Ashlands_ashrain,
+                    Activation = new RaidActivation() {
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "hildir1" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Skeleton_Hildir",  MaxSpawned = 1, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton", MaxSpawned = 8, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton_Poison",   MaxSpawned = 4, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "hildir_boss_revenge2",
+                    Duration = 180f,
+                    StartMessage = "$event_hildirboss2_start",
+                    EndMessage = "$event_hildirboss2_end",
+                    ForceMusic = Music.ZCombatEventL3,
+                    ForceEnvironment = DataObjects.Environment.Twilight_SnowStorm,
+                    Activation = new RaidActivation() {
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "hildir2" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Fenring_Cultist_Hildir",  MaxSpawned = 1, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Ulv", MaxSpawned = 6, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "Fenring_Cultist",   MaxSpawned = 2, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "hildir_boss_revenge3",
+                    Duration = 180f,
+                    StartMessage = "$event_hildirboss3_start",
+                    EndMessage = "$event_hildirboss3_end",
+                    ForceMusic = Music.ZCombatEventL4,
+                    ForceEnvironment = DataObjects.Environment.GoblinKing,
+                    Activation = new RaidActivation() {
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "hildir3" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "GoblinBruteBros",  MaxSpawned = 1, SpawnInterval = 4f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Goblin", MaxSpawned = 8, SpawnInterval = 6f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "GoblinShaman",   MaxSpawned = 2, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "deathlink_surprise",
+                    Duration = 180f,
+                    StartMessage = "$SLS_Secret_event1_start",
+                    EndMessage = "$SLS_Secret_event1_end",
+                    ForceEnvironment = DataObjects.Environment.Mistlands_thunder,
+                    ForceMusic = Music.ZCombatEventL4,
+                    Activation = new RaidActivation() {
+                        Chance = 25f,
+                        RequiredGlobalKeys = new List<string>() { "defeated_fader" },
+                        RequiredPlayerKeys = new List<string>() { "Deathlink" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "GoblinBruteBros",  MaxSpawned = 1, SpawnInterval = 180f, SpawnChance = 100f, LevelMin = 15, LevelMax = 30, CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Demon },
+                        new RaidSpawnEntry() { PrefabName = "Fenring_Cultist_Hildir",  MaxSpawned = 1, SpawnInterval = 180f, SpawnChance = 100f, LevelMin = 20, LevelMax = 30, CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Demon },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton_Hildir",  MaxSpawned = 1, SpawnInterval = 180f, SpawnChance = 100f, LevelMin = 25, LevelMax = 30, CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Demon },
+                        new RaidSpawnEntry() { PrefabName = "Skeleton_Poison",   MaxSpawned = 4, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 20, LevelMax = 30, CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Demon },
+                        new RaidSpawnEntry() { PrefabName = "GoblinShaman",   MaxSpawned = 2, SpawnInterval = 10f, SpawnChance = 100f, LevelMin = 12, LevelMax = 30, CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Demon },
                     },
                 }},
             },
@@ -257,6 +434,9 @@ namespace StarLevelSystem.Data
             try {
                 if (File.Exists(ValConfig.raidsFilePath)) {
                     UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
+                } else {
+                    RaidsData.SaveServerRaidData(DataObjects.yamlserializer.Serialize(RaidControl.ServerPlayerRaidData));
+                    UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
                 }
             }
             catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Raid values, defaults will be used. Exception: {e}"); }
@@ -268,8 +448,17 @@ namespace StarLevelSystem.Data
 
         public static bool UpdateYamlConfig(string yaml) {
             try {
-                SLE_Raid_Settings = DataObjects.yamldeserializer.Deserialize<RaidConfiguration>(yaml);
                 Logger.LogDebug("Loaded new Raid settings...");
+                SLE_Raid_Settings = DataObjects.yamldeserializer.Deserialize<RaidConfiguration>(yaml);
+
+                RaidsByName.Clear();
+                foreach (RaidDefinition raid in SLE_Raid_Settings.Raids) {
+                    if (RaidsByName.ContainsKey(raid.Name)) {
+                        Logger.LogWarning($"Raid with duplicate name, will be skipped. ({raid.Name})");
+                    }
+                    RaidsByName.Add(raid.Name, raid);
+                }
+
                 RaidControl.ApplyRaidConfiguration(RandEventSystem.instance);
             }
             catch (Exception ex) {

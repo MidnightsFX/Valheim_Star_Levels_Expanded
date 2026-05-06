@@ -23,11 +23,11 @@ namespace StarLevelSystem.common
     public class DataObjects
     {
 
-        public static IDeserializer yamldeserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
-        public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
+        public static IDeserializer yamldeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().Build();
+        public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
 
         //public static IDeserializer yamldeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
-        public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).JsonCompatible().Build();
+        public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).JsonCompatible().Build();
 
         public static BinaryFormatter binFormatter = new BinaryFormatter();
 
@@ -136,6 +136,89 @@ namespace StarLevelSystem.common
             HuntPlayer,
             Alerted,
             AgitatedByBuild
+        }
+
+        public enum Music {
+            Zrespawn,
+            Zintro,
+            Zmenu,
+            Zcombat,
+            ZCombatEventL1,
+            ZCombatEventL2,
+            ZCombatEventL3,
+            ZCombatEventL4,
+            Zboss_eikthyr,
+            Zboss_gdking,
+            Zboss_bonemass,
+            Zboss_moder,
+            Zboss_goblinking,
+            Zboss_queen,
+            Zboss_queen_ambience,
+            Zboss_fader,
+            Zmorning,
+            Zevening,
+            Zsailing,
+            Zsailing_ashlands,
+            Zblackforest,
+            Zmeadows,
+            Zswamp,
+            Zmountain,
+            Zplains,
+            Zplainstower,
+            Zmistlands,
+            Zashlands,
+            Zforestcrypt,
+            Zforestcrypthildir,
+            Zfrostcaves,
+            Zfrostcaveshildir,
+            Zhome,
+            Zlocation_forest,
+            Zlocation_haldor,
+            Zlocation_dvergrtower,
+            Zlocation_dvergrexc,
+            Zlocation_ashlands_ruins
+        }
+
+        public enum Environment {
+            Clear,
+            Misty,
+            Darklands_dark,
+            DeepForest_Mist,
+            Heath_clear,
+            InfectedMine,
+            GDKing,
+            Rain,
+            LightRain,
+            ThunderStorm,
+            Eikthyr,
+            Fader,
+            GoblinKing,
+            nofogts,
+            SwampRain,
+            Bonemass,
+            Snow,
+            SnowStorm,
+            Twilight_Clear,
+            Twilight_Snow,
+            Twilight_SnowStorm,
+            Moder,
+            Crypt,
+            CryptHildir,
+            Ghosts,
+            Queen,
+            SunkenCrypt,
+            Mistlands_clear,
+            Mistlands_rain,
+            Mistlands_thunder,
+            Ashlands_ashrain,
+            Ashlands_ashrain_clear,
+            Ashlands_CinderRain,
+            Ashlands_meteorshower,
+            Ashlands_misty,
+            Ashlands_SeaStorm,
+            Ashlands_storm,
+            Caves,
+            CavesHildir,
         }
 
         public class DNum {
@@ -425,6 +508,7 @@ namespace StarLevelSystem.common
             public List<string> PlayerPrivatekeys { get; set; } = new List<string>();
             public List<RaidDefinition> PlayerAvailableRaids { get; set; } = new List<RaidDefinition>();
             public double NextRaidableTime { get; set; } = 0f;
+            public Vector3 CurrentRaidPosition { get; set; }
             public Dictionary<string, double> LastRaidByName { get; set; } = new Dictionary<string, double>();
         }
 
@@ -447,7 +531,7 @@ namespace StarLevelSystem.common
 
         public class RaidConfiguration {
             public GlobalRaidSettings GlobalSettings { get; set; } = new GlobalRaidSettings();
-            public Dictionary<string, RaidDefinition> Raids { get; set; } = new Dictionary<string, RaidDefinition>();
+            public List<RaidDefinition> Raids { get; set; } = new List<RaidDefinition>();
         }
 
         public class GlobalRaidSettings {
@@ -473,21 +557,16 @@ namespace StarLevelSystem.common
             public float RaidCoolDownMinutes { get; set; } = 120f;
             public RaidActivation Activation { get; set; } = new RaidActivation();
             public List<RaidSpawnEntry> Spawns { get; set; } = new List<RaidSpawnEntry>();
-            [DefaultValue(-1)]
-            public int MaxLevelOverride { get; set; } = -1;
-            public float SpawnerDelay { get; set; } = 0f;
             [DefaultValue(96f)]
             public float EventRange { get; set; } = 96f;
             [DefaultValue("")]
             public string StartMessage { get; set; } = "";
             [DefaultValue("")]
             public string EndMessage { get; set; } = "";
-            [DefaultValue("")]
-            public string ForceEnvironment { get; set; } = "";
-            [DefaultValue("")]
-            public string ForceMusic { get; set; } = "";
-            [DefaultValue(true)]
-            public bool IsRandom { get; set; } = true;
+            [DefaultValue(Environment.Clear)]
+            public Environment ForceEnvironment { get; set; } = Environment.Clear;
+            [DefaultValue(Music.Zcombat)]
+            public Music ForceMusic { get; set; } = Music.Zcombat;
 
             public RandomEvent ToRaid(Vector3 position) {
                RandomEvent raid = new RandomEvent();
@@ -515,14 +594,14 @@ namespace StarLevelSystem.common
                     raid.m_pauseIfNoPlayerInArea = Activation.PauseIfNoPlayerInArea;
                     raid.m_nearBaseOnly = Activation.NearBaseOnly;
                 }
-                raid.m_spawnerDelay = SpawnerDelay;
+                raid.m_spawnerDelay = 0f;
                 raid.m_eventRange = EventRange;
                 raid.m_startMessage = Localization.instance.Localize(StartMessage);
                 raid.m_endMessage = Localization.instance.Localize(EndMessage);
-                raid.m_forceEnvironment = ForceEnvironment;
+                raid.m_forceEnvironment = ForceEnvironment.ToString();
                 raid.m_biome = Heightmap.FindBiome(position);
-                raid.m_forceMusic = ForceMusic;
-                raid.m_random = IsRandom;
+                raid.m_forceMusic = ForceMusic.ToString();
+                raid.m_random = true;
                 raid.m_time = 0; // This is used to track event times
                 raid.m_pos = position;
 
@@ -534,7 +613,7 @@ namespace StarLevelSystem.common
         public class RaidActivation {
             public List<Heightmap.Biome> Biomes { get; set; }
             [DefaultValue(true)]
-            public bool NearBaseOnly { get; set; } = true;
+            public bool NearBaseOnly { get; set; } = false;
             [DefaultValue(true)]
             public bool PauseIfNoPlayerInArea { get; set; } = true;
             [DefaultValue(100f)]
@@ -549,20 +628,27 @@ namespace StarLevelSystem.common
         [Serializable]
         public class RaidSpawnEntry {
             public string PrefabName { get; set; }
-            public AI CreatureAI { get; set; } = AI.AgitatedByBuild;
+            public AI CreatureAI { get; set; } = AI.Alerted;
             [DefaultValue(10f)]
             public float SpawnInterval { get; set; } = 10f;
             [DefaultValue(100f)]
             public float SpawnChance { get; set; } = 100f;
+            [DefaultValue(0f)]
+            public float InitalSpawnDelay { get; set; } = 0f;
             [DefaultValue(0)]
             public int MaxSpawned { get; set; } = 0;
             [DefaultValue(1)]
+            public int SpawnGroupSize { get; set; } = 1;
+            [DefaultValue(Character.Faction.TrainingDummy)]
+            public Character.Faction Faction { get; set; } = Character.Faction.TrainingDummy;
+            [DefaultValue(1)]
             public int LevelMin { get; set; } = 1;
             public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;
+            public bool UseRaidLevelSystem { get; set; } = true;
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
-            public List<string> ModifiersNotAllowed { get; set; }
-            [DefaultValue(0f)]
-            public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+            public List<string> ModifiersNotAllowed { get; set; } = null;
+            [DefaultValue(null)]
+            public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; } = null;
         }
 
         [Serializable]

@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Analytics;
 using static StarLevelSystem.common.DataObjects;
 using static ZNet;
 
@@ -186,6 +187,34 @@ namespace StarLevelSystem.common
             return characters;
         }
 
+        public static List<Player> GetPlayersInRange(Vector3 position, float range) {
+            Collider[] objs_near = Physics.OverlapSphere(position, range);
+            List<Player> players = new List<Player>();
+
+            foreach (var col in objs_near) {
+                var chara = col.GetComponentInChildren<Player>();
+                if (chara != null) { players.Add(chara); }
+            }
+
+            return players;
+        }
+
+        public static List<ZNetPeer> ServerGetPeersInArea(Vector3 pos, float radius) {
+            var result = new List<ZNetPeer>();
+            if (!ZNet.instance || !ZNet.instance.IsServer())
+                return result;
+
+            float radiusSqr = radius * radius;
+            foreach (ZNetPeer peer in ZNet.instance.m_peers) {
+                if (!peer.IsReady() || peer.m_characterID == ZDOID.None)
+                    continue;
+                if (Utils.DistanceSqr(peer.m_refPos, pos) <= radiusSqr)
+                    result.Add(peer);
+            }
+            return result;
+
+        }
+
         internal static float GetTotalDamageOptions(this HitData.DamageTypes hitdmg, bool include_poison = false, bool include_spirit = false, bool include_pickaxe_and_chop = false, float modElement = 1f, float modPhysical = 1f) {
             float physical = (hitdmg.m_damage + hitdmg.m_blunt + hitdmg.m_slash + hitdmg.m_pierce) * modPhysical;
             float elemental = (hitdmg.m_fire + hitdmg.m_frost + hitdmg.m_lightning) * modElement;
@@ -308,6 +337,20 @@ namespace StarLevelSystem.common
             return biomecfg;
         }
 
+        public static ZNetPeer GetPeerByPlatformID(string platformAndID) {
+            string compareID = platformAndID;
+            if (platformAndID.Contains("Steam")) {
+                compareID = platformAndID.Split('_')[1];
+            }
+            foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
+                if (peer.IsReady() && peer.m_socket.GetHostName() == compareID) {
+                    return peer;
+                }
+            }
+
+            return null;
+        }
+
         public static PlatformUserID GetPlatformUserID(long peerID) {
             ZNetPeer peer = ZNet.instance.GetPeer(peerID);
             if (peer == null || !peer.IsReady()) { return PlatformUserID.None; }
@@ -318,6 +361,31 @@ namespace StarLevelSystem.common
                 }
             }
             return PlatformUserID.None;
+        }
+
+        public static string GetLocalUserPlatformAndID() {
+            IUser local = (IUser)PlatformManager.DistributionPlatform.LocalUser;
+            return local.PlatformUserID.ToString();
+        }
+
+        public static bool PlatformAndIDIsPlayerOnline(string PlatformAndID) {
+            foreach (PlayerInfo playerInfo in ZNet.instance.GetPlayerList()) {
+                string platformID = $"{playerInfo.m_userInfo.m_id.m_platform.ToString()}_{playerInfo.m_userInfo.m_id.m_userID.ToString()}";
+                Logger.LogDebug($"Checking {platformID} == {PlatformAndID}");
+                if (platformID == PlatformAndID) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static Vector3 GetPlayerPosition(ZDOID characterID) {
+            if (characterID.IsNone() || ZDOMan.instance == null) return Vector3.zero;
+
+            ZDO zdo = ZDOMan.instance.GetZDO(characterID);
+            if (zdo == null) { return Vector3.zero; } 
+
+            return zdo.GetPosition();
         }
 
         public static List<string> GetPrivateKeysSanitize(this Player player) {

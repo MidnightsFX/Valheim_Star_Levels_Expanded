@@ -2,6 +2,7 @@
 using BepInEx.Configuration;
 using Jotunn.Entities;
 using Jotunn.Managers;
+using Splatform;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
@@ -13,6 +14,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -43,8 +45,10 @@ namespace StarLevelSystem
         private static CustomRPC CreatureLootSettingsRPC;
         private static CustomRPC ModifiersRPC;
         private static CustomRPC RaidsRPC;
-        private static CustomRPC ClientSendPlayerPrivateKeysRPC;
+        internal static CustomRPC ClientSendPlayerPrivateKeysRPC;
         internal static CustomRPC ClientStartRaidRPC;
+        internal static CustomRPC ClientForcePlayMusicRPC;
+        internal static CustomRPC ClientClearNearbyEventsRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -162,6 +166,8 @@ namespace StarLevelSystem
             RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerRecieveConfigs, OnClientReceiveRaidConfigs);
             ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerRecievePlayerPrivateKeys, OnClientRecieveRequestForPrivatekeys);
             ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerRecieveConfigs, OnClientRecieveRaidStart);
+            ClientForcePlayMusicRPC = NetworkManager.Instance.AddRPC("SLS_ClientForcePlayMusicRPC", OnServerRecieveConfigs, OnClientRecieveForcePlayMusic);
+            ClientClearNearbyEventsRPC = NetworkManager.Instance.AddRPC("SLS_ClientForceRemoveNearbyEventsRPC", OnServerRecieveConfigs, OnClientRecieveForceRemoveNearbyEvents);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
@@ -277,7 +283,7 @@ namespace StarLevelSystem
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
             MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
             RaidPerPlayerUpdateCheck = BindServerConfig("Raids", "RaidPerPlayerUpdateCheck", 10f, "The Interval in minutes between updating the valid raids for each player. Reduce if you want new raids to become available faster for players, increase to reduce pressure on server.", true, 1f, 120f);
-            ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 5, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
+            ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
@@ -565,9 +571,25 @@ namespace StarLevelSystem
             yield return null;
         }
 
+        private static IEnumerator OnClientRecieveForcePlayMusic(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            Music music = DataObjects.yamldeserializer.Deserialize<Music>(yaml);
+
+            MusicMan.instance.TriggerMusic(music.ToString());
+
+            // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
+        private static IEnumerator OnClientRecieveForceRemoveNearbyEvents(long sender, ZPackage package) {
+            RaidControl.RemoveNearbyRunningEvents();
+            // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
         internal static IEnumerator OnClientRecieveRequestForPrivatekeys(long sender, ZPackage _) {
             if (Player.m_localPlayer == null) { yield break; }
-            Logger.LogDebug("Collecting players private keys");
+            //Logger.LogDebug("Collecting players private keys");
             List<string> playerKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
             string filecontents = DataObjects.yamlserializerJsonCompat.Serialize(playerKeys);
             ZPackage package = new ZPackage();
@@ -576,13 +598,19 @@ namespace StarLevelSystem
                 Logger.LogDebug($"No private keys recieved from player: {Player.m_localPlayer.m_name}, skipping update to the server.");
                 yield break;
             }
-            Logger.LogDebug($"Sending private keys to server: {filecontents}");
-            if (ZNet.instance.GetServerPeer() != null) {
+            
+            if (ZNet.instance.GetServerPeer() != null && ZNet.instance.IsCurrentServerDedicated()) {
+                Logger.LogDebug($"Sending private keys to server: {filecontents}");
                 ClientSendPlayerPrivateKeysRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, package);
             } else {
                 // This is to handle integrated servers (singleplayer) where the server is the same as the client
-                //TaskRunner.Run().StartCoroutine(OnServerRecievePlayerPrivateKeys(0, package));
-                RaidControl.UpdateOrAddPlayerPrivateKeys(sender, playerKeys);
+                Logger.LogDebug($"Updating server with private keys: {filecontents}");
+                string PlatformAndID = SLSExtensions.GetLocalUserPlatformAndID();
+                if (string.IsNullOrEmpty(PlatformAndID)) {
+                    Logger.LogWarning("Could not update player private keys. Players platform was not detected.");
+                    yield break;
+                }
+                RaidControl.UpdateOrAddPlayerPrivateKeys(PlatformAndID, playerKeys);
             }
         }
 

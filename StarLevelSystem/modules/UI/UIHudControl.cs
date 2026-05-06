@@ -66,6 +66,7 @@ namespace StarLevelSystem.modules.UI {
 
         public static void InvalidateCacheEntry(Character chara) {
             uint id = chara.GetZDOID().ID;
+            //CreatureSetupControl.CreatureSetupNoDelay(chara);
             CompositeLazyCache.GetAndSetLocalCache(chara);
 
             if (characterExtendedHuds.ContainsKey(id)) {

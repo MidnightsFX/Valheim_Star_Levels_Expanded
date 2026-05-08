@@ -31,7 +31,7 @@ namespace StarLevelSystem.modules.Sizes {
             public static void Postfix(VisEquipment __instance, GameObject __result) {
                 if (__instance.m_isPlayer == true || __instance.m_nview == null || __instance.m_nview.GetZDO() == null || __result == null) { return; }
                 CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance.m_nview.GetZDO().m_uid.ID);
-                ApplyWeaponSizeModifications(__result, __instance.gameObject, cDetails);
+                SetSizeModification(__result, __instance.m_nview, cDetails);
             }
         }
 
@@ -45,7 +45,7 @@ namespace StarLevelSystem.modules.Sizes {
                 CharacterCacheEntry cDetails = CompositeLazyCache.GetAndSetLocalCache(__instance);
                 //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} - cdetails? {cDetails != null} with level {__instance.m_level}");
                 if (__instance.m_level > 1 && cDetails != null) {
-                    ApplySizeModifications(ragdoll.gameObject, cDetails, true);
+                    SetSizeModification(ragdoll.gameObject, __instance.m_nview, cDetails);
 
                     if (cDetails.Colorization != null) {
                         Colorization.ApplyColorizationWithoutLevelEffects(ragdoll.gameObject, cDetails.Colorization);

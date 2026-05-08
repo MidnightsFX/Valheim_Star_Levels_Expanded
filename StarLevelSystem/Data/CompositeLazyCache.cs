@@ -201,7 +201,7 @@ namespace StarLevelSystem.Data
                 Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
                 chara.SetLevel(maxlevel);
                 chara.m_level = maxlevel;
-                SizeModifications.ApplySizeModifications(chara.gameObject, characterEntry, force_update: true);
+                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, characterEntry);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
                 UIHudControl.InvalidateCacheEntry(chara);
             }

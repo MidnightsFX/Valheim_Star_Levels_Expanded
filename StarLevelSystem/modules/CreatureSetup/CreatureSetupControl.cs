@@ -76,7 +76,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
             CreatureModifiers.SetupModifiers(__instance, cDetails, CompositeLazyCache.GetCreatureModifiers(__instance));
             SpeedModifications.ApplySpeedModifications(__instance, cDetails);
             DamageModifications.ApplyDamageModification(__instance, cDetails);
-            SizeModifications.ApplySizeModifications(__instance.gameObject, cDetails);
+            SizeModifications.SetSizeModification(__instance.gameObject, __instance.m_nview, cDetails);
             HealthModifications.ApplyHealthModifications(__instance, cDetails);
 
             // Rebuild UI since it may have been created before these changes were applied

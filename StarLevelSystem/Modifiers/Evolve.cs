@@ -38,7 +38,7 @@ namespace StarLevelSystem.Modifiers {
                         CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
                         SpeedModifications.ApplySpeedModifications(chara, scd);
                         DamageModifications.ApplyDamageModification(chara, scd);
-                        SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
+                        SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
                         HealthModifications.ForceApplyHealthModifications(chara, scd);
                         chara.Heal(chara.GetMaxHealth() * 5f);
                         Logger.LogDebug($"Evolve: {chara} level: {level} -> {level + 1}");

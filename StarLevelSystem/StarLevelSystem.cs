@@ -9,6 +9,7 @@ using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Raids;
+using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
 using System.Linq;
 using System.Reflection;
@@ -57,6 +58,7 @@ namespace StarLevelSystem
             PrefabManager.OnVanillaPrefabsAvailable += UIHudControl.SetDefaultStar;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
             MinimapManager.OnVanillaMapDataLoaded += DistanceScaleSystem.DelayedMinimapSetup;
+            PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
             SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.RecievedServerUpdates();
             UIHudControl.LoadAssets();
             RaidControl.LoadAssets();

@@ -53,7 +53,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //cce.Level = LevelSystem.DetermineLevel(chara, chara.m_nview.GetZDO(), cce.CreatureSettings, cce.BiomeSettings);
                 //CompositeLazyCache.UpdateCharacterCacheEntry(chara, cce);
                 //CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, false);
-                SizeModifications.ApplySizeModifications(chara.gameObject, cce, force_update: true);
+                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cce, update: true);
                 CreatureSetupControl.CreatureSetup(chara, cce.Level);
                 //LevelUI.InvalidateCacheEntry(chara);
             }

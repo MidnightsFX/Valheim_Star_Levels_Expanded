@@ -42,7 +42,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute] = value;
             if ((CreatureBaseAttribute)attribute == CreatureBaseAttribute.Size) {
-                SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
+                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cdc, true);
             }
             return true;
         }
@@ -66,7 +66,7 @@ namespace StarLevelSystem.modules
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             SpeedModifications.ApplySpeedModifications(chara, scd);
             DamageModifications.ApplyDamageModification(chara, scd);
-            SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
+            SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
             HealthModifications.ForceApplyHealthModifications(chara, scd);
             return true;
         }
@@ -83,7 +83,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute] = value;
             if ((CreaturePerLevelAttribute)attribute == CreaturePerLevelAttribute.SizePerLevel) {
-                SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
+                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cdc, true);
             }
             return true;
         }
@@ -109,7 +109,7 @@ namespace StarLevelSystem.modules
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
             SpeedModifications.ApplySpeedModifications(chara, scd);
             DamageModifications.ApplyDamageModification(chara, scd);
-            SizeModifications.ApplySizeModifications(chara.gameObject, scd, true);
+            SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
             HealthModifications.ForceApplyHealthModifications(chara, scd);
             return true;
         }
@@ -201,7 +201,7 @@ namespace StarLevelSystem.modules
             if (cdc == null) { return false; }
             SpeedModifications.ApplySpeedModifications(chara, cdc);
             DamageModifications.ApplyDamageModification(chara, cdc);
-            SizeModifications.ApplySizeModifications(chara.gameObject, cdc, true);
+            SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cdc, true);
             HealthModifications.ForceApplyHealthModifications(chara, cdc);
             return true;
         }

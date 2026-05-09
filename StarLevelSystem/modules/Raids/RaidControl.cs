@@ -51,11 +51,13 @@ namespace StarLevelSystem.modules.Raids
         }
 
         internal static void UpdateOrAddPlayerPrivateKeys(string playerPlatformID, List<string> privatekeys) {
+            if (string.IsNullOrEmpty(playerPlatformID)) { return; }
             UpdateOrAddPlayerPrivateKeysToRegistry(playerPlatformID, privatekeys);
         }
 
         internal static void UpdateOrAddPlayerPrivateKeys(long playerID, List<string> privatekeys) {
             string playerPlatformID = SLSExtensions.GetPlatformUserID(playerID).ToString();
+            if (string.IsNullOrEmpty(playerPlatformID)) { return; }
             UpdateOrAddPlayerPrivateKeysToRegistry(playerPlatformID, privatekeys);
         }
 

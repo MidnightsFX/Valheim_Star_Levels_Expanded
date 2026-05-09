@@ -4,6 +4,8 @@
 - Improves size modification caching
 - Improves shutdown transition when destroying raid objects
 - Adds Key Anti-Affinity checks
+- Adds configurable config polling to better support server-side live changes regardless of hosting provider
+- Prevents API changes on null objects, such as already deleted creatures
  ```
 
 **0.19.0**

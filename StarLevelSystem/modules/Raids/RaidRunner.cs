@@ -180,10 +180,13 @@ namespace StarLevelSystem.modules.Raids {
             EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
 
             // Clean up any spawns
+            if (RaidSpawners == null) { return; }
             foreach (var raidmon in RaidSpawners) {
                 foreach (ZDOID spawned in raidmon.GetSpawnedZDOIDs() ) {
                     ZDO zdo = ZDOMan.instance.GetZDO(spawned);
+                    if (zdo == null) { continue; }
                     ZNetView nv = ZNetScene.instance.FindInstance(zdo);
+                    if (nv == null) { continue; }
                     if (nv != null) {
                         nv.ClaimOwnership();
                         ZNetScene.instance.Destroy(nv.gameObject); 

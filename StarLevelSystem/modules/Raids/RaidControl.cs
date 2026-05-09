@@ -154,6 +154,22 @@ namespace StarLevelSystem.modules.Raids
                     }
                 }
 
+                // Global key Anti-key check
+                if (raid.Activation.NotRequiredGlobalKeys != null) {
+                    bool hasAnAntiKey = false;
+                    List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
+                    foreach (string gkey in raid.Activation.NotRequiredGlobalKeys) {
+                        if (currentGlobalKeys.Contains(gkey) == false) {
+                            hasAnAntiKey = true;
+                            break;
+                        }
+                    }
+                    if (hasAnAntiKey == true) {
+                        Logger.LogDebug($"Server has a key that must be missing, skipping Raid: {raid.Name}");
+                        continue;
+                    }
+                }
+
                 //Logger.LogDebug($"Finding Player Raid Data");
                 PlayerRaidData playerData = new PlayerRaidData();
                 if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
@@ -191,6 +207,21 @@ namespace StarLevelSystem.modules.Raids
                     }
                     if (hasAnyRequiredPlayerKeys == false) {
                         Logger.LogDebug($"Player {playerPlatformID} does not have any of the required private keys, skipping Raid: {raid.Name}");
+                        continue;
+                    }
+                }
+
+                // Check to validate ensure that required missing keys are not present
+                if (raid.Activation.NotRequiredPlayerKeys != null) {
+                    bool hasAntiPrivateKey = false;
+                    foreach (string pkey in raid.Activation.NotRequiredPlayerKeys) {
+                        if (playerPrivateKeys.Contains(pkey) == false) {
+                            hasAntiPrivateKey = true;
+                            break;
+                        }
+                    }
+                    if (hasAntiPrivateKey == true) {
+                        Logger.LogDebug($"Player {playerPlatformID} has a private key which must be avoided, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }

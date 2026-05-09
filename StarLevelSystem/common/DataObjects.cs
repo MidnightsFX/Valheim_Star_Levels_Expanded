@@ -44,6 +44,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_INFERTILE = "SLS_Infertile";
         public static readonly string SLS_SOULEATER = "SLS_SoulEater";
         public static readonly string SLS_EVOLVE = "SLS_Evolve";
+        public static readonly string SLS_SIZE = "SLS_SIZE";
 
         public static readonly string SLS_MOD_CAP = "EffectCap";
 

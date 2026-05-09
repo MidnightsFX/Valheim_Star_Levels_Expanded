@@ -12,7 +12,7 @@ namespace StarLevelSystem.modules.Sizes {
 
         private static Dictionary<string, Vector3> SizeEstimateCache = new Dictionary<string, Vector3>();
         internal static void SetSizeModification(GameObject obj, ZNetView zview, CharacterCacheEntry cdetails, bool update = false, float bonus = 0f) {
-            Vector3 size = zview.m_zdo.GetVec3(ZDOVars.s_scaleHash, Vector3.zero);
+            Vector3 size = zview.m_zdo.GetVec3(SLS_SIZE, Vector3.zero);
 
             // Size setting exists and we are not updating it
             if (update == false && size != Vector3.zero) {
@@ -26,7 +26,7 @@ namespace StarLevelSystem.modules.Sizes {
             float scale = bonus + cdetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + (cdetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cdetails.Level);
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
             UpdateRidingCreaturesForSizeScaling(obj, cdetails);
-            zview.m_zdo.Set(ZDOVars.s_scaleHash, creatureScale);
+            zview.m_zdo.Set(SLS_SIZE, creatureScale);
             Logger.LogDebug($"Setting size of {cdetails.RefCreatureName} to {creatureScale}");
             Physics.SyncTransforms();
         }

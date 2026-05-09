@@ -150,12 +150,15 @@ namespace StarLevelSystem
         public static ConfigEntry<float> RaidPerPlayerUpdateCheck;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
 
+        public static ConfigEntry<float> ConfigPollIntervalSeconds;
+
         public ValConfig(ConfigFile cf)
         {
             // ensure all the config values are created
             cfg = cf;
             cfg.SaveOnConfigSet = true;
             CreateConfigValues(cf);
+            ConfigFileWatcher.Register(cfg.ConfigFilePath, OnMainConfigFileChanged);
         }
 
         public void SetupConfigRPCs() {
@@ -311,6 +314,7 @@ namespace StarLevelSystem
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
             InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
+            ConfigPollIntervalSeconds = BindServerConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);
 
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
@@ -419,8 +423,7 @@ namespace StarLevelSystem
                 }
             }
 
-            if (foundRaidFile == false)
-            {
+            if (foundRaidFile == false) {
                 Logger.LogDebug("Raid config file missing, recreating.");
                 using (StreamWriter writetext = new StreamWriter(raidsFilePath)) {
                     String header = @"#################################################
@@ -430,67 +433,57 @@ namespace StarLevelSystem
                     writetext.WriteLine(header);
                     writetext.WriteLine(RaidsData.YamlDefaultConfig());
                 }
+                
             }
 
-            SetupFileWatcher(ColorSettingsFileName);
-            SetupFileWatcher(LevelSettingsFileName);
-            SetupFileWatcher(ModifiersFileName);
-            SetupFileWatcher($"*{LootSettingsFileName}");
-            SetupFileWatcher(RaidSettingsFileName);
+            ConfigFileWatcher.Register(colorsFilePath, UpdateColorSettings);
+            ConfigFileWatcher.Register(LevelSettingsFileName, UpdateLevelSettings);
+            ConfigFileWatcher.Register(creatureModifierFilePath, UpdateModifierSettings);
+            ConfigFileWatcher.Register(creatureLootFilePath, UpdateLootSettings);
+            ConfigFileWatcher.Register(raidsFilePath, UpdateRaidSettings);
         }
 
-        private void SetupFileWatcher(string filtername)
-        {
-            FileSystemWatcher fw = new FileSystemWatcher();
-            fw.Path = ValConfig.GetSecondaryConfigDirectoryPath();
-            fw.NotifyFilter = NotifyFilters.LastWrite;
-            fw.Filter = filtername;
-            fw.Changed += new FileSystemEventHandler(UpdateConfigFileOnChange);
-            fw.Created += new FileSystemEventHandler(UpdateConfigFileOnChange);
-            fw.Renamed += new RenamedEventHandler(UpdateConfigFileOnChange);
-            fw.SynchronizingObject = ThreadingHelper.SynchronizingObject;
-            fw.EnableRaisingEvents = true;
+        private static void UpdateColorSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Color Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            Colorization.UpdateYamlConfig(filetext);
+            ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
         }
 
-        private static void UpdateConfigFileOnChange(object sender, FileSystemEventArgs e) {
-            if (SynchronizationManager.Instance.PlayerIsAdmin == false) {
-                Logger.LogInfo("Player is not an admin, and not allowed to change local configuration. Ignoring.");
+        private static void UpdateLevelSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Level Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            LevelSystemData.UpdateYamlConfig(filetext);
+            LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+        }
+
+        private static void UpdateLootSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Loot Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            LootSystemData.UpdateYamlConfig(filetext);
+            CreatureLootSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+        }
+
+        private static void UpdateModifierSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Modifiers Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            CreatureModifiersData.UpdateModifierConfig(filetext);
+            ModifiersRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+        }
+
+        private static void UpdateRaidSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Raid Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            RaidsData.UpdateYamlConfig(filetext);
+            RaidsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+        }
+
+        private static void OnMainConfigFileChanged(string _) {
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) {
                 return;
             }
-            if (!File.Exists(e.FullPath)) { return; }
-
-            string filetext = File.ReadAllText(e.FullPath);
-            var fileInfo = new FileInfo(e.FullPath);
-            Logger.LogDebug($"Filewatch changes from: ({fileInfo.Name}) {fileInfo.FullName}");
-            switch (fileInfo.Name) {
-                case ColorSettingsFileName:
-                    Logger.LogDebug("Triggering Color Settings update.");
-                    Colorization.UpdateYamlConfig(filetext);
-                    ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-                    break;
-                case LevelSettingsFileName:
-                    Logger.LogDebug("Triggering Level Settings update.");
-                    LevelSystemData.UpdateYamlConfig(filetext);
-                    LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-                    break;
-                // Support both file names for legacy configurations
-                case LootSettingsFileName:
-                case "CreatureLootSettings.yaml":
-                    Logger.LogDebug("Triggering Loot Settings update.");
-                    LootSystemData.UpdateYamlConfig(filetext);
-                    CreatureLootSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-                    break;
-                case ModifiersFileName:
-                    Logger.LogDebug("Triggering Modifiers Settings update.");
-                    CreatureModifiersData.UpdateModifierConfig(filetext);
-                    ModifiersRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-                    break;
-                case RaidSettingsFileName:
-                    Logger.LogDebug("Triggering Raid Settings update.");
-                    RaidsData.UpdateYamlConfig(filetext);
-                    RaidsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(e.FullPath));
-                    break;
-            }
+            Logger.LogInfo("Configuration file has been changed, reloading settings.");
+            cfg.Reload();
         }
 
         private static ZPackage SendFileAsZPackage(string filepath) {

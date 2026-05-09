@@ -26,14 +26,14 @@ namespace StarLevelSystem.modules.Sizes {
 
         // This duplicates the size of modifications on visual equipment if the creature already has the size modifications applied to it.
         // Alternatively, it can also fix size modifications that are applied _AFTER_ the creature is scaled
-        [HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
-        public static class VisualEquipmentScaleToFit {
-            public static void Postfix(VisEquipment __instance, GameObject __result) {
-                if (__instance.m_isPlayer == true || __instance.m_nview == null || __instance.m_nview.GetZDO() == null || __result == null) { return; }
-                CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance.m_nview.GetZDO().m_uid.ID);
-                SetSizeModification(__result, __instance.m_nview, cDetails);
-            }
-        }
+        //[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
+        //public static class VisualEquipmentScaleToFit {
+        //    public static void Postfix(VisEquipment __instance, GameObject __result) {
+        //        if (__instance.m_isPlayer == true || __instance.m_nview == null || __instance.m_nview.GetZDO() == null || __result == null) { return; }
+        //        CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance.m_nview.GetZDO().m_uid.ID);
+        //        SetSizeModification(__result, __instance.m_nview, cDetails);
+        //    }
+        //}
 
         // NOTE: Because this is where we are cleaning up the cache, it is possible that the cache will not be cleaned up
         [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.OnRagdollCreated))]

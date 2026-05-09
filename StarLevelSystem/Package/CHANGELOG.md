@@ -1,3 +1,11 @@
+**0.19.1**
+ ---
+ ```
+- Improves size modification caching
+- Improves shutdown transition when destroying raid objects
+- Adds Key Anti-Affinity checks
+ ```
+
 **0.19.0**
  ---
  ```

@@ -1,3 +1,10 @@
+**0.19.2**
+ ---
+ ```
+- Include missing assets
+- Default API updates
+ ```
+
 **0.19.1**
  ---
  ```

@@ -765,19 +765,19 @@ namespace StarLevelSystem.Data
         internal static void LoadPrefabs() {
             if (ActiveCreatureModifiers.MinorModifiers != null) {
                 foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.MinorModifiers) {
-                    // Logger.LogDebug($"Loading assets for: {mod}");
+                    Logger.LogDebug($"Loading assets for: {mod}");
                     ModifierDefinitions[mod.Key].LoadAndSetGameObjects();
                 }
             }
             if (ActiveCreatureModifiers.MajorModifiers != null) {
                 foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.MajorModifiers) {
-                    // Logger.LogDebug($"Loading assets for: {mod}");
+                    Logger.LogDebug($"Loading assets for: {mod}");
                     ModifierDefinitions[mod.Key].LoadAndSetGameObjects();
                 }
             }
             if (ActiveCreatureModifiers.BossModifiers != null) {
                 foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.BossModifiers) {
-                    // Logger.LogDebug($"Loading assets for: {mod}");
+                    Logger.LogDebug($"Loading assets for: {mod}");
                     ModifierDefinitions[mod.Key].LoadAndSetGameObjects();
                 }
             }

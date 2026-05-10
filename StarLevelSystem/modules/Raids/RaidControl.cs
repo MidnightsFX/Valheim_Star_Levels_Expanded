@@ -62,6 +62,7 @@ namespace StarLevelSystem.modules.Raids
         }
 
         private static void UpdateOrAddPlayerPrivateKeysToRegistry(string playerPlatformID, List<string> privatekeys) {
+            if (ServerPlayerRaidData == null) { ServerPlayerRaidData = new Dictionary<string, PlayerRaidData>() { }; }
             if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
                 ServerPlayerRaidData[playerPlatformID].PlayerPrivatekeys = privatekeys;
             } else {

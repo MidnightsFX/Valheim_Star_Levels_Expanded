@@ -11,7 +11,6 @@ using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
@@ -26,7 +25,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.19.0";
+        public const string PluginVersion = "0.19.2";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game

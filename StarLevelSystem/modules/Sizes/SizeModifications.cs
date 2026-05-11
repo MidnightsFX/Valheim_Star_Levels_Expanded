@@ -27,7 +27,7 @@ namespace StarLevelSystem.modules.Sizes {
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
             UpdateRidingCreaturesForSizeScaling(obj, cdetails);
             zview.m_zdo.Set(SLS_SIZE, creatureScale);
-            Logger.LogDebug($"Setting size of {cdetails.RefCreatureName} to {creatureScale}");
+            Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
             Physics.SyncTransforms();
         }
 
@@ -60,6 +60,11 @@ namespace StarLevelSystem.modules.Sizes {
             foreach (GameObject itemgo in ObjectDB.m_instance.m_items) {
                 if (SizeEstimateCache.ContainsKey(itemgo.name)) { continue; }
                 SizeEstimateCache.Add(itemgo.name, itemgo.transform.localScale);
+            }
+
+            foreach (Ragdoll ragdollgo in Resources.FindObjectsOfTypeAll<Ragdoll>().Where(obj => obj.name.EndsWith(clone) == false).ToList()) {
+                if (SizeEstimateCache.ContainsKey(ragdollgo.name)) { continue; }
+                SizeEstimateCache.Add(ragdollgo.name, ragdollgo.transform.localScale);
             }
 
         }

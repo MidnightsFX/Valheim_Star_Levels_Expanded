@@ -1,3 +1,9 @@
+**0.19.3**
+ ---
+ ```
+- Fix corpse sizing incorrectly, precaches corpse sizes
+ ```
+
 **0.19.2**
  ---
  ```

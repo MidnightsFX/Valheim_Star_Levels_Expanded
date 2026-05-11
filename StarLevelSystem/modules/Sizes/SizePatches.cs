@@ -45,7 +45,10 @@ namespace StarLevelSystem.modules.Sizes {
                 CharacterCacheEntry cDetails = CompositeLazyCache.GetAndSetLocalCache(__instance);
                 //Logger.LogDebug($"Ragdoll Humanoid created for {__instance.name} - cdetails? {cDetails != null} with level {__instance.m_level}");
                 if (__instance.m_level > 1 && cDetails != null) {
-                    SetSizeModification(ragdoll.gameObject, __instance.m_nview, cDetails);
+                    Vector3 size = __instance.m_nview.m_zdo.GetVec3(SLS_SIZE, Vector3.zero);
+                    if (size != Vector3.zero) {
+                        ragdoll.transform.localScale = GetSizeReferenceForObject(ragdoll.gameObject.name) * size.x;
+                    }
 
                     if (cDetails.Colorization != null) {
                         Colorization.ApplyColorizationWithoutLevelEffects(ragdoll.gameObject, cDetails.Colorization);

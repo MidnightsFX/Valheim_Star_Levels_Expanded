@@ -29,7 +29,7 @@ namespace StarLevelSystem.common {
 
         internal static void Initialize() {
             if (watchProcess != null) return;
-            GameObject go = new GameObject("VE_ConfigFileWatcher");
+            GameObject go = new GameObject("SLS_ConfigFileWatcher");
             UnityEngine.Object.DontDestroyOnLoad(go);
             go.hideFlags = HideFlags.HideAndDontSave;
             watchProcess = go.AddComponent<ConfigFileWatcherBehaviour>();

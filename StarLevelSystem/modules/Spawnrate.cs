@@ -2,6 +2,7 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,12 +19,19 @@ namespace StarLevelSystem.modules
             if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && chara.IsBoss()) {
                 return false;
             }
-            if (chara.IsTamed() && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
+            bool isTame = chara.IsTamed();
+            if (isTame && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
                 return false;
             }
             if (chara.m_nview.GetZDO().GetBool(SLS_SPAWN_MULT, false) == true) { return false; }
             chara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
             float spawnrate = ccEntry.SpawnRateModifier;
+
+            // Check for Nemesis Spawn system | this is only done on creatures which can spawn multiply
+            if (ValConfig.EnableNemesisSystem.Value && isTame == false) {
+                NemesisActions.NemesisRandomSpawner(chara);
+            }
+
             // Chance to increase spawn, or decrease it
             //Logger.LogDebug($"Spawn multiplier {spawnrate} apply for {character.gameObject}");
             if (spawnrate > 1f) {
@@ -42,7 +50,7 @@ namespace StarLevelSystem.modules
                         GameObject targetclone = PrefabManager.Instance.GetPrefab(ccEntry.RefCreatureName);
                         GameObject spawnedCreature = GameObject.Instantiate(targetclone, position, rotation);
                         Character spawnedChara = spawnedCreature.GetComponent<Character>();
-                        if (chara.IsTamed() && spawnedChara != null) {
+                        if (isTame && spawnedChara != null) {
                             spawnedChara.SetTamed(true);
                         }
                         Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject} at {position}");

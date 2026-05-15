@@ -1,3 +1,10 @@
+**0.19.4**
+ ---
+ ```
+- Fix for distance level calculation fallback not preferring custom bonuses
+- Rewired EnableDistanceLevelBonus to specifically disable distance bonuses, not night or biome bonuses
+ ```
+
 **0.19.3**
  ---
  ```

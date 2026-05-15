@@ -28,14 +28,18 @@ namespace StarLevelSystem
         internal const string LootSettingsFileName = "LootSettings.yaml";
         internal const string ModifiersFileName = "Modifiers.yaml";
         internal const string RaidSettingsFileName = "RaidSettings.yaml";
+        internal const string NemesisSettingsFileName = "NemesisSettings.yaml";
         internal const string StarLevelSystem = "StarLevelSystem";
         internal const string ServerRaidSavedData = "ServerRaidSavedData.yaml";
         internal const string SavedData = "SavedData";
+        internal const string NemesisLogFileName = "NemesisLog.log";
         internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LevelSettingsFileName);
         internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ColorSettingsFileName);
         internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LootSettingsFileName);
         internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
         internal static String raidsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, RaidSettingsFileName);
+        internal static String nemesisFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisSettingsFileName);
+        internal static String nemesisLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisLogFileName);
         internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
 
         internal static bool RecievedConfigsFromServer = false;
@@ -45,6 +49,7 @@ namespace StarLevelSystem
         private static CustomRPC CreatureLootSettingsRPC;
         private static CustomRPC ModifiersRPC;
         private static CustomRPC RaidsRPC;
+        private static CustomRPC NemesisRPC;
         internal static CustomRPC ClientSendPlayerPrivateKeysRPC;
         internal static CustomRPC ClientStartRaidRPC;
         internal static CustomRPC ClientForcePlayMusicRPC;
@@ -150,6 +155,8 @@ namespace StarLevelSystem
         public static ConfigEntry<float> RaidPerPlayerUpdateCheck;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
 
+        public static ConfigEntry<bool> EnableNemesisSystem;
+
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
 
         public ValConfig(ConfigFile cf)
@@ -167,6 +174,7 @@ namespace StarLevelSystem
             CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
             ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
             RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerRecieveConfigs, OnClientReceiveRaidConfigs);
+            NemesisRPC = NetworkManager.Instance.AddRPC("SLS_NemesisRPC", OnServerRecieveConfigs, OnClientReceiveNemesisConfigs);
             ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerRecievePlayerPrivateKeys, OnClientRecieveRequestForPrivatekeys);
             ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerRecieveConfigs, OnClientRecieveRaidStart);
             ClientForcePlayMusicRPC = NetworkManager.Instance.AddRPC("SLS_ClientForcePlayMusicRPC", OnServerRecieveConfigs, OnClientRecieveForcePlayMusic);
@@ -178,6 +186,7 @@ namespace StarLevelSystem
             SynchronizationManager.Instance.AddInitialSynchronization(CreatureLootSettingsRPC, SendCreatureLootConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
+            SynchronizationManager.Instance.AddInitialSynchronization(NemesisRPC, SendNemesisConfigs);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -289,6 +298,8 @@ namespace StarLevelSystem
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
 
+            EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
+
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
@@ -334,6 +345,7 @@ namespace StarLevelSystem
             bool foundLootFile = false;
             bool foundModifierFile = false;
             bool foundRaidFile = false;
+            bool foundNemesisFile = false;
 
             foreach (string configFile in presentFiles) {
                 if (configFile.Contains(LevelSettingsFileName))
@@ -367,6 +379,12 @@ namespace StarLevelSystem
                     Logger.LogDebug($"Found raid configuration: {configFile}");
                     raidsFilePath = configFile;
                     foundRaidFile = true;
+                }
+                if (configFile.Contains(NemesisSettingsFileName))
+                {
+                    Logger.LogDebug($"Found nemesis configuration: {configFile}");
+                    nemesisFilePath = configFile;
+                    foundNemesisFile = true;
                 }
             }
 
@@ -433,7 +451,19 @@ namespace StarLevelSystem
                     writetext.WriteLine(header);
                     writetext.WriteLine(RaidsData.YamlDefaultConfig());
                 }
-                
+
+            }
+
+            if (foundNemesisFile == false) {
+                Logger.LogDebug("Nemesis config file missing, recreating.");
+                using (StreamWriter writetext = new StreamWriter(nemesisFilePath)) {
+                    String header = @"#################################################
+# Star Level System Expanded - Nemesis Settings
+#################################################
+";
+                    writetext.WriteLine(header);
+                    writetext.WriteLine(NemesisSystemData.YamlDefaultConfig());
+                }
             }
 
             ConfigFileWatcher.Register(colorsFilePath, UpdateColorSettings);
@@ -441,6 +471,7 @@ namespace StarLevelSystem
             ConfigFileWatcher.Register(creatureModifierFilePath, UpdateModifierSettings);
             ConfigFileWatcher.Register(creatureLootFilePath, UpdateLootSettings);
             ConfigFileWatcher.Register(raidsFilePath, UpdateRaidSettings);
+            ConfigFileWatcher.Register(nemesisFilePath, UpdateNemesisSettings);
         }
 
         private static void UpdateColorSettings(string fullFileName) {
@@ -478,6 +509,13 @@ namespace StarLevelSystem
             RaidsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
         }
 
+        private static void UpdateNemesisSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Nemesis Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            NemesisSystemData.UpdateYamlConfig(filetext);
+            NemesisRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+        }
+
         private static void OnMainConfigFileChanged(string _) {
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) {
                 return;
@@ -511,6 +549,10 @@ namespace StarLevelSystem
 
         private static ZPackage SendRaidConfigs() {
             return SendFileAsZPackage(raidsFilePath);
+        }
+
+        private static ZPackage SendNemesisConfigs() {
+            return SendFileAsZPackage(nemesisFilePath);
         }
 
         private static ZPackage SendRequestForPrivateKeys() {
@@ -617,6 +659,13 @@ namespace StarLevelSystem
         private static IEnumerator OnClientReceiveRaidConfigs(long sender, ZPackage package) {
             var yaml = package.ReadString();
             RaidsData.UpdateYamlConfig(yaml);
+
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveNemesisConfigs(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            NemesisSystemData.UpdateYamlConfig(yaml);
 
             yield return null;
         }

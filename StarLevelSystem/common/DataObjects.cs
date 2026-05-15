@@ -45,6 +45,8 @@ namespace StarLevelSystem.common
         public static readonly string SLS_SOULEATER = "SLS_SoulEater";
         public static readonly string SLS_EVOLVE = "SLS_Evolve";
         public static readonly string SLS_SIZE = "SLS_SIZE";
+        public static readonly string SLS_NEMESIS_SCORE = "SLS_NEM_SCORE";
+        public static readonly string SLS_NEMESIS_SCOREDATA = "SLS_NEM_SCOREDATA";
 
         public static readonly string SLS_MOD_CAP = "EffectCap";
 
@@ -222,6 +224,13 @@ namespace StarLevelSystem.common
             CavesHildir,
         }
 
+        public enum NemesisAction {
+            ChangeLevel,
+            AddModifier,
+            RemoveModifier,
+            Spawn,
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -305,76 +314,146 @@ namespace StarLevelSystem.common
             }
         }
 
-
+        [Description("Controls overhaul creature levels")]
         public class CreatureLevelSettings {
+            [Description("Controls biome specific configuration, the 'All' biome can be used to set the default for everything.")]
             public Dictionary<Heightmap.Biome, BiomeSpecificSetting> BiomeConfiguration { get; set; }
+
+            [Description("Creature specific configuration.")]
             public Dictionary<string, CreatureSpecificSetting> CreatureConfiguration { get; set; }
+
+            [Description("Levelup chance for all creatures, this is modified by distance level bonuses and can be overridden by biome-specific settings or creature specific settings.")]
             public SortedDictionary<int, float> DefaultCreatureLevelUpChance { get; set; }
+
+            [Description("Globally disables the distance scaling system.")]
             public bool EnableDistanceLevelBonus { get; set; } = false;
+
+            [Description("Distance scaling system, each entry is a distance threshold and its corresponding level bonus. These are added to DefaultCreatureLevelUpChance, when a distance bucket is selected.")]
             public SortedDictionary<int, SortedDictionary<int, float>> DistanceLevelBonus { get; set; }
         }
 
-        public class NightSettings
-        {
+        [Description("Controls Night-time specific settings")]
+        public class NightSettings {
+            [Description("Modifies the spawn rate of creatures during the night time 1.0 = no change, 2.0 = 2x spawns, 0.5 = 50% reduced spawns.")]
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
+
+            [Description("A level up chance scalar that is only applied at night. 1.0 = no change. 2.0 = all levels are 2x more likely (typically mostly impacts higher levels)")]
             [DefaultValue(1f)]
             public float NightLevelUpChanceScaler { get; set; } = 1f;
+
+            [Description("Disables this creatures spawn during the night time.")]
             [DefaultValue(false)]
             public bool creatureSpawnsDisabled { get; set; } = false;
         }
 
-        public class BiomeNightSettings
-        {
+        [Description("Controls biome-specific Night-time specific settings")]
+        public class BiomeNightSettings {
+            [Description("Modifies the spawn rate of creatures during the night time 1.0 = no change, 2.0 = 2x spawns, 0.5 = 50% reduced spawns.")]
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
+
+            [Description("A level up chance scalar that is only applied at night. 1.0 = no change. 2.0 = all levels are 2x more likely (typically mostly impacts higher levels)")]
             [DefaultValue(1f)]
             public float NightLevelUpChanceScaler { get; set; } = 1f;
-            public List<string> creatureSpawnsDisabled { get; set; }
+
+            [Description("Disables this creatures spawn during the night time.")]
+            public List<string> creatureSpawnsDisabled { get; set; } = new List<string>();
         }
 
+        [Description("Biome specific settings.")]
         public class BiomeSpecificSetting {
+            [Description("Custom creature levelup chances that will replace default chances for any creature spawned in this biome.")]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+
+            [Description("Minimum level override for creatures in this biome.")]
             [DefaultValue(0)]
             public int BiomeMinLevelOverride { get; set; }
+
+            [Description("Maximum level override for creatures in this biome.")]
             public int BiomeMaxLevelOverride { get; set; }
+
+            [Description("How strong distance effects are in this biome. 1.0 = no change, 2.0 = 2x stronger, 0.5 = 50% weaker.")]
             [DefaultValue(1f)]
             public float DistanceScaleModifier { get; set; } = 1f;
+
+            [Description("Spawn rate modifier for creatures in this biome. 1.0 = no change, 2.0 = 2x spawns, 0.5 = 50% reduced spawns.")]
             [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
+
+            [Description("Creature base value modifiers for all creatures spawned in this biome.")]
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
+
+            [Description("Creature per-level value modifiers for all creatures spawned in this biome.")]
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+
+            [Description("Damage type and modifiers for all creatures spawned in this biome. This can be used to make creatures weak to, or immune to, certain damage types.")]
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
+
+            [Description("List of creature spawns which are disabled in this biome.")]
             public List<string> creatureSpawnsDisabled { get; set; }
+
+            [Description("Night-time specific settings for this biome.")]
             public BiomeNightSettings NightSettings { get; set; }
         }
 
+        [Description("Creature-specific settings.")]
         public class CreatureSpecificSetting {
+            [Description("How strong distance effects are for this creature. 1.0 = no change, 2.0 = 2x stronger, 0.5 = 50% weaker.")]
             [DefaultValue(1f)]
             public float DistanceScaleModifier { get; set; } = 1f;
+
+            [Description("Custom creature levelup chances that will replace default chances for this creature.")]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+
+            [Description("Creature specific minimum level.")]
             [DefaultValue(-1)]
             public int CreatureMinLevelOverride { get; set; } = -1;
+
+            [Description("Creature specific maximum level.")]
             [DefaultValue(-1)]
             public int CreatureMaxLevelOverride { get; set; } = -1;
+
+            [Description("Creature specific limit to the number of major modifiers.")]
             [DefaultValue(-1)]
             public int MaxMajorModifiers { get; set; } = -1;
+
+            [Description("Creature specific chance for major modifiers.")]
             [DefaultValue(-1f)]
             public float ChanceForMajorModifier { get; set; } = -1f;
+
+            [Description("Creature specific limit to the number of minor modifiers.")]
             [DefaultValue(-1)]
             public int MaxMinorModifiers { get; set; } = -1;
+
+            [Description("Creature specific chance for minor modifiers.")]
             [DefaultValue(-1f)]
             public float ChanceForMinorModifier { get; set; } = -1f;
+
+            [Description("Creature specific limit to the number of boss modifiers.")]
             [DefaultValue(-1)]
             public int MaxBossModifiers { get; set; } = -1;
+
+            [Description("Creature specific chance for boss modifiers.")]
             [DefaultValue(-1f)]
             public float ChanceForBossModifier { get; set; } = -1f;
-            [DefaultValue(1f)]
+
+            [Description("Modifiers that this creature will always spawn with.")]
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; }
+
+            [Description("Spawn rate modifier for this creature. 1.0 = no change, 2.0 = 2x spawns, 0.5 = 50% reduced spawns.")]
             public float SpawnRateModifier { get; set; } = 1f;
+
+            [Description("Night-time specific settings for this creature.")]
             public NightSettings NightSettings { get; set; }
+
+            [Description("Base value modifiers for this creature.")]
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
+
+            [Description("Per-level value modifiers for this creature.")]
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+
+            [Description("Damage received modifiers for this creature.")]
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
         }
 
@@ -673,6 +752,108 @@ namespace StarLevelSystem.common
                     SpawnedCreatures.Add(creature.ToString());
                 }
             }
+        }
+
+        public class NemesisConfiguration {
+            public NemesisScoreSystem ScoreSystem { get; set; } = new NemesisScoreSystem();
+            public NemesisGaurenteedChanges GaurenteedChanges { get; set; } = new NemesisGaurenteedChanges();
+            public NemesisChanceChanges ChanceChanges { get; set; } = new NemesisChanceChanges();
+            [DefaultValue(10f)]
+            public float NemesisActionCooldownSeconds { get; set; } = 10f;
+            [DefaultValue(300f)]
+            public float NemesisInfluenceRadius { get; set; } = 300f;
+        }
+
+        public class NemesisChanceChanges {
+           public Dictionary<string, NemesisChanceEntry> CreatureOps { get; set; } = new Dictionary<string, NemesisChanceEntry>();
+        }
+
+        public class NemesisChanceEntry {
+            public string RequiredGlobalKey { get; set; }
+            public string RequiredPrivateKey { get; set; }
+            [DefaultValue(true)]
+            public bool Enabled { get; set; } = true;
+            [DefaultValue(0.5f)]
+            public float Chance { get; set; } = 0.5f;
+            [DefaultValue(0)]
+            public int LevelBonus { get; set; } = 0;
+            [DefaultValue(0f)]
+            public float ScoreThreshold { get; set; } = 0f;
+            public NemesisAction Action { get; set; } = NemesisAction.ChangeLevel;
+            [DefaultValue(0f)]
+            public float ScoreChange { get; set; } = 0f;
+            public List<NemesisSpawn> SpawnConfig { get; set; }
+        }
+
+        public class NemesisSpawn {
+            public string Prefab { get; set; }
+            public AI CreatureAI { get; set; } = AI.HuntPlayer;
+            public int SpawnGroupSize { get; set; } = 1;
+            [DefaultValue(Character.Faction.TrainingDummy)]
+            public Character.Faction Faction { get; set; } = Character.Faction.TrainingDummy;
+            [DefaultValue(null)]
+            public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
+            [DefaultValue(null)]
+            public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; } = null;
+        }
+
+        public class NemesisGaurenteedChanges {
+            [DefaultValue(true)]
+            public bool FirstBossSetLevel { get; set; } = true;
+            [DefaultValue(1)]
+            public int FirstBossLevel { get; set; } = 0;
+        }
+
+        public class NemesisScoreSystem {
+            [DefaultValue(600f)]
+            public float NeutralScore { get; set; } = 600f;
+            [DefaultValue(0f)]
+            public float MinScore { get; set; } = 0f;
+            [DefaultValue(1000f)]
+            public float MaxScore { get; set; } = 1000f;
+            [DefaultValue(500f)]
+            public float DeathScoreReduction { get; set; } = 500f;
+            [DefaultValue(30f)]
+            public float DecayPerUpdate { get; set; } = 30f;
+            [DefaultValue(30f)]
+            public float ScoreIntervalSeconds { get; set; } = 30f;
+            [DefaultValue(25f)]
+            public float NearbyPlayerRadius { get; set; } = 25f;
+            [DefaultValue(0.05f)]
+            public float NearbyAveragingWeight { get; set; } = 0.05f;
+            [DefaultValue(0.5f)]
+            public float MeleeDamageDealtFactor { get; set; } = 0.5f;
+            [DefaultValue(0.25f)]
+            public float RangedDamageDealtFactor { get; set; } = 0.25f;
+            [DefaultValue(0.3f)]
+            public float MagicDamageDealtFactor { get; set; } = 0.3f;
+            [DefaultValue(1f)]
+            public float DamageTakenFactor { get; set; } = 1f;
+            [DefaultValue(250f)]
+            public float BossKillBonus { get; set; } = 250f;
+            [DefaultValue(100f)]
+            public float BossKillRadius { get; set; } = 100f;
+        }
+
+        [Serializable]
+        public class ScoreData {
+            public float DamageDealtMelee { get; set; } = 0f;
+            public float DamageDealtRanged { get; set; } = 0f;
+            public float DamageDealtMagic { get; set; } = 0f;
+            public float DamageTaken { get; set; } = 0f;
+            public int BossKills { get; set; } = 0;
+            public Dictionary<string, int> BossKillsHistory { get; set; } = new Dictionary<string, int>();
+            public double LastDeath { get; set; } = 0f;
+            public List<DamageScoreData> DamageScoreHistory { get; set; } = new List<DamageScoreData>();
+        }
+
+        [Serializable]
+        public class DamageScoreData {
+            public float DamageDealtMelee { get; set; } = 0f;
+            public float DamageDealtRanged { get; set; } = 0f;
+            public float DamageDealtMagic { get; set; } = 0f;
+            public float DamageTaken { get; set; } = 0f;
+            public int BossKills { get; set; } = 0;
         }
 
         [Serializable]

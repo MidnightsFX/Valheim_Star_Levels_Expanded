@@ -466,7 +466,6 @@ This mod is still in active development and is not considered complete yet.
 Planned Features
 - Refinement to the existing modifers
 - New modifiers!
-- Level scaling more things
 - Generic and biome specific loot multipliers
 - A Nemesis or mini-boss generation system
 - World leveling system based on boss kills

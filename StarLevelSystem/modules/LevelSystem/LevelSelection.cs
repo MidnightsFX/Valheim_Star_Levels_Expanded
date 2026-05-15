@@ -2,6 +2,7 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -71,6 +72,10 @@ namespace StarLevelSystem.modules.LevelSystem {
 
                 int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
+                if (ValConfig.EnableNemesisSystem.Value) {
+                    // Call out to make modifications to the level bonus rolls
+                    level = NemesisActions.LevelSystemDetermineNemesisInfluence(character, min_level, max_level, level);
+                }
                 //Logger.LogDebug($"Determined level {level} min: {min_level} max {max_level}");
                 //character.m_level = level;
                 return level;
@@ -127,7 +132,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static SortedDictionary<int, float> DetermineLevelupChance(CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null, SortedDictionary<int, float> customLevelup = null) {
-            SortedDictionary<int, float> levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
+            SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
+            if (levelup_chances == null) { levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance; }
             if (customLevelup != null) { levelup_chances = customLevelup; }
 
             if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null) {
@@ -141,7 +147,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         public static SortedDictionary<int, float> DetermineDistanceBonus(Vector3 pos) {
             SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
-            if (ValConfig.EnableDistanceLevelScalingBonus.Value == false) {
+            if (ValConfig.EnableDistanceLevelScalingBonus.Value == false || LevelSystemData.SLE_Level_Settings.EnableDistanceLevelBonus == false) {
                 return distance_levelup_bonuses;
             }
 

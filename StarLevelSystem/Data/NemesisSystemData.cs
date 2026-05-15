@@ -64,7 +64,6 @@ namespace StarLevelSystem.Data
                     // Increase Creature levels to make things harder
                     { "IncreaseCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.25f, ScoreThreshold = 600f, Action = NemesisAction.ChangeLevel, LevelBonus = 1, ScoreChange = -25f, } },
                     { "SignificantlyIncreaseCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.5f, ScoreThreshold = 800f, Action = NemesisAction.ChangeLevel, LevelBonus = 3, ScoreChange = -50f, } },
-
                 },
 
             }
@@ -86,6 +85,7 @@ namespace StarLevelSystem.Data
         }
 
         internal static void UpdateNemesisLog(string data) {
+            Logger.LogDebug($"Updating Nemesis Action Log: {ValConfig.nemesisLogFilePath}");
             ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
             File.AppendAllText(ValConfig.nemesisLogFilePath, data);
         }

@@ -2,6 +2,7 @@ using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using static StarLevelSystem.common.ConfigFileWatcher;
 using static StarLevelSystem.common.DataObjects;
@@ -42,8 +43,12 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 nextRecalcTime = ZNet.instance.GetTimeSeconds() + NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.ScoreIntervalSeconds;
                 NemesisScoreSystem.SaveScoreData(player);
 
-                string logEntry = $"#{ZNet.instance.GetTimeSeconds()} | Score: {NemesisScoreSystem.GetScore(player)} | Actions: {NemesisActionLog.Count}\n{string.Join("\n  ", NemesisActionLog)}";
-                NemesisSystemData.UpdateNemesisLog(logEntry);
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine($"{ZNet.instance.GetTimeSeconds()} | Score: {NemesisScoreSystem.GetScore(player)} | Actions: {NemesisActionLog.Count}");
+                foreach (string action in NemesisActionLog) {
+                    sb.AppendLine(action);
+                }
+                NemesisSystemData.UpdateNemesisLog(sb.ToString());
             }
             // Nemesis action
             //if (ReadyForNextNemesisAction()) {
@@ -53,7 +58,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         public void RecordNemesisAction(string nemSummary) {
             nextNemeisActionTime = ZNet.instance.GetTimeSeconds() + NemesisSystemData.SLE_Nemesis_Settings.NemesisActionCooldownSeconds;
-            NemesisActionLog.Add($"#{nextNemeisActionTime} | {nemSummary}");
+            NemesisActionLog.Add($"  {nemSummary}");
         }
 
         public bool ReadyForNextNemesisAction() {

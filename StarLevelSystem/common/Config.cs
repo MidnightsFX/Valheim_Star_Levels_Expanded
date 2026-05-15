@@ -39,7 +39,7 @@ namespace StarLevelSystem
         internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
         internal static String raidsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, RaidSettingsFileName);
         internal static String nemesisFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisSettingsFileName);
-        internal static String nemesisLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisLogFileName);
+        internal static String nemesisLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisLogFileName);
         internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
 
         internal static bool RecievedConfigsFromServer = false;

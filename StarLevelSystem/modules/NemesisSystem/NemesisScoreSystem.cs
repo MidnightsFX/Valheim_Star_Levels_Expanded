@@ -101,6 +101,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             }
 
             // Set the updated score
+            score = Mathf.Clamp(score, cfg.MinScore, cfg.MaxScore);
             SetScore(player, score);
             NemesisSystem.CachedPlayerScore = score;
 
@@ -108,7 +109,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             SaveScoreData(player);
 
             if (ValConfig.EnableDebugMode.Value) {
-                Logger.LogDebug($"Nemesis recalc: score={GetScore(player):0.0} dealtΔ(m/r)={dmgDealtMeleeTrend:0.0}/{dmgDealtRangedTrend:0.0} takenΔ={dmgTakenTrend:0.0} bossΔ={NemesisSystem.PlayerScore.BossKills} peers={peers.Count}");
+                Logger.LogDebug($"Nemesis recalc: score={GetScore(player):0.0} dealtΔ(dmg)={dmgDealtMeleeTrend:0.0}/{dmgDealtRangedTrend:0.0} takenΔ(dmg)={dmgTakenTrend:0.0} bossΔ(kills)={NemesisSystem.PlayerScore.BossKills} peers={peers.Count}");
             }
 
             // Clear the current score buckets
@@ -144,7 +145,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         internal static void SaveScoreData(Player player) {
             if (player == null || player.m_customData == null || NemesisSystem.PlayerScore == null) { return; }
-            player.m_customData[SLS_NEMESIS_SCOREDATA] = DataObjects.yamlserializer.Serialize(NemesisSystem.PlayerScore);
+            player.m_customData[SLS_NEMESIS_SCOREDATA] = DataObjects.yamlserializerJsonCompat.Serialize(NemesisSystem.PlayerScore);
         }
 
         public static void PlayerDeathScoreChange(Player player) {

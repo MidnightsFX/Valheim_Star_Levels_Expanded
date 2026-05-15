@@ -798,18 +798,16 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisGaurenteedChanges {
-            [DefaultValue(true)]
             public bool FirstBossSetLevel { get; set; } = true;
-            [DefaultValue(1)]
             public int FirstBossLevel { get; set; } = 0;
         }
 
         public class NemesisScoreSystem {
-            [DefaultValue(600f)]
+            [DefaultValue(0f)]
             public float NeutralScore { get; set; } = 600f;
             [DefaultValue(0f)]
             public float MinScore { get; set; } = 0f;
-            [DefaultValue(1000f)]
+            [DefaultValue(0f)]
             public float MaxScore { get; set; } = 1000f;
             [DefaultValue(500f)]
             public float DeathScoreReduction { get; set; } = 500f;

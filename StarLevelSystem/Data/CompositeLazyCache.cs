@@ -2,6 +2,7 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Sizes;
@@ -304,6 +305,7 @@ namespace StarLevelSystem.Data
                     SessionCache.Remove(id);
                     //Logger.LogDebug($"Removed deleted creature from cache {id}");
                 }
+                CreatureSetupQueue.RemoveTracking(id);
             }
         }
     }

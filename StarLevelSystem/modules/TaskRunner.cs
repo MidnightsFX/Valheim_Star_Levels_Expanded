@@ -1,4 +1,5 @@
 ﻿using Jotunn.Managers;
+using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,5 +32,8 @@ namespace StarLevelSystem.modules {
 
     internal class Orchestrator : MonoBehaviour {
 
+        private void Update() {
+            CreatureSetupQueue.Tick();
+        }
     }
 }

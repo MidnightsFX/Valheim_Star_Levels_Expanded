@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
+using static UnityEngine.EventSystems.EventTrigger;
 using static UnityEngine.UI.Image;
 
 namespace StarLevelSystem.modules.NemesisSystem {
@@ -31,16 +32,14 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
                 // If not a boss, check player score and evaluate the random change based changes
                 if (NemesisSystem.NemesisManager != null && NemesisSystem.NemesisManager.ReadyForNextNemesisAction() && NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges != null && NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges != null) {
-                    float playerScore = NemesisSystem.CachedPlayerScore;
 
                     // For all of the level changing Nemesis actions
-                    foreach (var entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
+                    foreach (KeyValuePair<string, NemesisChanceEntry> entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
                         if (entry.Value.Enabled == false || entry.Value.Action != NemesisAction.ChangeLevel) {
                             continue;
                         }
 
-                        if ((entry.Value.ScoreThreshold >= NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.NeutralScore && NemesisSystem.CachedPlayerScore >= entry.Value.ScoreThreshold) ||
-                            (entry.Value.ScoreThreshold < NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.NeutralScore && NemesisSystem.CachedPlayerScore < entry.Value.ScoreThreshold)) {
+                        if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
                             Logger.LogDebug($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
                             continue;
                         }
@@ -52,7 +51,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         }
 
                         level = Mathf.Clamp(entry.Value.LevelBonus + level, min_level, max_level);
-                        NemesisSystem.NemesisManager.RecordNemesisAction($"Changed level by {entry.Value.LevelBonus} due to {entry.Key} spawn with score {NemesisSystem.CachedPlayerScore:0.0}");
+                        NemesisSystem.NemesisManager.RecordNemesisAction($"Changed {character.m_name} level by {entry.Value.LevelBonus}({level}) due to {entry.Key} spawn with score {NemesisSystem.CachedPlayerScore:0.0}");
                         if (entry.Value.ScoreChange != 0) {
                             NemesisScoreSystem.UpdateScore(Player.m_localPlayer, entry.Value.ScoreChange);
                         }
@@ -71,13 +70,12 @@ namespace StarLevelSystem.modules.NemesisSystem {
             if (distance > NemesisSystemData.SLE_Nemesis_Settings.NemesisInfluenceRadius) { return; }
 
             // For all of the level changing Nemesis actions
-            foreach (var entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
+            foreach (KeyValuePair<string, NemesisChanceEntry> entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
                 if (entry.Value.Enabled == false || entry.Value.Action != NemesisAction.Spawn) {
                     continue;
                 }
 
-                if ((entry.Value.ScoreThreshold >= NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.NeutralScore && NemesisSystem.CachedPlayerScore >= entry.Value.ScoreThreshold) || 
-                    (entry.Value.ScoreThreshold < NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.NeutralScore && NemesisSystem.CachedPlayerScore < entry.Value.ScoreThreshold)) {
+                if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
                     Logger.LogDebug($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
                     continue;
                 }
@@ -121,6 +119,17 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
                 break;
             }
+        }
+
+        internal static bool MeetsScoreThreshold(float scoreThreshold) {
+            if (scoreThreshold > NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.NeutralScore && NemesisSystem.CachedPlayerScore < scoreThreshold) {
+                return false;
+            }
+
+            if (scoreThreshold < NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.NeutralScore && NemesisSystem.CachedPlayerScore > scoreThreshold) {
+                return false;
+            }
+            return true;
         }
     }
 }

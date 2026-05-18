@@ -52,19 +52,6 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
-        // Both need to be patched to use the new monobehavior controller instead of the vanilla methods- if enabled.
-        // ConsoleStartRandomEvent
-        // ConsoleResetRandomEvent
-
-        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.FixedUpdate))]
-        public static class ToggleCustomRaids {
-            // Skip the update loop for the randEvent system if we are using the custom raid system
-            public static bool Prefix() {
-                if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
-                return false;
-            }
-        }
-
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.SetRandomEvent))]
         public static class SetRandomCustomEvent {
             public static bool Prefix(RandEventSystem __instance, RandomEvent ev, Vector3 pos) {

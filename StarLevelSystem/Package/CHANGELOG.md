@@ -1,3 +1,9 @@
+**0.19.4**
+ ---
+ ```
+- Fixes boss music not playing when custom raids are configured
+ ```
+
 **0.19.3**
  ---
  ```

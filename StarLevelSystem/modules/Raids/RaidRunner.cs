@@ -40,7 +40,7 @@ namespace StarLevelSystem.modules.Raids {
 
 
         public void Update() {
-            if (RunningRaid == null || Znet.IsValid() == false) { return; }
+            if (ValConfig.UseVanillaRaidConfiguration.Value == true || RunningRaid == null || Znet.IsValid() == false) { return; }
 
             // Clients all get this to set their music
             RaidDefinition raid = RunningRaid.Get();

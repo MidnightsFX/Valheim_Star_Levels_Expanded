@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace StarLevelSystem.Modifiers
 {
     internal static class Drainers
     {
-        [HarmonyPatch(typeof(Character), nameof(Character.Damage))]
+        [HarmonyPatch(typeof(Character), nameof(Character.RPC_Damage))]
         public static class ModifierDrain
         {
             private static void Postfix(HitData hit, Character __instance)
@@ -21,12 +22,19 @@ namespace StarLevelSystem.Modifiers
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(attacker);
                 if (mods == null) { return; }
                 if (mods.Keys.Contains(ModifierNames.StaminaDrain.ToString())) {
+                    float dmgtotal = hit.m_damage.GetTotalDamageOptions(include_poison: true, include_spirit: true);
+                    
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.StaminaDrain.ToString(), mods[ModifierNames.StaminaDrain.ToString()]);
-                    __instance.UseStamina(cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));
+                    float drain = dmgtotal * (cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));
+                    Logger.LogDebug($"Draining Stamina from target {drain}");
+                    __instance.UseStamina(drain);
                 }
                 if (mods.Keys.Contains(ModifierNames.EitrDrain.ToString())) {
+                    float dmgtotal = hit.m_damage.GetTotalDamageOptions(include_poison: true, include_spirit: true);
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.EitrDrain.ToString(), mods[ModifierNames.EitrDrain.ToString()]);
-                    __instance.UseEitr(cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));
+                    float drain = dmgtotal * (cmcfg.BasePower + (cmcfg.PerlevelPower * attacker.m_level));
+                    Logger.LogDebug($"Draining Eitr from target {drain}");
+                    __instance.UseEitr(drain);
                 }
             }
         }

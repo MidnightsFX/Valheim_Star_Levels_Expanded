@@ -1,3 +1,10 @@
+**0.19.5**
+ ---
+ ```
+- Stamina and Eitr draining modifiers are now based on damage taken. Blocking is now effective against these, heavy damage creatures can completely drain your resources.
+- Raid compatibility with Custom Raids
+ ```
+
 **0.19.4**
  ---
  ```

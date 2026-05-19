@@ -17,7 +17,6 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
         internal static class UpdatePlayerPrivateKeys {
             public static void Postfix() {
-                //if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
                 if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
             }
@@ -26,7 +25,6 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(Player), nameof(Player.RemoveUniqueKey))]
         internal static class RemovePlayerPrivateKey {
             public static void Postfix() {
-                //if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
                 if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
             }
@@ -35,7 +33,6 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(Player), nameof(Player.Load))]
         internal static class SyncPlayerPrivateKeysOnLoad {
             public static void Postfix() {
-                //if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
                 if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
             }
@@ -55,9 +52,13 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.SetRandomEvent))]
         public static class SetRandomCustomEvent {
             public static bool Prefix(RandEventSystem __instance, RandomEvent ev, Vector3 pos) {
+                if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
                 Logger.LogDebug($"Checking for random Raid {ev.m_name}");
                 RaidsData.RaidsByName.TryGetValue(ev.m_name, out RaidDefinition raidDef);
-                if (raidDef == null) { return false; }
+                if (raidDef == null) {
+                    Logger.LogWarning($"SetRandomEvent called for '{ev.m_name}' but no matching SLS raid definition found — event dropped. Add it to RaidSettings.yaml or enable UseVanillaRaidConfiguration.");
+                    return false;
+                }
 
                 StartRaidRunner(raidDef, pos);
 

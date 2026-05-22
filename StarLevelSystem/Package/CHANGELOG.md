@@ -1,8 +1,21 @@
-**0.19.4**
+**0.20.0**
  ---
  ```
 - Fix for distance level calculation fallback not preferring custom bonuses
 - Rewired EnableDistanceLevelBonus to specifically disable distance bonuses, not night or biome bonuses
+```
+
+**0.19.5**
+ ---
+ ```
+- Stamina and Eitr draining modifiers are now based on damage taken. Blocking is now effective against these, heavy damage creatures can completely drain your resources.
+- Raid compatibility with Custom Raids
+ ```
+
+**0.19.4**
+ ---
+ ```
+- Fixes boss music not playing when custom raids are configured
  ```
 
 **0.19.3**

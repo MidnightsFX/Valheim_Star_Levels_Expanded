@@ -23,6 +23,7 @@ namespace StarLevelSystem.modules.Raids {
             if (setup == false) { return; }
             if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            if (RaidsData.SLE_Raid_Settings.GlobalSettings.DisableAllRaids == true) { return; }
 
 
             if (forceRaidStart || ZNet.instance.GetTimeSeconds() >= nextCheckForRaidsTime) {

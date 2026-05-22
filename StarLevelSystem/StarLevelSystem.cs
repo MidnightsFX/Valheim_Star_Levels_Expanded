@@ -26,7 +26,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.19.4";
+        public const string PluginVersion = "0.20.0";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game

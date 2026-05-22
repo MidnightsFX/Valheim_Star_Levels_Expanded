@@ -85,17 +85,13 @@ namespace StarLevelSystem.modules.Raids
 
         internal static void ApplyRaidConfiguration(RandEventSystem res) {
             if (res == null) { return; }
+            if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
 
             RaidConfiguration cfg = RaidsData.SLE_Raid_Settings ?? RaidsData.DefaultConfiguration;
 
             if (cfg.GlobalSettings != null) {
                 if (cfg.GlobalSettings.GlobalRaidIntervalScalar > 0f) {
                     res.m_eventIntervalMin *= cfg.GlobalSettings.GlobalRaidIntervalScalar;
-                }
-                if (cfg.GlobalSettings.DisableAllRaids) {
-                    res.m_events.Clear();
-                    Logger.LogInfo("SLS raid system: DisableAllRaids set, cleared all random events.");
-                    return;
                 }
             }
 

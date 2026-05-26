@@ -34,6 +34,46 @@ namespace StarLevelSystem.modules.Raids
             raidRun.StartRaid(targetRaid, Player.m_localPlayer);
         }
 
+        internal static bool StartNetworkedRaidRunner(RaidDefinition targetRaid, Vector3 pos) {
+            ZNetPeer peer = GetNearestReadyPeer(pos);
+            if (peer == null) {
+                Logger.LogWarning($"Unable to start raid {targetRaid.Name}; no ready peers were available for the client-side raid runner.");
+                return false;
+            }
+
+            Vector3 raidPosition = pos;
+            if (raidPosition.y == 0f) {
+                raidPosition.y = peer.m_refPos.y;
+            }
+
+            Logger.LogDebug($"Sending networked raid runner for {targetRaid.Name} to {peer.m_playerName} at {raidPosition}");
+            ValConfig.ClientStartRaidRPC.SendPackage(peer.m_uid, CreateStartRaidPackage(targetRaid, raidPosition));
+            ForceMusicForClientsInArea(targetRaid.ForceMusic, raidPosition, targetRaid.EventRange * 1.5f);
+            return true;
+        }
+
+        internal static ZPackage CreateStartRaidPackage(RaidDefinition targetRaid, Vector3 pos) {
+            ZPackage zpack = new ZPackage();
+            zpack.Write(DataObjects.yamlserializer.Serialize(targetRaid));
+            zpack.Write(pos);
+            return zpack;
+        }
+
+        internal static bool TryReadRaidPosition(ZPackage package, out Vector3 pos) {
+            pos = Vector3.zero;
+            if (package.GetPos() >= package.Size()) { return false; }
+            pos = package.ReadVector3();
+            return true;
+        }
+
+        private static ZNetPeer GetNearestReadyPeer(Vector3 pos) {
+            if (ZNet.instance == null) { return null; }
+            return ZNet.instance.GetPeers()
+                .Where(peer => peer != null && peer.IsReady() && peer.m_characterID != ZDOID.None)
+                .OrderBy(peer => Utils.DistanceXZ(peer.m_refPos, pos))
+                .FirstOrDefault();
+        }
+
         public static RaidDefinition RandomSelectValidRaidForPlayer(string playerPlatformID) {
             if (RaidsData.SLE_Raid_Settings.Raids.Count == 0) {
                 Logger.LogWarning("No Raids were defined.");

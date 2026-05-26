@@ -152,8 +152,7 @@ namespace StarLevelSystem.modules.Raids {
                                 MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString());
                             } else {
                                 Logger.LogDebug("Starting networked raid runner.");
-                                ZPackage zpack = new ZPackage();
-                                zpack.Write(DataObjects.yamlserializer.Serialize(raid));
+                                ZPackage zpack = RaidControl.CreateStartRaidPackage(raid, raidPosition);
                                 ZNetPeer zpeer = SLSExtensions.GetPeerByPlatformID(playerRaids.Key);
                                 ValConfig.ClientStartRaidRPC.SendPackage(zpeer.m_uid, zpack);
                             }

@@ -557,8 +557,12 @@ namespace StarLevelSystem
         private static IEnumerator OnClientRecieveRaidStart(long sender, ZPackage package) {
             var yaml = package.ReadString();
             RaidDefinition raiddef = DataObjects.yamldeserializer.Deserialize<RaidDefinition>(yaml);
+            Vector3 raidPosition = Player.m_localPlayer != null ? Player.m_localPlayer.transform.position : Vector3.zero;
+            if (RaidControl.TryReadRaidPosition(package, out Vector3 networkedPosition)) {
+                raidPosition = networkedPosition;
+            }
 
-            RaidControl.StartRaidRunner(raiddef, Player.m_localPlayer.transform.position);
+            RaidControl.StartRaidRunner(raiddef, raidPosition);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;

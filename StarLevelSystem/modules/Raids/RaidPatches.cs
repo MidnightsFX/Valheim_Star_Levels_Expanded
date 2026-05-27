@@ -53,10 +53,17 @@ namespace StarLevelSystem.modules.Raids
         public static class SetRandomCustomEvent {
             public static bool Prefix(RandEventSystem __instance, RandomEvent ev, Vector3 pos) {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                if (ev == null) { return true; }
+
                 Logger.LogDebug($"Checking for random Raid {ev.m_name}");
                 RaidsData.RaidsByName.TryGetValue(ev.m_name, out RaidDefinition raidDef);
                 if (raidDef == null) {
                     Logger.LogWarning($"SetRandomEvent called for '{ev.m_name}' but no matching SLS raid definition found — event dropped. Add it to RaidSettings.yaml or enable UseVanillaRaidConfiguration.");
+                    return false;
+                }
+
+                if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
+                    StartNetworkedRaidRunner(raidDef, pos);
                     return false;
                 }
 

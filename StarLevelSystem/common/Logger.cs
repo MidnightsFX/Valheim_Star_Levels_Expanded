@@ -28,6 +28,16 @@ namespace StarLevelSystem
             }
         }
 
+        public static void LogNemesis(string message) {
+            if (ValConfig.EnableDebugNemesisDetails.Value == false) { return; }
+            StarLevelSystem.Log.LogInfo("[Nemesis] " + message);
+        }
+
+        public static void LogRaid(string message) {
+            if (ValConfig.EnableDebugRaidDetails.Value == false) { return; }
+            StarLevelSystem.Log.LogInfo("[Raid] " + message);
+        }
+
         public static void LogDebug(string message)
         {
             if (Level >= LogLevel.Debug)

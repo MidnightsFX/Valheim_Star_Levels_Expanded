@@ -43,7 +43,7 @@ namespace StarLevelSystem.modules.Raids
         public static class RandEventSystemAwakePatch {
             public static void Postfix(RandEventSystem __instance) {
                 //if (ZNet.instance.IsServer() == false) { return; }
-                Logger.LogDebug("Adding custom raid manager");
+                Logger.LogRaid("Adding custom raid manager");
                 RaidControl.RaidMan = __instance.gameObject.AddComponent<RaidManager>();
                 RaidControl.RaidMan.Setup();   
             }
@@ -55,7 +55,7 @@ namespace StarLevelSystem.modules.Raids
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
                 if (ev == null) { return true; }
 
-                Logger.LogDebug($"Checking for random Raid {ev.m_name}");
+                Logger.LogRaid($"Checking for random Raid {ev.m_name}");
                 RaidsData.RaidsByName.TryGetValue(ev.m_name, out RaidDefinition raidDef);
                 if (raidDef == null) {
                     Logger.LogWarning($"SetRandomEvent called for '{ev.m_name}' but no matching SLS raid definition found — event dropped. Add it to RaidSettings.yaml or enable UseVanillaRaidConfiguration.");
@@ -112,12 +112,12 @@ namespace StarLevelSystem.modules.Raids
                     if (peer == null || peer.IsReady() == false) { continue; }
 
                     ZPackage package = new ZPackage();
-                    Logger.LogDebug($"Sending reset event RPC to {peer.m_playerName}");
+                    Logger.LogRaid($"Sending reset event RPC to {peer.m_playerName}");
                     ValConfig.ClientClearNearbyEventsRPC.SendPackage(peer.m_uid, package);
                 }
 
                 if (ZNet.instance.IsDedicated() == false) {
-                    Logger.LogDebug("Running integrated server removal");
+                    Logger.LogRaid("Running integrated server removal");
                     RaidControl.RemoveNearbyRunningEvents();
                 }
 

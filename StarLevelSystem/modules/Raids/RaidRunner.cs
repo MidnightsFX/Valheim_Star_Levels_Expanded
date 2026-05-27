@@ -73,7 +73,7 @@ namespace StarLevelSystem.modules.Raids {
                 bool spawnWindowClosed = Endtime < ZNet.instance.GetTimeSeconds();
 
                 // Spawn creatures
-                foreach (var rmonitor in RaidSpawners) {
+                foreach (RaidMonitor rmonitor in RaidSpawners) {
                     if (spawnWindowClosed) { continue; }
                     if (rmonitor.RaidSpawnDef.MaxSpawnTriggers > 0
                         && rmonitor.TriggerCount >= rmonitor.RaidSpawnDef.MaxSpawnTriggers) {
@@ -83,11 +83,11 @@ namespace StarLevelSystem.modules.Raids {
                         continue;
                     }
 
-                    Logger.LogDebug($"Checking {rmonitor.RaidSpawnDef.PrefabName} spawn timer: {rmonitor.NextSpawn} < {ZNet.instance.GetTimeSeconds()}");
+                    Logger.LogRaid($"Checking {rmonitor.RaidSpawnDef.PrefabName} spawn timer: {rmonitor.NextSpawn} < {ZNet.instance.GetTimeSeconds()}");
                     rmonitor.NextSpawn = ZNet.instance.GetTimeSeconds() + rmonitor.RaidSpawnDef.SpawnInterval;
                     // Update/remove null entries in the tracked ZDOIDs
                     List<ZDOID> connectedSpawns = rmonitor.GetSpawnedZDOIDs().Where(x => ZDOMan.instance.GetZDO(x) != null).ToList();
-                    Logger.LogDebug($"Found {connectedSpawns.Count} alive creatures");
+                    Logger.LogRaid($"Found {connectedSpawns.Count} alive creatures");
 
                     if (connectedSpawns.Count <= rmonitor.RaidSpawnDef.MaxSpawned) {
                         List<Vector3> spawnPoints = RaidSpawnPoints.Get();
@@ -99,7 +99,7 @@ namespace StarLevelSystem.modules.Raids {
                         // Check spawn chance
                         float chance = UnityEngine.Random.Range(0, 100f);
                         if (rmonitor.RaidSpawnDef.SpawnChance < chance) {
-                            Logger.LogDebug($"{rmonitor.RaidSpawnDef.PrefabName} Failed spawn chance roll {rmonitor.RaidSpawnDef.SpawnChance} < {chance}");
+                            Logger.LogRaid($"{rmonitor.RaidSpawnDef.PrefabName} Failed spawn chance roll {rmonitor.RaidSpawnDef.SpawnChance} < {chance}");
                             continue;
                         }
                         rmonitor.TriggerCount += 1;
@@ -113,9 +113,9 @@ namespace StarLevelSystem.modules.Raids {
                             int level = 0;
                             if (rmonitor.RaidSpawnDef.UseRaidLevelSystem) {
                                 level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1);
-                                Logger.LogDebug($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
+                                Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
                             } else {
-                                Logger.LogDebug($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");
+                                Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");
                             }
                             GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, UnityEngine.Random.rotation);
                             spawns += 1;
@@ -153,10 +153,21 @@ namespace StarLevelSystem.modules.Raids {
 
                 // Raid is over (or waiting on defeat)
                 if (spawnWindowClosed) {
-                    bool keepAlive = RunningRaid.Get().RaidActiveTillDefeated
-                                     && RaidSpawners.Any(rm => rm.GetSpawnedZDOIDs()
-                                            .Any(z => ZDOMan.instance.GetZDO(z) != null));
-                    if (keepAlive == false) {
+                    bool raidComplete = RunningRaid.Get().RaidActiveTillDefeated;
+                    bool spawnedMaxOnce = false;
+                    foreach (RaidMonitor raidspawn in RaidSpawners) {
+                        if (raidspawn.RaidSpawnDef.MaxSpawnTriggers > 0 && raidspawn.TriggerCount >= raidspawn.RaidSpawnDef.MaxSpawnTriggers) {
+                            raidComplete = true;
+                        }
+                        if (raidspawn.RaidSpawnDef.MaxSpawnTriggers == 0) { raidComplete = true; }
+                        if (raidspawn.RaidSpawnDef.MaxSpawned > 0 && raidspawn.TriggerCount >= raidspawn.RaidSpawnDef.MaxSpawned) {
+                            spawnedMaxOnce = true;
+                        }
+                        if (raidspawn.RaidSpawnDef.MaxSpawned == 0) { spawnedMaxOnce = true; }
+                    }
+                    
+                    if (raidComplete && spawnedMaxOnce) {
+                        Logger.LogRaid($"{raid.Name} Completed.");
                         RemoveExistingMapPins();
                         Player.MessageAllInRange(this.transform.position, RunningRaid.Get().EventRange * 1.5f, MessageHud.MessageType.Center, RunningRaid.Get().EndMessage);
                         ZNetScene.Destroy(this);
@@ -229,6 +240,7 @@ namespace StarLevelSystem.modules.Raids {
             Znet.ClaimOwnership();
             RunningRaid.ForceSet(raid);
             RaitStartTime.ForceSet(ZNet.instance.GetTimeSeconds());
+            Logger.LogRaid($"Starting Raid {raid.Name}");
         }
 
         public void AddMapPins(Vector3 pos, RaidDefinition raid) {

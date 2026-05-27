@@ -163,13 +163,13 @@ namespace StarLevelSystem.modules.Raids
                 // Biome Check
                 //Logger.LogDebug($"Checking for Raid biome requirements");
                 if (raid.Activation.Biomes != null && raid.Activation.Biomes.Contains(biome) == false) {
-                    Logger.LogDebug($"Player is not in a target biome, skipping selection of Raid: {raid.Name}");
+                    Logger.LogRaid($"Player is not in a target biome, skipping selection of Raid: {raid.Name}");
                     continue;
                 }
                 // BaseCheck
                 //Logger.LogDebug($"Checking for Raid player base requirements");
                 if (raid.Activation.NearBaseOnly && inBase == false ) {
-                    Logger.LogDebug($"Player is not in base, skipping selection of Raid: {raid.Name}");
+                    Logger.LogRaid($"Player is not in base, skipping selection of Raid: {raid.Name}");
                     continue;
                 }
                 // Required Global Key Check
@@ -184,7 +184,7 @@ namespace StarLevelSystem.modules.Raids
                         }
                     }
                     if (hasRequiredGlobalKeys == false) {
-                        Logger.LogDebug($"Server does not have a required global key, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Server does not have a required global key [{string.Join(",", raid.Activation.RequiredGlobalKeys)}], skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
@@ -200,7 +200,7 @@ namespace StarLevelSystem.modules.Raids
                         }
                     }
                     if (hasAnAntiKey == true) {
-                        Logger.LogDebug($"Server has a key that must be missing, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Server has a key that must be missing [{string.Join(",", raid.Activation.NotRequiredGlobalKeys)}], skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
@@ -226,7 +226,7 @@ namespace StarLevelSystem.modules.Raids
                         }
                     }
                     if (hasRequiredPlayerKeys == false) {
-                        Logger.LogDebug($"Player {playerPlatformID} does not have a required private key, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Player {playerPlatformID} does not have a required private key, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
@@ -241,7 +241,7 @@ namespace StarLevelSystem.modules.Raids
                         }
                     }
                     if (hasAnyRequiredPlayerKeys == false) {
-                        Logger.LogDebug($"Player {playerPlatformID} does not have any of the required private keys, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Player {playerPlatformID} does not have any of the required private keys, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
@@ -256,7 +256,7 @@ namespace StarLevelSystem.modules.Raids
                         }
                     }
                     if (hasAntiPrivateKey == true) {
-                        Logger.LogDebug($"Player {playerPlatformID} has a private key which must be avoided, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Player {playerPlatformID} has a private key which must be avoided, skipping Raid: {raid.Name}");
                         continue;
                     }
                 }
@@ -265,16 +265,16 @@ namespace StarLevelSystem.modules.Raids
                 //Logger.LogDebug($"Checking recent activations of specified raid");
                 if (playerData.LastRaidByName.Count > 0) {
                     if (playerData.NextRaidableTime > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogDebug($"Player {playerPlatformID} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Player {playerPlatformID} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Name}");
                         continue;
                     }
                     if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogDebug($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)}");
+                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)}");
                         continue;
                     }
                 }
 
-                Logger.LogDebug($"Raid {raid.Name} valid for player {playerPlatformID}");
+                Logger.LogRaid($"Raid {raid.Name} valid for player {playerPlatformID}");
                 playerAvailableRaids.Add(raid);
             }
 
@@ -296,14 +296,14 @@ namespace StarLevelSystem.modules.Raids
         }
 
         public static void RemoveNearbyRunningEvents() {
-            Logger.LogDebug($"Client recieved remove nearby event command.");
+            Logger.LogRaid($"Client recieved remove nearby event command.");
             
             // Avoid the original
             IEnumerable<RaidRunner> objects = Resources.FindObjectsOfTypeAll<RaidRunner>();
             //Logger.LogDebug($"Removing {objects.Count()} nearby events.");
             foreach (RaidRunner obj in objects) {
                 if (obj.name == "RaidRunner") { continue; } // skip the original
-                Logger.LogDebug($"Removing {obj.name}");
+                Logger.LogRaid($"Removing {obj.name}");
                 if (obj.Znet != null) { obj.Znet.ClaimOwnership(); }
                 ZNetScene.instance.Destroy(obj.gameObject);
             }
@@ -328,7 +328,7 @@ namespace StarLevelSystem.modules.Raids
                 if (targetBiome != Heightmap.Biome.None) {
                     if (hmap == null || foundBiome != targetBiome) {
                         spawn_location_attempts += 1;
-                        Logger.LogDebug($"Spawn location in the wrong biome, skipping. {foundBiome} | {determinedSpawn}");
+                        Logger.LogRaid($"Spawn location in the wrong biome, skipping. {foundBiome} | {determinedSpawn}");
                         continue;
                     }
                 }
@@ -341,7 +341,7 @@ namespace StarLevelSystem.modules.Raids
 
                     // Prevent spawns in objects and too high off the ground
                     if (terrainDiff > 1f) {
-                        Logger.LogDebug($"Spawn location blocked by an existing object skipping. {terrainDiff} | {determinedSpawn}");
+                        Logger.LogRaid($"Spawn location blocked by an existing object skipping. {terrainDiff} | {determinedSpawn}");
                         spawn_location_attempts += 1;
                         continue;
                     }
@@ -358,14 +358,14 @@ namespace StarLevelSystem.modules.Raids
                 // However ignoring player bases entirely means that the spawn can happen directly inside a players base/walls
                 // foundBiome != Heightmap.Biome.AshLands &&
                 if ((bool)EffectArea.IsPointInsideArea(determinedSpawn, EffectArea.Type.PlayerBase)) {
-                    Logger.LogDebug($"Spawn location in a players base zone, skipping. | {determinedSpawn}");
+                    Logger.LogRaid($"Spawn location in a players base zone, skipping. | {determinedSpawn}");
                     spawn_location_attempts += 1;
                     continue;
                 }
 
                 // Prevent water spawns
                 if (determinedSpawn.y < 27) {
-                    Logger.LogDebug($"Spawn location below water level, skipping. | {determinedSpawn}");
+                    Logger.LogRaid($"Spawn location below water level, skipping. | {determinedSpawn}");
                     spawn_location_attempts += 1;
                     continue;
                 }
@@ -373,11 +373,11 @@ namespace StarLevelSystem.modules.Raids
                 // Prevent spawning in Lava unless a last resort
                 if (foundBiome == Heightmap.Biome.AshLands && hmap.GetVegetationMask(determinedSpawn) > 0.45f) {
                     spawn_location_attempts += 1;
-                    Logger.LogDebug($"Spawn location is in lava, skipping. | {determinedSpawn}");
+                    Logger.LogRaid($"Spawn location is in lava, skipping. | {determinedSpawn}");
                     continue;
                 }
 
-                Logger.LogDebug($"Determined valid spawn target: {determinedSpawn}");
+                Logger.LogRaid($"Determined valid spawn target: {determinedSpawn}");
                 spawn_locations.Add(determinedSpawn);
             }
 

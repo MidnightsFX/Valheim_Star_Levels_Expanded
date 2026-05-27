@@ -37,7 +37,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 if (killer.IsBoss()) { return; }
 
                 float roll = UnityEngine.Random.Range(0f, 1f);
-                Logger.LogDebug($"Rolling for potential Nemesis boss creation {roll} <= {NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance}");
+                Logger.LogNemesis($"Rolling for potential Nemesis boss creation {roll} <= {NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance}");
                 if (roll > NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance) { return; }
 
                 int level = Mathf.Min(ValConfig.MaxLevel.Value, Mathf.RoundToInt(killer.m_level * UnityEngine.Random.Range(NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMinLevelBonus, NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMaxLevelBonus)));

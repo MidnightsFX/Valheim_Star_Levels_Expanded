@@ -108,7 +108,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             SaveScoreData(player);
 
             if (ValConfig.EnableDebugMode.Value) {
-                Logger.LogDebug($"Nemesis recalc: score={GetScore(player):0.0} dealtΔ(dmg)={dmgDealtMeleeTrend:0.0}/{dmgDealtRangedTrend:0.0} takenΔ(dmg)={dmgTakenTrend:0.0} bossΔ(kills)={NemesisSystem.PlayerScore.BossKills} peers={peers.Count}");
+                Logger.LogNemesis($"Nemesis recalc: score={GetScore(player):0.0} dealtΔ(dmg)={dmgDealtMeleeTrend:0.0}/{dmgDealtRangedTrend:0.0} takenΔ(dmg)={dmgTakenTrend:0.0} bossΔ(kills)={NemesisSystem.PlayerScore.BossKills} peers={peers.Count}");
             }
 
             // Clear the current score buckets

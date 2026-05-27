@@ -130,14 +130,14 @@ namespace StarLevelSystem.Data
         }
 
         internal static void UpdateNemesisLog(string data) {
-            Logger.LogDebug($"Updating Nemesis Action Log: {ValConfig.nemesisLogFilePath}");
+            Logger.LogNemesis($"Updating Nemesis Action Log: {ValConfig.nemesisLogFilePath}");
             ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
             File.AppendAllText(ValConfig.nemesisLogFilePath, data);
         }
 
         public static bool UpdateYamlConfig(string yaml) {
             try {
-                Logger.LogDebug("Loaded new Nemesis settings...");
+                Logger.LogNemesis("Loaded new Nemesis settings...");
                 SLE_Nemesis_Settings = DataObjects.yamldeserializer.Deserialize<NemesisConfiguration>(yaml);
             }
             catch (Exception ex) {

@@ -44,13 +44,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         }
 
                         if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
-                            Logger.LogDebug($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
+                            Logger.LogNemesis($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
                             continue;
                         }
 
                         float chance = UnityEngine.Random.Range(0, 1f);
                         if (chance > entry.Value.Chance) {
-                            Logger.LogDebug($"{entry.Key} failed chance roll.");
+                            Logger.LogNemesis($"{entry.Key} failed chance roll.");
                             continue;
                         }
 
@@ -80,13 +80,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
 
                 if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
-                    Logger.LogDebug($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
+                    Logger.LogNemesis($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
                     continue;
                 }
 
                 float chance = UnityEngine.Random.Range(0, 1f);
                 if (chance > entry.Value.Chance) {
-                    Logger.LogDebug($"{entry.Key} failed chance roll.");
+                    Logger.LogNemesis($"{entry.Key} failed chance roll.");
                     continue;
                 }
 

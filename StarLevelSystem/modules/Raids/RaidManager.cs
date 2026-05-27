@@ -57,7 +57,7 @@ namespace StarLevelSystem.modules.Raids {
                 bool isIntegratedServer = false;
                 string localPlayerPlatformAndID = null;
                 if (ZNet.instance.IsServer() && ZNet.instance.IsDedicated() == false && Player.m_localPlayer != null) {
-                    Logger.LogDebug("Integrated server mode enabled, local player will be checked for configuration data. Networked players already validated.");
+                    Logger.LogRaid("Integrated server mode enabled, local player will be checked for configuration data. Networked players already validated.");
                     localPlayerPlatformAndID = SLSExtensions.GetLocalUserPlatformAndID();
                     RaidControl.UpdateOrAddPlayerPrivateKeys(localPlayerPlatformAndID, Player.m_localPlayer.GetPrivateKeysSanitize());
                     isIntegratedServer = true;
@@ -68,25 +68,25 @@ namespace StarLevelSystem.modules.Raids {
                 int activatingRaids = 0;
                 int raidsChecked = 0;
                 double currentTime = ZNet.instance.GetTimeSeconds();
-                Logger.LogDebug($"Starting raid init check potential num raids: {numRaids} start-time: {currentTime} checking {RaidControl.ServerPlayerRaidData.Count} players for raid availability.");
+                Logger.LogRaid($"Starting raid init check potential num raids: {numRaids} start-time: {currentTime} checking {RaidControl.ServerPlayerRaidData.Count} players for raid availability.");
                 List<string> peers = new List<string>();
                 foreach (PlayerInfo player in ZNet.instance.GetPlayerList()) {
                     peers.Add($"{player.m_userInfo.m_id.m_platform}_{player.m_userInfo.m_id.m_userID}");
                 }
-                Logger.LogDebug($"Available players for raids:\n{string.Join("\n", peers)}\nAvailable Player data:\n{string.Join("\n", RaidControl.ServerPlayerRaidData.Keys)}");
+                Logger.LogRaid($"Available players for raids:\n{string.Join("\n", peers)}\nAvailable Player data:\n{string.Join("\n", RaidControl.ServerPlayerRaidData.Keys)}");
                 foreach (KeyValuePair<string, PlayerRaidData> playerRaids in RaidControl.ServerPlayerRaidData) {
-                    Logger.LogDebug($"Checking raids for {playerRaids.Key}");
+                    Logger.LogRaid($"Checking raids for {playerRaids.Key}");
 
                     if (SLSExtensions.PlatformAndIDIsPlayerOnline(playerRaids.Key) == false) {
-                        Logger.LogDebug($"Client {playerRaids.Key} was not online, skipping raid checks for them.");
+                        Logger.LogRaid($"Client {playerRaids.Key} was not online, skipping raid checks for them.");
                         continue;
                     }
                     if (forceRaidStart == false && playerRaids.Value.NextRaidableTime >= currentTime) {
-                        Logger.LogDebug($"{playerRaids.Key} is not currently raidable, still on cooldown: {playerRaids.Value.NextRaidableTime} >= {currentTime}");
+                        Logger.LogRaid($"{playerRaids.Key} is not currently raidable, still on cooldown: {playerRaids.Value.NextRaidableTime} >= {currentTime}");
                         continue;
                     }
                     if (activatingRaids >= numRaids) {
-                        Logger.LogDebug($"Number of raids activating now matches: activating {activatingRaids} == target {numRaids}");
+                        Logger.LogRaid($"Number of raids activating now matches: activating {activatingRaids} == target {numRaids}");
                         break;
                     }
 
@@ -97,7 +97,7 @@ namespace StarLevelSystem.modules.Raids {
                     Vector3 raidPosition = SLSExtensions.GetPlayerPosition(playerInfo.m_characterID);
 
                     if (raidPosition == Vector3.zero) {
-                        Logger.LogDebug($"Player {playerRaids.Key} position was not found, they will not get raided.");
+                        Logger.LogRaid($"Player {playerRaids.Key} position was not found, they will not get raided.");
                         continue;
                     }
                     // Check distance to existing raids
@@ -120,38 +120,38 @@ namespace StarLevelSystem.modules.Raids {
                         }
                     }
                     if (tooClose) {
-                        Logger.LogDebug("Potential raid would be too close to an existing raid, skipping.");
+                        Logger.LogRaid("Potential raid would be too close to an existing raid, skipping.");
                         break;
                     }
 
 
                     // Check available raids to see which one could activate
-                    Logger.LogDebug($"Updating available raids for {playerRaids.Key}");
+                    Logger.LogRaid($"Updating available raids for {playerRaids.Key}");
                     playerRaids.Value.PlayerAvailableRaids = RaidControl.GetValidRaidsForPlayer(raidPosition, playerRaids.Key);
-                    Logger.LogDebug($"Shuffling {playerRaids.Value.PlayerAvailableRaids.Count} potential raids for player...");
+                    Logger.LogRaid($"Shuffling {playerRaids.Value.PlayerAvailableRaids.Count} potential raids for player...");
 
                     foreach (RaidDefinition raid in playerRaids.Value.PlayerAvailableRaids.ShuffleList()) {
                         if (raidsChecked >= ValConfig.MaxRaidAttemptsPerPlayer.Value) {
-                            Logger.LogDebug($"Reached max raid attempts per player ({ValConfig.MaxRaidAttemptsPerPlayer.Value}), stopping checks for player {playerRaids.Key}");
+                            Logger.LogRaid($"Reached max raid attempts per player ({ValConfig.MaxRaidAttemptsPerPlayer.Value}), stopping checks for player {playerRaids.Key}");
                             break;
                         }
                         raidsChecked++;
 
 
                         float randv = UnityEngine.Random.Range(0f, 100f);
-                        Logger.LogDebug($"Raid {raid} checking activation chance: {randv} <= {raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar} | Forced? {forceRaidStart}");
+                        Logger.LogRaid($"Raid {raid} checking activation chance: {randv} <= {raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar} | Forced? {forceRaidStart}");
                         if (forceRaidStart || randv <= raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar) {
-                            Logger.LogDebug($"Activating Raid {raid.Name} for player {playerRaids.Key}");
+                            Logger.LogRaid($"Activating Raid {raid.Name} for player {playerRaids.Key}");
                             RaidControl.UpdatePlayerRaidHistory(playerRaids.Value, raid, raid.Name);
                             playerRaids.Value.CurrentRaidPosition = raidPosition;
                             // Send RPC to player to start their raid
-                            Logger.LogDebug($"Determining raid init style: integrated? {isIntegratedServer} && {localPlayerPlatformAndID} == {playerRaids.Key}");
+                            Logger.LogRaid($"Determining raid init style: integrated? {isIntegratedServer} && {localPlayerPlatformAndID} == {playerRaids.Key}");
                             if (isIntegratedServer && localPlayerPlatformAndID == playerRaids.Key) {
-                                Logger.LogDebug("Starting integrated raid runner.");
+                                Logger.LogRaid("Starting integrated raid runner.");
                                 RaidControl.StartRaidRunner(raid, raidPosition);
                                 MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString());
                             } else {
-                                Logger.LogDebug("Starting networked raid runner.");
+                                Logger.LogRaid("Starting networked raid runner.");
                                 ZNetPeer zpeer = SLSExtensions.GetPeerByPlatformID(playerRaids.Key);
                                 if (RaidControl.StartNetworkedRaidForPeer(raid, raidPosition, zpeer) == false) {
                                     Logger.LogWarning($"Tried to start raid {raid.Name} for player {playerRaids.Key} but networked dispatch failed (peer null or unavailable).");
@@ -172,7 +172,7 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void Setup() {
-            Logger.LogDebug("Starting setup for RaidManager.");
+            Logger.LogRaid("Starting setup for RaidManager.");
             try {
                 RaidControl.ServerPlayerRaidData = yamldeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(RaidsData.LoadServerRaidData());
             } catch (Exception e) {

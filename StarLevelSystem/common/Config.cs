@@ -156,8 +156,10 @@ namespace StarLevelSystem
         public static ConfigEntry<int> MaxRaidAttemptsPerPlayer;
         public static ConfigEntry<float> RaidPerPlayerUpdateCheck;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
+        public static ConfigEntry<bool> EnableDebugRaidDetails;
 
         public static ConfigEntry<bool> EnableNemesisSystem;
+        public static ConfigEntry<bool> EnableDebugNemesisDetails;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
 
@@ -211,6 +213,14 @@ namespace StarLevelSystem
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             EnableDebugLootDetails = Config.Bind("Client config", "EnableDebugLootDetails", false,
                 new ConfigDescription("Enables Detailed logging for loot generation.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
+            EnableDebugNemesisDetails = Config.Bind("Client config", "EnableDebugNemesisDetails", false,
+                new ConfigDescription("Enables Detailed logging for the Nemesis system.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
+            EnableDebugRaidDetails = Config.Bind("Client config", "EnableDebugRaidDetails", false,
+                new ConfigDescription("Enables Detailed logging for the Raid system.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
 

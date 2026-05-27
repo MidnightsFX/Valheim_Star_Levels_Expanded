@@ -25,9 +25,10 @@ namespace StarLevelSystem.modules.Sizes {
             // Set or update the size
             float scale = bonus + cdetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + (cdetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cdetails.Level);
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
+            obj.transform.localScale = creatureScale;
             UpdateRidingCreaturesForSizeScaling(obj, cdetails);
             zview.m_zdo.Set(SLS_SIZE, creatureScale);
-            Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
+            //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
             Physics.SyncTransforms();
         }
 

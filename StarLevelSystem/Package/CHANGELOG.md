@@ -1,11 +1,10 @@
 **0.20.0**
  ---
  ```
-- Nemesis System initial release (disabled by default)
+- Nemesis System initial release (Active by default)
 	- The nemesis system is a active-reactive game master that regularly monitors your gameplay and manipulates the world around you
 		- Nemesis can spawn creatures, waves, minibosses, lootgoblins
-		- Nemesis can downgrade the stars of newly spawned creatures
-		- Nemesis can upgrade stars of newly spawned creatures
+		- Nemesis can downgrade or upgrade the stars of newly spawned creatures
 		- Nemesis shares data with other nearby players, ensuring that a group of players gets an experience which roughly fits group average performance
 - Fix for distance level calculation fallback not preferring custom bonuses
 - Rewired EnableDistanceLevelBonus to specifically disable distance bonuses, not night or biome bonuses
@@ -14,6 +13,7 @@
 	- Creatures now have a maximum concurrent spawns (MaxSpawned) and a maximum number of times the spawner can fire (MaxSpawnTriggers)
 - Creature setup time optimizations
 - Creature damaged on frames before it is fully configured now tracks damage done instead of percentage damage done
+- Fixed an edge case that could cause infinite duration raids or 30s raids
 ```
 
 **0.19.5**

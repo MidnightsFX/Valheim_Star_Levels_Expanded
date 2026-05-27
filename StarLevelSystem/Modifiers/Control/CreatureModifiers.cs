@@ -198,6 +198,8 @@ namespace StarLevelSystem.Modifiers.Control
             }
 
             string cname = chara.m_name;
+            string customName = chara.m_nview.GetZDO().GetString(SLS_NAME, "");
+            if (string.IsNullOrEmpty(customName) == false) { cname = customName; }
 
             if (prefix_names.Count == 0 && suffix_names.Count == 0) {
                 return cname;

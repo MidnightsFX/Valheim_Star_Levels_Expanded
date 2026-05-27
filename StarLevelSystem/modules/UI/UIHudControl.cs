@@ -66,24 +66,21 @@ namespace StarLevelSystem.modules.UI {
 
         public static void InvalidateCacheEntry(Character chara) {
             uint id = chara.GetZDOID().ID;
-            //CreatureSetupControl.CreatureSetupNoDelay(chara);
-            CompositeLazyCache.GetAndSetLocalCache(chara);
+            if (characterExtendedHuds.ContainsKey(id) == false) { return; }
 
-            if (characterExtendedHuds.ContainsKey(id)) {
-                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
-                //Logger.LogDebug($"Invalidating cache entry for {id} - lvl:{cce.Level} name:{cce.CreatureNameLocalizable}");
-                StarLevelHud exthud = characterExtendedHuds[id];
-                cce.CreatureModifiers = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
-                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
-                cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(exthud.Hudlink.m_character, mods);
-                cce.CreatureModifiers = mods;
-                
-                // Update UI name, star count, and modifiers
-                exthud.Level = cce.Level;
-                UpdateHudModifiers(id, exthud, mods);
-                
-                if (cce == null || cce.CreatureNameLocalizable == null) { return; }
+            CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
+            if (cce == null) {
+                cce = CompositeLazyCache.GetAndSetLocalCache(chara);
+                if (cce == null) { return; }
             }
+
+            StarLevelHud exthud = characterExtendedHuds[id];
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
+            cce.CreatureModifiers = mods;
+            cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(exthud.Hudlink.m_character, mods);
+
+            exthud.Level = cce.Level;
+            UpdateHudModifiers(id, exthud, mods);
         }
 
         internal static void StarLevelHudDisplay(GameObject star, Transform basehud, Transform bosshud) {

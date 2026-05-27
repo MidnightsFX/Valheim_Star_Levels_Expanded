@@ -284,7 +284,7 @@ namespace StarLevelSystem.common
                 BiomeMinLevelOverride = othercfg.BiomeMinLevelOverride,
                 CreatureBaseValueModifiers = othercfg.CreatureBaseValueModifiers,
                 CreaturePerLevelValueModifiers = othercfg.CreaturePerLevelValueModifiers,
-                creatureSpawnsDisabled = othercfg.creatureSpawnsDisabled,
+                CreatureSpawnsDisabled = othercfg.CreatureSpawnsDisabled,
                 CustomCreatureLevelUpChance = othercfg.CustomCreatureLevelUpChance,
                 DamageRecievedModifiers = othercfg.DamageRecievedModifiers,
                 DistanceScaleModifier = othercfg.DistanceScaleModifier,
@@ -321,17 +321,17 @@ namespace StarLevelSystem.common
                 biomecfg.DamageRecievedModifiers = prioritycfg.DamageRecievedModifiers;
             }
 
-            if (prioritycfg.creatureSpawnsDisabled != null) {
-                biomecfg.creatureSpawnsDisabled = prioritycfg.creatureSpawnsDisabled;
-                if (othercfg.creatureSpawnsDisabled != null) {
-                    biomecfg.creatureSpawnsDisabled = prioritycfg.creatureSpawnsDisabled.Union(othercfg.creatureSpawnsDisabled).ToList();
+            if (prioritycfg.CreatureSpawnsDisabled != null) {
+                biomecfg.CreatureSpawnsDisabled = prioritycfg.CreatureSpawnsDisabled;
+                if (othercfg.CreatureSpawnsDisabled != null) {
+                    biomecfg.CreatureSpawnsDisabled = prioritycfg.CreatureSpawnsDisabled.Union(othercfg.CreatureSpawnsDisabled).ToList();
                 }
             }
 
             if (prioritycfg.NightSettings != null) {
                 biomecfg.NightSettings.SpawnRateModifier = prioritycfg.NightSettings.SpawnRateModifier;
-                if (prioritycfg.NightSettings.creatureSpawnsDisabled != null && biomecfg.NightSettings.creatureSpawnsDisabled != null) {
-                    biomecfg.NightSettings.creatureSpawnsDisabled = biomecfg.NightSettings.creatureSpawnsDisabled.Union(prioritycfg.NightSettings.creatureSpawnsDisabled).ToList();
+                if (prioritycfg.NightSettings.CreatureSpawnsDisabled != null && biomecfg.NightSettings.CreatureSpawnsDisabled != null) {
+                    biomecfg.NightSettings.CreatureSpawnsDisabled = biomecfg.NightSettings.CreatureSpawnsDisabled.Union(prioritycfg.NightSettings.CreatureSpawnsDisabled).ToList();
                 }
             }
             return biomecfg;

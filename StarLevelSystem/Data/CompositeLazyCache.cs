@@ -84,7 +84,7 @@ namespace StarLevelSystem.Data
             characterEntry.Biome = biome;
             characterEntry.RefCreatureName = creatureName;
             // Biome settings say to delete this
-            if (biomeSettings != null && biomeSettings.creatureSpawnsDisabled != null && biomeSettings.creatureSpawnsDisabled.Contains(creatureName)) {
+            if (biomeSettings != null && biomeSettings.CreatureSpawnsDisabled != null && biomeSettings.CreatureSpawnsDisabled.Contains(creatureName)) {
                 characterEntry.ShouldDelete = true;
             }
             // biome or creature spawn settings 
@@ -102,7 +102,7 @@ namespace StarLevelSystem.Data
                         biomeSettings.SpawnRateModifier = biomeSettings.NightSettings.SpawnRateModifier;
                     }
                     //Logger.LogDebug($"Biome has {biome_settings.NightSettings.creatureSpawnsDisabled.Count} disabled creatures: {string.Join(",", biome_settings.NightSettings.creatureSpawnsDisabled)}");
-                    if (biomeSettings.NightSettings.creatureSpawnsDisabled != null && biomeSettings.NightSettings.creatureSpawnsDisabled.Contains(creatureName)) {
+                    if (biomeSettings.NightSettings.CreatureSpawnsDisabled != null && biomeSettings.NightSettings.CreatureSpawnsDisabled.Contains(creatureName)) {
                         //Logger.LogDebug("Biome has spawn disabled.");
                         characterEntry.ShouldDelete = true;
                     }
@@ -113,7 +113,7 @@ namespace StarLevelSystem.Data
                     if (creatureSettings.NightSettings.SpawnRateModifier != 1f) {
                         creatureSettings.SpawnRateModifier = creatureSettings.NightSettings.SpawnRateModifier;
                     }
-                    if (creatureSettings.NightSettings.creatureSpawnsDisabled == true) {
+                    if (creatureSettings.NightSettings.CreatureSpawnsDisabled == true) {
                         //Logger.LogDebug("Creature has spawn disabled.");
                         characterEntry.ShouldDelete = true;
                     }
@@ -220,16 +220,27 @@ namespace StarLevelSystem.Data
             // Setup the creatures modifiers if it does not have any- ideally this only gets calculated on the zowners first setup
             // If network calls are significantly delayed this could be updated by a client and overwritten
             if (characterEntry.CreatureModifiers == null || characterEntry.CreatureModifiers.Count == 0) {
-                characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(
-                    chara,
-                    creatureName: characterEntry.RefCreatureName,
-                    creature_settings: characterEntry.creatureSettings,
-                    biome: characterEntry.Biome,
-                    level: characterEntry.Level,
-                    requiredModifiers: characterEntry.ModifiersRequired,
-                    notAllowedModifiers: characterEntry.ModifiersNotAllowed
-                    );
-                SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
+                // Defensive re-read: the cache was built from the ZDO earlier in this coroutine,
+                // but the ZDO may have received SLS_MODSV2 from another peer since then (the
+                // common failure mode with FGN-style server-authority patches that ping-pong
+                // ZDO ownership). Read straight from the ZDO once more before re-rolling so we
+                // don't clobber persisted modifiers with a fresh random roll.
+                Dictionary<string, ModifierType> persistedMods = GetCreatureModifiers(chara);
+                if (persistedMods != null && persistedMods.Count > 0) {
+                    characterEntry.CreatureModifiers = persistedMods;
+                    UpdateCharacterCacheEntry(chara, characterEntry);
+                } else {
+                    characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(
+                        chara,
+                        creatureName: characterEntry.RefCreatureName,
+                        creature_settings: characterEntry.creatureSettings,
+                        biome: characterEntry.Biome,
+                        level: characterEntry.Level,
+                        requiredModifiers: characterEntry.ModifiersRequired,
+                        notAllowedModifiers: characterEntry.ModifiersNotAllowed
+                        );
+                    SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
+                }
             }
             // 
             //if (characterEntry.CreatureModifiers != null) {

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-using static StarLevelSystem.common.ConfigFileWatcher;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.NemesisSystem {

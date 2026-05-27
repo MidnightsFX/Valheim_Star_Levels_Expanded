@@ -318,7 +318,9 @@ namespace StarLevelSystem.modules.Raids
                 }
 
                 // Prevent spawns in a players base | This does not work in the ashlands as all of the existing fortresses, POIs etc are considered "player bases"
-                if (foundBiome != Heightmap.Biome.AshLands && (bool)EffectArea.IsPointInsideArea(determinedSpawn, EffectArea.Type.PlayerBase)) {
+                // However ignoring player bases entirely means that the spawn can happen directly inside a players base/walls
+                // foundBiome != Heightmap.Biome.AshLands &&
+                if ((bool)EffectArea.IsPointInsideArea(determinedSpawn, EffectArea.Type.PlayerBase)) {
                     Logger.LogDebug($"Spawn location in a players base zone, skipping. | {determinedSpawn}");
                     spawn_location_attempts += 1;
                     continue;

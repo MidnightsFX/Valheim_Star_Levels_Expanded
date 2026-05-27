@@ -54,6 +54,8 @@ namespace StarLevelSystem
         internal static CustomRPC ClientStartRaidRPC;
         internal static CustomRPC ClientForcePlayMusicRPC;
         internal static CustomRPC ClientClearNearbyEventsRPC;
+        internal static CustomRPC SendNewNemesisBossRPC;
+        internal static CustomRPC RemoveNemeisBossRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
@@ -179,6 +181,8 @@ namespace StarLevelSystem
             ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerRecieveConfigs, OnClientRecieveRaidStart);
             ClientForcePlayMusicRPC = NetworkManager.Instance.AddRPC("SLS_ClientForcePlayMusicRPC", OnServerRecieveConfigs, OnClientRecieveForcePlayMusic);
             ClientClearNearbyEventsRPC = NetworkManager.Instance.AddRPC("SLS_ClientForceRemoveNearbyEventsRPC", OnServerRecieveConfigs, OnClientRecieveForceRemoveNearbyEvents);
+            SendNewNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_SendNewNemesisBossRPC", OnServerRecieveNemesisBossAdd, OnClientRecieveMiniBossAdd);
+            RemoveNemeisBossRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossRPC", OnServerRecieveNemesisBossRemove, OnClientRecieveMiniBossRemove);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
@@ -467,7 +471,7 @@ namespace StarLevelSystem
             }
 
             ConfigFileWatcher.Register(colorsFilePath, UpdateColorSettings);
-            ConfigFileWatcher.Register(LevelSettingsFileName, UpdateLevelSettings);
+            ConfigFileWatcher.Register(levelsFilePath, UpdateLevelSettings);
             ConfigFileWatcher.Register(creatureModifierFilePath, UpdateModifierSettings);
             ConfigFileWatcher.Register(creatureLootFilePath, UpdateLootSettings);
             ConfigFileWatcher.Register(raidsFilePath, UpdateRaidSettings);
@@ -565,6 +569,38 @@ namespace StarLevelSystem
             yield return null;
         }
 
+        public static IEnumerator OnServerRecieveNemesisBossAdd(long sender, ZPackage package) {
+            // Write the update to the local file and memory
+            var yaml = package.ReadString();
+            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
+            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemboss);
+            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlserializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+            // Send the update to all of the other clients
+            ZNet.instance.GetPeers().ForEach(peer => {
+                if (peer.m_uid != sender) {
+                    ClientSendPlayerPrivateKeysRPC.SendPackage(peer.m_uid, package);
+                }
+            });
+
+            yield return null;
+        }
+
+        public static IEnumerator OnServerRecieveNemesisBossRemove(long sender, ZPackage package) {
+            // Write the update to the local file and memory
+            var yaml = package.ReadString();
+            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
+            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemboss);
+            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlserializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+            // Send the update to all of the other clients
+            ZNet.instance.GetPeers().ForEach(peer => {
+                if (peer.m_uid != sender) {
+                    ClientSendPlayerPrivateKeysRPC.SendPackage(peer.m_uid, package);
+                }
+            });
+
+            yield return null;
+        }
+
         private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
             var levelsyaml = package.ReadString();
             LevelSystemData.UpdateYamlConfig(levelsyaml);
@@ -592,6 +628,24 @@ namespace StarLevelSystem
             var yaml = package.ReadString();
             CreatureModifiersData.UpdateModifierConfig(yaml);
 
+            // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
+        private static IEnumerator OnClientRecieveMiniBossAdd(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
+            if (NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Contains(nemboss) == false) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemboss);
+            }
+            // Add in a check if we want to write the server config to disk or use it virtually
+            yield return null;
+        }
+
+        private static IEnumerator OnClientRecieveMiniBossRemove(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
+            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemboss);
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }

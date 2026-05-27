@@ -70,8 +70,15 @@ namespace StarLevelSystem.modules.Raids {
                     RaidSpawners = ActiveRaidSpawns.Get();
                 }
 
+                bool spawnWindowClosed = Endtime < ZNet.instance.GetTimeSeconds();
+
                 // Spawn creatures
                 foreach (var rmonitor in RaidSpawners) {
+                    if (spawnWindowClosed) { continue; }
+                    if (rmonitor.RaidSpawnDef.MaxSpawnTriggers > 0
+                        && rmonitor.TriggerCount >= rmonitor.RaidSpawnDef.MaxSpawnTriggers) {
+                        continue;
+                    }
                     if (rmonitor.NextSpawn > ZNet.instance.GetTimeSeconds()) {
                         continue;
                     }
@@ -95,6 +102,7 @@ namespace StarLevelSystem.modules.Raids {
                             Logger.LogDebug($"{rmonitor.RaidSpawnDef.PrefabName} Failed spawn chance roll {rmonitor.RaidSpawnDef.SpawnChance} < {chance}");
                             continue;
                         }
+                        rmonitor.TriggerCount += 1;
                         Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count - 1)];
                         // Do custom level if custom level chances are set
                         SortedDictionary<int, float> levelupChance = LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
@@ -140,11 +148,19 @@ namespace StarLevelSystem.modules.Raids {
                     }
                 }
 
-                // Raid is over
-                if (Endtime < ZNet.instance.GetTimeSeconds()) {
-                    RemoveExistingMapPins();
-                    Player.MessageAllInRange(this.transform.position, RunningRaid.Get().EventRange * 1.5f, MessageHud.MessageType.Center, RunningRaid.Get().EndMessage);
-                    ZNetScene.Destroy(this);
+                // Persist any per-spawner state mutations (NextSpawn, TriggerCount) so they survive owner-handoff
+                ActiveRaidSpawns.Set(RaidSpawners);
+
+                // Raid is over (or waiting on defeat)
+                if (spawnWindowClosed) {
+                    bool keepAlive = RunningRaid.Get().RaidActiveTillDefeated
+                                     && RaidSpawners.Any(rm => rm.GetSpawnedZDOIDs()
+                                            .Any(z => ZDOMan.instance.GetZDO(z) != null));
+                    if (keepAlive == false) {
+                        RemoveExistingMapPins();
+                        Player.MessageAllInRange(this.transform.position, RunningRaid.Get().EventRange * 1.5f, MessageHud.MessageType.Center, RunningRaid.Get().EndMessage);
+                        ZNetScene.Destroy(this);
+                    }
                 }
 
                 // If we are maintaining a raid, we skip to prevent multiple starts etc
@@ -179,9 +195,13 @@ namespace StarLevelSystem.modules.Raids {
             // Clear the environment
             EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
 
-            // Clean up any spawns
-            if (RaidSpawners == null) { return; }
-            foreach (var raidmon in RaidSpawners) {
+            // Clean up any spawns. Fall back to the ZDO-backed list when the in-memory cache is empty
+            // (e.g. console-command teardown before Update populated RaidSpawners, or after owner-handoff).
+            List<RaidMonitor> spawnersToClean = (RaidSpawners != null && RaidSpawners.Count > 0)
+                ? RaidSpawners
+                : (networkReady && ActiveRaidSpawns != null ? ActiveRaidSpawns.Get() : null);
+            if (spawnersToClean == null) { return; }
+            foreach (var raidmon in spawnersToClean) {
                 foreach (ZDOID spawned in raidmon.GetSpawnedZDOIDs() ) {
                     ZDO zdo = ZDOMan.instance.GetZDO(spawned);
                     if (zdo == null) { continue; }
@@ -189,7 +209,7 @@ namespace StarLevelSystem.modules.Raids {
                     if (nv == null) { continue; }
                     if (nv != null) {
                         nv.ClaimOwnership();
-                        ZNetScene.instance.Destroy(nv.gameObject); 
+                        ZNetScene.instance.Destroy(nv.gameObject);
                     }
                 }
             }

@@ -360,7 +360,7 @@ namespace StarLevelSystem.Data
                     i = 0;
                 }
                 if (character == null || character.m_nview == null || character.m_nview.IsValid() == false) { continue; }
-                CreatureSetupControl.CreatureSetupNoDelay(character);
+                CreatureSetupControl.CreatureSetup(character, delay: 0);
                 i++;
             }
             HealthModifications.ForceUpdateHealth = false;

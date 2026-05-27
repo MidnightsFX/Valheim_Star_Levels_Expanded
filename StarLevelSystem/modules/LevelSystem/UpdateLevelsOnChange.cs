@@ -1,7 +1,6 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
-using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -47,14 +46,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
 
                 if (chara.GetLevel() <= ValConfig.MaxLevel.Value) { continue; }
-                //CompositeLazyCache.ClearCachedCreature(chara);
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
 
-                //cce.Level = LevelSystem.DetermineLevel(chara, chara.m_nview.GetZDO(), cce.CreatureSettings, cce.BiomeSettings);
-                //CompositeLazyCache.UpdateCharacterCacheEntry(chara, cce);
-                //CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, false);
-                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cce, update: true);
-                CreatureSetupQueue.Invalidate(chara);
                 CreatureSetupControl.CreatureSetup(chara, cce.Level);
                 //LevelUI.InvalidateCacheEntry(chara);
             }

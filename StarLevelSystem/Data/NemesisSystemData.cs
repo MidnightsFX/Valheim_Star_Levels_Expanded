@@ -26,10 +26,10 @@ namespace StarLevelSystem.Data
                 BossKillBonus = 100f,
                 BossKillRadius = 100f,
                 
-                MeleeDamageDealtFactor = 1f,
-                RangedDamageDealtFactor = 0.5f,
-                MagicDamageDealtFactor = 0.75f,
-                DamageTakenFactor = -1f,
+                MeleeDamageDealtFactor = 0.75f,
+                RangedDamageDealtFactor = 0.25f,
+                MagicDamageDealtFactor = 0.5f,
+                DamageTakenFactor = -0.5f,
                 DeathScoreReduction = 300f,
             },
             GaurenteedChanges = new NemesisGaurenteedChanges() {
@@ -64,8 +64,53 @@ namespace StarLevelSystem.Data
                     // Increase Creature levels to make things harder
                     { "IncreaseCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.25f, ScoreThreshold = 600f, Action = NemesisAction.ChangeLevel, LevelBonus = 1, ScoreChange = -25f, } },
                     { "SignificantlyIncreaseCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.5f, ScoreThreshold = 800f, Action = NemesisAction.ChangeLevel, LevelBonus = 3, ScoreChange = -50f, } },
-                },
 
+                    { "NemesisMiniboss1", new NemesisChanceEntry() { Enabled = true, Chance = 0.05f, ScoreThreshold = 950f, Action = NemesisAction.SpawnMiniboss, LevelBonus = 7, ScoreChange = -300f } },
+                },
+            },
+            AvailableMiniBosses = new List<NemesisMiniboss>(),
+            NemesisMinionTemplatesByBiome = new Dictionary<Heightmap.Biome, List<NemesisMinion>>() {
+                { Heightmap.Biome.Meadows, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "Neck", MinAmount = 6, MaxAmount = 9, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Boar", MinAmount = 3, MaxAmount = 6, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Greyling", MinAmount = 2, MaxAmount = 5, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
+                { Heightmap.Biome.BlackForest, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "GreyDwarf", MinAmount = 6, MaxAmount = 12, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "GreyDwarfShaman", MinAmount = 2, MaxAmount = 4, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Skeleton", MinAmount = 4, MaxAmount = 10, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "SkeletonArcher", MinAmount = 3, MaxAmount = 6, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
+                { Heightmap.Biome.Swamp, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "Surtling", MinAmount = 6, MaxAmount = 12, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Draugr", MinAmount = 4, MaxAmount = 8, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Draugr_Ranged", MinAmount = 3, MaxAmount = 6, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Blob", MinAmount = 6, MaxAmount = 10, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
+                { Heightmap.Biome.Mountain, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "Wolf", MinAmount = 4, MaxAmount = 8, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Ulv", MinAmount = 4, MaxAmount = 8, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Bat", MinAmount = 8, MaxAmount = 20, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Hatchling", MinAmount = 2, MaxAmount = 4, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
+                { Heightmap.Biome.Plains, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "Deathsquito", MinAmount = 4, MaxAmount = 8, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 3f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Fuling", MinAmount = 6, MaxAmount = 12, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "FulingArcher", MinAmount = 5, MaxAmount = 9, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "FulingShaman", MinAmount = 2, MaxAmount = 4, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
+                { Heightmap.Biome.Mistlands, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "Seeker", MinAmount = 4, MaxAmount = 7, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "DvergerRouge", MinAmount = 3, MaxAmount = 6, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "DvergerMage", MinAmount = 2, MaxAmount = 5, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Gjall", MinAmount = 2, MaxAmount = 4, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
+                { Heightmap.Biome.AshLands, new List<NemesisMinion>() {
+                    new NemesisMinion() { PrefabName = "Charred_Archer", MinAmount = 3, MaxAmount = 6, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Charred_Twitcher", MinAmount = 6, MaxAmount = 10, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Charred_Mage", MinAmount = 1, MaxAmount = 3, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                    new NemesisMinion() { PrefabName = "Charred_Melee", MinAmount = 3, MaxAmount = 5, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
+                }},
             }
 
         };

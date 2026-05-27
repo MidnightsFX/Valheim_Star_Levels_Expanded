@@ -76,7 +76,6 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 DamageDealtRanged = NemesisSystem.PlayerScore.DamageDealtRanged,
                 DamageDealtMagic = NemesisSystem.PlayerScore.DamageDealtMagic,
                 DamageTaken = NemesisSystem.PlayerScore.DamageTaken
-                
             };
 
             var (dmgDealtMeleeTrend, dmgDealtRangedTrend, dmgTakenTrend) = DamageTrendCalculation(dsd_recent);
@@ -87,7 +86,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             score += NemesisSystem.PlayerScore.BossKills * cfg.BossKillBonus;
 
             // Decay the score towards neutral over time, neutral can be a naturally easy, hard or balanced target.
-            if (score > cfg.NeutralScore) { 
+            if (score > cfg.NeutralScore) {
                 score -= cfg.DecayPerUpdate;
             } else {
                 score += cfg.DecayPerUpdate;

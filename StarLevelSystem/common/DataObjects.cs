@@ -31,7 +31,7 @@ namespace StarLevelSystem.common
 
         public static BinaryFormatter binFormatter = new BinaryFormatter();
 
-        public static readonly string SLS_CREATURE = "SLS_CREATURE";
+        public static readonly string SLS_NAME = "SLS_NAME";
         public static readonly string SLS_DAMAGE_MODIFIER = "SLS_DMOD";
         public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
         public static readonly string SLS_SPAWN_MULT = "SLS_MULT";
@@ -229,6 +229,7 @@ namespace StarLevelSystem.common
             AddModifier,
             RemoveModifier,
             Spawn,
+            SpawnMiniboss
         }
 
         public class DNum {
@@ -344,7 +345,7 @@ namespace StarLevelSystem.common
 
             [Description("Disables this creatures spawn during the night time.")]
             [DefaultValue(false)]
-            public bool creatureSpawnsDisabled { get; set; } = false;
+            public bool CreatureSpawnsDisabled { get; set; } = false;
         }
 
         [Description("Controls biome-specific Night-time specific settings")]
@@ -358,7 +359,7 @@ namespace StarLevelSystem.common
             public float NightLevelUpChanceScaler { get; set; } = 1f;
 
             [Description("Disables this creatures spawn during the night time.")]
-            public List<string> creatureSpawnsDisabled { get; set; } = new List<string>();
+            public List<string> CreatureSpawnsDisabled { get; set; } = new List<string>();
         }
 
         [Description("Biome specific settings.")]
@@ -391,7 +392,7 @@ namespace StarLevelSystem.common
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
 
             [Description("List of creature spawns which are disabled in this biome.")]
-            public List<string> creatureSpawnsDisabled { get; set; }
+            public List<string> CreatureSpawnsDisabled { get; set; }
 
             [Description("Night-time specific settings for this biome.")]
             public BiomeNightSettings NightSettings { get; set; }
@@ -632,6 +633,8 @@ namespace StarLevelSystem.common
             public bool Enabled { get; set; } = true;
             [DefaultValue(60f)]
             public float Duration { get; set; } = 60f;
+            [DefaultValue(true)]
+            public bool RaidActiveTillDefeated { get; set; } = true;
             [DefaultValue(12)]
             public int SpawnPoints { get; set; } = 12;
             public float RaidCoolDownMinutes { get; set; } = 120f;
@@ -717,6 +720,8 @@ namespace StarLevelSystem.common
             public float InitalSpawnDelay { get; set; } = 0f;
             [DefaultValue(0)]
             public int MaxSpawned { get; set; } = 0;
+            [DefaultValue(0)]
+            public int MaxSpawnTriggers { get; set; } = 0;
             [DefaultValue(1)]
             public int SpawnGroupSize { get; set; } = 1;
             [DefaultValue(Character.Faction.TrainingDummy)]
@@ -735,6 +740,8 @@ namespace StarLevelSystem.common
         public class RaidMonitor {
             public RaidSpawnEntry RaidSpawnDef { get; set; }
             public double NextSpawn { get; set; } = 0;
+            [DefaultValue(0)]
+            public int TriggerCount { get; set; } = 0;
             public List<string> SpawnedCreatures { get; set; } = new List<string>();
 
             public List<ZDOID> GetSpawnedZDOIDs() {
@@ -755,13 +762,29 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisConfiguration {
-            public NemesisScoreSystem ScoreSystem { get; set; } = new NemesisScoreSystem();
-            public NemesisGaurenteedChanges GaurenteedChanges { get; set; } = new NemesisGaurenteedChanges();
-            public NemesisChanceChanges ChanceChanges { get; set; } = new NemesisChanceChanges();
             [DefaultValue(10f)]
             public float NemesisActionCooldownSeconds { get; set; } = 10f;
             [DefaultValue(300f)]
             public float NemesisInfluenceRadius { get; set; } = 300f;
+            public bool CreateMinibossFromPlayerKiller { get; set; } = true;
+            public bool CreationRemovesSourceCreature { get; set; } = true;
+            public float NemesisBossChance { get; set; } = 0.1f;
+            public float NemesisBossMaxLevelBonus { get; set; } = 0.40f;
+            public float NemesisBossMinLevelBonus { get; set; } = 0.20f;
+
+            public NemesisScoreSystem ScoreSystem { get; set; } = new NemesisScoreSystem();
+            public NemesisGaurenteedChanges GaurenteedChanges { get; set; } = new NemesisGaurenteedChanges();
+            public NemesisChanceChanges ChanceChanges { get; set; } = new NemesisChanceChanges();
+            public List<NemesisMiniboss> AvailableMiniBosses { get; set; } = new List<NemesisMiniboss>();
+            public Dictionary<Heightmap.Biome, List<NemesisMinion>> NemesisMinionTemplatesByBiome = new Dictionary<Heightmap.Biome, List<NemesisMinion>>();
+        }
+
+        public class NemesisMinion {
+            public string PrefabName { get; set; }
+            public int MinAmount { get; set; }
+            public int MaxAmount { get; set; }
+            public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
+            public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
         }
 
         public class NemesisChanceChanges {
@@ -788,13 +811,27 @@ namespace StarLevelSystem.common
         public class NemesisSpawn {
             public string Prefab { get; set; }
             public AI CreatureAI { get; set; } = AI.HuntPlayer;
+            [DefaultValue(0)]
+            public int ForcedLevel { get; set; } = 0;
+            [DefaultValue(false)]
+            public bool IsBoss { get; set; } = false;
             public int SpawnGroupSize { get; set; } = 1;
+            [DefaultValue("")]
+            public string CustomName { get; set; } = "";
             [DefaultValue(Character.Faction.TrainingDummy)]
             public Character.Faction Faction { get; set; } = Character.Faction.TrainingDummy;
             [DefaultValue(null)]
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
-            [DefaultValue(null)]
-            public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; } = null;
+            public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
+            public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+        }
+
+        public class NemesisMiniboss {
+            public bool BossCreatedFromKillingPlayer { get; set; }
+            public string KilledPlayerName { get; set; }
+            public NemesisSpawn BossSpawn { get; set; }
+            public List<NemesisSpawn> Minions { get; set; }
+            public Heightmap.Biome Biome { get; set; }
         }
 
         public class NemesisGaurenteedChanges {
@@ -1172,7 +1209,6 @@ namespace StarLevelSystem.common
 
         public class DictionaryDmgNetProperty : ZNetProperty<Dictionary<DamageType, float>>
         {
-            BinaryFormatter binFormatter = new BinaryFormatter();
             public DictionaryDmgNetProperty(string key, ZNetView zNetView, Dictionary<DamageType, float> defaultValue) : base(key, zNetView, defaultValue)
             {
             }

@@ -1,4 +1,5 @@
-﻿using Jotunn.Utils;
+﻿using BepInEx.Configuration;
+using Jotunn.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +15,8 @@ namespace StarLevelSystem.modules
         // Mod flags
         public static bool IsDropThatEnabled = false;
         public static bool IsExpandWorldEnabled = false;
+        public static bool IsFGNEnabled = false;
+
 
         private static Type DropThatDropTableSessionManager;
         private static Type DropThatCharacterDropSessionManager;
@@ -39,6 +42,9 @@ namespace StarLevelSystem.modules
                     } else {
                         Logger.LogWarning("Warning: Compat methods for DropThat not found, strict compatibility patches will be used.");
                     }
+                }
+                if (plugins.Keys.Contains("com.Fire.FiresGhettoNetworkMod")) {
+                    IsFGNEnabled = true;
                 }
                 if (plugins.Keys.Contains("expand_world_size")) {
                     IsExpandWorldEnabled = true;

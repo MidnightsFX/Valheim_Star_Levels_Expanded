@@ -460,6 +460,12 @@ Compatibility is being worked on for the following mods:
 - CarryMeMaster
 - PortablePals
 
+## Contributions
+If you would like to donate, any amount is appreciated!
+- Donators can have a name of their choice added to the Nemesis system (must be approved).
+
+I welcome pull requests, fixes, and improvements.
+
 ## Planned Features
 This mod is still in active development and is not considered complete yet.
 
@@ -467,5 +473,5 @@ Planned Features
 - Refinement to the existing modifers
 - New modifiers!
 - Generic and biome specific loot multipliers
-- A Nemesis or mini-boss generation system
 - World leveling system based on boss kills
+- Zonal scaling system

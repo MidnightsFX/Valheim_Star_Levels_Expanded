@@ -25,7 +25,7 @@ namespace StarLevelSystem.modules.Health {
 
             float currentMaxHealth = chara.GetMaxHealth();
             float maxHealthBase = chara.GetMaxHealthBase();
-            float targetCreatureHealth = chealth;
+            float targetCreatureHealth;
             if (cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] != 1 || cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] > 0) {
                 float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
                 float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
@@ -52,7 +52,19 @@ namespace StarLevelSystem.modules.Health {
                     if (ValConfig.EnableDebugMode.Value) {
                         Logger.LogDebug($"Creature {Localization.instance.Localize(cDetails.CreatureNameLocalizable)} HP does not match target: current:{currentMaxHealth} (base {maxHealthBase}) != {targetCreatureHealth} | vanilla {vanillaMaxHealth} | Set to {targetCreatureHealth}");
                     }
+                    // Preserve any damage taken before setup ran (spawn-window hits, or combat damage on
+                    // mid-game modifier re-application). Capture before SetMaxHealth so the delta is correct.
+                    float currentHealth = chara.GetHealth();
+                    float damageTaken = currentMaxHealth - currentHealth;
+
                     chara.SetMaxHealth(targetCreatureHealth);
+
+                    if (damageTaken > 0f) {
+                        // No clamp — if pre-setup damage exceeds new max, let the creature die naturally.
+                        chara.SetHealth(targetCreatureHealth - damageTaken);
+                    } else {
+                        chara.Heal(targetCreatureHealth);
+                    }
                 }
             }
         }

@@ -31,9 +31,5 @@ namespace StarLevelSystem.modules {
     }
 
     internal class Orchestrator : MonoBehaviour {
-
-        private void Update() {
-            CreatureSetupQueue.Tick();
-        }
     }
 }

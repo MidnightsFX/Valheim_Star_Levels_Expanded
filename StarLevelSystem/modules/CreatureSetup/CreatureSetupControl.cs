@@ -16,11 +16,6 @@ namespace StarLevelSystem.modules.CreatureSetup {
         internal static bool RunCharacterSetup(Character __instance, CharacterCacheEntry cDetails) {
             if (__instance == null || cDetails == null || cDetails.Level == 0) { return false; }
 
-            if (ValConfig.ForceControlAllSpawns.Value == true) {
-                CompositeLazyCache.StartZOwnerCreatureRoutines(__instance, cDetails);
-                cDetails = CompositeLazyCache.GetCacheEntry(__instance);
-            }
-
             cDetails.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(__instance, cDetails.CreatureModifiers);
 
             CreatureModifiers.RunOnceModifierSetup(__instance, cDetails);
@@ -42,21 +37,18 @@ namespace StarLevelSystem.modules.CreatureSetup {
 
         internal static void CreatureSpawnerSetup(Character chara, int leveloverride = 0, bool multiply = true, float delay = 0.1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
             if (chara == null) { return; }
-            CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, leveloverride, requiredModifiers, notAllowedModifiers);
-            CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, multiply);
+            // Pre-populate the cache eagerly so the spawn-time params (level / required mods / not-allowed mods)
+            // are stored before Enqueue. Character.Awake's postfix already enqueued a setup with no overrides
+            // during Instantiate; if we don't write our params into the cache first, dedupe will drop this call
+            // and the queue worker will run with the empty Awake-time params instead. The expensive ZOwner work
+            // is left to the queue worker so it only runs once per creature.
+            CompositeLazyCache.GetAndSetLocalCache(chara, leveloverride, requiredModifiers, notAllowedModifiers, updateCache: true);
             CreatureSetup(chara, leveloverride, multiply, delay, requiredModifiers, notAllowedModifiers);
         }
 
-        // Schedules the creature for setup with no artificial delay (next queue tick).
-        internal static void CreatureSetupNoDelay(Character __instance) {
-            if (__instance == null) { return; }
-            CreatureSetupQueue.Enqueue(__instance, levelOverride: 0, spawnMultiply: true, delay: 0f, requiredModifiers: null, notAllowedModifiers: null);
-        }
 
-        // Primary entry point - enqueues the creature for the timestamped setup queue.
+        // Primary entry point
         internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
-            if (__instance == null) { return; }
-            if (__instance.IsPlayer()) { return; }
             if (delay < 0f) { delay = 0f; }
 
             CreatureSetupQueue.Enqueue(__instance, leveloverride, multiply, delay, requiredModifiers, notAllowedModifiers);

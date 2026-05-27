@@ -62,8 +62,11 @@ namespace StarLevelSystem.modules.Raids
                     return false;
                 }
 
+                // Special case for when the server itself tries to start a raid, as it does not have a player
                 if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
-                    StartNetworkedRaidRunner(raidDef, pos);
+                    if (StartNetworkedRaidRunner(raidDef, pos) == false) {
+                        Logger.LogWarning($"Networked raid dispatch failed for '{raidDef.Name}' at {pos}; event will be skipped this cycle.");
+                    }
                     return false;
                 }
 

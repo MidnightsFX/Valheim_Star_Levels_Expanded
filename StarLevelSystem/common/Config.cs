@@ -652,21 +652,24 @@ namespace StarLevelSystem
 
         private static IEnumerator OnClientRecieveRaidStart(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            RaidDefinition raiddef = DataObjects.yamldeserializer.Deserialize<RaidDefinition>(yaml);
+            NetworkRaidRequest raidNetRequest = DataObjects.yamldeserializer.Deserialize<NetworkRaidRequest>(yaml);
             Vector3 raidPosition = Player.m_localPlayer != null ? Player.m_localPlayer.transform.position : Vector3.zero;
-            if (RaidControl.TryReadRaidPosition(package, out Vector3 networkedPosition)) {
-                raidPosition = networkedPosition;
+            if (raidNetRequest.RaidPostion != Vector3.zero) {
+                raidPosition = raidNetRequest.RaidPostion;
             }
 
-            RaidControl.StartRaidRunner(raiddef, raidPosition);
+            RaidControl.StartRaidRunner(raidNetRequest.Raid, raidPosition);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
         private static IEnumerator OnClientRecieveForcePlayMusic(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            Music music = DataObjects.yamldeserializer.Deserialize<Music>(yaml);
+            string musicName = package.ReadString();
+            if (Enum.TryParse<Music>(musicName, out Music music) == false) {
+                Logger.LogWarning($"Music {musicName} not found.");
+                yield break;
+            }
 
             MusicMan.instance.TriggerMusic(music.ToString());
 

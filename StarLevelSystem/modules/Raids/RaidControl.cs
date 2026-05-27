@@ -35,7 +35,7 @@ namespace StarLevelSystem.modules.Raids
         }
 
         internal static bool StartNetworkedRaidRunner(RaidDefinition targetRaid, Vector3 pos) {
-            ZNetPeer peer = GetNearestReadyPeer(pos);
+            ZNetPeer peer = SLSExtensions.GetNearestReadyPeer(pos);
             if (peer == null) {
                 Logger.LogWarning($"Unable to start raid {targetRaid.Name}; no ready peers were available for the client-side raid runner.");
                 return false;
@@ -46,32 +46,26 @@ namespace StarLevelSystem.modules.Raids
                 raidPosition.y = peer.m_refPos.y;
             }
 
-            Logger.LogDebug($"Sending networked raid runner for {targetRaid.Name} to {peer.m_playerName} at {raidPosition}");
-            ValConfig.ClientStartRaidRPC.SendPackage(peer.m_uid, CreateStartRaidPackage(targetRaid, raidPosition));
+            if (StartNetworkedRaidForPeer(targetRaid, raidPosition, peer) == false) { return false; }
             ForceMusicForClientsInArea(targetRaid.ForceMusic, raidPosition, targetRaid.EventRange * 1.5f);
+            return true;
+        }
+
+        internal static bool StartNetworkedRaidForPeer(RaidDefinition targetRaid, Vector3 pos, ZNetPeer peer) {
+            if (peer == null) {
+                Logger.LogWarning($"Unable to start raid {targetRaid.Name}; target peer is null.");
+                return false;
+            }
+
+            Logger.LogDebug($"Sending networked raid runner for {targetRaid.Name} to {peer.m_playerName} at {pos}");
+            ValConfig.ClientStartRaidRPC.SendPackage(peer.m_uid, CreateStartRaidPackage(targetRaid, pos));
             return true;
         }
 
         internal static ZPackage CreateStartRaidPackage(RaidDefinition targetRaid, Vector3 pos) {
             ZPackage zpack = new ZPackage();
-            zpack.Write(DataObjects.yamlserializer.Serialize(targetRaid));
-            zpack.Write(pos);
+            zpack.Write(DataObjects.yamlserializer.Serialize(new NetworkRaidRequest() { Raid = targetRaid, RaidPostion = pos}));
             return zpack;
-        }
-
-        internal static bool TryReadRaidPosition(ZPackage package, out Vector3 pos) {
-            pos = Vector3.zero;
-            if (package.GetPos() >= package.Size()) { return false; }
-            pos = package.ReadVector3();
-            return true;
-        }
-
-        private static ZNetPeer GetNearestReadyPeer(Vector3 pos) {
-            if (ZNet.instance == null) { return null; }
-            return ZNet.instance.GetPeers()
-                .Where(peer => peer != null && peer.IsReady() && peer.m_characterID != ZDOID.None)
-                .OrderBy(peer => Utils.DistanceXZ(peer.m_refPos, pos))
-                .FirstOrDefault();
         }
 
         public static RaidDefinition RandomSelectValidRaidForPlayer(string playerPlatformID) {
@@ -84,10 +78,10 @@ namespace StarLevelSystem.modules.Raids
 
             if (ServerPlayerRaidData.ContainsKey(playerPlatformID) == false) {
                 Logger.LogWarning($"Player {playerPlatformID} was not found and an appropriate raid can't be determined, a random one will be selected. \n  Currently tracked: {string.Join(",", ServerPlayerRaidData.Keys.ToList())}");
-                return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count - 1));
+                return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count));
             }
 
-            return ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.ElementAt(UnityEngine.Random.Range(0, ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.Count - 1));
+            return ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.ElementAt(UnityEngine.Random.Range(0, ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.Count));
         }
 
         internal static void UpdateOrAddPlayerPrivateKeys(string playerPlatformID, List<string> privatekeys) {
@@ -119,6 +113,8 @@ namespace StarLevelSystem.modules.Raids
             } else {
                 playerRaidData.LastRaidByName.Add(key, ZNet.instance.GetTimeSeconds());
             }
+            // Set the current raid
+            playerRaidData.ActiveRaid = raidDef;
             // Update cooldown
             playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (raidDef.RaidCoolDownMinutes * 60 * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar);
         }
@@ -198,7 +194,7 @@ namespace StarLevelSystem.modules.Raids
                     bool hasAnAntiKey = false;
                     List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
                     foreach (string gkey in raid.Activation.NotRequiredGlobalKeys) {
-                        if (currentGlobalKeys.Contains(gkey) == false) {
+                        if (currentGlobalKeys.Contains(gkey)) {
                             hasAnAntiKey = true;
                             break;
                         }
@@ -215,7 +211,7 @@ namespace StarLevelSystem.modules.Raids
                     playerData = ServerPlayerRaidData[playerPlatformID];
                 }
 
-                List<string> playerPrivateKeys = playerData.PlayerPrivatekeys;
+                List<string> playerPrivateKeys = playerData.PlayerPrivatekeys ?? new List<string>();
 
 
                 // Player Private keys will require an RPC requeast from the client for the data, since it is not stored server side.
@@ -238,7 +234,7 @@ namespace StarLevelSystem.modules.Raids
                 // Check for partial match player keys
                 if (raid.Activation.AnyRequiredPlayerKeys != null) {
                     bool hasAnyRequiredPlayerKeys = false;
-                    foreach (string pkey in raid.Activation.RequiredPlayerKeys) {
+                    foreach (string pkey in raid.Activation.AnyRequiredPlayerKeys) {
                         if (playerPrivateKeys.Contains(pkey)) {
                             hasAnyRequiredPlayerKeys = true;
                             break;
@@ -254,7 +250,7 @@ namespace StarLevelSystem.modules.Raids
                 if (raid.Activation.NotRequiredPlayerKeys != null) {
                     bool hasAntiPrivateKey = false;
                     foreach (string pkey in raid.Activation.NotRequiredPlayerKeys) {
-                        if (playerPrivateKeys.Contains(pkey) == false) {
+                        if (playerPrivateKeys.Contains(pkey)) {
                             hasAntiPrivateKey = true;
                             break;
                         }
@@ -272,8 +268,8 @@ namespace StarLevelSystem.modules.Raids
                         Logger.LogDebug($"Player {playerPlatformID} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Name}");
                         continue;
                     }
-                    if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + raid.RaidCoolDownMinutes) > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogDebug($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + raid.RaidCoolDownMinutes}");
+                    if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) > ZNet.instance.GetTimeSeconds()) {
+                        Logger.LogDebug($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)}");
                         continue;
                     }
                 }
@@ -308,6 +304,7 @@ namespace StarLevelSystem.modules.Raids
             foreach (RaidRunner obj in objects) {
                 if (obj.name == "RaidRunner") { continue; } // skip the original
                 Logger.LogDebug($"Removing {obj.name}");
+                if (obj.Znet != null) { obj.Znet.ClaimOwnership(); }
                 ZNetScene.instance.Destroy(obj.gameObject);
             }
         }
@@ -318,7 +315,7 @@ namespace StarLevelSystem.modules.Raids
             int spawn_location_attempts = 0;
             Vector3 determinedSpawn = origin;
 
-            while (spawn_locations.Count < numTargets || spawn_location_attempts > 200) {
+            while (spawn_locations.Count < numTargets && spawn_location_attempts < 200) {
                 var offset = UnityEngine.Random.insideUnitCircle * (maxDistance * 0.8f);
                 determinedSpawn = origin + new Vector3(offset.x, 0, offset.y);
 

@@ -394,5 +394,13 @@ namespace StarLevelSystem.common
             return keys;
         }
 
+        public static ZNetPeer GetNearestReadyPeer(Vector3 pos) {
+            if (ZNet.instance == null) { return null; }
+            return ZNet.instance.GetPeers()
+                .Where(peer => peer != null && peer.IsReady() && peer.m_characterID != ZDOID.None)
+                .OrderBy(peer => Utils.DistanceXZ(peer.m_refPos, pos))
+                .FirstOrDefault();
+        }
+
     }
 }

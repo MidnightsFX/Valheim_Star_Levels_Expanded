@@ -107,8 +107,8 @@ namespace StarLevelSystem.modules.Raids {
                         if (playerRaid.Value.NextRaidableTime < currentTime) { continue; }
 
                         // Last raid of the active raid type, is within its active duration
-                        if (playerRaid.Value.LastRaidByName.ContainsKey(playerRaid.Key)) {
-                            double lastRaidTime = playerRaid.Value.LastRaidByName[playerRaid.Key];
+                        if (playerRaid.Value.ActiveRaid != null && playerRaid.Value.LastRaidByName.ContainsKey(playerRaid.Value.ActiveRaid.Name)) {
+                            double lastRaidTime = playerRaid.Value.LastRaidByName[playerRaid.Value.ActiveRaid.Name];
 
                             // Check if the raid is too close
                             if ((lastRaidTime + playerRaid.Value.ActiveRaid.Duration) > currentTime) {
@@ -152,9 +152,11 @@ namespace StarLevelSystem.modules.Raids {
                                 MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString());
                             } else {
                                 Logger.LogDebug("Starting networked raid runner.");
-                                ZPackage zpack = RaidControl.CreateStartRaidPackage(raid, raidPosition);
                                 ZNetPeer zpeer = SLSExtensions.GetPeerByPlatformID(playerRaids.Key);
-                                ValConfig.ClientStartRaidRPC.SendPackage(zpeer.m_uid, zpack);
+                                if (RaidControl.StartNetworkedRaidForPeer(raid, raidPosition, zpeer) == false) {
+                                    Logger.LogWarning($"Tried to start raid {raid.Name} for player {playerRaids.Key} but networked dispatch failed (peer null or unavailable).");
+                                    continue;
+                                }
                             }
                             RaidControl.ForceMusicForClientsInArea(raid.ForceMusic, raidPosition, raid.EventRange * 1.5f);
 

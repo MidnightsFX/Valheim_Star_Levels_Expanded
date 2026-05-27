@@ -626,6 +626,11 @@ namespace StarLevelSystem.common
             public float GlobalRaidChanceScalar { get; set; } = 1f;
         }
 
+        public class NetworkRaidRequest {
+            public Vector3 RaidPostion { get; set; } = Vector3.zero;
+            public RaidDefinition Raid { get; set; }
+        }
+
         [Serializable]
         public class RaidDefinition {
             public string Name { get; set; }

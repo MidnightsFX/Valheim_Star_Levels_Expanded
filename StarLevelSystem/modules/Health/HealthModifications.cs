@@ -61,7 +61,11 @@ namespace StarLevelSystem.modules.Health {
 
                     if (damageTaken > 0f) {
                         // No clamp — if pre-setup damage exceeds new max, let the creature die naturally.
-                        chara.SetHealth(targetCreatureHealth - damageTaken);
+                        float setHealth = targetCreatureHealth - damageTaken;
+                        if (ValConfig.EnableDebugMode.Value && setHealth <= 0f) {
+                            Logger.LogDebug($"{Localization.instance.Localize(cDetails.CreatureNameLocalizable)} - lvl:{chara.m_level} will die from health update. New health: {setHealth}, targetHealth: {targetCreatureHealth}, damageTaken: {damageTaken}");
+                        }
+                        chara.SetHealth(setHealth);
                     } else {
                         chara.Heal(targetCreatureHealth);
                     }

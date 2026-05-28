@@ -69,7 +69,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         public static void UpdateScore(Player player) {
-            DataObjects.NemesisScoreSystem cfg = NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem;
+            DataObjects.NemesisScore cfg = NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem;
 
             DamageScoreData dsd_recent = new DamageScoreData() {
                 DamageDealtMelee = NemesisSystem.PlayerScore.DamageDealtMelee,

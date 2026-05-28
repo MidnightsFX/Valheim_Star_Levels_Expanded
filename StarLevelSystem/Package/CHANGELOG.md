@@ -1,3 +1,11 @@
+**0.20.1**
+ ---
+ ```
+- Fixes Nemesis system spawning the wrong attack groups
+- Added docs for Nemesis system configuration
+- Retuned damage levels for the nemesis system slightly, configs will be updated to the new version automatically
+```
+
 **0.20.0**
  ---
  ```

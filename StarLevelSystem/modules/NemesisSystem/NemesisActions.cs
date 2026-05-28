@@ -73,14 +73,37 @@ namespace StarLevelSystem.modules.NemesisSystem {
             float distance = Vector3.Distance(chara.transform.position, Player.m_localPlayer.transform.position);
             if (distance > NemesisSystemData.SLE_Nemesis_Settings.NemesisInfluenceRadius) { return; }
 
+            List<string> playerPrivateKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
+            Heightmap.Biome targetBiome = Heightmap.FindBiome(chara.transform.position);
             // For all of the level changing Nemesis actions
             foreach (KeyValuePair<string, NemesisChanceEntry> entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
                 if (entry.Value.Enabled == false || SpawnActions.Contains(entry.Value.Action) == false) {
                     continue;
                 }
 
+                if (string.IsNullOrEmpty(entry.Value.RequiredGlobalKey) == false && ZoneSystem.instance.GetGlobalKey(entry.Value.RequiredGlobalKey) == false) {
+                    Logger.LogNemesis($"{entry.Key} skipped due to server missing required global key: {entry.Value.RequiredGlobalKey}");
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(entry.Value.RequiredPrivateKey) == false && playerPrivateKeys.Contains(entry.Value.RequiredPrivateKey) == false) {
+                    Logger.LogNemesis($"{entry.Key} skipped due to player missing required player key: {entry.Value.RequiredPrivateKey}");
+                    continue;
+                }
+
                 if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
                     Logger.LogNemesis($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
+                    continue;
+                }
+
+
+                if (entry.Value.AllowedBiomes != null && entry.Value.AllowedBiomes.Count > 0 && entry.Value.AllowedBiomes.Contains(targetBiome) == false) {
+                    Logger.LogNemesis($"{entry.Key} skipped due to not being an allowed biome Allowed: {entry.Value.AllowedBiomes} Current: {targetBiome}.");
+                    continue;
+                }
+
+                if (entry.Value.DeniedBiomes != null && entry.Value.DeniedBiomes.Count > 0 && entry.Value.DeniedBiomes.Contains(targetBiome)) {
+                    Logger.LogNemesis($"{entry.Key} skipped due to being in a denied biome: {entry.Value.DeniedBiomes} Current: {targetBiome}.");
                     continue;
                 }
 

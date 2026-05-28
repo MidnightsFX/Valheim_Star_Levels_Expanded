@@ -11,26 +11,27 @@ namespace StarLevelSystem.Data
         public static NemesisConfiguration SLE_Nemesis_Settings = DefaultConfiguration;
 
         public static readonly NemesisConfiguration DefaultConfiguration = new NemesisConfiguration() {
+            NemesisVersion = 1,
             NemesisActionCooldownSeconds = 10,
             NemesisInfluenceRadius = 300f,
-            ScoreSystem = new NemesisScoreSystem() {
-                MaxScore = 1000f,
-                NeutralScore = 500f,
+            ScoreSystem = new NemesisScore() {
+                MaxScore = 10000f,
+                NeutralScore = 5000f,
                 MinScore = 0f,
                 ScoreIntervalSeconds = 30,
-                DecayPerUpdate = 35f,
+                DecayPerUpdate = 250f,
 
                 NearbyAveragingWeight = 0.05f,
                 NearbyPlayerRadius = 60f,
 
-                BossKillBonus = 100f,
+                BossKillBonus = 500f,
                 BossKillRadius = 100f,
                 
                 MeleeDamageDealtFactor = 0.75f,
                 RangedDamageDealtFactor = 0.25f,
                 MagicDamageDealtFactor = 0.5f,
                 DamageTakenFactor = -0.5f,
-                DeathScoreReduction = 300f,
+                DeathScoreReduction = 1500f,
             },
             GaurenteedChanges = new NemesisGaurenteedChanges() {
                 FirstBossSetLevel = true,
@@ -38,34 +39,123 @@ namespace StarLevelSystem.Data
             },
             ChanceChanges = new NemesisChanceChanges() { 
                 CreatureOps = new Dictionary<string, NemesisChanceEntry>() {
-                    { "CharredAttack", new NemesisChanceEntry() { Enabled = true, Chance = 0.3f, RequiredGlobalKey = "defeated_fader", ScoreThreshold = 900f, Action = NemesisAction.Spawn, LevelBonus = 5, ScoreChange = -200,SpawnConfig = new List<NemesisSpawn>(){
-                        new NemesisSpawn() { Prefab = "Charred_Melee", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
-                        new NemesisSpawn() { Prefab = "Charred_Ranged", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } }
+                    { "CharredAttack", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.DeepNorth },
+                        RequiredGlobalKey = "defeated_fader",
+                        ScoreThreshold = 9000f,
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5,
+                        ScoreChange = -2000,
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Charred_Melee", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "Charred_Ranged", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } }
                     }}},
-                    { "SeekerAttack", new NemesisChanceEntry() { Enabled = true, Chance = 0.3f, RequiredGlobalKey = "defeated_queen", ScoreThreshold = 900f, Action = NemesisAction.Spawn, LevelBonus = 5, ScoreChange = -200,SpawnConfig = new List<NemesisSpawn>(){
-                        new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
+                    { "SeekerAttack", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        RequiredGlobalKey = "defeated_queen",
+                        ScoreThreshold = 9000f,
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5,
+                        ScoreChange = -2000,
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
                     }}},
-                    { "GoblinAttack", new NemesisChanceEntry() { Enabled = true, Chance = 0.3f, RequiredGlobalKey = "defeated_goblinking", ScoreThreshold = 900f, Action = NemesisAction.Spawn, LevelBonus = 5, ScoreChange = -200,SpawnConfig = new List<NemesisSpawn>(){
-                        new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
-                        new NemesisSpawn() { Prefab = "GoblinShaman", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
+                    { "GoblinAttack", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        RequiredGlobalKey = "defeated_goblinking",
+                        ScoreThreshold = 9000f,
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5,
+                        ScoreChange = -2000,
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "GoblinShaman", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
                     }}},
-                    { "FenringAttack", new NemesisChanceEntry() { Enabled = true, Chance = 0.3f, RequiredGlobalKey = "defeated_dragon", ScoreThreshold = 900f, Action = NemesisAction.Spawn, LevelBonus = 5, ScoreChange = -200,SpawnConfig = new List<NemesisSpawn>(){
-                        new NemesisSpawn() { Prefab = "Fenring", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Big", ModifierType.Major } } },
+                    { "FenringAttack", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        RequiredGlobalKey = "defeated_dragon",
+                        ScoreThreshold = 9000f,
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5,
+                        ScoreChange = -2000,
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Fenring", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Big", ModifierType.Major } } },
                     }}},
-                    { "SwampAttack", new NemesisChanceEntry() { Enabled = true, Chance = 0.3f, RequiredGlobalKey = "defeated_bonemass", ScoreThreshold = 900f, Action = NemesisAction.Spawn, LevelBonus = 5, ScoreChange = -200,SpawnConfig = new List<NemesisSpawn>(){
-                        new NemesisSpawn() { Prefab = "Draugr_Elite", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Poison", ModifierType.Major } } },
+                    { "SwampAttack", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        RequiredGlobalKey = "defeated_bonemass",
+                        ScoreThreshold = 9000f,
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5,
+                        ScoreChange = -2000,
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Draugr_Elite", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Poison", ModifierType.Major } } },
                     }}},
-                    { "BlackForestSwarm", new NemesisChanceEntry() { Enabled = true, Chance = 0.3f, RequiredGlobalKey = "defeated_gdking", ScoreThreshold = 900f, Action = NemesisAction.Spawn, LevelBonus = 5, ScoreChange = -200,SpawnConfig = new List<NemesisSpawn>(){
-                        new NemesisSpawn() { Prefab = "Greydwarf", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 6, RequiredModifiers = new Dictionary<string, ModifierType>() { { "FireNova", ModifierType.Minor } } },
+                    { "BlackForestSwarm", new NemesisChanceEntry() { 
+                        Enabled = true, 
+                        Chance = 0.3f, 
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mountain, Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth }, 
+                        RequiredGlobalKey = "defeated_gdking", 
+                        ScoreThreshold = 9000f,
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5, 
+                        ScoreChange = -2000, 
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Greydwarf", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 6, RequiredModifiers = new Dictionary<string, ModifierType>() { { "FireNova", ModifierType.Minor } } },
                     }}},
                     // Reduce Creature levels to make things easier
-                    { "ReduceCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.25f, ScoreThreshold = 400f, Action = NemesisAction.ChangeLevel, LevelBonus = -1, ScoreChange = 20f, } },
-                    { "SignificantlyReduceCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.5f, ScoreThreshold = 200f, Action = NemesisAction.ChangeLevel, LevelBonus = -3, ScoreChange = 40f, } },
+                    { "ReduceCreatureLevel", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.25f,
+                        ScoreThreshold = 4000f,
+                        Action = NemesisAction.ChangeLevel,
+                        LevelBonus = -1,
+                        ScoreChange = 200f
+                    }},
+                    { "SignificantlyReduceCreatureLevel", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.5f,
+                        ScoreThreshold = 2000f,
+                        Action = NemesisAction.ChangeLevel,
+                        LevelBonus = -3,
+                        ScoreChange = 400f,
+                    }},
                     // Increase Creature levels to make things harder
-                    { "IncreaseCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.25f, ScoreThreshold = 600f, Action = NemesisAction.ChangeLevel, LevelBonus = 1, ScoreChange = -25f, } },
-                    { "SignificantlyIncreaseCreatureLevel", new NemesisChanceEntry() { Enabled = true, Chance = 0.5f, ScoreThreshold = 800f, Action = NemesisAction.ChangeLevel, LevelBonus = 3, ScoreChange = -50f, } },
+                    { "IncreaseCreatureLevel", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.25f,
+                        ScoreThreshold = 6000f,
+                        Action = NemesisAction.ChangeLevel,
+                        LevelBonus = 1,
+                        ScoreChange = -250f
+                    }},
+                    { "SignificantlyIncreaseCreatureLevel", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.5f,
+                        ScoreThreshold = 8000f,
+                        Action = NemesisAction.ChangeLevel,
+                        LevelBonus = 3,
+                        ScoreChange = -500f
+                    }},
 
-                    { "NemesisMiniboss1", new NemesisChanceEntry() { Enabled = true, Chance = 0.05f, ScoreThreshold = 950f, Action = NemesisAction.SpawnMiniboss, LevelBonus = 7, ScoreChange = -300f } },
+                    { "NemesisMiniboss1", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.05f,
+                        ScoreThreshold = 9500f,
+                        Action = NemesisAction.SpawnMiniboss,
+                        LevelBonus = 7,
+                        ScoreChange = -3000f
+                    }},
                 },
             },
             AvailableMiniBosses = new List<NemesisMiniboss>(),
@@ -139,6 +229,11 @@ namespace StarLevelSystem.Data
             try {
                 Logger.LogNemesis("Loaded new Nemesis settings...");
                 SLE_Nemesis_Settings = DataObjects.yamldeserializer.Deserialize<NemesisConfiguration>(yaml);
+                if (SLE_Nemesis_Settings.NemesisVersion != DefaultConfiguration.NemesisVersion) {
+                    Logger.LogInfo("Nemesis Config version outdated, resetting to default.");
+                    SLE_Nemesis_Settings = DefaultConfiguration;
+                    File.WriteAllText(ValConfig.nemesisFilePath, YamlDefaultConfig());
+                }
             }
             catch (Exception ex) {
                 StarLevelSystem.Log.LogError($"Failed to parse NemesisSettings YAML: {ex.Message}");

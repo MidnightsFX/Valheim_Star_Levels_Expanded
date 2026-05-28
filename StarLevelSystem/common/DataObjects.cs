@@ -767,6 +767,7 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisConfiguration {
+            public int NemesisVersion { get; set; }
             [DefaultValue(10f)]
             public float NemesisActionCooldownSeconds { get; set; } = 10f;
             [DefaultValue(300f)]
@@ -777,7 +778,7 @@ namespace StarLevelSystem.common
             public float NemesisBossMaxLevelBonus { get; set; } = 0.40f;
             public float NemesisBossMinLevelBonus { get; set; } = 0.20f;
 
-            public NemesisScoreSystem ScoreSystem { get; set; } = new NemesisScoreSystem();
+            public NemesisScore ScoreSystem { get; set; } = new NemesisScore();
             public NemesisGaurenteedChanges GaurenteedChanges { get; set; } = new NemesisGaurenteedChanges();
             public NemesisChanceChanges ChanceChanges { get; set; } = new NemesisChanceChanges();
             public List<NemesisMiniboss> AvailableMiniBosses { get; set; } = new List<NemesisMiniboss>();
@@ -805,6 +806,8 @@ namespace StarLevelSystem.common
             public float Chance { get; set; } = 0.5f;
             [DefaultValue(0)]
             public int LevelBonus { get; set; } = 0;
+            public List<Heightmap.Biome> DeniedBiomes { get; set; } = new List<Heightmap.Biome>() { Heightmap.Biome.None };
+            public List<Heightmap.Biome> AllowedBiomes { get; set; } = new List<Heightmap.Biome>() { };
             [DefaultValue(0f)]
             public float ScoreThreshold { get; set; } = 0f;
             public NemesisAction Action { get; set; } = NemesisAction.ChangeLevel;
@@ -844,7 +847,7 @@ namespace StarLevelSystem.common
             public int FirstBossLevel { get; set; } = 0;
         }
 
-        public class NemesisScoreSystem {
+        public class NemesisScore {
             [DefaultValue(0f)]
             public float NeutralScore { get; set; } = 600f;
             [DefaultValue(0f)]

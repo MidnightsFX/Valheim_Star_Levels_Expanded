@@ -3,11 +3,14 @@ using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using UnityEngine;
+using UnityEngine.SocialPlatforms.Impl;
 using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -22,6 +25,7 @@ namespace StarLevelSystem.common
             CommandManager.Instance.AddConsoleCommand(new GiveCreatureModifier());
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             CommandManager.Instance.AddConsoleCommand(new KillAllCreaturesNearby());
+            CommandManager.Instance.AddConsoleCommand(new SetNemesisScore());
         }
 
         internal class KillAllCreaturesNearby : ConsoleCommand {
@@ -53,6 +57,20 @@ namespace StarLevelSystem.common
                         ZNet.Destroy(chara.gameObject);
                     }
                 }
+            }
+        }
+
+        internal class SetNemesisScore : ConsoleCommand {
+            public override string Name => "SLS-SetNem-Score";
+            public override string Help => "Format: [required: value] eg: sls-setnem-score 500";
+
+            public override void Run(string[] args) {
+                // Set the updated score
+                float.TryParse(args[0], out float scoreres);
+                float score = Mathf.Clamp(scoreres, NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.MinScore, NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.MaxScore);
+                NemesisScoreSystem.SetScore(Player.m_localPlayer, score);
+                NemesisSystem.CachedPlayerScore = score;
+                Logger.LogInfo($"Set Local player Nemesis score to {score}");
             }
         }
 

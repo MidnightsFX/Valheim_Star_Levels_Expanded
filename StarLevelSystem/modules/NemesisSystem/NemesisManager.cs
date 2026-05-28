@@ -68,6 +68,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             player = p;
             if (player == null) { return; }
             NemesisScoreSystem.LoadScoreData(player);
+            NemesisSystem.CachedPlayerScore = NemesisScoreSystem.GetScore(player);  // seed cache
             double now = ZNet.instance != null ? ZNet.instance.GetTimeSeconds() : 0;
             nextRecalcTime = now + NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.ScoreIntervalSeconds;
             NemesisSystem.NemesisManager = this;

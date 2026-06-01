@@ -28,10 +28,10 @@ namespace StarLevelSystem.Modifiers
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
                 if (mods != null && mods.ContainsKey(ModifierNames.Lootbags.ToString())) {
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), mods[ModifierNames.Lootbags.ToString()]);
-                    List <KeyValuePair<GameObject, int>> ExtraLoot = new List <KeyValuePair<GameObject, int>>();
+                    List<LootEntry> ExtraLoot = new List<LootEntry>();
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
                     foreach (var kvp in __result) {
-                        ExtraLoot.Add(new KeyValuePair<GameObject, int>(key: kvp.Key, value: Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier)));
+                        ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier) });
                     }
                     LootPerformanceChanges.DropItemsPreferAsync(__instance.gameObject.transform.position, ExtraLoot, true);
                 }

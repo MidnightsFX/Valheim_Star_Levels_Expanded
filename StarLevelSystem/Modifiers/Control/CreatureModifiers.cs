@@ -160,6 +160,8 @@ namespace StarLevelSystem.Modifiers.Control
         }
 
         internal static string BuildCreatureLocalizableName(Character chara, Dictionary<string, ModifierType> modifiers) {
+            if (chara.m_nview.IsValid() == false) { return chara.m_name; }
+
             modifiers ??= new Dictionary<string, ModifierType>();
             List<string> prefix_names = new List<string>();
             List<string> suffix_names = new List<string>();

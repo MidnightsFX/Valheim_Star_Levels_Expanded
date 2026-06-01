@@ -77,6 +77,11 @@ namespace StarLevelSystem
         public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<string> LootDropCalculationType;
         public static ConfigEntry<bool> LootEggsDropIncreaseStacks;
+        public static ConfigEntry<bool> CreatureLootDropStacked;
+        public static ConfigEntry<bool> TreeLootDropsStacked;
+        public static ConfigEntry<bool> RockLootDropsStacked;
+        public static ConfigEntry<bool> MiscLootDropsStacked;
+
         public static ConfigEntry<bool> EggLevelDeterminedByItemQuality;
         public static ConfigEntry<bool> OffspringCanBeStrongerThanParents;
         public static ConfigEntry<float> OffspringGainExtraLevelChance;
@@ -304,6 +309,10 @@ namespace StarLevelSystem
             OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
             OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
             OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f,1f);
+            CreatureLootDropStacked = BindServerConfig("LevelSystem", "CreatureLootDropStacked", true, "When enabled, character drops will be automatically stacked before dropping (significantly more performant).");
+            TreeLootDropsStacked = BindServerConfig("LevelSystem", "TreeLootDropsStacked", true, "When enabled, tree drops will be automatically stacked before dropping (significantly more performant).");
+            RockLootDropsStacked = BindServerConfig("LevelSystem", "RockLootDropsStacked", true, "When enabled, rock drops will be automatically stacked before dropping (significantly more performant).");
+            MiscLootDropsStacked = BindServerConfig("LevelSystem", "MiscLootDropsStacked", true, "When enabled, misc (such as small destructible skeletons etc) drops will be automatically stacked before dropping (significantly more performant).");
 
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);

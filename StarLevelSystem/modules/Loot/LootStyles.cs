@@ -7,7 +7,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
-using static Mono.Security.X509.X520;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.Loot {
@@ -24,29 +23,29 @@ namespace StarLevelSystem.modules.Loot {
             SelectedLootFactor = (LootFactorType)Enum.Parse(typeof(LootFactorType), ValConfig.LootDropCalculationType.Value);
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeBase treeInstance) {
+        internal static List<LootEntry> ModifyTreeDropsOrDefault(TreeBase treeInstance) {
             int level = CompositeLazyCache.GetOrAddCachedTreeEntry(treeInstance.m_nview);
             SelectObjectDistanceBonus(treeInstance.transform, out DistanceLootModifier distance_bonus);
-            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
+            List<LootEntry> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
             return drops;
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyTreeDropsOrDefault(TreeLog treeInstance) {
+        internal static List<LootEntry> ModifyTreeDropsOrDefault(TreeLog treeInstance) {
             int level = CompositeLazyCache.GetOrAddCachedTreeEntry(treeInstance.m_nview);
             SelectObjectDistanceBonus(treeInstance.transform, out DistanceLootModifier distance_bonus);
-            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
+            List<LootEntry> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
             return drops;
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyRockDropsOrDefault(Transform tform, DropTable droptable, string name, int level) {
+        internal static List<LootEntry> ModifyRockDropsOrDefault(Transform tform, DropTable droptable, string name, int level) {
             SelectObjectDistanceBonus(tform, out DistanceLootModifier distance_bonus);
-            List<KeyValuePair<GameObject, int>> drops = ModifyObjectDropsOrDefault(droptable, name, level, distance_bonus, DropType.Rock);
+            List<LootEntry> drops = ModifyObjectDropsOrDefault(droptable, name, level, distance_bonus, DropType.Rock);
             return drops;
         }
 
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree) {
-            List<KeyValuePair<GameObject, int>> dropList = new List<KeyValuePair<GameObject, int>>();
+        internal static List<LootEntry> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree) {
+            List<LootEntry> dropList = new List<LootEntry>();
             Logger.LogDebug($"Checking for custom drop configuration for {lookupkey}");
             if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot.ContainsKey(lookupkey)) {
                 Logger.LogDebug($"Custom loot drops configured for:{lookupkey}");
@@ -76,7 +75,7 @@ namespace StarLevelSystem.modules.Loot {
                     if (eod.Drop.DontScale == true) {
                         // Apply Random change, and the range of the loot drop
                         // Logger.LogDebug($"Drop {loot.Drop.Prefab} does not scale and will drop {drop_base_amount}");
-                        dropList.Add(new KeyValuePair<GameObject, int>(eod.DropGo, UnityEngine.Random.Range(eod.Drop.Min, eod.Drop.Max)));
+                        dropList.Add(new LootEntry() { Prefab = eod.DropGo, Amount = UnityEngine.Random.Range(eod.Drop.Min, eod.Drop.Max) });
                         continue;
                     }
 
@@ -123,7 +122,7 @@ namespace StarLevelSystem.modules.Loot {
                         Logger.LogDebug($"Drop {eod.Drop.Prefab} capped to {drop}");
                     }
 
-                    dropList.Add(new KeyValuePair<GameObject, int>(eod.DropGo, drop));
+                    dropList.Add(new LootEntry() { Prefab = eod.DropGo, Amount = drop });
                 }
 
             } else {
@@ -324,8 +323,8 @@ namespace StarLevelSystem.modules.Loot {
             return droptable;
         }
 
-        internal static List<KeyValuePair<GameObject, int>> OptimizeToDropStacks(List<GameObject> drops, float lootmult = 1) {
-            List<KeyValuePair<GameObject, int>> optimizeDrops = new List<KeyValuePair<GameObject, int>>();
+        internal static List<LootEntry> OptimizeToDropStacks(List<GameObject> drops, DropType dropType = DropType.None, float lootmult = 1) {
+            List<LootEntry> optimizeDrops = new List<LootEntry>();
             Dictionary<GameObject, int> dropCollect = new Dictionary<GameObject, int>();
             foreach (GameObject drop in drops) {
                 if (dropCollect.ContainsKey(drop)) {
@@ -334,16 +333,38 @@ namespace StarLevelSystem.modules.Loot {
                 }
                 dropCollect.Add(drop, 1);
             }
+            // Determine the max drop size per entry
+            int maxPerStack = 2;
+            switch (dropType) {
+                case DropType.Rock:
+                    if (ValConfig.RockLootDropsStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.Tree:
+                    if (ValConfig.TreeLootDropsStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.Destructible:
+                    if (ValConfig.MiscLootDropsStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.None:
+                    break;
+            }
+
             // Apply loot increases or decreases if we have those set, else just add to the drop list
             if (lootmult != 1) {
                 foreach (KeyValuePair<GameObject, int> kvp in dropCollect) {
                     int amount = Mathf.RoundToInt(kvp.Value * lootmult);
                     Logger.LogDebug($"{kvp.Key} loot modified: {kvp.Value} * {lootmult} = {amount}");
-                    optimizeDrops.Add(new KeyValuePair<GameObject, int>(kvp.Key, amount));
+                    optimizeDrops.Add(new LootEntry() { Prefab = kvp.Key, Amount = amount });
                 }
             } else {
                 foreach (KeyValuePair<GameObject, int> ddrop in dropCollect) {
-                    optimizeDrops.Add(new KeyValuePair<GameObject, int>(ddrop.Key, ddrop.Value));
+                    optimizeDrops.Add(new LootEntry() { Prefab = ddrop.Key, Amount = ddrop.Value });
                 }
             }
             return optimizeDrops;

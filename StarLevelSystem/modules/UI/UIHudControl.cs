@@ -65,6 +65,7 @@ namespace StarLevelSystem.modules.UI {
         }
 
         public static void InvalidateCacheEntry(Character chara) {
+            if (chara == null || chara.GetZDOID() == ZDOID.None) { return; }
             uint id = chara.GetZDOID().ID;
             if (characterExtendedHuds.ContainsKey(id) == false) { return; }
 

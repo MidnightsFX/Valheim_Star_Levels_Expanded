@@ -13,27 +13,16 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Load the NemesisManager data when the player spawns in
         [HarmonyPatch(typeof(Player))]
         public static class NemesisCreateNemesisFromPlayerKillers {
-            static ZDOID attacker = ZDOID.None;
-
-            [HarmonyPatch(typeof(Player), nameof(Player.OnDamaged))]
-            [HarmonyPostfix]
-            public static void RecordPlayerAttacker(HitData hit) {
-                if (NemesisSystemData.SLE_Nemesis_Settings == null || ValConfig.EnableNemesisSystem.Value == false) { return; }
-                attacker = hit.m_attacker;
-            }
-
             [HarmonyPatch(typeof(Player), nameof(Player.OnDeath))]
             [HarmonyPostfix]
             public static void PlayerDiedCreateNemesis(Player __instance) {
                 if (NemesisSystemData.SLE_Nemesis_Settings == null || ValConfig.EnableNemesisSystem.Value == false) { return; }
-                if (NemesisSystemData.SLE_Nemesis_Settings.CreateMinibossFromPlayerKiller == false || attacker.IsNone()) { return; }
-
-                // Can't make a miniboss if the object doesn't exist anymore
-                GameObject gameObject = ZNetScene.instance.FindInstance(attacker);
-                if (gameObject == null) { return; }
+                
+                if (NemesisSystemData.SLE_Nemesis_Settings.CreateMinibossFromPlayerKiller == false || __instance.m_lastHit == null) { return; }
+                Character killer = __instance.m_lastHit.GetAttacker();
+                if (killer == null) { return; }
 
                 // Can't make minibosses out of bosses
-                Character killer = gameObject.GetComponent<Character>();
                 if (killer.IsBoss()) { return; }
 
                 float roll = UnityEngine.Random.Range(0f, 1f);

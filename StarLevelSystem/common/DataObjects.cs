@@ -120,7 +120,8 @@ namespace StarLevelSystem.common
         public enum DropType {
             Tree,
             Rock,
-            Destructible
+            Destructible,
+            None
         }
 
         public enum LootFactorType {
@@ -470,6 +471,12 @@ namespace StarLevelSystem.common
             public Dictionary<string, List<ExtendedObjectDrop>> nonCharacterSpecificLoot { get; set; }
             public bool EnableDistanceLootModifier { get; set; } = false;
             public SortedDictionary<int, DistanceLootModifier> DistanceLootModifier { get; set; }
+        }
+
+        public class LootEntry {
+            public int Amount { get; set; }
+            public GameObject Prefab { get; set; }
+            public int MaxAmountPerDrop { get; set; } = 1;
         }
 
         public class DistanceLootModifier {

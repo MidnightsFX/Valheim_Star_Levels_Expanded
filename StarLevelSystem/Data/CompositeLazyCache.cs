@@ -83,42 +83,9 @@ namespace StarLevelSystem.Data
             // Set biome | used to deletion check
             characterEntry.Biome = biome;
             characterEntry.RefCreatureName = creatureName;
-            // Biome settings say to delete this
-            if (biomeSettings != null && biomeSettings.CreatureSpawnsDisabled != null && biomeSettings.CreatureSpawnsDisabled.Contains(creatureName)) {
-                characterEntry.ShouldDelete = true;
-            }
-            // biome or creature spawn settings 
-            if (biomeSettings != null) { characterEntry.SpawnRateModifier = biomeSettings.SpawnRateModifier; }
-            if (creatureSettings != null) { characterEntry.SpawnRateModifier = creatureSettings.SpawnRateModifier; }
 
-            //Logger.LogDebug("Checking Night settings.");
-            // Check if night time
-            if (EnvMan.IsNight()) {
-                // Override spawn rate modifiers for night time
-                //Logger.LogDebug($"Checking night settings for {creature_name} setup? {setupstatus}");
-                if (biomeSettings != null && biomeSettings.NightSettings != null) {
-                    //Logger.LogDebug("Checking biome settings.");
-                    if (biomeSettings.NightSettings.SpawnRateModifier != 1f) {
-                        biomeSettings.SpawnRateModifier = biomeSettings.NightSettings.SpawnRateModifier;
-                    }
-                    //Logger.LogDebug($"Biome has {biome_settings.NightSettings.creatureSpawnsDisabled.Count} disabled creatures: {string.Join(",", biome_settings.NightSettings.creatureSpawnsDisabled)}");
-                    if (biomeSettings.NightSettings.CreatureSpawnsDisabled != null && biomeSettings.NightSettings.CreatureSpawnsDisabled.Contains(creatureName)) {
-                        //Logger.LogDebug("Biome has spawn disabled.");
-                        characterEntry.ShouldDelete = true;
-                    }
-                }
-
-                if (creatureSettings != null && creatureSettings.NightSettings != null) {
-                   // Logger.LogDebug("Checking creature settings.");
-                    if (creatureSettings.NightSettings.SpawnRateModifier != 1f) {
-                        creatureSettings.SpawnRateModifier = creatureSettings.NightSettings.SpawnRateModifier;
-                    }
-                    if (creatureSettings.NightSettings.CreatureSpawnsDisabled == true) {
-                        //Logger.LogDebug("Creature has spawn disabled.");
-                        characterEntry.ShouldDelete = true;
-                    }
-                }
-            }
+            // Determine creature spawn rate, and if it should be queued for deletion
+            DetermineCreatureSpawnRate(characterEntry, biomeSettings, creatureSettings);
 
             if (requiredModifiers == null) {
                 if (creatureSettings != null && creatureSettings.RequiredModifiers != null) {
@@ -303,6 +270,49 @@ namespace StarLevelSystem.Data
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;
                 UpdateCharacterCacheEntry(chara, cce);
+            }
+        }
+
+        private static void DetermineCreatureSpawnRate(CharacterCacheEntry characterEntry, BiomeSpecificSetting biomeSettings, CreatureSpecificSetting creatureSettings) {
+            bool isNight = EnvMan.IsNight();
+
+            if (biomeSettings != null && biomeSettings.CreatureSpawnsDisabled != null && biomeSettings.CreatureSpawnsDisabled.Contains(characterEntry.RefCreatureName)) {
+                characterEntry.ShouldDelete = true;
+                return;
+            }
+
+            // Spawn rate: select the day or night rate without mutating the shared config.
+            // Creature spawn rate takes precedence over the biome spawn rate.
+            if (biomeSettings != null) {
+                float biomeRate = biomeSettings.SpawnRateModifier;
+                if (isNight && biomeSettings.NightSettings != null && biomeSettings.NightSettings.SpawnRateModifier != 1f) {
+                    biomeRate = biomeSettings.NightSettings.SpawnRateModifier;
+                }
+                characterEntry.SpawnRateModifier = biomeRate;
+            }
+            if (creatureSettings != null) {
+                float creatureRate = creatureSettings.SpawnRateModifier;
+                if (isNight && creatureSettings.NightSettings != null && creatureSettings.NightSettings.SpawnRateModifier != 1f) {
+                    creatureRate = creatureSettings.NightSettings.SpawnRateModifier;
+                }
+                characterEntry.SpawnRateModifier = creatureRate;
+            }
+
+            // Night-time spawn disable checks
+            if (isNight) {
+                //Logger.LogDebug($"Biome has {biome_settings.NightSettings.creatureSpawnsDisabled.Count} disabled creatures: {string.Join(",", biome_settings.NightSettings.creatureSpawnsDisabled)}");
+                if (biomeSettings != null && biomeSettings.NightSettings != null
+                    && biomeSettings.NightSettings.CreatureSpawnsDisabled != null
+                    && biomeSettings.NightSettings.CreatureSpawnsDisabled.Contains(characterEntry.RefCreatureName)) {
+                    //Logger.LogDebug("Biome has spawn disabled.");
+                    characterEntry.ShouldDelete = true;
+                    return;
+                }
+                if (creatureSettings != null && creatureSettings.NightSettings != null
+                    && creatureSettings.NightSettings.CreatureSpawnsDisabled == true) {
+                    //Logger.LogDebug("Creature has spawn disabled.");
+                    characterEntry.ShouldDelete = true;
+                }
             }
         }
 

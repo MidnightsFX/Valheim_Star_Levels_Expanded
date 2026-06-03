@@ -53,7 +53,7 @@ namespace StarLevelSystem.modules
                         if (isTame && spawnedChara != null) {
                             spawnedChara.SetTamed(true);
                         }
-                        Logger.LogDebug($"Spawn Multiplier| Spawned {spawnedCreature.gameObject} at {position}");
+                        Logger.LogDebug($"Spawn Multiplier| {spawnrate} Spawned {spawnedCreature.gameObject} at {position}");
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         CreatureSetupControl.CreatureSetup(spawnedChara, multiply: false);
                         spawnedChara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);

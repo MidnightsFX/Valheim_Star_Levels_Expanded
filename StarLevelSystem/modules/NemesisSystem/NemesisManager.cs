@@ -34,7 +34,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         public void FixedUpdate() {
             if (ValConfig.EnableNemesisSystem.Value == false) { return; }
-            if (setup == false) { return; }
+            if (setup == false|| ZNet.instance == null) { return; }
 
             // Score updater
             if (ZNet.instance.GetTimeSeconds() >= nextRecalcTime) {

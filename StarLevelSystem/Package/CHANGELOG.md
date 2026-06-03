@@ -1,3 +1,12 @@
+**0.20.2**
+ ---
+ ```
+- Improves compatibility with Custom Raids (both SLS Raids and Customs can be active now)
+- Fixes a data consistency issue with merging spawn denial groups
+- Fixes a harmless but spammy error when logging to the main menu
+- Sets egg quality to level 1 for quantity egg production, quality egg production still allows higher levels (and fewer eggs)
+```
+
 **0.20.1**
  ---
  ```

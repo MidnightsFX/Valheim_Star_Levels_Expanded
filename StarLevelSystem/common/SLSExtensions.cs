@@ -288,7 +288,6 @@ namespace StarLevelSystem.common
                 CustomCreatureLevelUpChance = othercfg.CustomCreatureLevelUpChance,
                 DamageRecievedModifiers = othercfg.DamageRecievedModifiers,
                 DistanceScaleModifier = othercfg.DistanceScaleModifier,
-                NightSettings = othercfg.NightSettings,
                 SpawnRateModifier = othercfg.SpawnRateModifier,
             };
             if (prioritycfg.CustomCreatureLevelUpChance != null) { biomecfg.CustomCreatureLevelUpChance = prioritycfg.CustomCreatureLevelUpChance; }
@@ -328,11 +327,32 @@ namespace StarLevelSystem.common
                 }
             }
 
-            if (prioritycfg.NightSettings != null) {
-                biomecfg.NightSettings.SpawnRateModifier = prioritycfg.NightSettings.SpawnRateModifier;
-                if (prioritycfg.NightSettings.CreatureSpawnsDisabled != null && biomecfg.NightSettings.CreatureSpawnsDisabled != null) {
-                    biomecfg.NightSettings.CreatureSpawnsDisabled = biomecfg.NightSettings.CreatureSpawnsDisabled.Union(prioritycfg.NightSettings.CreatureSpawnsDisabled).ToList();
+            if (prioritycfg.NightSettings != null || othercfg.NightSettings != null) {
+                BiomeNightSettings priorityNight = prioritycfg.NightSettings;
+                BiomeNightSettings baseNight = othercfg.NightSettings;
+                // Need to ensure that we build a fresh config instance instead of modifying one of the sources
+                BiomeNightSettings mergedNight = new BiomeNightSettings();
+
+                if (priorityNight != null) {
+                    mergedNight.SpawnRateModifier = priorityNight.SpawnRateModifier;
+                    mergedNight.NightLevelUpChanceScaler = priorityNight.NightLevelUpChanceScaler;
+                } else {
+                    mergedNight.SpawnRateModifier = baseNight.SpawnRateModifier;
+                    mergedNight.NightLevelUpChanceScaler = baseNight.NightLevelUpChanceScaler;
                 }
+
+                List<string> nightDisabled = new List<string>();
+                if (baseNight != null && baseNight.CreatureSpawnsDisabled != null) {
+                    nightDisabled = nightDisabled.Union(baseNight.CreatureSpawnsDisabled).ToList();
+                }
+                if (priorityNight != null && priorityNight.CreatureSpawnsDisabled != null) {
+                    nightDisabled = nightDisabled.Union(priorityNight.CreatureSpawnsDisabled).ToList();
+                }
+                mergedNight.CreatureSpawnsDisabled = nightDisabled;
+
+                biomecfg.NightSettings = mergedNight;
+            } else {
+                biomecfg.NightSettings = null;
             }
             return biomecfg;
         }

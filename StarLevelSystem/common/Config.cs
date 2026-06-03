@@ -162,6 +162,7 @@ namespace StarLevelSystem
         public static ConfigEntry<float> RaidPerPlayerUpdateCheck;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
+        public static ConfigEntry<bool> EnableCustomRaidsCompat;
 
         public static ConfigEntry<bool> EnableNemesisSystem;
         public static ConfigEntry<bool> EnableDebugNemesisDetails;
@@ -320,6 +321,7 @@ namespace StarLevelSystem
             RaidPerPlayerUpdateCheck = BindServerConfig("Raids", "RaidPerPlayerUpdateCheck", 10f, "The Interval in minutes between updating the valid raids for each player. Reduce if you want new raids to become available faster for players, increase to reduce pressure on server.", true, 1f, 120f);
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
+            EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.");
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
 

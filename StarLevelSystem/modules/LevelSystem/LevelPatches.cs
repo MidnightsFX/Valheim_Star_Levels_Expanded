@@ -256,6 +256,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     int leveled_loot = Mathf.RoundToInt(1 * (1 + ValConfig.PerLevelLootScale.Value * proclass.m_character.m_level));
                     if (leveled_loot > item.m_itemData.m_shared.m_maxStackSize) { leveled_loot = item.m_itemData.m_shared.m_maxStackSize; }
                     item.m_itemData.m_stack = leveled_loot;
+                    item.SetQuality(1);
                 } else {
                     // This is effectively the current vanilla behavior
                     int level = Mathf.Max(proclass.m_minOffspringLevel, proclass.m_character ? proclass.m_character.GetLevel() : proclass.m_minOffspringLevel);

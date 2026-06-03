@@ -58,23 +58,16 @@ namespace StarLevelSystem.modules.Raids
                 Logger.LogRaid($"Checking for random Raid {ev.m_name}");
                 RaidsData.RaidsByName.TryGetValue(ev.m_name, out RaidDefinition raidDef);
                 if (raidDef == null) {
+                    // Not an SLS raid. When CustomRaids compat is active, let the vanilla/CustomRaids pipeline handle it.
+                    if (Compatibility.CustomRaidsCompatActive) {
+                        Logger.LogRaid($"'{ev.m_name}' is not an SLS raid; passing through to the vanilla/CustomRaids pipeline.");
+                        return true;
+                    }
                     Logger.LogWarning($"SetRandomEvent called for '{ev.m_name}' but no matching SLS raid definition found — event dropped. Add it to RaidSettings.yaml or enable UseVanillaRaidConfiguration.");
                     return false;
                 }
 
-                // Special case for when the server itself tries to start a raid, as it does not have a player
-                if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
-                    if (StartNetworkedRaidRunner(raidDef, pos) == false) {
-                        Logger.LogWarning($"Networked raid dispatch failed for '{raidDef.Name}' at {pos}; event will be skipped this cycle.");
-                    }
-                    return false;
-                }
-
-                StartRaidRunner(raidDef, pos);
-
-                if (Player.m_localPlayer) {
-                    Player.m_localPlayer.ShowTutorial("randomevent", false);
-                }
+                RaidControl.DispatchForcedRaid(raidDef, pos);
                 return false;
             }
         }
@@ -91,14 +84,15 @@ namespace StarLevelSystem.modules.Raids
                     if (rm != null) {
                         RaidMan = rm;
                         RaidMan.ForceRaidStart();
-                        return false;
+                        return Compatibility.CustomRaidsCompatActive;
                     }
                     RaidControl.RaidMan = __instance.gameObject.AddComponent<RaidManager>();
                     RaidControl.RaidMan.Setup();
                     RaidMan.ForceRaidStart();
                 }
 
-                return false;
+                // When CustomRaids compat is active, also let the vanilla/CustomRaids forced-event path run.
+                return Compatibility.CustomRaidsCompatActive;
             }
         }
 
@@ -121,6 +115,33 @@ namespace StarLevelSystem.modules.Raids
                     RaidControl.RemoveNearbyRunningEvents();
                 }
 
+                // When CustomRaids compat is active, also let vanilla reset its active event.
+                return Compatibility.CustomRaidsCompatActive;
+            }
+        }
+
+        // The vanilla `event <name>` console command guards on HaveEvent before starting. SLS raids are defined in
+        // RaidsData.RaidsByName, not vanilla m_events, so allow the guard to pass for SLS raid names.
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.HaveEvent))]
+        public static class AllowSLSRaidEventNames {
+            public static void Postfix(string name, ref bool __result) {
+                if (__result || ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                if (RaidsData.RaidsByName.ContainsKey(name)) { __result = true; }
+            }
+        }
+
+        // Route the `event <name>` console command to the SLS raid system when the name is an SLS raid.
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.SetRandomEventByName))]
+        public static class RouteNamedEventToSLS {
+            public static bool Prefix(string name, Vector3 pos) {
+                if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                if (RaidsData.RaidsByName.TryGetValue(name, out RaidDefinition raidDef) == false) {
+                    // Vanilla / CustomRaids event (present in m_events) — let vanilla resolve and start it.
+                    return true;
+                }
+                Logger.LogRaid($"Console force-start routing '{name}' to SLS raid system at {pos}");
+                RaidControl.DispatchForcedRaid(raidDef, pos);
+                // Skip vanilla GetEvent/SetRandomEvent, which would no-op for an SLS-only event name.
                 return false;
             }
         }
@@ -129,6 +150,9 @@ namespace StarLevelSystem.modules.Raids
         public static class OverrideRaidSelectionSystem {
             public static bool Prefix() {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                // When CustomRaids compat is active, let the vanilla selection loop run so CustomRaids raids can fire.
+                // SLS's own RaidManager continues selecting raids independently, so both systems run in parallel.
+                if (Compatibility.CustomRaidsCompatActive) { return true; }
                 // We override the entire raid selection process if SLS raids are enabled
                 return false;
             }

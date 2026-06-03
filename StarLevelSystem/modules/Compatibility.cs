@@ -16,6 +16,11 @@ namespace StarLevelSystem.modules
         public static bool IsDropThatEnabled = false;
         public static bool IsExpandWorldEnabled = false;
         public static bool IsFGNEnabled = false;
+        public static bool IsCustomRaidsEnabled = false;
+
+        // Active only when CustomRaids is installed AND the compat toggle is enabled.
+        public static bool CustomRaidsCompatActive =>
+            IsCustomRaidsEnabled && ValConfig.EnableCustomRaidsCompat.Value;
 
 
         private static Type DropThatDropTableSessionManager;
@@ -43,6 +48,10 @@ namespace StarLevelSystem.modules
                 }
                 if (plugins.Keys.Contains("expand_world_size")) {
                     IsExpandWorldEnabled = true;
+                }
+                if (plugins.Keys.Contains("asharppen.valheim.custom_raids")) {
+                    IsCustomRaidsEnabled = true;
+                    Logger.LogInfo("Valheim.CustomRaids detected; CustomRaids raids will fire alongside SLS raids while EnableCustomRaidsCompat is enabled.");
                 }
             } catch {
                 Logger.LogWarning("Unable to check mod compatibility. Ensure that Bepinex can load.");

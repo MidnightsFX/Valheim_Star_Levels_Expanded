@@ -34,6 +34,22 @@ namespace StarLevelSystem.modules.Raids
             raidRun.StartRaid(targetRaid, Player.m_localPlayer);
         }
 
+        // Shared start sequence for a forced raid (e.g. console 'event' command or vanilla SetRandomEvent passthrough).
+        internal static void DispatchForcedRaid(RaidDefinition targetRaid, Vector3 pos) {
+            // Special case for when the server itself tries to start a raid, as it does not have a player.
+            if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
+                if (StartNetworkedRaidRunner(targetRaid, pos) == false) {
+                    Logger.LogWarning($"Networked raid dispatch failed for '{targetRaid.Name}' at {pos}; event will be skipped this cycle.");
+                }
+                return;
+            }
+
+            StartRaidRunner(targetRaid, pos);
+            if (Player.m_localPlayer) {
+                Player.m_localPlayer.ShowTutorial("randomevent", false);
+            }
+        }
+
         internal static bool StartNetworkedRaidRunner(RaidDefinition targetRaid, Vector3 pos) {
             ZNetPeer peer = SLSExtensions.GetNearestReadyPeer(pos);
             if (peer == null) {

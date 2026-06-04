@@ -329,14 +329,27 @@ namespace StarLevelSystem.modules.Raids
             List<Vector3> spawn_locations = new List<Vector3>();
             //Logger.LogDebug($"Starting spawn destination in incrments of {range_increment} from x{origin.x} y{origin.y} z{origin.z}");
             int spawn_location_attempts = 0;
+            float originalMaxDistance = maxDistance;
             Vector3 determinedSpawn = origin;
 
-            while (spawn_locations.Count < numTargets && spawn_location_attempts < 200) {
+            while (spawn_locations.Count < numTargets) {
                 var offset = UnityEngine.Random.insideUnitCircle * (maxDistance * 0.8f);
                 determinedSpawn = origin + new Vector3(offset.x, 0, offset.y);
 
+                // Every 50 attempts after 300 attempts add distance
+                if (spawn_location_attempts > 300 && spawn_location_attempts % 50 == 0) {
+                    if (spawn_locations.Count > 0) {
+                        // At least one valid spawn has been found
+                        break;
+                    }
+                    maxDistance += 50f;
+                    if (maxDistance > originalMaxDistance * 2) {
+                        break; // Avoid infinite loop, if we have doubled the max distance and still can't find a valid spawn, its possible the player has completely surrounded themselves with an unspawnable area
+                    }
+                }
+
                 // Sleep to avoid locking the thread
-                if (spawn_location_attempts > 1 && spawn_location_attempts % 10 == 0) { yield return new WaitForSeconds(0.5f); }
+                if (spawn_location_attempts > 1 && spawn_location_attempts % 10 == 0) { yield return new WaitForSeconds(0.1f); }
 
                 ZoneSystem.instance.GetGroundData(ref determinedSpawn, out var normal, out var foundBiome, out var biomeArea, out var hmap);
 
@@ -398,7 +411,7 @@ namespace StarLevelSystem.modules.Raids
             }
 
             if (spawn_locations.Count < numTargets) {
-                Logger.LogWarning("Unable to find the requested number of spawn points.");
+                Logger.LogWarning($"Unable to find the requested number of spawn points. Found {spawn_locations.Count} spawn locations");
             }
             resultset.ForceSet(spawn_locations);
             pointsReady.ForceSet(true);

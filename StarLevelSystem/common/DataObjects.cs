@@ -47,6 +47,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_SIZE = "SLS_SIZE";
         public static readonly string SLS_NEMESIS_SCORE = "SLS_NEM_SCORE";
         public static readonly string SLS_NEMESIS_SCOREDATA = "SLS_NEM_SCOREDATA";
+        public static readonly string SLS_RAIDS_ACTIVE = "SLS_RAIDS_ACTIVE";
 
         public static readonly string SLS_MOD_CAP = "EffectCap";
 
@@ -779,6 +780,7 @@ namespace StarLevelSystem.common
             public float NemesisActionCooldownSeconds { get; set; } = 10f;
             [DefaultValue(300f)]
             public float NemesisInfluenceRadius { get; set; } = 300f;
+            public float NemesisMinSpawnDistance { get; set; } = 20f;
             public bool CreateMinibossFromPlayerKiller { get; set; } = true;
             public bool CreationRemovesSourceCreature { get; set; } = true;
             public float NemesisBossChance { get; set; } = 0.1f;
@@ -805,8 +807,9 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisChanceEntry {
-            public string RequiredGlobalKey { get; set; }
-            public string RequiredPrivateKey { get; set; }
+            public List<string> RequiredGlobalKeys { get; set; }
+            public List<string> NotRequiredGlobalKeys { get; set; }
+            public List<string> RequiredPrivateKeys { get; set; }
             [DefaultValue(true)]
             public bool Enabled { get; set; } = true;
             [DefaultValue(0.5f)]
@@ -820,6 +823,7 @@ namespace StarLevelSystem.common
             public NemesisAction Action { get; set; } = NemesisAction.ChangeLevel;
             [DefaultValue(0f)]
             public float ScoreChange { get; set; } = 0f;
+            public float ExtraCooldownSeconds { get; set; } = 0f;
             public List<NemesisSpawn> SpawnConfig { get; set; }
         }
 

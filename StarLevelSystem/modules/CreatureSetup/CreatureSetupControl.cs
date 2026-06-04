@@ -5,6 +5,7 @@ using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
+using System;
 using System.Collections.Generic;
 using static StarLevelSystem.common.DataObjects;
 
@@ -14,7 +15,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
         // Runs the actual creature setup pipeline. Returns true once the creature has been fully configured.
         // Made internal so the queue worker can drive it.
         internal static bool RunCharacterSetup(Character __instance, CharacterCacheEntry cDetails) {
-            if (__instance == null || cDetails == null || cDetails.Level == 0) { return false; }
+            if (__instance == null || __instance.m_nview == null || __instance.m_nview.IsValid() == false || cDetails == null || cDetails.Level == 0) { return false; }
 
             cDetails.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(__instance, cDetails.CreatureModifiers);
 
@@ -44,6 +45,35 @@ namespace StarLevelSystem.modules.CreatureSetup {
             // is left to the queue worker so it only runs once per creature.
             CompositeLazyCache.GetAndSetLocalCache(chara, leveloverride, requiredModifiers, notAllowedModifiers, updateCache: true);
             CreatureSetup(chara, leveloverride, multiply, delay, requiredModifiers, notAllowedModifiers);
+        }
+
+
+        // Applies the configured spawn-time AI behaviour to a freshly spawned creature.
+        // Shared by the raid and nemesis spawners so they stay in sync.
+        internal static void ApplySpawnAI(MonsterAI ai, AI creatureAI) {
+            if (ai == null) { return; }
+            switch (creatureAI) {
+                case AI.HuntPlayer:
+                    ai.SetHuntPlayer(true);
+                    break;
+                case AI.Alerted:
+                    ai.SetAlerted(true);
+                    break;
+                case AI.AgitatedByBuild:
+                    // SetAggravated is a no-op unless the creature is m_aggravatable (Dvergr/Seekers etc).
+                    // For everything else, fall back to alert+hunt so the creature actually engages.
+                    if (ai.IsAggravatable()) {
+                        ai.SetAggravated(true, BaseAI.AggravatedReason.Building);
+                        ai.SetAlerted(true);
+                    } else {
+                        ai.SetAlerted(true);
+                        ai.SetHuntPlayer(true);
+                    }
+                    break;
+                default:
+                    ai.SetAlerted(true);
+                    break;
+            }
         }
 
 

@@ -3,21 +3,15 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
-using static UnityEngine.EventSystems.EventTrigger;
-using static UnityEngine.UI.Image;
 
 namespace StarLevelSystem.modules.NemesisSystem {
     internal static class NemesisActions {
 
-        private static List<NemesisAction> SpawnActions = new List<NemesisAction>() { NemesisAction.Spawn, NemesisAction.SpawnMiniboss }; 
+        private static readonly List<NemesisAction> SpawnActions = new List<NemesisAction>() { NemesisAction.Spawn, NemesisAction.SpawnMiniboss };
 
         // Nemesis actions with the level system
         public static int LevelSystemDetermineNemesisInfluence(Character character, int min_level, int max_level, int current_level) {
@@ -72,6 +66,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
             float distance = Vector3.Distance(chara.transform.position, Player.m_localPlayer.transform.position);
             if (distance > NemesisSystemData.SLE_Nemesis_Settings.NemesisInfluenceRadius) { return; }
+            if (distance < NemesisSystemData.SLE_Nemesis_Settings.NemesisMinSpawnDistance) { return; }
 
             List<string> playerPrivateKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
             Heightmap.Biome targetBiome = Heightmap.FindBiome(chara.transform.position);
@@ -81,14 +76,31 @@ namespace StarLevelSystem.modules.NemesisSystem {
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(entry.Value.RequiredGlobalKey) == false && ZoneSystem.instance.GetGlobalKey(entry.Value.RequiredGlobalKey) == false) {
-                    Logger.LogNemesis($"{entry.Key} skipped due to server missing required global key: {entry.Value.RequiredGlobalKey}");
-                    continue;
+                if (entry.Value.RequiredGlobalKeys != null && entry.Value.RequiredGlobalKeys.Count > 0) {
+                    foreach(string key in entry.Value.RequiredGlobalKeys) {
+                        if (ZoneSystem.instance.GetGlobalKey(key) == false) {
+                            Logger.LogNemesis($"{entry.Key} skipped due to server missing required global key: {key} in {string.Join(", ", entry.Value.RequiredGlobalKeys)}");
+                            continue;
+                        }
+                    }
                 }
 
-                if (string.IsNullOrEmpty(entry.Value.RequiredPrivateKey) == false && playerPrivateKeys.Contains(entry.Value.RequiredPrivateKey) == false) {
-                    Logger.LogNemesis($"{entry.Key} skipped due to player missing required player key: {entry.Value.RequiredPrivateKey}");
-                    continue;
+                if (entry.Value.NotRequiredGlobalKeys != null && entry.Value.NotRequiredGlobalKeys.Count > 0) {
+                    foreach (string key in entry.Value.NotRequiredGlobalKeys) {
+                        if (ZoneSystem.instance.GetGlobalKey(key) == true) {
+                            Logger.LogNemesis($"{entry.Key} skipped due to server having unwanted global key: {key} in {string.Join(", ", entry.Value.NotRequiredGlobalKeys)}");
+                            continue;
+                        }
+                    }
+                }
+
+                if (entry.Value.RequiredPrivateKeys != null && entry.Value.RequiredPrivateKeys.Count > 0) {
+                    foreach(string key in entry.Value.RequiredPrivateKeys) {
+                        if (playerPrivateKeys.Contains(key) == false) {
+                            Logger.LogNemesis($"{entry.Key} skipped due to server missing required Private key: {key} in {string.Join(", ", entry.Value.RequiredPrivateKeys)}");
+                            continue;
+                        }
+                    }
                 }
 
                 if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
@@ -162,20 +174,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         }
                         MonsterAI spawnAI = cgo.GetComponent<MonsterAI>();
                         if (spawnAI != null) {
-                            switch (spawn.CreatureAI) {
-                                case AI.HuntPlayer:
-                                    spawnAI.SetHuntPlayer(true);
-                                    break;
-                                case AI.Alerted:
-                                    spawnAI.SetAlerted(true);
-                                    break;
-                                case AI.AgitatedByBuild:
-                                    spawnAI.SetAggravated(true, BaseAI.AggravatedReason.Building);
-                                    break;
-                                default:
-                                    spawnAI.SetAlerted(true);
-                                    break;
-                            }
+                            CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
                         }
                         CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawn.ForcedLevel);
                         cce.Level += entry.Value.LevelBonus;
@@ -197,6 +196,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
 
                 NemesisSystem.NemesisManager.RecordNemesisAction($"Spawn event {entry.Key}, {spawnedDetails} | score {NemesisSystem.CachedPlayerScore:0.0}");
+                if (entry.Value.ExtraCooldownSeconds > 0) {
+                    NemesisSystem.NemesisManager.AddCooldownForNextNemesisAction(entry.Value.ExtraCooldownSeconds);
+                }
                 if (entry.Value.ScoreChange != 0) {
                     NemesisScoreSystem.UpdateScore(Player.m_localPlayer, entry.Value.ScoreChange);
                 }

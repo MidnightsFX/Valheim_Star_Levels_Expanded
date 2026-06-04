@@ -63,6 +63,12 @@ namespace StarLevelSystem.modules.Raids {
                 return;
             }
 
+            if (RaidSpawnPointsReady.Get() && ActiveRaidSpawns.Get().Count == 0) {
+                Logger.LogRaid($"Raid failed to find any valid spawn points, stopping raid.");
+                RemoveExistingMapPins();
+                ZNetScene.Destroy(this);
+            }
+
             // Raid is resuming, reconnecting or continuing to run
             if (ActiveRaidSpawns.Get().Count > 0) {
                 if (Endtime == 0) { Endtime = RaitStartTime.Get() + RunningRaid.Get().Duration; }
@@ -103,7 +109,7 @@ namespace StarLevelSystem.modules.Raids {
                             continue;
                         }
                         rmonitor.TriggerCount += 1;
-                        Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count)];
+                        Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count - 1)];
                         // Do custom level if custom level chances are set
                         SortedDictionary<int, float> levelupChance = LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
                         SortedDictionary<int, float> levelupDistanceBonus = LevelSelection.DetermineDistanceBonus(selectedSpawn);
@@ -120,20 +126,8 @@ namespace StarLevelSystem.modules.Raids {
                             GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, UnityEngine.Random.rotation);
                             spawns += 1;
                             MonsterAI mAI = spawnedCreature.GetComponent<MonsterAI>();
-                            switch (rmonitor.RaidSpawnDef.CreatureAI) {
-                                case AI.HuntPlayer:
-                                    mAI.SetHuntPlayer(true);
-                                    break;
-                                case AI.Alerted:
-                                    mAI.SetAlerted(true);
-                                    break;
-                                case AI.AgitatedByBuild:
-                                    mAI.SetAggravated(true, BaseAI.AggravatedReason.Building);
-                                    break;
-                                default:
-                                    mAI.SetAlerted(true);
-                                    break;
-                            }
+                            mAI.SetEventCreature(true);
+                            CreatureSetupControl.ApplySpawnAI(mAI, rmonitor.RaidSpawnDef.CreatureAI);
 
                             Character chara = spawnedCreature.GetComponent<Character>();
                             if (rmonitor.RaidSpawnDef.Faction != Character.Faction.TrainingDummy) {
@@ -153,7 +147,7 @@ namespace StarLevelSystem.modules.Raids {
 
                 // Raid is over (or waiting on defeat)
                 if (spawnWindowClosed) {
-                    bool raidComplete = RunningRaid.Get().RaidActiveTillDefeated;
+                    bool raidComplete = !RunningRaid.Get().RaidActiveTillDefeated;
                     bool spawnedMaxOnce = false;
                     foreach (RaidMonitor raidspawn in RaidSpawners) {
                         if (raidspawn.RaidSpawnDef.MaxSpawnTriggers > 0 && raidspawn.TriggerCount >= raidspawn.RaidSpawnDef.MaxSpawnTriggers) {
@@ -201,11 +195,18 @@ namespace StarLevelSystem.modules.Raids {
             RemoveExistingMapPins();
 
             // Stop the music
-            MusicMan.instance.StopMusic();
+            if (MusicMan.instance != null) {
+                MusicMan.instance.StopMusic();
+            }
+            
 
             // Clear the environment
-            EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
-
+            if (EnvMan.instance != null) {
+                EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
+            }
+            
+            // Skip clearing spawns etc if the network is shutting down
+            if (ZDOMan.instance == null || ZNetScene.instance == null) { return; }
             // Clean up any spawns. Fall back to the ZDO-backed list when the in-memory cache is empty
             // (e.g. console-command teardown before Update populated RaidSpawners, or after owner-handoff).
             List<RaidMonitor> spawnersToClean = (RaidSpawners != null && RaidSpawners.Count > 0)

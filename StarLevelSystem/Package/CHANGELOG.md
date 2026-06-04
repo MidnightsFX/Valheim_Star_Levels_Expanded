@@ -1,3 +1,13 @@
+**0.20.3**
+ ---
+ ```
+- Increased default raid configuration size (delete your RaidSettings.yaml if you want the new default)
+- Fixed an issue where creatures would not become aggressive during raids or nemesis spawns
+- Adds additional fallback for raids that fail to determine spawn points
+- Improved flexibility of Nemesis spawn configuration, new default configuration (delete your NemesisSettings.yaml)
+	- Adds Nemesis hunters that spawn when players are in a biome that is significantly ahead of their progression
+```
+
 **0.20.2**
  ---
  ```

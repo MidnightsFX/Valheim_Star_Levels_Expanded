@@ -64,6 +64,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
             return ZNet.instance.GetTimeSeconds() >= nextNemeisActionTime;
         }
 
+        public void AddCooldownForNextNemesisAction(float seconds) {
+            nextNemeisActionTime += seconds;
+        }
+
         internal void Setup(Player p) {
             player = p;
             if (player == null) { return; }

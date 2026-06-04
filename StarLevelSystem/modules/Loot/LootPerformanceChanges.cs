@@ -27,7 +27,10 @@ namespace StarLevelSystem.modules.Loot {
 
             foreach(KeyValuePair<GameObject, int> drop in drops) {
                 if (dropIndividuals == false) {
-                    MaxDropSize = drop.Key.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxStackSize;
+                    ItemDrop id = drop.Key.GetComponent<ItemDrop>();
+                    if (id != null) {
+                        MaxDropSize = id.m_itemData.m_shared.m_maxStackSize;
+                    }
                 }
                 LootDrops.Add(new LootEntry() { Amount = drop.Value, Prefab = drop.Key, MaxAmountPerDrop = MaxDropSize });
             }

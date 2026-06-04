@@ -146,6 +146,17 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // SLS raids bypass the vanilla event selection, 
+        // This ensures that creatures set to hunt the player will actually follow through
+        // Note: This will make event creatures not despawn. TODO: custom despawn logic for raids/nemesis?
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.HaveActiveEvent))]
+        public static class SlsRaidCountsAsActiveEvent {
+            public static void Postfix(ref bool __result) {
+                if (__result || ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                __result = true;
+            }
+        }
+
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.UpdateRandomEvent))]
         public static class OverrideRaidSelectionSystem {
             public static bool Prefix() {

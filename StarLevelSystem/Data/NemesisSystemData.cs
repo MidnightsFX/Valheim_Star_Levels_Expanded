@@ -11,7 +11,7 @@ namespace StarLevelSystem.Data
         public static NemesisConfiguration SLE_Nemesis_Settings = DefaultConfiguration;
 
         public static readonly NemesisConfiguration DefaultConfiguration = new NemesisConfiguration() {
-            NemesisVersion = 2,
+            NemesisVersion = 3,
             NemesisActionCooldownSeconds = 10,
             NemesisInfluenceRadius = 300f,
             NemesisMinSpawnDistance = 30f,
@@ -46,11 +46,13 @@ namespace StarLevelSystem.Data
                         AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands },
                         // Blackforest/meadows level players get hunted when they go to plains
                         NotRequiredGlobalKeys = new List<string> { "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader" },
-                        ScoreThreshold = 5000f,
                         Action = NemesisAction.Spawn,
                         LevelBonus = 5,
                         ScoreChange = -100,
                         ExtraCooldownSeconds = 60,
+                        PlayerReqs = new NemesisPlayerStateRequirements() {
+                            PlayerCurrentBiome = Heightmap.Biome.Mistlands,
+                        },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3 },
                     }}},
@@ -60,11 +62,13 @@ namespace StarLevelSystem.Data
                         AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Plains },
                         // Blackforest/meadows level players get hunted when they go to plains
                         NotRequiredGlobalKeys = new List<string> { "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader" },
-                        ScoreThreshold = 5000f,
                         Action = NemesisAction.Spawn,
                         LevelBonus = 5,
                         ScoreChange = -100,
                         ExtraCooldownSeconds = 60,
+                        PlayerReqs = new NemesisPlayerStateRequirements() {
+                            PlayerCurrentBiome = Heightmap.Biome.Plains,
+                        },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 6 },
                     }}},
@@ -74,11 +78,13 @@ namespace StarLevelSystem.Data
                         AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mountain },
                         // Blackforest/meadows level players get hunted when they go to plains
                         NotRequiredGlobalKeys = new List<string> { "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader" },
-                        ScoreThreshold = 5000f,
                         Action = NemesisAction.Spawn,
                         LevelBonus = 5,
                         ScoreChange = -100,
                         ExtraCooldownSeconds = 60,
+                        PlayerReqs = new NemesisPlayerStateRequirements() {
+                            PlayerCurrentBiome = Heightmap.Biome.Mountain,
+                        },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Hatchling", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 4 },
                     }}},
@@ -265,6 +271,13 @@ namespace StarLevelSystem.Data
         internal static void UpdateNemesisLog(string data) {
             Logger.LogNemesis($"Updating Nemesis Action Log: {ValConfig.nemesisLogFilePath}");
             ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
+            const long maxLogSizeBytes = 1024L * 1024L * 1024L; // 1 GB
+            FileInfo logInfo = new FileInfo(ValConfig.nemesisLogFilePath);
+            if (logInfo.Exists && logInfo.Length > maxLogSizeBytes) {
+                Logger.LogNemesis($"Nemesis log exceeded {maxLogSizeBytes} bytes, overwriting with most recent event.");
+                File.WriteAllText(ValConfig.nemesisLogFilePath, data);
+                return;
+            }
             File.AppendAllText(ValConfig.nemesisLogFilePath, data);
         }
 

@@ -38,6 +38,36 @@ namespace StarLevelSystem.modules.Loot {
             return LootDrops;
         }
 
+        public static int CheckItemStackingConfig(DropType dropType) {
+            // Determine the max drop size per entry
+            int maxPerStack = 2;
+            switch (dropType) {
+                case DropType.Rock:
+                    if (ValConfig.RockLootDropsStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.Tree:
+                    if (ValConfig.TreeLootDropsStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.Destructible:
+                    if (ValConfig.MiscLootDropsStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.Item:
+                    if (ValConfig.CreatureLootDropStacked.Value) {
+                        maxPerStack = 1;
+                    }
+                    break;
+                case DropType.None:
+                    break;
+            }
+            return maxPerStack;
+        }
+
 
         private static void DropItemsImmediate(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
             int dropindex = 0;

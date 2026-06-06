@@ -30,8 +30,9 @@ namespace StarLevelSystem.Modifiers
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), mods[ModifierNames.Lootbags.ToString()]);
                     List<LootEntry> ExtraLoot = new List<LootEntry>();
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
+                    int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(DropType.Item);
                     foreach (var kvp in __result) {
-                        ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier) });
+                        ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier), MaxAmountPerDrop = maxPerStack });
                     }
                     LootPerformanceChanges.DropItemsPreferAsync(__instance.gameObject.transform.position, ExtraLoot, true);
                 }

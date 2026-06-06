@@ -63,10 +63,14 @@ namespace StarLevelSystem.modules.Raids {
                 return;
             }
 
-            if (RaidSpawnPointsReady.Get() && ActiveRaidSpawns.Get().Count == 0) {
-                Logger.LogRaid($"Raid failed to find any valid spawn points, stopping raid.");
-                RemoveExistingMapPins();
-                ZNetScene.Destroy(this);
+            if (RaidSpawnPointsReady.Get()) {
+                List<Vector3> determinedSpawnPoints = RaidSpawnPoints.Get();
+                if (determinedSpawnPoints == null || determinedSpawnPoints.Count == 0) {
+                    Logger.LogRaid($"Raid failed to find any valid spawn points, stopping raid.");
+                    RemoveExistingMapPins();
+                    ZNetScene.Destroy(this);
+                    return;
+                }
             }
 
             // Raid is resuming, reconnecting or continuing to run

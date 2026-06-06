@@ -333,38 +333,18 @@ namespace StarLevelSystem.modules.Loot {
                 }
                 dropCollect.Add(drop, 1);
             }
-            // Determine the max drop size per entry
-            int maxPerStack = 2;
-            switch (dropType) {
-                case DropType.Rock:
-                    if (ValConfig.RockLootDropsStacked.Value) {
-                        maxPerStack = 1;
-                    }
-                    break;
-                case DropType.Tree:
-                    if (ValConfig.TreeLootDropsStacked.Value) {
-                        maxPerStack = 1;
-                    }
-                    break;
-                case DropType.Destructible:
-                    if (ValConfig.MiscLootDropsStacked.Value) {
-                        maxPerStack = 1;
-                    }
-                    break;
-                case DropType.None:
-                    break;
-            }
+            int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(dropType);
 
             // Apply loot increases or decreases if we have those set, else just add to the drop list
             if (lootmult != 1) {
                 foreach (KeyValuePair<GameObject, int> kvp in dropCollect) {
                     int amount = Mathf.RoundToInt(kvp.Value * lootmult);
                     Logger.LogDebug($"{kvp.Key} loot modified: {kvp.Value} * {lootmult} = {amount}");
-                    optimizeDrops.Add(new LootEntry() { Prefab = kvp.Key, Amount = amount });
+                    optimizeDrops.Add(new LootEntry() { Prefab = kvp.Key, Amount = amount, MaxAmountPerDrop = maxPerStack });
                 }
             } else {
                 foreach (KeyValuePair<GameObject, int> ddrop in dropCollect) {
-                    optimizeDrops.Add(new LootEntry() { Prefab = ddrop.Key, Amount = ddrop.Value });
+                    optimizeDrops.Add(new LootEntry() { Prefab = ddrop.Key, Amount = ddrop.Value, MaxAmountPerDrop = maxPerStack });
                 }
             }
             return optimizeDrops;

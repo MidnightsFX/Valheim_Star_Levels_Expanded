@@ -122,7 +122,8 @@ namespace StarLevelSystem.common
             Tree,
             Rock,
             Destructible,
-            None
+            None,
+            Item
         }
 
         public enum LootFactorType {
@@ -825,6 +826,11 @@ namespace StarLevelSystem.common
             public float ScoreChange { get; set; } = 0f;
             public float ExtraCooldownSeconds { get; set; } = 0f;
             public List<NemesisSpawn> SpawnConfig { get; set; }
+            public NemesisPlayerStateRequirements PlayerReqs { get; set; }
+        }
+
+        public class NemesisPlayerStateRequirements {
+            public Heightmap.Biome PlayerCurrentBiome { get; set; }
         }
 
         public class NemesisSpawn {

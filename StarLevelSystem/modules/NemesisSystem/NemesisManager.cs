@@ -26,6 +26,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
     internal class NemesisManager : MonoBehaviour {
         private Player player;
         private bool setup;
+        public bool IsSetup => setup;
         private List<string> NemesisActionLog = new List<string>();
 
         public double nextRecalcTime;
@@ -42,12 +43,15 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 nextRecalcTime = ZNet.instance.GetTimeSeconds() + NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.ScoreIntervalSeconds;
                 NemesisScoreSystem.SaveScoreData(player);
 
-                StringBuilder sb = new StringBuilder();
-                sb.AppendLine($"{ZNet.instance.GetTimeSeconds()} | Score: {NemesisScoreSystem.GetScore(player)} | Actions: {NemesisActionLog.Count}");
-                foreach (string action in NemesisActionLog) {
-                    sb.AppendLine(action);
+                if (NemesisActionLog.Count > 0) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine($"{ZNet.instance.GetTimeSeconds()} | Score: {NemesisScoreSystem.GetScore(player)} | Actions: {NemesisActionLog.Count}");
+                    foreach (string action in NemesisActionLog) {
+                        sb.AppendLine(action);
+                    }
+                    NemesisSystemData.UpdateNemesisLog(sb.ToString());
+                    NemesisActionLog.Clear();
                 }
-                NemesisSystemData.UpdateNemesisLog(sb.ToString());
             }
             // Nemesis action
             //if (ReadyForNextNemesisAction()) {

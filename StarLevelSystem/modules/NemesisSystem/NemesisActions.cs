@@ -17,6 +17,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
         public static int LevelSystemDetermineNemesisInfluence(Character character, int min_level, int max_level, int current_level) {
             int level = current_level;
 
+            // Don't evaluate score-based actions until the manager is set up and the player score cache is seeded.
+            if (NemesisSystem.NemesisManager == null || NemesisSystem.NemesisManager.IsSetup == false || NemesisSystem.PlayerScore == null) {
+                return level;
+            }
+
             bool isBoss = character.IsBoss();
             string characterName = character.gameObject.name.Replace("(Clone)", "");
             if (isBoss) {
@@ -49,7 +54,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         }
 
                         level = Mathf.Clamp(entry.Value.LevelBonus + level, min_level, max_level);
-                        NemesisSystem.NemesisManager.RecordNemesisAction($"Changed {character.m_name} level by {entry.Value.LevelBonus}({level}) due to {entry.Key} spawn with score {NemesisSystem.CachedPlayerScore:0.0}");
+                        NemesisSystem.NemesisManager.RecordNemesisAction($"Changed {character.m_name} level by {entry.Value.LevelBonus}({level}) due to {entry.Key} spawn with score {NemesisSystem.CachedPlayerScore}");
                         if (entry.Value.ScoreChange != 0) {
                             NemesisScoreSystem.UpdateScore(Player.m_localPlayer, entry.Value.ScoreChange);
                         }
@@ -62,6 +67,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
 
         public static void NemesisRandomSpawner(Character chara) {
+            if (NemesisSystem.NemesisManager == null || NemesisSystem.NemesisManager.IsSetup == false) { return; }
             if (NemesisSystem.NemesisManager.ReadyForNextNemesisAction() == false) { return; }
 
             float distance = Vector3.Distance(chara.transform.position, Player.m_localPlayer.transform.position);
@@ -70,40 +76,62 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
             List<string> playerPrivateKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
             Heightmap.Biome targetBiome = Heightmap.FindBiome(chara.transform.position);
+            Heightmap.Biome playerBiome = Heightmap.FindBiome(Player.m_localPlayer.transform.position);
             // For all of the level changing Nemesis actions
             foreach (KeyValuePair<string, NemesisChanceEntry> entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
                 if (entry.Value.Enabled == false || SpawnActions.Contains(entry.Value.Action) == false) {
                     continue;
                 }
 
-                if (entry.Value.RequiredGlobalKeys != null && entry.Value.RequiredGlobalKeys.Count > 0) {
+                if (entry.Value.RequiredGlobalKeys != null && entry.Value.RequiredGlobalKeys.Count > 0 && entry.Value.RequiredGlobalKeys.Any(key => ZoneSystem.instance.GetGlobalKey(key) == false)) {
+                    bool hasAllRequired = true;
                     foreach(string key in entry.Value.RequiredGlobalKeys) {
                         if (ZoneSystem.instance.GetGlobalKey(key) == false) {
-                            Logger.LogNemesis($"{entry.Key} skipped due to server missing required global key: {key} in {string.Join(", ", entry.Value.RequiredGlobalKeys)}");
-                            continue;
+                            hasAllRequired = false;
+                            Logger.LogNemesis($"{entry.Key} skipped due to server missing a required global key ({key}) in {string.Join(", ", entry.Value.RequiredGlobalKeys)}");
+                            break;
                         }
+                    }
+                    if (hasAllRequired == false) {
+                        continue;
                     }
                 }
 
-                if (entry.Value.NotRequiredGlobalKeys != null && entry.Value.NotRequiredGlobalKeys.Count > 0) {
-                    foreach (string key in entry.Value.NotRequiredGlobalKeys) {
+                if (entry.Value.NotRequiredGlobalKeys != null && entry.Value.NotRequiredGlobalKeys.Count > 0 && entry.Value.NotRequiredGlobalKeys.Any(key => ZoneSystem.instance.GetGlobalKey(key) == true)) {
+                    bool hasNoAvoidedKeys = true;
+                    foreach(string key in entry.Value.NotRequiredGlobalKeys) {
                         if (ZoneSystem.instance.GetGlobalKey(key) == true) {
-                            Logger.LogNemesis($"{entry.Key} skipped due to server having unwanted global key: {key} in {string.Join(", ", entry.Value.NotRequiredGlobalKeys)}");
-                            continue;
+                            hasNoAvoidedKeys = false;
+                            Logger.LogNemesis($"{entry.Key} skipped due to server having an unwanted global key ({key}) in {string.Join(", ", entry.Value.NotRequiredGlobalKeys)}");
+                            break;
                         }
+                    }
+                    if (hasNoAvoidedKeys == false) {
+                        continue;
                     }
                 }
 
-                if (entry.Value.RequiredPrivateKeys != null && entry.Value.RequiredPrivateKeys.Count > 0) {
-                    foreach(string key in entry.Value.RequiredPrivateKeys) {
+                if (entry.Value.RequiredPrivateKeys != null && entry.Value.RequiredPrivateKeys.Count > 0 && entry.Value.RequiredPrivateKeys.Any(key => playerPrivateKeys.Contains(key) == false)) {
+
+                    bool hasAllRequired = true;
+                    foreach (string key in entry.Value.RequiredPrivateKeys) {
                         if (playerPrivateKeys.Contains(key) == false) {
-                            Logger.LogNemesis($"{entry.Key} skipped due to server missing required Private key: {key} in {string.Join(", ", entry.Value.RequiredPrivateKeys)}");
-                            continue;
+                            hasAllRequired = false;
+                            Logger.LogNemesis($"{entry.Key} skipped due to server missing a required private key ({key}) in {string.Join(", ", entry.Value.RequiredPrivateKeys)}");
+                            break;
                         }
+                    }
+                    if (hasAllRequired == false) {
+                        continue;
                     }
                 }
 
-                if (MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
+                if (entry.Value.PlayerReqs != null && entry.Value.PlayerReqs.PlayerCurrentBiome != playerBiome) {
+                    Logger.LogNemesis($"{entry.Key} skipped due to player not being in the current required biome.");
+                    continue;
+                }
+
+                if (entry.Value.ScoreThreshold != 0 && MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
                     Logger.LogNemesis($"{entry.Key} skipped due to player score {NemesisSystem.CachedPlayerScore:0.0} not meeting threshold {entry.Value.ScoreThreshold:0.0}.");
                     continue;
                 }
@@ -115,7 +143,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
 
                 if (entry.Value.DeniedBiomes != null && entry.Value.DeniedBiomes.Count > 0 && entry.Value.DeniedBiomes.Contains(targetBiome)) {
-                    Logger.LogNemesis($"{entry.Key} skipped due to being in a denied biome: {entry.Value.DeniedBiomes} Current: {targetBiome}.");
+                    Logger.LogNemesis($"{entry.Key} skipped due to being in a denied biome: {string.Join(", ", entry.Value.DeniedBiomes)} Current: {targetBiome}.");
                     continue;
                 }
 
@@ -177,7 +205,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                             CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
                         }
                         CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawn.ForcedLevel);
-                        cce.Level += entry.Value.LevelBonus;
+                        cce.Level = Mathf.Min(entry.Value.LevelBonus + cce.Level, ValConfig.MaxLevel.Value);
                         if (spawn.CreaturePerLevelValueModifiers != null) {
                             cce.CreaturePerLevelValueModifiers = spawn.CreaturePerLevelValueModifiers;
                         }

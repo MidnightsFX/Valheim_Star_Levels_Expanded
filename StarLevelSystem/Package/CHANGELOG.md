@@ -1,3 +1,18 @@
+**0.20.4**
+ ---
+ ```
+- Fixed Nemesis spawns not obeying the max level
+- Fixed Lootbag item drops always spawning as individual items, now uses the preference system
+- Fixed Nemesis key lookups not gating events from happening
+- Added additional position conditionals for Biome Defender nemesis events
+	- Updated Nemesis configuration version
+	- Allows Nemesis events which are not tied to score
+	- Ensured that Nemesis persistent log can't grow too big
+	- Fixed an issue where the Nemesis system could be too kind on newly loaded players
+	- Improved Nemesis logging details
+- Fixes an issue which would disable a raid when it could normally find all spawn points
+```
+
 **0.20.3**
  ---
  ```

@@ -1,3 +1,15 @@
+**0.20.5**
+ ---
+ ```
+- Fixed drop counts not scaling in some scenarios properly
+- Fixed inverted drop individual vs stacked configs, moved these configs to LootSystem Section
+- Nemesis system (delete config if you want the changes)
+	- Removed boss faction settings for generic attack groups and biome defender groups
+	- Added player current health check
+	- Added custom loot for Nemesis creatures
+	- Added a treasure troll for the plains at high threat levels (very low chance)
+```
+
 **0.20.4**
  ---
  ```

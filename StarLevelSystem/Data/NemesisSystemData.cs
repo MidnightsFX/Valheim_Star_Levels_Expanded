@@ -40,6 +40,34 @@ namespace StarLevelSystem.Data
             },
             ChanceChanges = new NemesisChanceChanges() { 
                 CreatureOps = new Dictionary<string, NemesisChanceEntry>() {
+                    { "TreasureTrolls", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.1f,
+                        AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands },
+                        // Blackforest/meadows level players get hunted when they go to plains
+                        RequiredGlobalKeys = new List<string> { "defeated_goblinking" },
+                        Action = NemesisAction.Spawn,
+                        LevelBonus = 5,
+                        ScoreChange = -100,
+                        ExtraCooldownSeconds = 60,
+                        PlayerReqs = new NemesisPlayerStateRequirements() {
+                            PlayerCurrentBiome = Heightmap.Biome.Plains,
+                        },
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { 
+                                Prefab = "Troll",
+                                CreatureAI = AI.Alerted,
+                                Faction = Character.Faction.Boss,
+                                SpawnGroupSize = 3,
+                                CustomName = "Treasure Troll",
+                                CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.Size, 0.3f } },
+                                CustomLoot = new List<ExtendedCharacterDrop>() {
+                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 250, Max = 750, Prefab = "Coins", Chance = 100f } },
+                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 10, Max = 15, Prefab = "Ruby", Chance = 25f } },
+                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 15, Max = 20, Prefab = "Amber", Chance = 25f } }
+                                }
+                            },
+                    }}},
                     { "MistlandHunters", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.5f,
@@ -54,7 +82,7 @@ namespace StarLevelSystem.Data
                             PlayerCurrentBiome = Heightmap.Biome.Mistlands,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3 },
+                            new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.MistlandsMonsters, SpawnGroupSize = 3 },
                     }}},
                     { "PlainsDefenders", new NemesisChanceEntry() {
                         Enabled = true,
@@ -70,7 +98,7 @@ namespace StarLevelSystem.Data
                             PlayerCurrentBiome = Heightmap.Biome.Plains,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 6 },
+                            new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.PlainsMonsters, SpawnGroupSize = 6 },
                     }}},
                     { "MountainDefenders", new NemesisChanceEntry() {
                         Enabled = true,
@@ -86,7 +114,7 @@ namespace StarLevelSystem.Data
                             PlayerCurrentBiome = Heightmap.Biome.Mountain,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Hatchling", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 4 },
+                            new NemesisSpawn() { Prefab = "Hatchling", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.MountainMonsters, SpawnGroupSize = 4 },
                     }}},
                     { "CharredAttack", new NemesisChanceEntry() {
                         Enabled = true,
@@ -98,8 +126,8 @@ namespace StarLevelSystem.Data
                         LevelBonus = 5,
                         ScoreChange = -2000,
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Charred_Melee", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
-                            new NemesisSpawn() { Prefab = "Charred_Ranged", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } }
+                            new NemesisSpawn() { Prefab = "Charred_Melee", CreatureAI = AI.HuntPlayer, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "Charred_Ranged", CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } }
                     }}},
                     { "SeekerAttack", new NemesisChanceEntry() {
                         Enabled = true,
@@ -111,7 +139,7 @@ namespace StarLevelSystem.Data
                         LevelBonus = 5,
                         ScoreChange = -2000,
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.MistlandsMonsters, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
                     }}},
                     { "GoblinAttack", new NemesisChanceEntry() {
                         Enabled = true,
@@ -123,8 +151,8 @@ namespace StarLevelSystem.Data
                         LevelBonus = 5,
                         ScoreChange = -2000,
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
-                            new NemesisSpawn() { Prefab = "GoblinShaman", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.PlainsMonsters, SpawnGroupSize = 3, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "GoblinShaman", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.PlainsMonsters, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Lightning", ModifierType.Major } } },
                     }}},
                     { "FenringAttack", new NemesisChanceEntry() {
                         Enabled = true,
@@ -136,7 +164,7 @@ namespace StarLevelSystem.Data
                         LevelBonus = 5,
                         ScoreChange = -2000,
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Fenring", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Big", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "Fenring", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.MountainMonsters, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Big", ModifierType.Major } } },
                     }}},
                     { "SwampAttack", new NemesisChanceEntry() {
                         Enabled = true,
@@ -148,7 +176,7 @@ namespace StarLevelSystem.Data
                         LevelBonus = 5,
                         ScoreChange = -2000,
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Draugr_Elite", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Poison", ModifierType.Major } } },
+                            new NemesisSpawn() { Prefab = "Draugr_Elite", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Undead, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Poison", ModifierType.Major } } },
                     }}},
                     { "BlackForestSwarm", new NemesisChanceEntry() { 
                         Enabled = true, 
@@ -160,7 +188,7 @@ namespace StarLevelSystem.Data
                         LevelBonus = 5, 
                         ScoreChange = -2000, 
                         SpawnConfig = new List<NemesisSpawn>(){
-                            new NemesisSpawn() { Prefab = "Greydwarf", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.Boss, SpawnGroupSize = 6, RequiredModifiers = new Dictionary<string, ModifierType>() { { "FireNova", ModifierType.Minor } } },
+                            new NemesisSpawn() { Prefab = "Greydwarf", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.ForestMonsters, SpawnGroupSize = 6, RequiredModifiers = new Dictionary<string, ModifierType>() { { "FireNova", ModifierType.Minor } } },
                     }}},
                     // Reduce Creature levels to make things easier
                     { "ReduceCreatureLevel", new NemesisChanceEntry() {

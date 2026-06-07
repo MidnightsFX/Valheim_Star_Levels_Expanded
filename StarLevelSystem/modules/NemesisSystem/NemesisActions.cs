@@ -126,9 +126,20 @@ namespace StarLevelSystem.modules.NemesisSystem {
                     }
                 }
 
-                if (entry.Value.PlayerReqs != null && entry.Value.PlayerReqs.PlayerCurrentBiome != playerBiome) {
-                    Logger.LogNemesis($"{entry.Key} skipped due to player not being in the current required biome.");
-                    continue;
+                if (entry.Value.PlayerReqs != null) {
+                    if (entry.Value.PlayerReqs.PlayerCurrentBiome != Heightmap.Biome.None && entry.Value.PlayerReqs.PlayerCurrentBiome != playerBiome) {
+                        Logger.LogNemesis($"{entry.Key} skipped due to player not being in the current required biome.");
+                        continue;
+                    }
+                    float playerHealthP = Player.m_localPlayer.GetHealthPercentage();
+                    if (entry.Value.PlayerReqs.PlayerHealthPercentAbove != 0f && playerHealthP <= entry.Value.PlayerReqs.PlayerHealthPercentAbove) {
+                        Logger.LogNemesis($"{entry.Key} skipped due to player health percentage not above the requirement ({playerHealthP}) req: {entry.Value.PlayerReqs.PlayerHealthPercentAbove}.");
+                        continue;
+                    }
+                    if (entry.Value.PlayerReqs.PlayerHealthPercentBelow != 0f && playerHealthP >= entry.Value.PlayerReqs.PlayerHealthPercentBelow) {
+                        Logger.LogNemesis($"{entry.Key} skipped due to player health percentage not below the requirement ({playerHealthP}) req: {entry.Value.PlayerReqs.PlayerHealthPercentBelow}.");
+                        continue;
+                    }
                 }
 
                 if (entry.Value.ScoreThreshold != 0 && MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
@@ -218,7 +229,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
                             CompositeLazyCache.SetCreatureModifiers(spawnChara, spawn.RequiredModifiers);
                         }
                         CreatureSetupControl.CreatureSetup(spawnChara, cce.Level, delay: 0);
-                        // Need to set the data structure for persisted nemesis data here
+                        // Persist any custom loot table for this spawn onto the creature's ZDO
+                        if (spawn.CustomLoot != null && spawn.CustomLoot.Count > 0) {
+                            LootSystemData.SetCustomLoot(spawnChara, spawn.CustomLoot);
+                        }
                     }
                     spawnedDetails += $" {spawn.Prefab}x{spawn.SpawnGroupSize}";
                 }

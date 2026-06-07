@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using static CharacterDrop;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.Loot {
@@ -72,10 +73,13 @@ namespace StarLevelSystem.modules.Loot {
                         }
                     }
 
+                    // Determine how large the dropped stacks can be (honors the per-type stacking config)
+                    int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(eod.DropGo.GetComponent<ItemDrop>(), type);
+
                     if (eod.Drop.DontScale == true) {
                         // Apply Random change, and the range of the loot drop
                         // Logger.LogDebug($"Drop {loot.Drop.Prefab} does not scale and will drop {drop_base_amount}");
-                        dropList.Add(new LootEntry() { Prefab = eod.DropGo, Amount = UnityEngine.Random.Range(eod.Drop.Min, eod.Drop.Max) });
+                        dropList.Add(new LootEntry() { Prefab = eod.DropGo, Amount = UnityEngine.Random.Range(eod.Drop.Min, eod.Drop.Max), MaxAmountPerDrop = maxPerStack });
                         continue;
                     }
 
@@ -122,7 +126,7 @@ namespace StarLevelSystem.modules.Loot {
                         Logger.LogDebug($"Drop {eod.Drop.Prefab} capped to {drop}");
                     }
 
-                    dropList.Add(new LootEntry() { Prefab = eod.DropGo, Amount = drop });
+                    dropList.Add(new LootEntry() { Prefab = eod.DropGo, Amount = drop, MaxAmountPerDrop = maxPerStack });
                 }
 
             } else {
@@ -143,12 +147,12 @@ namespace StarLevelSystem.modules.Loot {
                         updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
                         break;
                 }
-                dropList = OptimizeToDropStacks(updatedDropTable.GetDropList());
+                dropList = OptimizeToDropStacks(updatedDropTable.GetDropList(), type);
             }
             return dropList;
         }
 
-        internal static List<KeyValuePair<GameObject, int>> ModifyCharacterDrops(CharacterDrop cdrop, string name) {
+        internal static List<KeyValuePair<GameObject, int>> ModifyCharacterDrops(CharacterDrop cdrop, string name, List<ExtendedCharacterDrop> customLoot = null) {
             List<KeyValuePair<GameObject, int>> drop_results = new List<KeyValuePair<GameObject, int>>();
             int level = 1;
             if (cdrop.m_character != null) {
@@ -157,9 +161,10 @@ namespace StarLevelSystem.modules.Loot {
 
             LootStyles.SelectCharacterLootSettings(cdrop.m_character, out DistanceLootModifier distance_bonus);
             // Logger.LogDebug($"SLS Custom drop set for {name} - level {level}");
-            // Use modified loot drop settings
+            // Use modified loot drop settings; per-creature custom loot replaces the global table when present.
+            List<ExtendedCharacterDrop> lootSet = customLoot ?? LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name];
             StringBuilder sb = new StringBuilder();
-            foreach (ExtendedCharacterDrop loot in LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name]) {
+            foreach (ExtendedCharacterDrop loot in lootSet) {
                 // Skip this loop drop if it doesn't drop for tamed creatures or only drops for tamed creatures
                 if (cdrop.m_character != null) {
                     if (ValConfig.EnableDebugLootDetails.Value) {
@@ -333,17 +338,18 @@ namespace StarLevelSystem.modules.Loot {
                 }
                 dropCollect.Add(drop, 1);
             }
-            int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(dropType);
 
             // Apply loot increases or decreases if we have those set, else just add to the drop list
             if (lootmult != 1) {
                 foreach (KeyValuePair<GameObject, int> kvp in dropCollect) {
+                    int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(kvp.Key.GetComponent<ItemDrop>(), dropType);
                     int amount = Mathf.RoundToInt(kvp.Value * lootmult);
                     Logger.LogDebug($"{kvp.Key} loot modified: {kvp.Value} * {lootmult} = {amount}");
                     optimizeDrops.Add(new LootEntry() { Prefab = kvp.Key, Amount = amount, MaxAmountPerDrop = maxPerStack });
                 }
             } else {
                 foreach (KeyValuePair<GameObject, int> ddrop in dropCollect) {
+                    int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(ddrop.Key.GetComponent<ItemDrop>(), dropType);
                     optimizeDrops.Add(new LootEntry() { Prefab = ddrop.Key, Amount = ddrop.Value, MaxAmountPerDrop = maxPerStack });
                 }
             }

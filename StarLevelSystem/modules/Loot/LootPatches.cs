@@ -32,10 +32,12 @@ namespace StarLevelSystem.modules.Loot {
                 if (__instance.m_character == null) { return true; }
                 string name = Utils.GetPrefabName(__instance.m_character.gameObject);
                 // Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
-                if (LootSystemData.SLS_Drop_Settings == null || LootSystemData.SLS_Drop_Settings.characterSpecificLoot == null) { return true; }
-                if (LootSystemData.SLS_Drop_Settings.characterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.characterSpecificLoot.ContainsKey(name) != true) { return true; }
+                // Per-creature custom loot stored on the ZDO (e.g. nemesis spawns) replaces the global table for this instance.
+                List<ExtendedCharacterDrop> customLoot = LootSystemData.GetCustomLoot(__instance.m_character);
+                bool hasGlobal = LootSystemData.SLS_Drop_Settings?.characterSpecificLoot?.ContainsKey(name) == true;
+                if (customLoot == null && hasGlobal != true) { return true; }
 
-                __result = LootStyles.ModifyCharacterDrops(__instance, name);
+                __result = LootStyles.ModifyCharacterDrops(__instance, name, customLoot);
                 return false;
             }
         }

@@ -298,6 +298,10 @@ namespace StarLevelSystem
             SpawnsAlwaysControlled = BindServerConfig("LevelSystem", "SpawnsAlwaysControlled", "piece_TrainingDummy", "A list of creatures which always get their level set");
             SpawnsAlwaysControlled.SettingChanged += LevelSelection.LeveledCreatureListChanged;
             LevelSelection.SetupForceLeveledCreatureList();
+            OffspringCanBeStrongerThanParents = BindServerConfig("LevelSystem", "OffspringCanBeStrongerThanParents", false, "When enabled, creatures that are bred can have higher levels than their parents. Otherwise, they will be capped at the highest parent level.");
+            OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
+            OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
+            OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f, 1f);
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootStyles.AllowedLootFactors, false);
@@ -306,14 +310,10 @@ namespace StarLevelSystem
             ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");
             LootEggsDropIncreaseStacks = BindServerConfig("LootSystem", "LootEggsDropIncreaseStacks", true, "This causes higher level chickens (and other egg producers) to drop MORE eggs instead of higher leveled ones.");
             EggLevelDeterminedByItemQuality = BindServerConfig("LootSystem", "EggLevelDeterminedByItemQuality", false, "When enabled, the level of egg grown creatures is determined by the eggs quality level. Otherwise the grown creature uses its default level configuration.");
-            OffspringCanBeStrongerThanParents = BindServerConfig("LevelSystem", "OffspringCanBeStrongerThanParents", false, "When enabled, creatures that are bred can have higher levels than their parents. Otherwise, they will be capped at the highest parent level.");
-            OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
-            OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
-            OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f,1f);
-            CreatureLootDropStacked = BindServerConfig("LevelSystem", "CreatureLootDropStacked", true, "When enabled, character drops will be automatically stacked before dropping (significantly more performant).");
-            TreeLootDropsStacked = BindServerConfig("LevelSystem", "TreeLootDropsStacked", true, "When enabled, tree drops will be automatically stacked before dropping (significantly more performant).");
-            RockLootDropsStacked = BindServerConfig("LevelSystem", "RockLootDropsStacked", true, "When enabled, rock drops will be automatically stacked before dropping (significantly more performant).");
-            MiscLootDropsStacked = BindServerConfig("LevelSystem", "MiscLootDropsStacked", true, "When enabled, misc (such as small destructible skeletons etc) drops will be automatically stacked before dropping (significantly more performant).");
+            CreatureLootDropStacked = BindServerConfig("LootSystem", "CreatureLootDropStacked", true, "When enabled, character drops will be automatically stacked before dropping (significantly more performant).");
+            TreeLootDropsStacked = BindServerConfig("LootSystem", "TreeLootDropsStacked", true, "When enabled, tree drops will be automatically stacked before dropping (significantly more performant).");
+            RockLootDropsStacked = BindServerConfig("LootSystem", "RockLootDropsStacked", true, "When enabled, rock drops will be automatically stacked before dropping (significantly more performant).");
+            MiscLootDropsStacked = BindServerConfig("LootSystem", "MiscLootDropsStacked", true, "When enabled, misc (such as small destructible skeletons etc) drops will be automatically stacked before dropping (significantly more performant).");
 
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);

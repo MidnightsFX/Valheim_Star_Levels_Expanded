@@ -235,5 +235,31 @@ namespace StarLevelSystem.Data
             }
             return true;
         }
+
+        // Persists a per-creature custom loot table onto the creature's ZDO so it survives
+        // save/reload and network sync. Mirrors CompositeLazyCache.SetCreatureModifiers.
+        public static void SetCustomLoot(Character chara, List<ExtendedCharacterDrop> loot)
+        {
+            if (chara?.m_nview == null || chara.m_nview.GetZDO() == null || loot == null) { return; }
+            chara.m_nview.GetZDO().Set(DataObjects.SLS_CUSTOM_LOOT, DataObjects.yamlserializer.Serialize(loot));
+        }
+
+        // Reads the per-creature custom loot table back from the ZDO, or null if none stored.
+        public static List<ExtendedCharacterDrop> GetCustomLoot(Character chara)
+        {
+            if (chara?.m_nview == null || chara.m_nview.GetZDO() == null) { return null; }
+            string raw = chara.m_nview.GetZDO().GetString(DataObjects.SLS_CUSTOM_LOOT, null);
+            if (string.IsNullOrEmpty(raw)) { return null; }
+            try {
+                var loot = DataObjects.yamldeserializer.Deserialize<List<ExtendedCharacterDrop>>(raw);
+                // Resolve prefab references (GameDrop) since the DoesNotScale path dereferences them directly.
+                foreach (ExtendedCharacterDrop d in loot) { d.ToCharacterDrop(); }
+                return loot;
+            }
+            catch (Exception ex) {
+                Logger.LogWarning($"Failed to read SLS_CUSTOM_LOOT: {ex.Message}");
+                return null;
+            }
+        }
     }
 }

@@ -48,6 +48,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_NEMESIS_SCORE = "SLS_NEM_SCORE";
         public static readonly string SLS_NEMESIS_SCOREDATA = "SLS_NEM_SCOREDATA";
         public static readonly string SLS_RAIDS_ACTIVE = "SLS_RAIDS_ACTIVE";
+        public static readonly string SLS_CUSTOM_LOOT = "SLS_CUSTOM_LOOT";
 
         public static readonly string SLS_MOD_CAP = "EffectCap";
 
@@ -141,7 +142,7 @@ namespace StarLevelSystem.common
         public enum AI {
             HuntPlayer,
             Alerted,
-            AgitatedByBuild
+            AgitatedByBuild,
         }
 
         public enum Music {
@@ -830,7 +831,11 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisPlayerStateRequirements {
-            public Heightmap.Biome PlayerCurrentBiome { get; set; }
+            [DefaultValue(Heightmap.Biome.None)]
+            public Heightmap.Biome PlayerCurrentBiome { get; set; } = Heightmap.Biome.None;
+            [DefaultValue(0f)]
+            public float PlayerHealthPercentAbove { get; set; } = 0f;
+            public float PlayerHealthPercentBelow { get; set; } = 0f;
         }
 
         public class NemesisSpawn {
@@ -849,6 +854,8 @@ namespace StarLevelSystem.common
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+            [DefaultValue(null)]
+            public List<ExtendedCharacterDrop> CustomLoot { get; set; } = null;
         }
 
         public class NemesisMiniboss {

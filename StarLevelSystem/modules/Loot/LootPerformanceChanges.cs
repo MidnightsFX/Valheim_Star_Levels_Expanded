@@ -38,33 +38,40 @@ namespace StarLevelSystem.modules.Loot {
             return LootDrops;
         }
 
-        public static int CheckItemStackingConfig(DropType dropType) {
+        public static int CheckItemStackingConfig(ItemDrop id, DropType dropType) {
+            if (id == null) { return 1; }
             // Determine the max drop size per entry
             int maxPerStack = 2;
             switch (dropType) {
                 case DropType.Rock:
-                    if (ValConfig.RockLootDropsStacked.Value) {
+                    if (!ValConfig.RockLootDropsStacked.Value) {
                         maxPerStack = 1;
                     }
                     break;
                 case DropType.Tree:
-                    if (ValConfig.TreeLootDropsStacked.Value) {
+                    if (!ValConfig.TreeLootDropsStacked.Value) {
                         maxPerStack = 1;
                     }
                     break;
                 case DropType.Destructible:
-                    if (ValConfig.MiscLootDropsStacked.Value) {
+                    if (!ValConfig.MiscLootDropsStacked.Value) {
                         maxPerStack = 1;
                     }
                     break;
                 case DropType.Item:
-                    if (ValConfig.CreatureLootDropStacked.Value) {
+                    if (!ValConfig.CreatureLootDropStacked.Value) {
                         maxPerStack = 1;
                     }
                     break;
                 case DropType.None:
                     break;
             }
+
+            // Check the items specific max drop size
+            if (maxPerStack == 2) {
+                return id.m_itemData.m_shared.m_maxStackSize;
+            }
+
             return maxPerStack;
         }
 
@@ -81,23 +88,18 @@ namespace StarLevelSystem.modules.Loot {
                     max_stack_size = drop.MaxAmountPerDrop;
                     // Drop the item at the specified position
                     GameObject droppedItem = UnityEngine.Object.Instantiate(drop.Prefab, centerPos, Quaternion.identity);
+                    // Number of units this dropped object represents (defaults to 1 for non-stacked items and creatures)
+                    int dropped = 1;
 
                     // Modify the dropped item to be dropped in stacks up to the specified amount
                     if (max_stack_size > 1) {
                         ItemDrop component = droppedItem.GetComponent<ItemDrop>();
                         // Drop in stacks if this is an item
                         if (component is not null) {
-                            int remaining = (drop.Amount - i);
-                            if (remaining > 0) {
-                                if (drop.Amount > max_stack_size) {
-                                    component.m_itemData.m_stack = max_stack_size;
-                                    i += max_stack_size;
-                                } else {
-                                    component.m_itemData.m_stack = remaining;
-                                    i += remaining;
-                                }
-                            }
+                            int stack = Mathf.Min(drop.Amount - i, max_stack_size);
+                            component.m_itemData.m_stack = stack;
                             component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
+                            dropped = stack;
                         } else {
                             Character chara = droppedItem.GetComponent<Character>();
                             if (chara == null) {
@@ -126,7 +128,7 @@ namespace StarLevelSystem.modules.Loot {
                         }
                         component2.AddForce(insideUnitSphere * 5f, ForceMode.VelocityChange);
                     }
-                    i++;
+                    i += dropped;
                 }
                 dropindex++;
             }
@@ -152,22 +154,17 @@ namespace StarLevelSystem.modules.Loot {
                     // Drop the item at the specified position
                     GameObject droppedItem = UnityEngine.Object.Instantiate(drop.Prefab, centerPos, Quaternion.identity);
                     obj_spawns++;
+                    // Number of units this dropped object represents (defaults to 1 for non-stacked items and creatures)
+                    int dropped = 1;
 
                     if (max_stack_size > 1) {
                         ItemDrop component = droppedItem.GetComponent<ItemDrop>();
                         // Drop in stacks if this is an item
                         if (component is not null) {
-                            int remaining = (drop.Amount - i);
-                            if (remaining > 0) {
-                                if (drop.Amount > max_stack_size) {
-                                    component.m_itemData.m_stack = max_stack_size;
-                                    i += max_stack_size;
-                                } else {
-                                    component.m_itemData.m_stack = remaining;
-                                    i += remaining;
-                                }
-                            }
+                            int stack = Mathf.Min(drop.Amount - i, max_stack_size);
+                            component.m_itemData.m_stack = stack;
                             component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
+                            dropped = stack;
                         } else {
                             Character chara = droppedItem.GetComponent<Character>();
                             if (chara == null) {
@@ -195,7 +192,7 @@ namespace StarLevelSystem.modules.Loot {
                         }
                         component2.AddForce(insideUnitSphere * 5f, ForceMode.VelocityChange);
                     }
-                    i++;
+                    i += dropped;
                 }
                 dropindex++;
             }

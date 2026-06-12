@@ -1,3 +1,9 @@
+**0.20.6**
+ ---
+ ```
+- Fixes Tames not properly inheriting levels from their parents by chance
+```
+
 **0.20.5**
  ---
  ```

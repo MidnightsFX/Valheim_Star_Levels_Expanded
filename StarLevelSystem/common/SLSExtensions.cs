@@ -212,7 +212,6 @@ namespace StarLevelSystem.common
                     result.Add(peer);
             }
             return result;
-
         }
 
         internal static float GetTotalDamageOptions(this HitData.DamageTypes hitdmg, bool include_poison = false, bool include_spirit = false, bool include_pickaxe_and_chop = false, float modElement = 1f, float modPhysical = 1f) {

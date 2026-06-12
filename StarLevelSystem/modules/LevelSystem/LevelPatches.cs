@@ -301,6 +301,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                         }
                     }
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
+                    CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, inheritedLevel, updateCache: true);
+                    chara.m_nview.GetZDO().Set(ZDOVars.s_level, inheritedLevel);
                     CreatureSetupControl.CreatureSetup(chara, level, delay: 0.1f);
                 } else {
                     if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
@@ -310,6 +312,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                         }
                     }
                     Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
+                    CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, inheritedLevel, updateCache: true);
+                    chara.m_nview.GetZDO().Set(ZDOVars.s_level, inheritedLevel);
                     CreatureSetupControl.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
                 }
                 CheckToMakeOffspringInfertile(chara);

@@ -12,7 +12,6 @@ namespace StarLevelSystem.modules.Raids
 {
     internal static class RaidPatches
     {
-        internal static List<ActiveRaid> ActiveRaids = new List<ActiveRaid>();
 
         [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
         internal static class UpdatePlayerPrivateKeys {

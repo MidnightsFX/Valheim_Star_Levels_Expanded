@@ -326,7 +326,7 @@ namespace StarLevelSystem.modules.Raids
         }
 
         public static IEnumerator DetermineRemoteSpawnLocations(Vector3 origin, ListVectorZNetProperty resultset,  int numTargets, BoolZNetProperty pointsReady, float maxDistance = 300f, Heightmap.Biome targetBiome = Heightmap.Biome.None) {
-            List<Vector3> spawn_locations = new List<Vector3>();
+            List<SerializableVector3> spawn_locations = new List<SerializableVector3>();
             //Logger.LogDebug($"Starting spawn destination in incrments of {range_increment} from x{origin.x} y{origin.y} z{origin.z}");
             int spawn_location_attempts = 0;
             float originalMaxDistance = maxDistance;

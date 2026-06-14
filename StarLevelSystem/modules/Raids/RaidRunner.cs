@@ -64,7 +64,7 @@ namespace StarLevelSystem.modules.Raids {
             }
 
             if (RaidSpawnPointsReady.Get()) {
-                List<Vector3> determinedSpawnPoints = RaidSpawnPoints.Get();
+                List<SerializableVector3> determinedSpawnPoints = RaidSpawnPoints.Get();
                 if (determinedSpawnPoints == null || determinedSpawnPoints.Count == 0) {
                     Logger.LogRaid($"Raid failed to find any valid spawn points, stopping raid.");
                     RemoveExistingMapPins();
@@ -100,7 +100,7 @@ namespace StarLevelSystem.modules.Raids {
                     Logger.LogRaid($"Found {connectedSpawns.Count} alive creatures");
 
                     if (connectedSpawns.Count <= rmonitor.RaidSpawnDef.MaxSpawned) {
-                        List<Vector3> spawnPoints = RaidSpawnPoints.Get();
+                        List<SerializableVector3> spawnPoints = RaidSpawnPoints.Get();
                         GameObject creaturePrefab = PrefabManager.Instance.GetPrefab(rmonitor.RaidSpawnDef.PrefabName);
                         if (creaturePrefab == null) {
                             Logger.LogWarning($"The creature defined for this wave is invalid and will be skipped. |{rmonitor.RaidSpawnDef.PrefabName}|");

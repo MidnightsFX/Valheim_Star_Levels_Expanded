@@ -599,7 +599,7 @@ namespace StarLevelSystem.common
             public List<string> PlayerPrivatekeys { get; set; } = new List<string>();
             public List<RaidDefinition> PlayerAvailableRaids { get; set; } = new List<RaidDefinition>();
             public double NextRaidableTime { get; set; } = 0f;
-            public Vector3 CurrentRaidPosition { get; set; }
+            public SerializableVector3 CurrentRaidPosition { get; set; }
             public Dictionary<string, double> LastRaidByName { get; set; } = new Dictionary<string, double>();
         }
 
@@ -611,13 +611,6 @@ namespace StarLevelSystem.common
         public class PlayerRaidHistory {
             public double NextRaidableTime { get; set; }
             public Dictionary<string, double> LastRaidByName { get; set; }
-        }
-
-        public class ActiveRaid {
-            public Vector3 Position { get; set; }
-            public RaidDefinition Definition { get; set; }
-            public float StartTime { get; set; }
-            public ZNetPeer TargetPlayer { get; set; }
         }
 
         public class RaidConfiguration {
@@ -637,7 +630,7 @@ namespace StarLevelSystem.common
         }
 
         public class NetworkRaidRequest {
-            public Vector3 RaidPostion { get; set; } = Vector3.zero;
+            public SerializableVector3 RaidPostion { get; set; } = Vector3.zero;
             public RaidDefinition Raid { get; set; }
         }
 
@@ -1133,6 +1126,31 @@ namespace StarLevelSystem.common
             protected abstract void SetValue(T value);
         }
 
+        [Serializable]
+        public struct SerializableVector3 {
+            public float x;
+            public float y;
+            public float z;
+
+            public SerializableVector3(float rX, float rY, float rZ) {
+                x = rX;
+                y = rY;
+                z = rZ;
+            }
+
+            public override string ToString() {
+                return String.Format("[{0}, {1}, {2}]", x, y, z);
+            }
+
+            public static implicit operator Vector3(SerializableVector3 rValue) {
+                return new Vector3(rValue.x, rValue.y, rValue.z);
+            }
+
+            public static implicit operator SerializableVector3(Vector3 rValue) {
+                return new SerializableVector3(rValue.x, rValue.y, rValue.z);
+            }
+        }
+
         public class ListStringZNetProperty : ZNetProperty<List<string>>
         {
             BinaryFormatter binFormatter = new BinaryFormatter();
@@ -1360,21 +1378,21 @@ namespace StarLevelSystem.common
             }
         }
 
-        public class ListVectorZNetProperty : ZNetProperty<List<Vector3>> {
-            public ListVectorZNetProperty(string key, ZNetView zNetView, List<Vector3> defaultValue)
+        public class ListVectorZNetProperty : ZNetProperty<List<SerializableVector3>> {
+            public ListVectorZNetProperty(string key, ZNetView zNetView, List<SerializableVector3> defaultValue)
                 : base(key, zNetView, defaultValue) {
             }
 
-            public override List<Vector3> Get() {
+            public override List<SerializableVector3> Get() {
                 byte[] bytes = zNetView.GetZDO().GetByteArray(Key);
                 if (bytes is null) { return null; }
                 
-                List<Vector3> result = new List<Vector3>();
+                List<SerializableVector3> result = new List<SerializableVector3>();
 
                 int length = bytes.Length / 12;
 
                 for (int i = 0; i < length; ++i) {
-                    result.Add(new Vector3(
+                    result.Add(new SerializableVector3(
                         BitConverter.ToSingle(bytes, i * 12 + 0), 
                         BitConverter.ToSingle(bytes, i * 12 + 4), 
                         BitConverter.ToSingle(bytes, i * 12 + 8)
@@ -1383,7 +1401,7 @@ namespace StarLevelSystem.common
                 return result;
             }
 
-            protected override void SetValue(List<Vector3> value) {
+            protected override void SetValue(List<SerializableVector3> value) {
                 byte[] bytes = new byte[value.Count * 12];
 
                 for (int i = 0; i < value.Count; ++i) {

@@ -1,3 +1,9 @@
+**0.20.7**
+ ---
+ ```
+- Fixes Raid network serialization occasionally running into errors starting
+```
+
 **0.20.6**
  ---
  ```

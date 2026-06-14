@@ -236,6 +236,12 @@ namespace StarLevelSystem.common
             SpawnMiniboss
         }
 
+        public enum ModifierDisplayStyle {
+            Icons,
+            Stars,
+            None
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -531,7 +537,7 @@ namespace StarLevelSystem.common
                 }
                 if (StarVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(StarVisual)) {
                     string path = $"assets/custom/starlevels/icons/{StarVisual}.png";
-                    if (ValConfig.UseStarShapedModifierIcons.Value) { path = $"assets/custom/starlevels/icons2/{StarVisual}.png"; }
+                    if (CreatureModifiersData.SelectedModifierDisplayStyle == ModifierDisplayStyle.Stars) { path = $"assets/custom/starlevels/icons2/{StarVisual}.png"; }
                     Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>(path);
                     CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, game_obj);
                 }

@@ -145,7 +145,7 @@ namespace StarLevelSystem
         public static ConfigEntry<bool> EnableDebugOutputForDamage;
         public static ConfigEntry<bool> EnableDebugOutputLevelRolls;
         public static ConfigEntry<bool> EnableDebugLootDetails;
-        public static ConfigEntry<bool> UseStarShapedModifierIcons;
+        public static ConfigEntry<string> ModifierIconDisplayStyle;
 
         public static ConfigEntry<float> EnemyHealthbarScalarX;
         public static ConfigEntry<float> EnemyHealthbarScalarY;
@@ -339,7 +339,9 @@ namespace StarLevelSystem
             SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Wether or not creatures spawned from the Splitter modifier inherit the level of the parent creature.");
             LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
-            UseStarShapedModifierIcons = BindServerConfig("Modifiers", "UseStarShapedModifierIcons", true, "When enabled, uses modifier icons that are star shaped. When disabled, uses non-star shaped modifier icons. Requires a restart.", advanced: true);
+            ModifierIconDisplayStyle = BindServerConfig("Modifiers", "ModifierIconDisplayStyle", ModifierDisplayStyle.Stars.ToString(), "Style to display modifiers as on the creature HUD. Icons = detailed modifier icons, Stars = star-shaped modifier icons, None = plain default stars.", new AcceptableValueList<string>(ModifierDisplayStyle.Icons.ToString(), ModifierDisplayStyle.Stars.ToString(), ModifierDisplayStyle.None.ToString()));
+            CreatureModifiersData.ParseModifierDisplayStyle();
+            ModifierIconDisplayStyle.SettingChanged += CreatureModifiersData.ModifierDisplayStyleChanged;
 
             EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
             EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);

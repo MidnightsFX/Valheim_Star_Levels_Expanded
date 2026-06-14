@@ -16,6 +16,9 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.UI {
     internal static class UIHudControl {
+
+        internal static Color StarColor = new Color(1, 0.8174f, 0.3382f, 1f);
+
         public class StarLevelHud {
             public bool IsBoss { get; set; }
             public string CreatureNameLocalized { get; set; }
@@ -382,17 +385,20 @@ namespace StarLevelSystem.modules.UI {
             if (mods == null) { mods = new Dictionary<string, ModifierType>(); }
             // Logger.LogDebug($"Building sprite list");
             extended_hud.DisplayedMods = mods.Keys.ToList();
-            foreach (KeyValuePair<string, ModifierType> entry in mods) {
-                if (entry.Key == CreatureModifiers.NoMods) { continue; }
-                //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
-                CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
-                if (cmd.StarVisual != null) {
-                    if (CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
-                        Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
-                        starReplacements.Add(star, starsprite);
+            // When the display style is None, leave starReplacements empty so the slots fall through to the default stars below.
+            if (CreatureModifiersData.SelectedModifierDisplayStyle != ModifierDisplayStyle.None) {
+                foreach (KeyValuePair<string, ModifierType> entry in mods) {
+                    if (entry.Key == CreatureModifiers.NoMods) { continue; }
+                    //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
+                    CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
+                    if (cmd.StarVisual != null) {
+                        if (CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
+                            Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
+                            starReplacements.Add(star, starsprite);
+                        }
                     }
+                    star++;
                 }
-                star++;
             }
 
             int star_index = 2;
@@ -424,6 +430,7 @@ namespace StarLevelSystem.modules.UI {
                     if (extended_hud.StarLevelFront[star_index] != null) {
                         extended_hud.StarLevelFront[star_index].sprite = defaultStar;
                         extended_hud.StarLevelFront[star_index].rectTransform.sizeDelta = new Vector2(14, 14);
+                        extended_hud.StarLevelFront[star_index].color = StarColor;
                     }
                     if (extended_hud.StarLevelBack[star_index] != null) {
                         extended_hud.StarLevelBack[star_index].sprite = defaultStar;

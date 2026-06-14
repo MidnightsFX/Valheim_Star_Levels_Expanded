@@ -3,6 +3,7 @@ using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using StarLevelSystem.Modifiers;
 using UnityEngine;
 using static Heightmap;
@@ -27,6 +28,28 @@ namespace StarLevelSystem.Data
         public static Dictionary<string, GameObject> LoadedModifierEffects = new Dictionary<string, GameObject>();
         public static Dictionary<string, GameObject> LoadedSecondaryEffects = new Dictionary<string, GameObject>();
         public static Dictionary<string, Sprite> LoadedModifierSprites = new Dictionary<string, Sprite>();
+
+        // Drives how creature modifiers are shown on the HUD icon/star row above the health bar.
+        // Icons = detailed icons (icons/ folder), Stars = star-shaped icons (icons2/ folder), None = plain default stars.
+        public static ModifierDisplayStyle SelectedModifierDisplayStyle = ModifierDisplayStyle.Icons;
+
+        // Initial parse only (no reload) - called once after the config binds, before LoadPrefabs runs.
+        internal static void ParseModifierDisplayStyle() {
+            SelectedModifierDisplayStyle = (ModifierDisplayStyle)Enum.Parse(typeof(ModifierDisplayStyle), ValConfig.ModifierIconDisplayStyle.Value);
+        }
+
+        // Live re-parse + reload (SettingChanged / RPC / file-watch).
+        internal static void ModifierDisplayStyleChanged(object s, EventArgs e) {
+            ParseModifierDisplayStyle();
+            // Icons<->Stars load from different folders, so drop and reload the sprite cache.
+            LoadedModifierSprites.Clear();
+            LoadPrefabs();
+            // Existing on-screen HUDs only rebuild icons when level/mods change (see UpdateHudforAllLevels),
+            // so force a rebuild for a style-only change.
+            foreach (uint id in modules.UI.UIHudControl.characterExtendedHuds.Keys.ToList()) {
+                modules.UI.UIHudControl.RemoveExtendedHudFromCache(id);
+            }
+        }
 
         public static List<string> NonCombatCreatures = new List<string>() {
             "Deer",

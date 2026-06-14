@@ -36,6 +36,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         public void FixedUpdate() {
             if (ValConfig.EnableNemesisSystem.Value == false) { return; }
             if (setup == false|| ZNet.instance == null) { return; }
+            if (player == null) { setup = false; return; }   // Unity == handles destroyed objects; re-setups on next Player.Load
 
             // Score updater
             if (ZNet.instance.GetTimeSeconds() >= nextRecalcTime) {

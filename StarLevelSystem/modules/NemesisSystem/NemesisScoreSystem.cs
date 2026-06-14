@@ -69,6 +69,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         public static void UpdateScore(Player player) {
+            if (player == null || player.m_nview == null || player.m_nview.GetZDO() == null) { return; }
+            if (NemesisSystem.PlayerScore == null) { return; }
             DataObjects.NemesisScore cfg = NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem;
 
             DamageScoreData dsd_recent = new DamageScoreData() {

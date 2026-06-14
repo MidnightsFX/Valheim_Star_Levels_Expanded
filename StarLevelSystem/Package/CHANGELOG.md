@@ -1,3 +1,13 @@
+**0.21.0**
+ ---
+ ```
+- Adds configuration to allow setting and changing how modifier icons/stars are displayed
+	- This now updates live
+	- Supports disabling all star/icon changes for modifiers (just name changes)
+	- Adds many of the missing Icon style displays for modifiers (note 2 are still missing and will be added as time permits)
+- Fixes a chance that the nemesis system could error during player death (now pauses correctly)
+```
+
 **0.20.7**
  ---
  ```

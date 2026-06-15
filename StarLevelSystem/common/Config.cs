@@ -41,6 +41,8 @@ namespace StarLevelSystem
         internal static String nemesisFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisSettingsFileName);
         internal static String nemesisLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisLogFileName);
         internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
+        internal const string ZoneDataFileName = "ZoneData.yaml";
+        internal static String zoneDataSavedDataPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ZoneDataFileName);
 
         internal static bool RecievedConfigsFromServer = false;
 
@@ -166,6 +168,11 @@ namespace StarLevelSystem
 
         public static ConfigEntry<bool> EnableNemesisSystem;
         public static ConfigEntry<bool> EnableDebugNemesisDetails;
+
+        public static ConfigEntry<bool> EnableZoneScalingBonus;
+        public static ConfigEntry<float> ZoneLevelBonusPerLevel;
+        public static ConfigEntry<int> ZoneKillsPerLevelUp;
+        public static ConfigEntry<bool> EnableZoneMapOverlay;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
 
@@ -324,6 +331,11 @@ namespace StarLevelSystem
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.");
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
+
+            EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
+            ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
+            ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
+            EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");

@@ -1364,6 +1364,29 @@ namespace StarLevelSystem.common
             }
         }
 
+        [Serializable]
+        public class ZoneData {
+            public int ZoneId { get; set; }
+            public float MinX { get; set; }
+            public float MaxX { get; set; }
+            public float MinZ { get; set; }
+            public float MaxZ { get; set; }
+            public int ZoneLevel { get; set; } = 1;
+            public int TotalKills { get; set; } = 0;
+            public double LastDecayTimestamp { get; set; } = 0;
+
+            public bool ContainsPosition(Vector3 pos) =>
+                pos.x >= MinX && pos.x <= MaxX && pos.z >= MinZ && pos.z <= MaxZ;
+
+            public float CenterX => (MinX + MaxX) / 2f;
+            public float CenterZ => (MinZ + MaxZ) / 2f;
+        }
+
+        public class ZoneSystemSaveData {
+            public List<ZoneData> Zones { get; set; } = new List<ZoneData>();
+            public string WorldName { get; set; }
+        }
+
         public class RaidMonitorListZNetProperty : ZNetProperty<List<RaidMonitor>> {
             public RaidMonitorListZNetProperty(string key, ZNetView zNetView, List<RaidMonitor> defaultValue) : base(key, zNetView, defaultValue) {
             }

@@ -13,7 +13,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
-namespace StarLevelSystem.Modifiers.Control
+namespace StarLevelSystem.modules.Control
 {
     public static class CreatureModifiers
     {

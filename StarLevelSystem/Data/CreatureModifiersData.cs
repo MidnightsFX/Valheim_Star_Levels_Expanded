@@ -692,6 +692,8 @@ namespace StarLevelSystem.Data
             // Logger.LogDebug($"Building probability entries for creature {creature} with {modifiers.Count} modifiers");
             foreach (var entry in modifiers) {
                 // Logger.LogDebug($"Checking modifier {entry.Key}");
+                // Skip modifiers that have been disabled
+                if (!entry.Value.Enabled) { continue; }
                 // Skip if in the deny list
                 if (entry.Value.UnallowedCreatures != null && entry.Value.UnallowedCreatures.Contains(creature)) { continue; }
                 if (entry.Value.AllowedBiomes != null && !entry.Value.AllowedBiomes.Contains(biome)) { continue; }

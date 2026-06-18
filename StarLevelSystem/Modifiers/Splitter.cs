@@ -1,8 +1,8 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Control;
 using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections.Generic;

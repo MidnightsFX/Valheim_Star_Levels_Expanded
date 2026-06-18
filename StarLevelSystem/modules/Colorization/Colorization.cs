@@ -24,6 +24,7 @@ namespace StarLevelSystem.modules
         };
 
         public static List<Color> mapRingColors = new List<Color>();
+        public static List<Color> zoneOverlayColors = new List<Color>();
         public static readonly Dictionary<string, string> defaultColors = new Dictionary<string, string>()
         {
             { "Red",    "#ff1a1a" },
@@ -38,6 +39,14 @@ namespace StarLevelSystem.modules
             { "Brown",  "#b37700" },
             { "Black",  "#333333" },
             { "White",  "#f2f2f2" },
+            // Light/dark variants used by the zone overlay heat-map gradient.
+            { "LightYellow", "#ffff99" },
+            { "LightOrange", "#ffc266" },
+            { "DarkOrange",  "#cc6600" },
+            { "LightRed",    "#ff6666" },
+            { "DarkRed",     "#b30000" },
+            { "LightPurple", "#e0b3ff" },
+            { "DarkPurple",  "#8000b3" },
         };
 
         public static ColorDef defaultColorization = new ColorDef()
@@ -254,19 +263,31 @@ namespace StarLevelSystem.modules
 
         public static void UpdateMapColorSelection()
         {
-            mapRingColors.Clear();
-            foreach (string colorstring in ValConfig.DistanceRingColorOptions.Value.Split(',').ToList())
+            ParseColorOptions(ValConfig.DistanceRingColorOptions.Value, mapRingColors, "distance ring");
+        }
+
+        public static void UpdateZoneOverlayColorSelection()
+        {
+            ParseColorOptions(ValConfig.ZoneOverlayColorOptions.Value, zoneOverlayColors, "zone overlay");
+        }
+
+        // Parses a comma-separated list of named colors (from defaultColors) and/or raw #hex strings
+        // into the supplied target list. Shared by the distance-ring and zone-overlay palettes.
+        private static void ParseColorOptions(string optionsCsv, List<Color> target, string contextLabel)
+        {
+            target.Clear();
+            foreach (string colorstring in optionsCsv.Split(',').ToList())
             {
                 if (colorstring.StartsWith("#"))
                 {
                     if (ColorUtility.TryParseHtmlString(colorstring.Trim(), out Color parsedColor))
                     {
-                        mapRingColors.Add(parsedColor);
+                        target.Add(parsedColor);
                         continue;
                     }
                     else
                     {
-                        Logger.LogWarning($"Unable to parse color string {colorstring} for distance ring colors. It will be skipped");
+                        Logger.LogWarning($"Unable to parse color string {colorstring} for {contextLabel} colors. It will be skipped");
                         continue;
                     }
                 }
@@ -275,7 +296,7 @@ namespace StarLevelSystem.modules
                 {
                     if (ColorUtility.TryParseHtmlString(htmlcolor, out Color parsedColor))
                     {
-                        mapRingColors.Add(parsedColor);
+                        target.Add(parsedColor);
                     }
                 }
             }

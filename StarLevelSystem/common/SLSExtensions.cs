@@ -1,6 +1,6 @@
 ﻿using HarmonyLib;
 using Splatform;
-using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Control;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -274,6 +274,21 @@ namespace StarLevelSystem.common
             if (float.IsNaN(dmg)) { dmg = 100f; }
             Logger.LogDebug($"Estimated {chara.m_name} damage as: {dmg}");
             return dmg;
+        }
+
+        public static SortedDictionary<int, float> MergeSortedDictionary(this SortedDictionary<int, float> primaryDict, SortedDictionary<int, float> otherDict, bool addative = true) {
+            foreach (var key in otherDict.Keys) {
+                if (primaryDict.ContainsKey(key)) {
+                    if (addative) {
+                        primaryDict[key] += otherDict[key];
+                    } else {
+                        primaryDict[key] = otherDict[key];
+                    }
+                } else {
+                    primaryDict.Add(key, otherDict[key]);
+                }
+            }
+            return primaryDict;
         }
 
         public static BiomeSpecificSetting MutatingMergeBiomeConfigs(BiomeSpecificSetting prioritycfg, BiomeSpecificSetting othercfg)

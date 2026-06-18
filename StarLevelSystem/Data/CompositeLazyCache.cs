@@ -1,7 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
-using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.Control;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.LevelSystem;
@@ -42,6 +42,12 @@ namespace StarLevelSystem.Data
         internal static void FlushCache() {
             Logger.LogDebug("Flushing creature cache...");
             SessionCache.Clear();
+        }
+
+        // Safe check for zownership
+        public static bool IsZOwner(Character character) {
+            if (character == null || character.m_nview == null) { return false; }
+            return character.m_nview.IsOwner();
         }
 
         public static CharacterCacheEntry GetCacheEntry(uint cid)
@@ -106,10 +112,19 @@ namespace StarLevelSystem.Data
             characterEntry.ModifiersRequired = requiredModifiers;
 
             characterEntry.CreatureModifiers = GetCreatureModifiers(character);
-            // Check for level or set it
-            //Logger.LogDebug("Setting creature level");
-            characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, leveloverride);
 
+            // Only allowed to set levels if this is the ZOwner
+            bool isOwner = IsZOwner(character);
+            characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, biome, leveloverride, allowRoll: isOwner);
+
+            // Build creature name
+            characterEntry.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(character, characterEntry.CreatureModifiers);
+
+            // Update Level and health, for non-zowners, once it has been set.
+            if (isOwner == false && characterEntry.Level > 0 && character.m_level != characterEntry.Level) {
+                character.m_level = characterEntry.Level;
+                character.SetupMaxHealth();
+            }
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");
@@ -122,6 +137,11 @@ namespace StarLevelSystem.Data
 
             // skip setting cache if the creature is gone already
             uint uid = character.GetZDOID().ID;
+            
+            // If this creatures level wasn't setup yet, we do not cache it so it is refreshed until the values are set.
+            if (characterEntry.Level <= 0) {
+                return characterEntry;
+            }
             //Logger.LogDebug($"Determined {creatureName} level {characterEntry.Level} Setting cache {uid}");
             if (SessionCache.ContainsKey(uid)) {
                 if (updateCache) {
@@ -138,6 +158,8 @@ namespace StarLevelSystem.Data
         // SAFE to re-run
         public static void StartZOwnerCreatureRoutines(Character chara, CharacterCacheEntry characterEntry, bool spawnratecheck = true) {
             if (characterEntry == null || chara == null) { return; }
+            // This MUST only run on zowners
+            if (IsZOwner(chara) == false) { return; }
             if (characterEntry.Level == 0) { characterEntry.Level = 1; }
 
             // Destroy character if its selected for deletion
@@ -176,7 +198,7 @@ namespace StarLevelSystem.Data
 
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
-            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || LevelSelection.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value) {
                 chara.SetLevel(characterEntry.Level);
             }
 

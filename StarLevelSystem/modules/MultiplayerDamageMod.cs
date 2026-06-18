@@ -34,7 +34,7 @@ namespace StarLevelSystem.modules
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
                 if (playerDifficulty >= ValConfig.MultiplayerScalingRequiredPlayersNearby.Value) {
-                    __result = 1f - (playerDifficulty * ValConfig.MultiplayerEnemyHealthModifier.Value);
+                    __result = Mathf.Max(1f - (playerDifficulty * ValConfig.MultiplayerEnemyHealthModifier.Value), ValConfig.MultiplayerEnemyMinDamageTaken.Value);
                 } else {
                     __result = 1f;
                 }

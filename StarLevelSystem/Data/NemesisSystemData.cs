@@ -35,7 +35,7 @@ namespace StarLevelSystem.Data
                 DeathScoreReduction = 1500f,
             },
             GaurenteedChanges = new NemesisGaurenteedChanges() {
-                FirstBossSetLevel = true,
+                FirstBossSetLevel = false,
                 FirstBossLevel = 1,
             },
             ChanceChanges = new NemesisChanceChanges() { 

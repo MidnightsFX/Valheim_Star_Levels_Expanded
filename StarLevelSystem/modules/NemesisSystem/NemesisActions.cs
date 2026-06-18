@@ -3,6 +3,7 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.LevelSystem;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -203,6 +204,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
                             }
                             if (spawn.IsBoss) {
                                 spawnChara.m_boss = true;
+                                // Persist boss status so the wide boss healthbar survives reloads and shows
+                                // on other clients (Character.m_boss itself is not networked/saved).
+                                if (spawnChara.m_nview != null) {
+                                    spawnChara.m_nview.GetZDO().Set(SLS_NEMESIS_BOSS, true);
+                                }
                                 spawnedDetails += "Miniboss Spawn ";
                             }
                             if (string.IsNullOrEmpty(spawn.CustomName) == false) {
@@ -215,7 +221,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         if (spawnAI != null) {
                             CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
                         }
-                        CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawn.ForcedLevel);
+                        // Level generators (inline or referenced) roll a level that overrides ForcedLevel when configured.
+                        int rolledLevel = LevelGeneratorResolver.RollLevel(spawn.LevelupGenerators, spawn.LevelupGeneratorRefs);
+                        int spawnLevelOverride = rolledLevel > 0 ? rolledLevel : spawn.ForcedLevel;
+                        CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawnLevelOverride);
                         cce.Level = Mathf.Min(entry.Value.LevelBonus + cce.Level, ValConfig.MaxLevel.Value);
                         if (spawn.CreaturePerLevelValueModifiers != null) {
                             cce.CreaturePerLevelValueModifiers = spawn.CreaturePerLevelValueModifiers;

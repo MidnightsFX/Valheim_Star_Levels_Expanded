@@ -1,7 +1,7 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Control;
 using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections.Generic;
@@ -17,6 +17,7 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.UI {
     internal static class UIHudControl {
 
+        internal static List<StarLevelHud> CurrentBossHuds = new List<StarLevelHud>();
         internal static Color StarColor = new Color(1, 0.8174f, 0.3382f, 1f);
 
         public class StarLevelHud {
@@ -52,6 +53,20 @@ namespace StarLevelSystem.modules.UI {
         public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject HealthText;
         static Sprite defaultStar;
+
+        // --- Boss healthbar stacking -----------------------------------------------------------------
+        // Multiple active boss bars are stacked top-down by nudging each bar's anchoredPosition.y per row.
+        // We never reparent or add a layout group: a Unity layout group force-resets a child's anchors to
+        // the corner and (with childControlWidth off) leaves it with no width, which squished the bars.
+        // Manual offsetting leaves each bar's native anchors / width / internal layout completely untouched.
+        private const float bossBarFallbackHeight = 44f; // row-height hint if the template height can't be measured
+
+        // Boss-hud template defaults, captured once: anchored position is row 0, height seeds the row step.
+        private static bool bossDefaultsCaptured = false;
+        private static Vector2 bossHudDefaultAnchoredPos;
+        private static float bossHudDefaultHeight = bossBarFallbackHeight;
+
+        internal static GameObject BossHudRoot;
 
         internal static void SetDefaultStar() {
             defaultStar = PrefabManager.Cache.GetPrefab<Sprite>("craft_icon");
@@ -271,6 +286,11 @@ namespace StarLevelSystem.modules.UI {
 
                 extended_hud.IsBoss = ehud.m_character.IsBoss();
 
+                // Track this boss hud for boss hud sizing and ordering
+                if (extended_hud.IsBoss) {
+                    CurrentBossHuds.Add(extended_hud);
+                }
+
                 // Modify the size of the health bar if its enabled
                 if ((ValConfig.EnemyHealthbarScalarX.Value != 1f || ValConfig.EnemyHealthbarScalarY.Value != 1f) && extended_hud.IsBoss == false) {
                     RectTransform healthRect = ehud.m_gui.transform.Find("Health").GetComponent<RectTransform>();
@@ -297,6 +317,16 @@ namespace StarLevelSystem.modules.UI {
                     extended_hud.HealthText = HealthTextHolder.GetComponent<TextMeshProUGUI>();
                     // Use a slightly diminishing scale as otherwise things get overscaled easily
                     extended_hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
+
+                    
+                    extended_hud.HealthText.font = extended_hud.Hudlink.m_name.font;
+                    // Health text boss fixes? resize?
+                    if (extended_hud.IsBoss) {
+                        RectTransform hthRT = HealthTextHolder.transform as RectTransform;
+                        hthRT.localPosition = new Vector3(0, 0, 0);
+                        extended_hud.HealthText.fontSize = 20f;
+                        extended_hud.HealthText.characterSpacing = 12f;
+                    }
                 }
 
                 UpdateHudModifiers(czid, extended_hud, mods);
@@ -457,6 +487,43 @@ namespace StarLevelSystem.modules.UI {
                 extended_hud.StarLevelNBackImage.rectTransform.sizeDelta = new Vector2(21, 21);
             }
         } 
+
+        // Captures the boss-hud template's default anchored position and height so stacking starts from
+        // the right place. Called once, after the star holders are built onto the m_baseHudBoss template.
+        internal static void CaptureBossHudDefaults(GameObject baseHudBoss) {
+            if (bossDefaultsCaptured || baseHudBoss == null) { return; }
+
+            RectTransform bossRt = baseHudBoss.GetComponent<RectTransform>();
+            if (bossRt != null) {
+                bossHudDefaultAnchoredPos = bossRt.anchoredPosition;
+                if (bossRt.rect.height > 1f) { bossHudDefaultHeight = bossRt.rect.height; }
+            }
+
+            bossDefaultsCaptured = true;
+        }
+
+        // Runs once per frame (Postfix on EnemyHud.UpdateHuds). Stacks every active boss bar top-down by
+        // offsetting each one's anchoredPosition.y per row. Vanilla never repositions boss huds per-frame
+        // (UpdateHuds only screen-positions non-boss huds), so this is the only thing moving them. We never
+        // reparent or touch anchors/width, so each bar keeps its exact native layout.
+        public static void StackBossHuds(EnemyHud hud) {
+            if (hud == null || hud.m_huds == null) { return; }
+
+
+            // Sort boss huds by their ZDOID
+            UIHudControl.CurrentBossHuds.Sort((a, b) => a.Hudlink.m_character.GetZDOID().ID.CompareTo(b.Hudlink.m_character.GetZDOID().ID));
+
+
+
+            //float step = bossHudDefaultHeight + ValConfig.BossHealthbarStackSpacing.Value;
+            //for (int i = 0; i < bosses.Count; i++) {
+            //    RectTransform rt = bosses[i].m_gui.GetComponent<RectTransform>();
+            //    if (rt == null) { continue; }
+            //    // Row 0 == vanilla default position; each subsequent row drops by one bar-height + spacing.
+            //    // Only the Y is offset; anchors, pivot, width and X are left exactly as the template set them.
+            //    rt.anchoredPosition = new Vector2(bossHudDefaultAnchoredPos.x, bossHudDefaultAnchoredPos.y - i * step);
+            //}
+        }
 
         internal static void LoadAssets() {
             HealthText = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>("HealthText.prefab");

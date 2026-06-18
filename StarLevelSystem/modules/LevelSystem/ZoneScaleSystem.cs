@@ -11,35 +11,32 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class ZoneScaleSystem {
-        internal static List<ZoneData> Zones = new List<ZoneData>();
-        internal static bool zonesBuilt = false;
-        private static bool buildingZones = false;
-        private static bool decayRunning = false;
-        private static bool overlayAvailable = false;
-        private static int overlayUpdates = 0;
 
         // Grid resolution for island detection (world units per sample)
         private const float GridResolution = 100f;
+        private const string ZoneLayer = "SLS-ZoneLevels";
+        private static Color defaultColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
 
-        // Size constraints (world units)
-        private const float MinZoneSize = 750f;
-        private const float MaxZoneSize = 1500f;
+        private static readonly List<SerializableVector3> pendingDeaths = new List<SerializableVector3>();
+        private static bool flushRunning = false;
+        // Tracks Overlay rebuilds to prevent flickering
+        private static Coroutine overlayRebuildCoroutine;
 
         public static void Initialize() {
             if (!ValConfig.EnableZoneScalingBonus.Value) { return; }
-            if (zonesBuilt || buildingZones) { return; }
+            if (ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.buildingZones) { return; }
             if (ZNet.instance.IsDedicated()) {
                 Logger.LogDebug("Server is headless, skipping zone minimap generation.");
             }
-            if (LoadZoneData()) {
-                Logger.LogInfo($"Zone data loaded from file. {Zones.Count} zones available.");
-                zonesBuilt = true;
-                StartDecayCoroutine();
+            if (ZoneScaleSystemData.LoadZoneData()) {
+                Logger.LogInfo($"Zone data loaded from file. {ZoneScaleSystemData.Zones.Count} zones available.");
+                ZoneScaleSystemData.zonesBuilt = true;
+                ZoneScaleSystemData.StartDecayCoroutine();
                 DrawMinimapOverlay();
                 return;
             }
             Logger.LogInfo("No zone data found, building zone map from world...");
-            buildingZones = true;
+            ZoneScaleSystemData.buildingZones = true;
             TaskRunner.Run().StartCoroutine(BuildZoneMap());
         }
 
@@ -49,7 +46,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             if (WorldGenerator.instance == null) {
                 Logger.LogWarning("WorldGenerator not available, cannot build zone map.");
-                buildingZones = false;
+                ZoneScaleSystemData.buildingZones = false;
                 yield break;
             }
 
@@ -100,84 +97,40 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             Logger.LogDebug($"Found {regions.Count} connected land regions.");
 
-            // PHASE 3: Convert regions to candidate zones (compute bounding boxes)
-            var candidateZones = new List<ZoneData>();
+            // PHASE 3: Tile qualifying land onto a single global grid of MaxZoneSize cells.
+            // A region qualifies only if its bounding box is at least MinZoneSize on both axes;
+            // trivial islets are dropped (no zone). Every emitted zone is a cell of one global
+            // grid anchored at the world min corner, so any two zones are either identical
+            // (deduped below) or disjoint -> guaranteed non-overlapping.
+            float cellSize = ValConfig.MaxZoneSize.Value;
+            var cellZones = new Dictionary<long, ZoneData>();
             foreach (var region in regions) {
                 int minGX = region.Min(r => r.gx);
                 int maxGX = region.Max(r => r.gx);
                 int minGZ = region.Min(r => r.gz);
                 int maxGZ = region.Max(r => r.gz);
-                float minX = -worldRadius + minGX * GridResolution;
-                float maxX = -worldRadius + (maxGX + 1) * GridResolution;
-                float minZ = -worldRadius + minGZ * GridResolution;
-                float maxZ = -worldRadius + (maxGZ + 1) * GridResolution;
-                candidateZones.Add(new ZoneData {
-                    MinX = minX, MaxX = maxX, MinZ = minZ, MaxZ = maxZ
-                });
-            }
-
-            // PHASE 4: Merge small zones into nearest neighbor
-            var mergedZones = new List<ZoneData>();
-            var smallZones = candidateZones.Where(z => (z.MaxX - z.MinX) < MinZoneSize || (z.MaxZ - z.MinZ) < MinZoneSize).ToList();
-            var validZones = candidateZones.Where(z => (z.MaxX - z.MinX) >= MinZoneSize && (z.MaxZ - z.MinZ) >= MinZoneSize).ToList();
-
-            foreach (var small in smallZones) {
-                float sCenterX = small.CenterX;
-                float sCenterZ = small.CenterZ;
-                ZoneData nearest = validZones.Count > 0
-                    ? validZones.OrderBy(z => Mathf.Pow(z.CenterX - sCenterX, 2) + Mathf.Pow(z.CenterZ - sCenterZ, 2)).First()
-                    : (mergedZones.Count > 0 ? mergedZones.OrderBy(z => Mathf.Pow(z.CenterX - sCenterX, 2) + Mathf.Pow(z.CenterZ - sCenterZ, 2)).First() : null);
-                if (nearest != null) {
-                    nearest.MinX = Mathf.Min(nearest.MinX, small.MinX);
-                    nearest.MaxX = Mathf.Max(nearest.MaxX, small.MaxX);
-                    nearest.MinZ = Mathf.Min(nearest.MinZ, small.MinZ);
-                    nearest.MaxZ = Mathf.Max(nearest.MaxZ, small.MaxZ);
-                } else {
-                    mergedZones.Add(small);
+                float regionWidth = (maxGX - minGX + 1) * GridResolution;
+                float regionDepth = (maxGZ - minGZ + 1) * GridResolution;
+                if (regionWidth < ValConfig.MinZoneSize.Value || regionDepth < ValConfig.MinZoneSize.Value) {
+                    continue; // island too small to scale; skip it entirely
+                }
+                foreach (var (gx, gz) in region) {
+                    // Sample center -> global cell index (floored from the world min corner).
+                    float wx = -worldRadius + (gx + 0.5f) * GridResolution;
+                    float wz = -worldRadius + (gz + 0.5f) * GridResolution;
+                    int gcx = Mathf.FloorToInt((wx + worldRadius) / cellSize);
+                    int gcz = Mathf.FloorToInt((wz + worldRadius) / cellSize);
+                    long key = ((long)(uint)gcx << 32) | (uint)gcz;
+                    if (cellZones.ContainsKey(key)) { continue; }
+                    float cellMinX = -worldRadius + gcx * cellSize;
+                    float cellMinZ = -worldRadius + gcz * cellSize;
+                    cellZones[key] = new ZoneData {
+                        MinX = cellMinX, MaxX = cellMinX + cellSize,
+                        MinZ = cellMinZ, MaxZ = cellMinZ + cellSize
+                    };
                 }
             }
-            mergedZones.AddRange(validZones);
-
-            // PHASE 5: Subdivide large zones into MaxZoneSize cells
-            var finalZones = new List<ZoneData>();
-            foreach (var zone in mergedZones) {
-                float width = zone.MaxX - zone.MinX;
-                float depth = zone.MaxZ - zone.MinZ;
-                if (width <= MaxZoneSize && depth <= MaxZoneSize) {
-                    finalZones.Add(zone);
-                    continue;
-                }
-                int colCount = Mathf.CeilToInt(width / MaxZoneSize);
-                int rowCount = Mathf.CeilToInt(depth / MaxZoneSize);
-                float cellW = width / colCount;
-                float cellD = depth / rowCount;
-                for (int col = 0; col < colCount; col++) {
-                    for (int row = 0; row < rowCount; row++) {
-                        float cellMinX = zone.MinX + col * cellW;
-                        float cellMaxX = cellMinX + cellW;
-                        float cellMinZ = zone.MinZ + row * cellD;
-                        float cellMaxZ = cellMinZ + cellD;
-                        // Only keep cells that contain at least one land sample
-                        bool hasLand = false;
-                        for (int gx = 0; gx < gridDim && !hasLand; gx++) {
-                            float wx = -worldRadius + gx * GridResolution;
-                            if (wx < cellMinX || wx > cellMaxX) { continue; }
-                            for (int gz = 0; gz < gridDim && !hasLand; gz++) {
-                                float wz = -worldRadius + gz * GridResolution;
-                                if (wz >= cellMinZ && wz <= cellMaxZ && landGrid[gx, gz]) {
-                                    hasLand = true;
-                                }
-                            }
-                        }
-                        if (hasLand) {
-                            finalZones.Add(new ZoneData {
-                                MinX = cellMinX, MaxX = cellMaxX,
-                                MinZ = cellMinZ, MaxZ = cellMaxZ
-                            });
-                        }
-                    }
-                }
-            }
+            var finalZones = cellZones.Values.ToList();
 
             // Assign IDs and finalize
             int idCounter = 0;
@@ -185,13 +138,48 @@ namespace StarLevelSystem.modules.LevelSystem {
                 zone.ZoneId = idCounter++;
                 zone.LastDecayTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             }
-            Zones = finalZones;
-            zonesBuilt = true;
-            buildingZones = false;
-            Logger.LogInfo($"Zone map built: {Zones.Count} zones created.");
-            SaveZoneData();
-            StartDecayCoroutine();
+            ZoneScaleSystemData.Zones = finalZones;
+            ZoneScaleSystemData.BuildZoneIndex();
+            ZoneScaleSystemData.zonesBuilt = true;
+            ZoneScaleSystemData.buildingZones = false;
+            Logger.LogInfo($"Zone map built: {ZoneScaleSystemData.Zones.Count} zones created.");
+            ZoneScaleSystemData.SaveZoneData();
+            ZoneScaleSystemData.StartDecayCoroutine();
             DrawMinimapOverlay();
+        }
+
+        internal static void RebuildZones() {
+            if (!ValConfig.EnableZoneScalingBonus.Value) {
+                Logger.LogInfo("Zone scaling is disabled (EnableZoneScalingBonus=false); nothing to rebuild.");
+                return;
+            }
+            if (ZNet.instance == null) {
+                Logger.LogInfo("Not in a world; cannot rebuild zones.");
+                return;
+            }
+            if (ZoneScaleSystemData.buildingZones) {
+                Logger.LogInfo("Zone map is already building; please wait.");
+                return;
+            }
+
+            // Clear the existing minimap overlay so stale boundaries don't linger during the rebuild.
+            if (ZoneScaleSystemData.overlayAvailable && !ZNet.instance.IsDedicated() && MinimapManager.Instance != null) {
+                var existing = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: true);
+                if (existing != null) {
+                    int mapSize = existing.TextureSize * existing.TextureSize;
+                    existing.OverlayTex.SetPixels(new Color[mapSize]);
+                    existing.OverlayTex.Apply();
+                }
+            }
+
+            // Reset state and regenerate from the world.
+            ZoneScaleSystemData.Zones = new List<ZoneData>();
+            ZoneScaleSystemData.BuildZoneIndex();
+            ZoneScaleSystemData.zonesBuilt = false;
+            ZoneScaleSystemData.overlayAvailable = false;
+            ZoneScaleSystemData.buildingZones = true;
+            Logger.LogInfo("Rebuilding zone map from world...");
+            TaskRunner.Run().StartCoroutine(BuildZoneMap());
         }
 
         private static IEnumerable<(int, int)> Neighbors(int x, int z) {
@@ -201,159 +189,103 @@ namespace StarLevelSystem.modules.LevelSystem {
             yield return (x, z + 1);
         }
 
-        internal static ZoneData GetZoneForPosition(Vector3 pos) {
-            foreach (var zone in Zones) {
-                if (zone.ContainsPosition(pos)) { return zone; }
-            }
-            return null;
-        }
-
-        internal static SortedDictionary<int, float> SelectZoneLevelBonus(ZoneData zone) {
-            var result = new SortedDictionary<int, float>();
-            if (zone == null || zone.ZoneLevel <= 1) { return result; }
-            float bonus = (zone.ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
-            if (LevelSystemData.SLE_Level_Settings?.DefaultCreatureLevelUpChance == null) { return result; }
-            foreach (var key in LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance.Keys) {
-                result[key] = bonus;
-            }
-            return result;
-        }
-
+        // Runs on the creature's owner peer (which may be a client, not the server). We only record
+        // the death position and let the batched flush coroutine report it to the server.
         internal static void OnCreatureKilled(Vector3 pos) {
             if (!ValConfig.EnableZoneScalingBonus.Value) { return; }
-            if (!ZNet.instance.IsServer()) { return; }
-            if (!zonesBuilt) { return; }
-            ZoneData zone = GetZoneForPosition(pos);
-            if (zone == null) { return; }
-            zone.TotalKills++;
-            if (zone.TotalKills % ValConfig.ZoneKillsPerLevelUp.Value == 0) {
-                zone.ZoneLevel++;
-                Logger.LogDebug($"Zone {zone.ZoneId} leveled up to {zone.ZoneLevel} after {zone.TotalKills} kills.");
-                SaveZoneData();
-                TaskRunner.Run().StartCoroutine(UpdateMinimapOverlay());
-            } else if (zone.TotalKills % 10 == 0) {
-                SaveZoneData();
-            }
+            pendingDeaths.Add(pos);
+            StartKillReportFlush();
         }
 
-        private static void StartDecayCoroutine() {
-            if (decayRunning) { return; }
-            decayRunning = true;
-            TaskRunner.Run().StartCoroutine(DecayZoneLevels());
+        private static void StartKillReportFlush() {
+            if (flushRunning) { return; }
+            flushRunning = true;
+            TaskRunner.Run().StartCoroutine(FlushKillReports());
         }
 
-        private static IEnumerator DecayZoneLevels() {
+        // Periodically drains pendingDeaths. The authority (dedicated server or host) applies them
+        // directly; a remote client batches them into a single RPC to the server.
+        private static IEnumerator FlushKillReports() {
             while (true) {
-                yield return new WaitForSeconds(60f);
-                if (!zonesBuilt || Zones.Count == 0) { continue; }
-                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                bool changed = false;
-                foreach (var zone in Zones) {
-                    if (zone.ZoneLevel <= 1) { continue; }
-                    double elapsedHours = (now - zone.LastDecayTimestamp) / 3600.0;
-                    if (elapsedHours >= 1.0) {
-                        int hoursDecayed = (int)elapsedHours;
-                        zone.ZoneLevel = Mathf.Max(1, zone.ZoneLevel - hoursDecayed);
-                        zone.LastDecayTimestamp = now;
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    Logger.LogDebug("Zone levels decayed.");
-                    SaveZoneData();
-                    TaskRunner.Run().StartCoroutine(UpdateMinimapOverlay());
+                yield return new WaitForSeconds(ValConfig.KillReportFlushIntervalSeconds.Value);
+                if (pendingDeaths.Count == 0) { continue; }
+                if (ZNet.instance == null) { pendingDeaths.Clear(); continue; }
+                List<SerializableVector3> batch = new List<SerializableVector3>(pendingDeaths);
+                pendingDeaths.Clear();
+                if (ZNet.instance.IsServer()) {
+                    ZoneScaleSystemData.ApplyDeaths(batch);
+                } else {
+                    ZNetPeer server = ZNet.instance.GetServerPeer();
+                    if (server == null) { continue; }
+                    ValConfig.ZoneKillReportRPC.SendPackage(server.m_uid, ZoneScaleSystemData.SerializeDeaths(batch));
                 }
             }
         }
 
-        private static void SaveZoneData() {
-            try {
-                ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
-                var saveData = new ZoneSystemSaveData {
-                    Zones = Zones,
-                    WorldName = ZNet.instance?.GetWorldName() ?? "unknown"
-                };
-                File.WriteAllText(ValConfig.zoneDataSavedDataPath, DataObjects.yamlserializer.Serialize(saveData));
-            } catch (Exception e) {
-                Logger.LogWarning($"Failed to save zone data: {e.Message}");
-            }
-        }
-
-        private static bool LoadZoneData() {
-            try {
-                ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
-                if (!File.Exists(ValConfig.zoneDataSavedDataPath)) { return false; }
-                string yaml = File.ReadAllText(ValConfig.zoneDataSavedDataPath);
-                var loaded = DataObjects.yamldeserializer.Deserialize<ZoneSystemSaveData>(yaml);
-                if (loaded?.Zones == null || loaded.Zones.Count == 0) { return false; }
-                string currentWorld = ZNet.instance?.GetWorldName() ?? "";
-                if (!string.IsNullOrEmpty(loaded.WorldName) && loaded.WorldName != currentWorld) {
-                    Logger.LogInfo($"Zone data is for a different world ({loaded.WorldName} vs {currentWorld}), rebuilding.");
-                    return false;
-                }
-                Zones = loaded.Zones;
-                return true;
-            } catch (Exception e) {
-                Logger.LogWarning($"Failed to load zone data: {e.Message}");
-                return false;
-            }
-        }
-
-        private static void DrawMinimapOverlay() {
+        // Single entrypoint for map overlay building
+        internal static void DrawMinimapOverlay() {
             if (!ValConfig.EnableZoneMapOverlay.Value) { return; }
-            if (ZNet.instance.IsDedicated()) { return; }
-            TaskRunner.Run().StartCoroutine(BuildZoneMapOverlay());
+            if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
+            Orchestrator runner = TaskRunner.Run();
+            if (overlayRebuildCoroutine != null) { runner.StopCoroutine(overlayRebuildCoroutine); }
+            overlayRebuildCoroutine = runner.StartCoroutine(BuildZoneMapOverlay());
         }
 
-        private static IEnumerator UpdateMinimapOverlay() {
-            if (!ValConfig.EnableZoneMapOverlay.Value || ZNet.instance.IsDedicated()) { yield break; }
-            if (overlayAvailable) {
-                MinimapManager.MapOverlay existing = MinimapManager.Instance.GetMapOverlay("SLS-ZoneLevels");
-                if (existing != null) {
-                    int mapSize = existing.TextureSize * existing.TextureSize;
-                    existing.OverlayTex.SetPixels(new Color[mapSize]);
-                    existing.OverlayTex.Apply();
-                    overlayAvailable = false;
-                }
-            }
-            yield return BuildZoneMapOverlay();
+        public static void UpdateZoneOverlayColorsOnChange(object s, EventArgs e) {
+            Colorization.UpdateZoneOverlayColorSelection();
+            if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
+            DrawMinimapOverlay();
         }
 
         private static IEnumerator BuildZoneMapOverlay() {
             if (!ValConfig.EnableZoneMapOverlay.Value || ZNet.instance.IsDedicated()) { yield break; }
-            if (!zonesBuilt || Zones.Count == 0) { yield break; }
+            if (!ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) { yield break; }
             if (Minimap.instance == null) { yield break; }
 
-            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay("SLS-ZoneLevels");
+            // ignoreFog: true so zone boundaries render across the whole map
+            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: true);
             zoneOverlay.Enabled = true;
             int texSize = zoneOverlay.TextureSize;
             int mapSize = texSize * texSize;
+            // Build the whole frame into this local buffer; the live OverlayTex is left untouched
+            // until the single atomic SetPixels/Apply at the end, so the old overlay stays visible.
             Color[] pixels = new Color[mapSize];
-            zoneOverlay.OverlayTex.SetPixels(pixels);
 
-            List<Color> colors = Colorization.mapRingColors;
-            Color defaultColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
+            List<Color> colors = Colorization.zoneOverlayColors;
 
-            overlayUpdates = 0;
-            foreach (var zone in Zones) {
-                Color zoneColor = zone.ZoneLevel <= 1
-                    ? defaultColor
-                    : colors != null && colors.Count > 0
-                        ? colors[(zone.ZoneLevel - 1) % colors.Count]
-                        : defaultColor;
 
-                // Draw the 4 edges of the zone rectangle
-                yield return DrawZoneEdge(pixels, texSize, zone.MinX, zone.MinZ, zone.MaxX, zone.MinZ, zoneColor);
-                yield return DrawZoneEdge(pixels, texSize, zone.MinX, zone.MaxZ, zone.MaxX, zone.MaxZ, zoneColor);
-                yield return DrawZoneEdge(pixels, texSize, zone.MinX, zone.MinZ, zone.MinX, zone.MaxZ, zoneColor);
-                yield return DrawZoneEdge(pixels, texSize, zone.MaxX, zone.MinZ, zone.MaxX, zone.MaxZ, zoneColor);
+            // Configured pixel inset -> world units via the live minimap scale, so each outline is
+            // drawn slightly inside its cell and adjacent zones don't collapse onto one shared line.
+            Minimap.instance.WorldToPixel(Vector3.zero, out int sp0x, out _);
+            Minimap.instance.WorldToPixel(new Vector3(5000f, 0f, 0f), out int sp1x, out _);
+            float pixelsPerWorld = Mathf.Abs(sp1x - sp0x) / 5000f;
+            float outlineInset = pixelsPerWorld > 0f ? 1 / pixelsPerWorld : 0f;
+
+            ZoneScaleSystemData.overlayUpdates = 0;
+            foreach (var zone in ZoneScaleSystemData.Zones) {
+                Color zoneColor = defaultColor;
+                if (zone.ZoneLevel >= 1 && colors != null && colors.Count > 0) {
+                    zoneColor = colors[(zone.ZoneLevel - 1) % colors.Count];
+                }
+                zoneColor.a = ValConfig.ZoneOverlayColorTransparency.Value;
+
+                // Draw the 4 edges of the zone rectangle, inset slightly so neighbouring cells
+                // render as two parallel lines rather than one merged boundary. Fall back to the
+                // raw bounds if a cell is too small for the inset.
+                float ix0 = zone.MinX + outlineInset, ix1 = zone.MaxX - outlineInset;
+                float iz0 = zone.MinZ + outlineInset, iz1 = zone.MaxZ - outlineInset;
+                if (ix1 <= ix0 || iz1 <= iz0) { ix0 = zone.MinX; ix1 = zone.MaxX; iz0 = zone.MinZ; iz1 = zone.MaxZ; }
+                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix1, iz0, zoneColor); // bottom
+                yield return DrawZoneEdge(pixels, texSize, ix0, iz1, ix1, iz1, zoneColor); // top
+                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix0, iz1, zoneColor); // left
+                yield return DrawZoneEdge(pixels, texSize, ix1, iz0, ix1, iz1, zoneColor); // right
             }
 
             if (zoneOverlay == null) { yield break; }
             zoneOverlay.OverlayTex.SetPixels(pixels);
             zoneOverlay.OverlayTex.Apply();
-            overlayAvailable = true;
-            Logger.LogDebug($"Zone map overlay drawn for {Zones.Count} zones.");
+            ZoneScaleSystemData.overlayAvailable = true;
+            Logger.LogDebug($"Zone map overlay drawn for {ZoneScaleSystemData.Zones.Count} zones.");
         }
 
         private static IEnumerator DrawZoneEdge(Color[] pixels, int texSize, float x0, float z0, float x1, float z1, Color color) {
@@ -361,17 +293,25 @@ namespace StarLevelSystem.modules.LevelSystem {
             float dz = z1 - z0;
             float length = Mathf.Sqrt(dx * dx + dz * dz);
             int steps = Mathf.Max(1, Mathf.CeilToInt(length / 10f));
+            int border = 1; // Configure border size
+            int lo = -(border - 1) / 2;
+            int hi = border / 2;
             for (int i = 0; i <= steps; i++) {
                 float t = (float)i / steps;
                 float wx = x0 + dx * t;
                 float wz = z0 + dz * t;
                 Minimap.instance.WorldToPixel(new Vector3(wx, 0, wz), out int px, out int pz);
-                int idx = pz * texSize + px;
-                if (idx >= 0 && idx < pixels.Length) {
-                    pixels[idx] = color;
+                for (int oz = lo; oz <= hi; oz++) {
+                    int bz = pz + oz;
+                    if (bz < 0 || bz >= texSize) { continue; }
+                    for (int ox = lo; ox <= hi; ox++) {
+                        int bx = px + ox;
+                        if (bx < 0 || bx >= texSize) { continue; }
+                        pixels[bz * texSize + bx] = color;
+                    }
                 }
-                overlayUpdates++;
-                if (overlayUpdates % 3000 == 0) {
+                ZoneScaleSystemData.overlayUpdates++;
+                if (ZoneScaleSystemData.overlayUpdates % 3000 == 0) {
                     yield return new WaitForEndOfFrame();
                 }
             }

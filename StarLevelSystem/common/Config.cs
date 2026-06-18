@@ -10,6 +10,7 @@ using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Loot;
 using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -58,9 +59,12 @@ namespace StarLevelSystem
         internal static CustomRPC ClientClearNearbyEventsRPC;
         internal static CustomRPC SendNewNemesisBossRPC;
         internal static CustomRPC RemoveNemeisBossRPC;
+        internal static CustomRPC ZoneKillReportRPC;
+        internal static CustomRPC ZoneLevelSyncRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
+        public static ConfigEntry<int> MaxBossLevel;
         public static ConfigEntry<bool> OverlevedCreaturesGetRerolledOnLoad;
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
@@ -139,6 +143,7 @@ namespace StarLevelSystem
         public static ConfigEntry<int> MultiplayerScalingRequiredPlayersNearby;
         public static ConfigEntry<float> MultiplayerEnemyDamageModifier;
         public static ConfigEntry<float> MultiplayerEnemyHealthModifier;
+        public static ConfigEntry<float> MultiplayerEnemyMinDamageTaken;
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
         public static ConfigEntry<bool> OutputColorizationGeneratorsData;
@@ -153,6 +158,8 @@ namespace StarLevelSystem
         public static ConfigEntry<float> EnemyHealthbarScalarY;
         public static ConfigEntry<bool> EnableEnemyHeathbarNumberDisplay;
         public static ConfigEntry<float> HealthDisplayFontSizeAdjustment;
+        public static ConfigEntry<bool> StackMultipleBossHealthbars;
+        public static ConfigEntry<float> BossHealthbarStackSpacing;
 
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
         public static ConfigEntry<bool> OverrideCreatureModifiedHealth;
@@ -173,6 +180,13 @@ namespace StarLevelSystem
         public static ConfigEntry<float> ZoneLevelBonusPerLevel;
         public static ConfigEntry<int> ZoneKillsPerLevelUp;
         public static ConfigEntry<bool> EnableZoneMapOverlay;
+        public static ConfigEntry<float> MinZoneSize;
+        public static ConfigEntry<float> MaxZoneSize;
+        public static ConfigEntry<float> KillReportFlushIntervalSeconds;
+        public static ConfigEntry<string> ZoneOverlayColorOptions;
+        public static ConfigEntry<bool> ShowMinimapLevelIndicator;
+        public static ConfigEntry<float> ZoneOverlayColorTransparency;
+        public static ConfigEntry<bool> ShowQuickConfigureButton;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
 
@@ -198,6 +212,9 @@ namespace StarLevelSystem
             ClientClearNearbyEventsRPC = NetworkManager.Instance.AddRPC("SLS_ClientForceRemoveNearbyEventsRPC", OnServerRecieveConfigs, OnClientRecieveForceRemoveNearbyEvents);
             SendNewNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_SendNewNemesisBossRPC", OnServerRecieveNemesisBossAdd, OnClientRecieveMiniBossAdd);
             RemoveNemeisBossRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossRPC", OnServerRecieveNemesisBossRemove, OnClientRecieveMiniBossRemove);
+            // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
+            ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NoopRecieve);
+            ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerRecieveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
@@ -206,6 +223,8 @@ namespace StarLevelSystem
             SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(NemesisRPC, SendNemesisConfigs);
+            // Give joining clients the current (non-default) zone levels for their overlay / level bonuses.
+            SynchronizationManager.Instance.AddInitialSynchronization(ZoneLevelSyncRPC, ZoneScaleSystemData.SerializeLeveledZonesForSync);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -236,10 +255,21 @@ namespace StarLevelSystem
                 new ConfigDescription("Enables Detailed logging for the Raid system.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
+            ShowMinimapLevelIndicator = Config.Bind("Client config", "ShowMinimapLevelIndicator", true,
+                new ConfigDescription("Show a small ring/zone level readout next to the minimap. Each section is hidden when its scaling system is disabled.",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowMinimapLevelIndicator.SettingChanged += MinimapLevelIndicator.OnShowIndicatorChanged;
+            ShowQuickConfigureButton = Config.Bind("Client config", "ShowQuickConfigureButton", true,
+                new ConfigDescription("Show the StarLevelSystem quick configuration button on the main menu and (for hosts/admins) the pause menu.",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowQuickConfigureButton.SettingChanged += QuickConfigureTool.OnShowButtonChanged;
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 200);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have.", false, 1, 200);
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
+            MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The Maximum number of stars that a boss creature can have.", false, 1, 200);
             OverlevedCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up overleveled creatures if you reduce the max level.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
 
@@ -293,6 +323,7 @@ namespace StarLevelSystem
 
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
+            MultiplayerEnemyMinDamageTaken = BindServerConfig("Multiplayer", "MultiplayerEnemyMinDamageTaken", 0.2f, "Minimum amount of damage that enemies can take from multiplayer scaling. 0.2 = 20%", advanced: true);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);
             EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Wether or not creatures gain more health when players are grouped up.");
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Wether or not creatures gain more damage when players are grouped up.");
@@ -302,9 +333,6 @@ namespace StarLevelSystem
             ControlBossSpawns = BindServerConfig("LevelSystem", "ControlBossSpawns", true, "Forces boss creatures to be controlled by SLS. Bosses will not get star levels if this is disabled.");
             ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");
             //DistanceBonusMapsCanIncludeLowerLevels = BindServerConfig("LevelSystem", "DistanceBonusMapsCanIncludeLowerLevels", true, "When enabled makes the distance bonus configuration include the highest previously lower level defined keys, if they are not defined in the current level.");
-            SpawnsAlwaysControlled = BindServerConfig("LevelSystem", "SpawnsAlwaysControlled", "piece_TrainingDummy", "A list of creatures which always get their level set");
-            SpawnsAlwaysControlled.SettingChanged += LevelSelection.LeveledCreatureListChanged;
-            LevelSelection.SetupForceLeveledCreatureList();
             OffspringCanBeStrongerThanParents = BindServerConfig("LevelSystem", "OffspringCanBeStrongerThanParents", false, "When enabled, creatures that are bred can have higher levels than their parents. Otherwise, they will be capped at the highest parent level.");
             OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
             OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
@@ -325,10 +353,9 @@ namespace StarLevelSystem
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
             MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
-            RaidPerPlayerUpdateCheck = BindServerConfig("Raids", "RaidPerPlayerUpdateCheck", 10f, "The Interval in minutes between updating the valid raids for each player. Reduce if you want new raids to become available faster for players, increase to reduce pressure on server.", true, 1f, 120f);
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
-            EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.");
+            EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
 
@@ -336,6 +363,13 @@ namespace StarLevelSystem
             ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
             ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
             EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
+            MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 500f, 10000f);
+            MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 1000f, 10000f);
+            KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters.", true);
+            ZoneOverlayColorOptions = BindServerConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
+            ZoneOverlayColorOptions.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
+            ZoneOverlayColorTransparency = BindServerConfig("ZoneScaling", "ZoneOverlayColorTransparency", 0.5f, "Transparency value of the color used for zone boundaries.", true, 0f, 1f);
+            ZoneOverlayColorTransparency.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
@@ -359,6 +393,8 @@ namespace StarLevelSystem
             EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
             HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.");
             EnableEnemyHeathbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHeathbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
+            StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row) instead of overlapping them.");
+            BossHealthbarStackSpacing = BindServerConfig("UI", "BossHealthbarStackSpacing", 6f, "Vertical gap, in pixels, between stacked boss healthbars.", true, 0f, 40f);
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
@@ -640,6 +676,19 @@ namespace StarLevelSystem
             var levelsyaml = package.ReadString();
             LevelSystemData.UpdateYamlConfig(levelsyaml);
 
+            yield return null;
+        }
+
+        internal static IEnumerator NoopRecieve(long sender, ZPackage package) {
+            yield break;
+        }
+
+        // Server handler for ZoneKillReportRPC: a remote client reported a batch of death positions.
+        internal static IEnumerator OnServerReceiveZoneKills(long sender, ZPackage package) {
+            if (ZNet.instance == null || !ZNet.instance.IsServer()) { yield break; }
+            List<SerializableVector3> deaths = DataObjects.yamldeserializer.Deserialize<List<SerializableVector3>>(package.ReadString());
+            if (deaths == null) { yield break; }
+            ZoneScaleSystemData.ApplyDeaths(deaths);
             yield return null;
         }
 

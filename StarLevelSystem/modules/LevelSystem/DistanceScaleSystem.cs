@@ -68,6 +68,19 @@ namespace StarLevelSystem.modules.LevelSystem {
             return new SortedDictionary<int, float>() { };
         }
 
+        // Which distance band the position sits in: the count of DistanceLevelBonus thresholds (the
+        // rings drawn on the minimap) at or below the 2D distance from the ring center. 0 = inside the
+        // innermost ring. Used by the minimap level indicator.
+        internal static int GetCurrentRingLevel(Vector3 pos) {
+            if (LevelSystemData.SLE_Level_Settings?.DistanceLevelBonus == null) { return 0; }
+            float distance = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(center.x, center.z));
+            int ring = 0;
+            foreach (int threshold in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {
+                if (distance >= threshold) { ring++; } else { break; }
+            }
+            return ring;
+        }
+
         private static void CreateLevelBonusRingMapOverlays() {
             if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
             SetRingCenter();

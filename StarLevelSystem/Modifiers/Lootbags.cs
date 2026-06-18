@@ -32,6 +32,7 @@ namespace StarLevelSystem.Modifiers
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
                     
                     foreach (var kvp in __result) {
+                        if (kvp.Key == null) { continue; }
                         int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(kvp.Key.GetComponent<ItemDrop>(), DropType.Item);
                         ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier), MaxAmountPerDrop = maxPerStack });
                     }

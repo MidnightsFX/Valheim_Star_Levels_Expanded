@@ -16,8 +16,7 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class LevelSelection {
 
-        public static List<string> ForceLeveledCreatures = new List<string>();
-        public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, int leveloverride = 0) {
+        public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, int leveloverride = 0, bool allowRoll = true) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
                 return 1;
@@ -32,19 +31,23 @@ namespace StarLevelSystem.modules.LevelSystem {
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > ValConfig.MaxLevel.Value}");
             if (clevel <= 0 || ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value) {
+                // Strict ZDO-owner authority: only the roller (the ZDO owner) ever rolls a level.
+                // A non-owner must never invent a value - it reads the synced ZDO and waits. Returning
+                // the synced level, or 0 when it hasn't replicated yet, signals "not ready" to the caller.
+                if (allowRoll == false) {
+                    return clevel <= 0 ? 0 : clevel;
+                }
                 // Determine max level
                 int max_level = ValConfig.MaxLevel.Value;
+                if (character.IsBoss()) { max_level = ValConfig.MaxBossLevel.Value; }
                 int min_level = 0;
-                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) {
-                    //Logger.LogDebug($"Max Level from: BiomeSpecific {biome_settings.BiomeMaxLevelOverride}");
-                    max_level = biome_settings.BiomeMaxLevelOverride;
-                }
-                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) {
-                    //Logger.LogDebug($"Max Level from: CreatureSpecific:{creature_settings.CreatureMaxLevelOverride}");
-                    max_level = creature_settings.CreatureMaxLevelOverride;
-                }
 
+                // Global key based generator built levelup replaces default, if it exists, otherwise its null
+                SortedDictionary<int, float> conditional_levelup = ConditionalScaleSystem.GetConditionalLevelupChance(biome);
+
+                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
                 if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
+                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
                 min_level += 1;
                 max_level += 1;
@@ -52,7 +55,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = DetermineDistanceBonus(character.transform.position);
-                SortedDictionary<int, float> levelup_chances = DetermineLevelupChance(creature_settings, biome_settings);
+                SortedDictionary<int, float> levelup_chances = DetermineLevelupChance(creature_settings, biome_settings, conditional_levelup);
 
                 if (biome_settings != null) {
                     distance_level_modifier = biome_settings.DistanceScaleModifier;
@@ -70,7 +73,16 @@ namespace StarLevelSystem.modules.LevelSystem {
                     nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
                 }
 
-                int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus);
+                // Zone system bonus
+                float zoneScaleBonus = 1f;
+                if (ValConfig.EnableZoneScalingBonus.Value) {
+                    ZoneData zone = ZoneScaleSystemData.GetZoneForPosition(character.transform.position);
+                    if (zone != null) {
+                        zoneScaleBonus = zone.GetLevelBonus();
+                    }
+                }
+
+                int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus, zoneScaleBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
                 if (ValConfig.EnableNemesisSystem.Value) {
                     // Call out to make modifications to the level bonus rolls
@@ -168,7 +180,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         // Consider decision tree for levelups to reduce iterations
-        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f) {
+        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f) {
             int selected_level = 0;
             // Build new levelup definitions with bonuses applied
             SortedDictionary<int, float> LevelUpWithBonus = new SortedDictionary<int, float>() { };
@@ -185,7 +197,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             int index = 0;
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {
-                float levelup_req = kvp.Value * nightBonus;
+                float levelup_req = kvp.Value * nightBonus * zoneBonus;
                 index++;
                 // Uncomment to debug level roll selection and values (warning verbose)
                 //if (ValConfig.EnableDebugOutputLevelRolls.Value) {
@@ -205,7 +217,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                         float baseval = 0;
                         if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) | max-level used: {maxLevel} Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) * {zoneBonus}(Zone) | max-level used: {maxLevel} Selected Level: {selected_level}");
                     }
                     break;
                 }
@@ -304,17 +316,5 @@ namespace StarLevelSystem.modules.LevelSystem {
             yield break;
         }
 
-
-
-        internal static void LeveledCreatureListChanged(object s, EventArgs e) {
-            SetupForceLeveledCreatureList();
-        }
-
-        internal static void SetupForceLeveledCreatureList() {
-            ForceLeveledCreatures.Clear();
-            foreach (var item in ValConfig.SpawnsAlwaysControlled.Value.Split(',')) {
-                ForceLeveledCreatures.Add(item);
-            }
-        }
     }
 }

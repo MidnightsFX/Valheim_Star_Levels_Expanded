@@ -1,3 +1,27 @@
+**1.0.0**
+ ---
+ ```
+- Provides a simple configuration GUI
+	- Can be turned off through configuration
+	- Allows tuning some of the largest system knobs that otherwise require yaml editing
+- Levelup chance Generators
+	- Similar to color generators, these are simple definitions which allow building out complex or large level curves
+	- Define a min, max, style (linear, exponential, gaussian), and chance to configure levelup chances
+	- Multiple level generators can be used to provide unique level curves
+- Adds boss kill based, scaling
+	- As the world's bosses are defeated (global keys), levelup chances for creatures in each biome will change
+	- The highest entry is selected, and optionally influences any biomes with custom levelup chances (uses level generators)
+- Zone Scaling
+	- Zones fill the map, they scale independantly. Regular kills in a zone will cause it to spawn stronger enemies.
+	- Zones can be seen through a togglable overlay on the minimap
+- Current Zone & Distance level can be optionally shown on the minimap now
+- Fixes overlapping multiple boss name/healthbars, they are now stacked vertically at their full native width (spacing configurable via BossHealthbarStackSpacing)
+- Fix for rare race condition that could result in players seeing a creatures as a different level with enough latency
+- Adds a simple configuration for seperately limiting boss creatures levels
+- Adds two missing icons to modifier icon display style
+- Added MultiplayerEnemyMinDamageTaken which caps the damage reduction provided to creatures from multiplayer scaling (default creatures take a minimum of 20% damage)
+```
+
 **0.21.0**
  ---
  ```

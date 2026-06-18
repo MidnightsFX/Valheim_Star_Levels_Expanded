@@ -22,6 +22,8 @@ namespace StarLevelSystem.modules.Sizes {
                 return;
             }
 
+            
+
             // Set or update the size
             float scale = bonus + cdetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + (cdetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cdetails.Level);
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);

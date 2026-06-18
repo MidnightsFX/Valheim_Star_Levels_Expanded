@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using Jotunn.Managers;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -6,7 +7,10 @@ using System.Linq;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using YamlDotNet.Core.Tokens;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.UI {
@@ -26,8 +30,68 @@ namespace StarLevelSystem.modules.UI {
 
                 // Levels 1-5 get their stars, then we also get the n* setup
                 UIHudControl.StarLevelHudDisplay(star, __instance.m_baseHud.transform, __instance.m_baseHudBoss.transform);
+
+                // Setup boss huds for stacking support
+                float halfW = Screen.width * 0.5f;
+                UIHudControl.BossHudRoot = GameObject.Instantiate(new GameObject("BossHuds"), __instance.transform.Find("HudRoot").transform);
+                UIHudControl.BossHudRoot.name = "BossHuds"; // remove the "Cloned"
+                UIHudControl.BossHudRoot.transform.localPosition = new Vector3(0, (Screen.height/2.6f), 0);
+                VerticalLayoutGroup vlg = UIHudControl.BossHudRoot.AddComponent<VerticalLayoutGroup>();
+                vlg.childAlignment = TextAnchor.UpperCenter;
+                vlg.childControlHeight = true;
+                vlg.childControlWidth = false;
+                vlg.spacing = 30f;
+                vlg.childForceExpandHeight = false;
+
+                // Add a layout element to the top level of this, if it doesn't already exist
+                if (__instance.m_baseHudBoss.GetComponent<LayoutElement>() == null) {
+                    LayoutElement le = __instance.m_baseHudBoss.AddComponent<LayoutElement>();
+                    le.minWidth = halfW;
+                    le.minHeight = 50f;
+                    le.preferredWidth = Screen.width * 0.6f;
+                }
+
+                // Pull down the name tag slightly
+                RectTransform nameRT = (RectTransform)__instance.m_baseHudBoss.transform.Find("Name");
+                nameRT.sizeDelta = new Vector3(0, 40, 0);
+                nameRT.localPosition = new Vector3(0, 42f, 0);
+
+                // Adjust the offset for the boss health bars
+                Transform HealthTform = __instance.m_baseHudBoss.transform.Find("Health");
+                RectTransform hslowb_rt = HealthTform.Find("health_slow/bar").gameObject.GetComponent<RectTransform>();
+                hslowb_rt.sizeDelta = new Vector2(halfW, 20f);
+                hslowb_rt.localPosition = new Vector2((halfW * -0.5f), 0f);
+                RectTransform hfastb_rt = HealthTform.Find("health_fast/bar").gameObject.GetComponent<RectTransform>();
+                hfastb_rt.sizeDelta = new Vector2(halfW, 20f);
+                hfastb_rt.localPosition = new Vector2((halfW * -0.5f), 0f);
+
+                // Create a container for scaling the background shaders
+                GameObject backgroundContainer = GameObject.Instantiate(new GameObject("Background"), HealthTform);
+                backgroundContainer.name = "Background";
+                Transform bkgtform = HealthTform.Find("bkg").transform;
+                Transform darkentform = HealthTform.Find("darken").transform;
+                bkgtform.SetParent(backgroundContainer.transform);
+                darkentform.SetParent(backgroundContainer.transform);
+                // Setting as the first sibling to render behind other elements, ensuring this is the "background"
+                backgroundContainer.transform.SetSiblingIndex(0);
             }
         }
+
+        // Runs after EnemyHud has updated every hud; stacks + compacts boss bars when more than one is shown.
+        //[HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.UpdateHuds))]
+        //public static class StackBossHealthbars {
+        //    public static void Postfix(EnemyHud __instance) {
+        //        UIHudControl.StackBossHuds(__instance);
+        //    }
+        //}
+
+        //[HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.UpdateHuds))]
+        //public static class TrackBossHuds {
+        //    [HarmonyPrefix]
+        //    public static void Prefix(EnemyHud __instance) {
+        //        UIHudControl.CurrentBossHuds.Clear();
+        //    }
+        //}
 
         [HarmonyPatch(typeof(Tameable), nameof(Tameable.SetName))]
         public static class UpdateTamedName {
@@ -43,8 +107,8 @@ namespace StarLevelSystem.modules.UI {
             public static void Postfix(EnemyHud __instance, Character c) {
                 if (__instance == null || c == null) { return; }
                 // non-bosses and players
+                __instance.m_huds.TryGetValue(c, out var value);
                 if (!c.IsBoss()) {
-                    __instance.m_huds.TryGetValue(c, out var value);
                     if (value != null) {
                         if (value.m_level2 == null || value.m_level3 == null) {
                             return;
@@ -52,6 +116,22 @@ namespace StarLevelSystem.modules.UI {
                         value.m_level2?.gameObject?.SetActive(false);
                         value.m_level3?.gameObject?.SetActive(false);
                     }
+                } else {
+                    // Boss hud, setup elements
+                    // Reparent to our container
+                    value.m_gui.transform.SetParent(UIHudControl.BossHudRoot.transform);
+
+                    // Set the health bar display properly
+                    //RectTransform rt = (RectTransform)value.m_gui.transform.Find("Health").transform;
+                    //rt.sizeDelta = new Vector2(15, Screen.width);
+                    //value.m_healthSlow.m_width = Screen.width;
+                    //value.m_healthFast.m_width = Screen.width;
+                    // Fix the health text display
+                    // This needs to happen where the health text is added, since its not in this frame
+                    //RectTransform healthNumRT = (RectTransform)rt.Find("HealthText(Clone)").transform;
+                    //TextMeshPro healthTMP = healthNumRT.gameObject.GetComponent<TextMeshPro>();
+                    //healthTMP.font = value.m_name.font;
+
                 }
             }
         }
@@ -94,6 +174,13 @@ namespace StarLevelSystem.modules.UI {
                 }
 
                 return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(Menu), nameof(Menu.Start))]
+        public static class AddPauseMenuButton {
+            public static void Postfix(Menu __instance) {
+                QuickConfigureTool.CreatePauseMenuButton(__instance);
             }
         }
     }

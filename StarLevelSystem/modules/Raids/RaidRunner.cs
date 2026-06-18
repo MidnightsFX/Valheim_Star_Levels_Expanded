@@ -114,8 +114,10 @@ namespace StarLevelSystem.modules.Raids {
                         }
                         rmonitor.TriggerCount += 1;
                         Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count - 1)];
-                        // Do custom level if custom level chances are set
-                        SortedDictionary<int, float> levelupChance = LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
+                        // Do custom level if custom level chances are set. Level generators (inline or referenced)
+                        // take precedence and overwrite the spawn's configured levelup chances when present.
+                        SortedDictionary<int, float> levelupChance = LevelGeneratorResolver.BuildLevelupChance(rmonitor.RaidSpawnDef.LevelupGenerators, rmonitor.RaidSpawnDef.LevelupGeneratorRefs)
+                            ?? LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
                         SortedDictionary<int, float> levelupDistanceBonus = LevelSelection.DetermineDistanceBonus(selectedSpawn);
 
                         int spawns = 0;

@@ -1,4 +1,4 @@
-﻿using StarLevelSystem.Modifiers.Control;
+﻿using StarLevelSystem.modules.Control;
 using System.Collections.Generic;
 using System.Linq;
 using static StarLevelSystem.common.DataObjects;

@@ -552,5 +552,3 @@ Planned Features
 - Refinement to the existing modifers
 - New modifiers!
 - Generic and biome specific loot multipliers
-- World leveling system based on boss kills
-- Zonal scaling system

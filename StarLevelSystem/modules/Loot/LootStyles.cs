@@ -175,6 +175,16 @@ namespace StarLevelSystem.modules.Loot {
                     if (loot.TamedOnlyDrop && cdrop.m_character.IsTamed() != true) { continue; }
                 }
 
+                // Ensure the prefab is resolved; skip drops whose prefab cannot be found so we never
+                // hand a null GameObject to vanilla Ragdoll.SaveLootList / ZNetScene.GetPrefabHash.
+                if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
+                    loot.ToCharacterDrop();
+                    if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
+                        Logger.LogWarning($"Loot prefab '{loot.Drop?.Prefab}' for '{name}' was not found. Ensure it is spelled correctly and available in the game. This drop will be skipped.");
+                        continue;
+                    }
+                }
+
                 float scale_multiplier = 1f;
 
                 // If chance is enabled, calculate all of the chance characteristics
@@ -247,11 +257,6 @@ namespace StarLevelSystem.modules.Loot {
                 if (loot.Drop.OnePerPlayer) {
                     int playersNearby = Player.GetPlayersInRangeXZ(cdrop.transform.position, 500f);
                     drop *= Mathf.Max(1, playersNearby);
-                }
-
-                // Add the drop to the results
-                if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
-                    loot.ToCharacterDrop();
                 }
 
                 drop_results.Add(new KeyValuePair<GameObject, int>(loot.GameDrop.m_prefab, drop));

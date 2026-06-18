@@ -1,5 +1,4 @@
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -67,12 +66,18 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     ownershipClaimAttempted = true;
                 }
 
+                // Strict ZDO-owner authority. Recomputed each iteration because the ClaimOwnership above
+                // may have just made us the owner.
+                bool isRoller = chara.m_nview.IsOwner() || ValConfig.ForceControlAllSpawns.Value;
                 CharacterCacheEntry cce;
-                if (chara.m_nview.IsOwner() || ValConfig.ForceControlAllSpawns.Value) {
+                if (isRoller) {
                     cce = CompositeLazyCache.GetAndSetLocalCache(chara, levelOverride, requiredModifiers, notAllowedModifiers);
                     CompositeLazyCache.StartZOwnerCreatureRoutines(chara, cce, spawnMultiply);
                 } else {
-                    cce = CompositeLazyCache.GetCacheEntry(chara);
+                    // Non-owner: build a read-only display cache straight from the synced ZDO. With the
+                    // owner-only roll guards this never rolls or writes; it yields a not-ready (Level 0)
+                    // entry until the owner's level/modifiers replicate, which keeps this loop retrying.
+                    cce = CompositeLazyCache.GetAndSetLocalCache(chara, levelOverride, requiredModifiers, notAllowedModifiers);
                 }
 
                 success = CreatureSetupControl.RunCharacterSetup(chara, cce);
@@ -80,9 +85,11 @@ namespace StarLevelSystem.modules.CreatureSetup {
                 if (success == false) {
                     attempts++;
                     if (attempts == maxAttempts - 1) {
-                        // Fallback - force a fresh cache + zowner routine, then setup.
+                        // Fallback - force a fresh cache, and (only as the roller) the ZOwner routine, then setup.
                         CharacterCacheEntry fallback = CompositeLazyCache.GetAndSetLocalCache(chara, levelOverride, requiredModifiers, notAllowedModifiers, updateCache: true);
-                        CompositeLazyCache.StartZOwnerCreatureRoutines(chara, fallback, spawnMultiply);
+                        if (isRoller) {
+                            CompositeLazyCache.StartZOwnerCreatureRoutines(chara, fallback, spawnMultiply);
+                        }
                         success = CreatureSetupControl.RunCharacterSetup(chara, fallback);
                         if (success) { Logger.LogDebug($"{fallback.RefCreatureName} running delayed setup."); }
                     }

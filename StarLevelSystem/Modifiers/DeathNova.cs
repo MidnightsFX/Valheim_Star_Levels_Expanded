@@ -1,7 +1,7 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Control;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;

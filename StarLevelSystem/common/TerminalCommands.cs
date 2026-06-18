@@ -2,7 +2,7 @@
 using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Control;
 using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections.Generic;
@@ -26,6 +26,17 @@ namespace StarLevelSystem.common
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             CommandManager.Instance.AddConsoleCommand(new KillAllCreaturesNearby());
             CommandManager.Instance.AddConsoleCommand(new SetNemesisScore());
+            CommandManager.Instance.AddConsoleCommand(new RebuildZones());
+        }
+
+        internal class RebuildZones : ConsoleCommand {
+            public override string Name => "SLS-rebuild-zones";
+            public override string Help => "Clears existing zones and regenerates the zone map from the world, then redraws the minimap overlay. Resets zone kill counts and levels.";
+            public override bool IsCheat => true;
+
+            public override void Run(string[] args) {
+                modules.LevelSystem.ZoneScaleSystem.RebuildZones();
+            }
         }
 
         internal class KillAllCreaturesNearby : ConsoleCommand {

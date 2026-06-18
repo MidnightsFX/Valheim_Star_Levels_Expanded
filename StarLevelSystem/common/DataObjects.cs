@@ -12,6 +12,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Security.Policy;
 using System.Text;
 using UnityEngine;
 using YamlDotNet.Serialization;
@@ -49,7 +50,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_NEMESIS_SCOREDATA = "SLS_NEM_SCOREDATA";
         public static readonly string SLS_RAIDS_ACTIVE = "SLS_RAIDS_ACTIVE";
         public static readonly string SLS_CUSTOM_LOOT = "SLS_CUSTOM_LOOT";
-
+        public static readonly string SLS_NEMESIS_BOSS = "SLS_NEM_BOSS";
         public static readonly string SLS_MOD_CAP = "EffectCap";
 
         public enum CreatureBaseAttribute {
@@ -242,6 +243,12 @@ namespace StarLevelSystem.common
             None
         }
 
+        public enum LevelupCalculationStyle {
+            Gaussian,
+            Exponential,
+            Linear,
+        }
+
         public class DNum {
             private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -299,24 +306,77 @@ namespace StarLevelSystem.common
             public float LevelUpChance { get; set; }
             [DefaultValue(1f)]
             public float NightMultiplier { get; set; }
-            [DefaultValue(false)]
+            [DefaultValue(LevelupCalculationStyle.Linear)]
+            public LevelupCalculationStyle LevelupCalculationStyle { get; set; } = LevelupCalculationStyle.Linear;
+            [DefaultValue(0f)]
+            public float GaussianOffset { get; set; } = 0f;
 
+            // Expands this generator into a level -> threshold table on the 0-100 roll scale consumed by
+            // LevelSelection.DetermineLevelRollResult (which selects the first level whose threshold <= roll, so
+            // thresholds must be strictly decreasing). LevelUpChance is authored as a 0-1 fraction (0.25 == 25%).
             public SortedDictionary<int, float> GetLevelUpDefinition() {
-                int cLevel = MaxLevel - MinLevel;
-                SortedDictionary<int, float> LevelupChances = new SortedDictionary<int, float>();
-                // Fallthrough for invalid or Min=Max Level
-                if (cLevel >= 0) {
-                    LevelupChances.Add(MinLevel, LevelUpChance);
-                    return LevelupChances;
+                SortedDictionary<int, float> chances = new SortedDictionary<int, float>();
+                int min = MinLevel;
+                int max = MaxLevel;
+                if (max < min) { int swap = min; min = max; max = swap; }
+
+                // Single-level range always resolves to that level.
+                if (max == min) {
+                    chances.Add(min, 0f);
+                    return chances;
                 }
 
-                cLevel += MinLevel;
-                float levelupChance = LevelUpChance;
-                while (cLevel <= MaxLevel) {
-                    LevelupChances.Add(cLevel, levelupChance);
-                    levelupChance *= LevelUpChance;
+                const float epsilon = 0.01f;
+                float start = Mathf.Clamp(LevelUpChance * 100f, epsilon, 100f); // threshold at MinLevel
+                int span = max - min;
+
+                switch (this.LevelupCalculationStyle) {
+                    case LevelupCalculationStyle.Linear: {
+                        // Threshold ramps linearly from 'start' at MinLevel down to ~0 at MaxLevel.
+                        for (int lvl = min; lvl <= max; lvl++) {
+                            float t = (float)(max - lvl) / span; // 1 at min, 0 at max
+                            float threshold = start * t;
+                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
+                        }
+                        break;
+                    }
+                    case LevelupCalculationStyle.Gaussian: {
+                        // Build bell-shaped per-level weights, then convert to the descending threshold curve via
+                        // the survival function (threshold[k] = 100 * P(level > k)) so the roller actually favors
+                        // mid levels. LevelUpChance controls peakedness; GaussianOffset shifts the center.
+                        float center = Mathf.Clamp(GaussianOffset, -1f, 1f);
+                        float sigma = Mathf.Max(0.05f, 1f - Mathf.Clamp01(LevelUpChance));
+                        double twoSigmaSq = 2.0 * sigma * sigma;
+                        int count = span + 1;
+                        double[] weights = new double[count];
+                        double total = 0.0;
+                        for (int i = 0; i < count; i++) {
+                            float x = -1f + 2f * i / span; // normalized level position in [-1, 1]
+                            double w = Math.Exp(-((x - center) * (x - center)) / twoSigmaSq);
+                            weights[i] = w;
+                            total += w;
+                        }
+                        double cumulative = 0.0;
+                        for (int i = 0; i < count; i++) {
+                            cumulative += weights[i] / total;                       // P(level <= k)
+                            float threshold = (float)((1.0 - cumulative) * 100.0);  // P(level > k) * 100
+                            int lvl = min + i;
+                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
+                        }
+                        break;
+                    }
+                    case LevelupCalculationStyle.Exponential:
+                    default: {
+                        // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel.
+                        float decay = Mathf.Pow(epsilon / start, 1f / span); // start * decay^span == epsilon at max
+                        for (int lvl = min; lvl <= max; lvl++) {
+                            float threshold = start * Mathf.Pow(decay, lvl - min);
+                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
+                        }
+                        break;
+                    }
                 }
-                return LevelupChances;
+                return chances;
             }
 
             public int RollAndDetermineLevel() {
@@ -325,8 +385,21 @@ namespace StarLevelSystem.common
             }
         }
 
+        [Description("Per-biome conditional level generator, keyed under a defeated-boss global key.")]
+        public class ConditionalLevelupChance {
+            [Description("Level generators whose expanded curve replaces the biome default levelup chances when the owning boss is defeated.")]
+            public List<LevelGenerator> LevelupGenerators { get; set; }
+
+            [Description("Names of generator lists in CreatureLevelSettings.CustomLevelupGenerators to include alongside any inline LevelupGenerators.")]
+            [DefaultValue(null)]
+            public List<string> LevelupGeneratorRefs { get; set; }
+        }
+
         [Description("Controls overhaul creature levels")]
         public class CreatureLevelSettings {
+            [Description("Keyed lists of level generators that can be referenced elsewhere")]
+            public Dictionary<string, List<LevelGenerator>> CustomLevelupGenerators { get; set; }
+
             [Description("Controls biome specific configuration, the 'All' biome can be used to set the default for everything.")]
             public Dictionary<Heightmap.Biome, BiomeSpecificSetting> BiomeConfiguration { get; set; }
 
@@ -336,11 +409,25 @@ namespace StarLevelSystem.common
             [Description("Levelup chance for all creatures, this is modified by distance level bonuses and can be overridden by biome-specific settings or creature specific settings.")]
             public SortedDictionary<int, float> DefaultCreatureLevelUpChance { get; set; }
 
+            [Description("Inline level generators whose expanded curve overwrites DefaultCreatureLevelUpChance on load. Merged with DefaultLevelupGeneratorRefs.")]
+            [DefaultValue(null)]
+            public List<LevelGenerator> DefaultLevelupGenerators { get; set; }
+
+            [Description("Names of generator lists in CustomLevelupGenerators to include when building DefaultCreatureLevelUpChance. When any generators are present, the generated curve overwrites DefaultCreatureLevelUpChance.")]
+            [DefaultValue(null)]
+            public List<string> DefaultLevelupGeneratorRefs { get; set; }
+
             [Description("Globally disables the distance scaling system.")]
             public bool EnableDistanceLevelBonus { get; set; } = false;
 
             [Description("Distance scaling system, each entry is a distance threshold and its corresponding level bonus. These are added to DefaultCreatureLevelUpChance, when a distance bucket is selected.")]
             public SortedDictionary<int, SortedDictionary<int, float>> DistanceLevelBonus { get; set; }
+
+            [Description("Enables boss-reactive, biome-specific levelup chances based on the world's defeated bosses (global keys).")]
+            public bool EnableConditionalCreatureLevelupChance { get; set; } = false;
+
+            [Description("Defeated-boss global key -> biome -> level generator. Highest tier (bottom-most listed) defeated boss applies; its generator replaces the biome default levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
+            public Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> ConditionalCreatureLevelupChance { get; set; }
         }
 
         [Description("Controls Night-time specific settings")]
@@ -376,6 +463,12 @@ namespace StarLevelSystem.common
         public class BiomeSpecificSetting {
             [Description("Custom creature levelup chances that will replace default chances for any creature spawned in this biome.")]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+
+            [Description("Inline level generators whose expanded curve overwrites this biome's CustomCreatureLevelUpChance on load. Merged with LevelupGeneratorRefs.")]
+            public List<LevelGenerator> LevelupGenerators { get; set; }
+
+            [Description("Names of generator lists in CreatureLevelSettings.CustomLevelupGenerators to include when building this biome's levelup chances. When any generators are present, the generated curve overwrites CustomCreatureLevelUpChance.")]
+            public List<string> LevelupGeneratorRefs { get; set; }
 
             [Description("Minimum level override for creatures in this biome.")]
             [DefaultValue(0)]
@@ -416,6 +509,12 @@ namespace StarLevelSystem.common
 
             [Description("Custom creature levelup chances that will replace default chances for this creature.")]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; }
+
+            [Description("Inline level generators whose expanded curve overwrites this creature's CustomCreatureLevelUpChance on load. Merged with LevelupGeneratorRefs.")]
+            public List<LevelGenerator> LevelupGenerators { get; set; }
+
+            [Description("Names of generator lists in CreatureLevelSettings.CustomLevelupGenerators to include when building this creature's levelup chances. When any generators are present, the generated curve overwrites CustomCreatureLevelUpChance.")]
+            public List<string> LevelupGeneratorRefs { get; set; }
 
             [Description("Creature specific minimum level.")]
             [DefaultValue(-1)]
@@ -505,6 +604,8 @@ namespace StarLevelSystem.common
 
         public class CreatureModifierConfiguration
         {
+            [DefaultValue(true)]
+            public bool Enabled { get; set; } = true;
             [DefaultValue(1f)]
             public float SelectionWeight { get; set; } = 1f;
             public CreatureModConfig Config { get; set; } = new CreatureModConfig();
@@ -515,6 +616,7 @@ namespace StarLevelSystem.common
 
         public class CreatureModifierDefinition
         {
+            public bool Enabled { get; set; } = true;
             public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
             public string NamePrefix { get; set; }
             public string NameSuffix { get; set; }
@@ -748,6 +850,10 @@ namespace StarLevelSystem.common
             public List<string> ModifiersNotAllowed { get; set; } = null;
             [DefaultValue(null)]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; } = null;
+            [DefaultValue(null)]
+            public List<LevelGenerator> LevelupGenerators { get; set; } = null;
+            [DefaultValue(null)]
+            public List<string> LevelupGeneratorRefs { get; set; } = null;
         }
 
         [Serializable]
@@ -842,6 +948,10 @@ namespace StarLevelSystem.common
             public AI CreatureAI { get; set; } = AI.HuntPlayer;
             [DefaultValue(0)]
             public int ForcedLevel { get; set; } = 0;
+            [DefaultValue(null)]
+            public List<LevelGenerator> LevelupGenerators { get; set; } = null;
+            [DefaultValue(null)]
+            public List<string> LevelupGeneratorRefs { get; set; } = null;
             [DefaultValue(false)]
             public bool IsBoss { get; set; } = false;
             public int SpawnGroupSize { get; set; } = 1;
@@ -1375,12 +1485,23 @@ namespace StarLevelSystem.common
             public int TotalKills { get; set; } = 0;
             public double LastDecayTimestamp { get; set; } = 0;
 
-            public bool ContainsPosition(Vector3 pos) =>
-                pos.x >= MinX && pos.x <= MaxX && pos.z >= MinZ && pos.z <= MaxZ;
+            public bool ContainsPosition(Vector3 pos) {
+                // Half-open on the max edges so a point on a shared grid edge resolves to exactly
+                // one zone (the cell to the +X/+Z is the owner), keeping lookups unambiguous.
+                return pos.x >= MinX && pos.x < MaxX && pos.z >= MinZ && pos.z < MaxZ;
+            }
 
             public float CenterX => (MinX + MaxX) / 2f;
             public float CenterZ => (MinZ + MaxZ) / 2f;
+
+            internal float GetLevelBonus() {
+                if (ZoneLevel <= 1) { return 1f; }
+                float bonus = (ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
+                return bonus;
+            }
         }
+
+
 
         public class ZoneSystemSaveData {
             public List<ZoneData> Zones { get; set; } = new List<ZoneData>();

@@ -25,15 +25,16 @@ namespace StarLevelSystem.modules.Sizes {
 
 
         // Locally sync size to the creatures set size
-        [HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
-        public static class VisualEquipmentScaleToFit {
-            public static void Postfix(VisEquipment __instance, GameObject __result) {
-                if (__instance == null || __instance.m_isPlayer || __result == null) { return; }
-                Transform parent = __result.transform.parent;
-                if (parent == null) { return; }
-                __result.transform.localScale = Vector3.Scale(__result.transform.localScale, parent.lossyScale);
-            }
-        }
+        // NOTE: This MASSIVELY over scales, as creatures constantly re-quip equipment
+        //[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
+        //public static class VisualEquipmentScaleToFit {
+        //    public static void Postfix(VisEquipment __instance, GameObject __result) {
+        //        if (__instance == null || __instance.m_isPlayer || __result == null) { return; }
+        //        Transform parent = __result.transform.parent;
+        //        if (parent == null) { return; }
+        //        __result.transform.localScale = Vector3.Scale(__result.transform.localScale, parent.lossyScale);
+        //    }
+        //}
 
         // NOTE: Because this is where we are cleaning up the cache, it is possible that the cache will not be cleaned up
         [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.OnRagdollCreated))]

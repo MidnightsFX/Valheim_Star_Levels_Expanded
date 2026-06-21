@@ -17,7 +17,7 @@ namespace StarLevelSystem.modules.Raids
         internal static class UpdatePlayerPrivateKeys {
             public static void Postfix() {
                 if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
-                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
+                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }
 
@@ -25,7 +25,7 @@ namespace StarLevelSystem.modules.Raids
         internal static class RemovePlayerPrivateKey {
             public static void Postfix() {
                 if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
-                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
+                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }
 
@@ -33,7 +33,7 @@ namespace StarLevelSystem.modules.Raids
         internal static class SyncPlayerPrivateKeysOnLoad {
             public static void Postfix() {
                 if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
-                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientRecieveRequestForPrivatekeys(1, null));
+                TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }
 

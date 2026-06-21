@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -32,7 +33,8 @@ namespace StarLevelSystem.modules.UI {
                 UIHudControl.StarLevelHudDisplay(star, __instance.m_baseHud.transform, __instance.m_baseHudBoss.transform);
 
                 // Setup boss huds for stacking support
-                float halfW = Screen.width * 0.5f;
+                Logger.LogDebug("Setting BossHud root");
+                float halfW = Screen.width * 0.4f;
                 UIHudControl.BossHudRoot = GameObject.Instantiate(new GameObject("BossHuds"), __instance.transform.Find("HudRoot").transform);
                 UIHudControl.BossHudRoot.name = "BossHuds"; // remove the "Cloned"
                 UIHudControl.BossHudRoot.transform.localPosition = new Vector3(0, (Screen.height/2.6f), 0);
@@ -44,34 +46,39 @@ namespace StarLevelSystem.modules.UI {
                 vlg.childForceExpandHeight = false;
 
                 // Add a layout element to the top level of this, if it doesn't already exist
+                Logger.LogDebug("Setting root layout element");
                 if (__instance.m_baseHudBoss.GetComponent<LayoutElement>() == null) {
                     LayoutElement le = __instance.m_baseHudBoss.AddComponent<LayoutElement>();
                     le.minWidth = halfW;
                     le.minHeight = 50f;
-                    le.preferredWidth = Screen.width * 0.6f;
+                    le.preferredWidth = halfW;
                 }
 
                 // Pull down the name tag slightly
+                Logger.LogDebug("Modifying name position");
                 RectTransform nameRT = (RectTransform)__instance.m_baseHudBoss.transform.Find("Name");
-                nameRT.sizeDelta = new Vector3(0, 40, 0);
+                nameRT.sizeDelta = new Vector3(halfW, 40, 0);
                 nameRT.localPosition = new Vector3(0, 42f, 0);
 
                 // Adjust the offset for the boss health bars
-                Transform HealthTform = __instance.m_baseHudBoss.transform.Find("Health");
-                RectTransform hslowb_rt = HealthTform.Find("health_slow/bar").gameObject.GetComponent<RectTransform>();
-                hslowb_rt.sizeDelta = new Vector2(halfW, 20f);
-                hslowb_rt.localPosition = new Vector2((halfW * -0.5f), 0f);
-                RectTransform hfastb_rt = HealthTform.Find("health_fast/bar").gameObject.GetComponent<RectTransform>();
-                hfastb_rt.sizeDelta = new Vector2(halfW, 20f);
-                hfastb_rt.localPosition = new Vector2((halfW * -0.5f), 0f);
+                Logger.LogDebug("Modifying health bars");
+                Transform HealthTForm = __instance.m_baseHudBoss.transform.Find("Health");
+                RectTransform healthBarSlowRT = HealthTForm.Find("health_slow/bar").gameObject.GetComponent<RectTransform>();
+                healthBarSlowRT.sizeDelta = new Vector2(halfW, 20f);
+                healthBarSlowRT.localPosition = new Vector2((halfW * -0.5f), 0f);
+                RectTransform healthBarFastRT = HealthTForm.Find("health_fast/bar").gameObject.GetComponent<RectTransform>();
+                healthBarFastRT.sizeDelta = new Vector2(halfW, 20f);
+                healthBarFastRT.localPosition = new Vector2((halfW * -0.5f), 0f);
 
                 // Create a container for scaling the background shaders
-                GameObject backgroundContainer = GameObject.Instantiate(new GameObject("Background"), HealthTform);
+                GameObject backgroundContainer = GameObject.Instantiate(new GameObject("Background"), HealthTForm);
                 backgroundContainer.name = "Background";
-                Transform bkgtform = HealthTform.Find("bkg").transform;
-                Transform darkentform = HealthTform.Find("darken").transform;
-                bkgtform.SetParent(backgroundContainer.transform);
-                darkentform.SetParent(backgroundContainer.transform);
+                RectTransform bkgRT = (RectTransform)HealthTForm.Find("bkg").transform;
+                RectTransform darkenRT = (RectTransform)HealthTForm.Find("darken").transform;
+                bkgRT.SetParent(backgroundContainer.transform, false);
+                bkgRT.sizeDelta = new Vector2(halfW, 20f);
+                darkenRT.SetParent(backgroundContainer.transform, false);
+                darkenRT.sizeDelta = new Vector2(halfW, 24f);
                 // Setting as the first sibling to render behind other elements, ensuring this is the "background"
                 backgroundContainer.transform.SetSiblingIndex(0);
             }
@@ -119,7 +126,9 @@ namespace StarLevelSystem.modules.UI {
                 } else {
                     // Boss hud, setup elements
                     // Reparent to our container
-                    value.m_gui.transform.SetParent(UIHudControl.BossHudRoot.transform);
+                    // It is important that the world position is NOT KEPT. This allows existing, but extremely fragile scale settings to be kept
+                    // Because valheims healthbar setup is entirely not structured (ie purely offset based and no layout elements used) it won't get resized
+                    value.m_gui.transform.SetParent(UIHudControl.BossHudRoot.transform, false);
 
                     // Set the health bar display properly
                     //RectTransform rt = (RectTransform)value.m_gui.transform.Find("Health").transform;
@@ -155,7 +164,7 @@ namespace StarLevelSystem.modules.UI {
                     new CodeMatch(OpCodes.Stloc_S)
                     ).InsertAndAdvance(
                     new CodeInstruction(OpCodes.Ldloc_S, (byte)6), // Load the hud instance that is being manipulated
-                    Transpilers.EmitDelegate(UIHudControl.UpdateHudforAllLevels)
+                    Transpilers.EmitDelegate(UIHudControl.UpdateHudForAllLevels)
                     ).RemoveInstructions(23).ThrowIfNotMatch("Unable to patch Enemy Hud update, levels will not be displayed properly.");
 
                 return codeMatcher.Instructions();

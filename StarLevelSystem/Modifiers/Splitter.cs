@@ -1,9 +1,10 @@
 ﻿using HarmonyLib;
 using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
-using StarLevelSystem.modules.Control;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.Modifiers;
 using System;
 using System.Collections.Generic;
 using UnityEngine;

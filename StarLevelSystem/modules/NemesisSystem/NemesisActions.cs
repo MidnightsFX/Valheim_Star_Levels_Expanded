@@ -179,8 +179,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
                         // Send remote removal
                         ZPackage removeBossPack = new ZPackage();
-                        removeBossPack.Write(DataObjects.yamlserializer.Serialize(nemBoss));
-                        ValConfig.RemoveNemeisBossRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, removeBossPack);
+                        removeBossPack.Write(DataObjects.yamlSerializer.Serialize(nemBoss));
+                        ValConfig.RemoveNemesisBossRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, removeBossPack);
                         // Locally remove
                         NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemBoss);
                     } else {

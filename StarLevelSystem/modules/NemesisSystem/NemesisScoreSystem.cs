@@ -135,7 +135,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             NemesisSystem.PlayerScore = null;
             if (player.m_customData != null && player.m_customData.TryGetValue(SLS_NEMESIS_SCOREDATA, out string raw) && !string.IsNullOrEmpty(raw)) {
                 try {
-                    NemesisSystem.PlayerScore = DataObjects.yamldeserializer.Deserialize<ScoreData>(raw);
+                    NemesisSystem.PlayerScore = DataObjects.yamlDeserializer.Deserialize<ScoreData>(raw);
                 } catch (System.Exception ex) {
                     Logger.LogWarning($"Nemesis ScoreData failed to deserialize, resetting: {ex.Message}");
                     NemesisSystem.PlayerScore = null;
@@ -146,7 +146,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         internal static void SaveScoreData(Player player) {
             if (player == null || player.m_customData == null || NemesisSystem.PlayerScore == null) { return; }
-            player.m_customData[SLS_NEMESIS_SCOREDATA] = DataObjects.yamlserializerJsonCompat.Serialize(NemesisSystem.PlayerScore);
+            player.m_customData[SLS_NEMESIS_SCOREDATA] = DataObjects.yamlSerializerJsonCompat.Serialize(NemesisSystem.PlayerScore);
         }
 
         public static void PlayerDeathScoreChange(Player player) {

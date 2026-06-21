@@ -1,4 +1,5 @@
 ﻿using BepInEx.Configuration;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.LevelSystem;
 using System;
@@ -48,9 +49,9 @@ namespace StarLevelSystem.modules.Loot {
         internal static List<LootEntry> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree) {
             List<LootEntry> dropList = new List<LootEntry>();
             Logger.LogDebug($"Checking for custom drop configuration for {lookupkey}");
-            if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot.ContainsKey(lookupkey)) {
+            if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot.ContainsKey(lookupkey)) {
                 Logger.LogDebug($"Custom loot drops configured for:{lookupkey}");
-                foreach (ExtendedObjectDrop eod in LootSystemData.SLS_Drop_Settings.nonCharacterSpecificLoot[lookupkey]) {
+                foreach (ExtendedObjectDrop eod in LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot[lookupkey]) {
 
                     // If chance is enabled, calculate all of the chance characteristics
                     if (eod.Drop.Chance < 1) {
@@ -136,15 +137,15 @@ namespace StarLevelSystem.modules.Loot {
                 switch (type) {
                     case DropType.Tree:
                         Logger.LogDebug($"Updating Tree drops with: level-{level}");
-                        updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelTreeLootScale.Value);
+                        updatedDropTable = UpdateDropTableByLevel(defaultDrops, level, ValConfig.PerLevelTreeLootScale.Value);
                         break;
                     case DropType.Rock:
                         Logger.LogDebug($"Updating Rock drops with: level-{level}");
-                        updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelMineRockLootScale.Value);
+                        updatedDropTable = UpdateDropTableByLevel(defaultDrops, level, ValConfig.PerLevelMineRockLootScale.Value);
                         break;
                     case DropType.Destructible:
                         Logger.LogDebug($"Updating Destructible drops with: level-{level}");
-                        updatedDropTable = UpdateDroptableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
+                        updatedDropTable = UpdateDropTableByLevel(defaultDrops, level, ValConfig.PerLevelDestructibleLootScale.Value);
                         break;
                 }
                 dropList = OptimizeToDropStacks(updatedDropTable.GetDropList(), type);
@@ -162,7 +163,7 @@ namespace StarLevelSystem.modules.Loot {
             LootStyles.SelectCharacterLootSettings(cdrop.m_character, out DistanceLootModifier distance_bonus);
             // Logger.LogDebug($"SLS Custom drop set for {name} - level {level}");
             // Use modified loot drop settings; per-creature custom loot replaces the global table when present.
-            List<ExtendedCharacterDrop> lootSet = customLoot ?? LootSystemData.SLS_Drop_Settings.characterSpecificLoot[name];
+            List<ExtendedCharacterDrop> lootSet = customLoot ?? LootSystemData.SLS_Drop_Settings.CharacterSpecificLoot[name];
             StringBuilder sb = new StringBuilder();
             foreach (ExtendedCharacterDrop loot in lootSet) {
                 // Skip this loop drop if it doesn't drop for tamed creatures or only drops for tamed creatures
@@ -262,65 +263,65 @@ namespace StarLevelSystem.modules.Loot {
                 drop_results.Add(new KeyValuePair<GameObject, int>(loot.GameDrop.m_prefab, drop));
             }
             if (ValConfig.EnableDebugLootDetails.Value) {
-                Logger.LogDebug($"Generated drops for {name}:\n{sb.ToString()}");
+                Logger.LogDebug($"Generated drops for {name}:\n{sb}");
             }
             return drop_results;
         }
 
         // This builds the total amount of loot from this style of loot modification
         // Loot amount x level x modifiers 
-        private static int MultiplyLootPerLevel(int lootdrop_amount, int level, DistanceLootModifier dmod, float scale_factor = 1f) {
-            if (level == 1) { return lootdrop_amount; } // no scaling for level 1, just return the base loot amount
-            float min_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + dmod.MinAmountScaleFactorBonus);
-            float max_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + dmod.MaxAmountScaleFactorBonus);
+        private static int MultiplyLootPerLevel(int lootDrop_amount, int level, DistanceLootModifier damageMod, float scale_factor = 1f) {
+            if (level == 1) { return lootDrop_amount; } // no scaling for level 1, just return the base loot amount
+            float min_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + damageMod.MinAmountScaleFactorBonus);
+            float max_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + damageMod.MaxAmountScaleFactorBonus);
             // If its the same no need to randomize
             if (min_drop_scale == max_drop_scale) {
-                int result = Mathf.RoundToInt(min_drop_scale * lootdrop_amount);
+                int result = Mathf.RoundToInt(min_drop_scale * lootDrop_amount);
                 if (ValConfig.EnableDebugLootDetails.Value) {
-                    Logger.LogDebug($"MultiplyLootPerLevel {result} = drop_base: {lootdrop_amount} * {min_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus:{dmod.MinAmountScaleFactorBonus})");
+                    Logger.LogDebug($"MultiplyLootPerLevel {result} = drop_base: {lootDrop_amount} * {min_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus:{damageMod.MinAmountScaleFactorBonus})");
                 }
                 return result;
             }
-            int min_drop = Mathf.RoundToInt(min_drop_scale * lootdrop_amount);
-            int max_drop = Mathf.RoundToInt(max_drop_scale * lootdrop_amount);
+            int min_drop = Mathf.RoundToInt(min_drop_scale * lootDrop_amount);
+            int max_drop = Mathf.RoundToInt(max_drop_scale * lootDrop_amount);
             int randomized_result = UnityEngine.Random.Range(min_drop, max_drop);
             if (ValConfig.EnableDebugLootDetails.Value) {
-                Logger.LogDebug($"MultiplyLootPerLevel {randomized_result} from range: ({min_drop} <-> {max_drop}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus: min{dmod.MinAmountScaleFactorBonus}/max:{dmod.MaxAmountScaleFactorBonus})");
+                Logger.LogDebug($"MultiplyLootPerLevel {randomized_result} from range: ({min_drop} <-> {max_drop}) = drop_base: {lootDrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus: min{damageMod.MinAmountScaleFactorBonus}/max:{damageMod.MaxAmountScaleFactorBonus})");
             }
             return randomized_result;
         }
 
-        private static int ExponentLootPerLevel(int lootdrop_amount, int level, DistanceLootModifier dmod, float scale_factor = 1) {
-            if (level == 1) { return lootdrop_amount; } // no scaling for level 1, just return the base loot amount
+        private static int ExponentLootPerLevel(int lootDrop_amount, int level, DistanceLootModifier damageMod, float scale_factor = 1) {
+            if (level == 1) { return lootDrop_amount; } // no scaling for level 1, just return the base loot amount
 
-            float min_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MinAmountScaleFactorBonus + scale_factor;
-            float max_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MaxAmountScaleFactorBonus + scale_factor;
+            float min_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MinAmountScaleFactorBonus + scale_factor;
+            float max_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MaxAmountScaleFactorBonus + scale_factor;
             float selectedMod = UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
             float loot_scale_factor = Mathf.Pow(selectedMod, level);
-            int result = Mathf.RoundToInt(loot_scale_factor * lootdrop_amount);
-            Logger.LogDebug($"ExponentLootPerLevel {result} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){dmod.MinAmountScaleFactorBonus}/(max){dmod.MaxAmountScaleFactorBonus} perlevelscale:{dmod.MinAmountScaleFactorBonus})");
+            int result = Mathf.RoundToInt(loot_scale_factor * lootDrop_amount);
+            Logger.LogDebug($"ExponentLootPerLevel {result} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootDrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){damageMod.MinAmountScaleFactorBonus}/(max){damageMod.MaxAmountScaleFactorBonus} perlevelscale:{damageMod.MinAmountScaleFactorBonus})");
             return result;
         }
 
-        private static int ChancePerLevel(int lootdrop_amount, int level, DistanceLootModifier dmod, float scale_factor = 1) {
-            float min_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MinAmountScaleFactorBonus + scale_factor;
-            float max_drop_scale = ValConfig.PerLevelLootScale.Value + dmod.MaxAmountScaleFactorBonus + scale_factor;
+        private static int ChancePerLevel(int lootDrop_amount, int level, DistanceLootModifier damageMod, float scale_factor = 1) {
+            float min_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MinAmountScaleFactorBonus + scale_factor;
+            float max_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MaxAmountScaleFactorBonus + scale_factor;
             float selectedMod = UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
             float chance = Mathf.Pow(selectedMod, level);
             float luck_roll = UnityEngine.Random.value;
-            Logger.LogDebug($"ChancePerLevel roll {luck_roll} vs chance {chance} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootdrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){dmod.MinAmountScaleFactorBonus}/(max){dmod.MaxAmountScaleFactorBonus} perlevelscale:{dmod.MinAmountScaleFactorBonus})");
+            Logger.LogDebug($"ChancePerLevel roll {luck_roll} vs chance {chance} from range ({min_drop_scale} <-> {max_drop_scale}) = drop_base: {lootDrop_amount} * min:{min_drop_scale}/max:{max_drop_scale} scale from (factor:{scale_factor} + distance:(min){damageMod.MinAmountScaleFactorBonus}/(max){damageMod.MaxAmountScaleFactorBonus} perlevelscale:{damageMod.MinAmountScaleFactorBonus})");
             if (luck_roll < chance) {
-                return lootdrop_amount;
+                return lootDrop_amount;
             }
             return 0;
         }
 
-        internal static DropTable UpdateDroptableByLevel(DropTable droptable, int level, float mod) {
+        internal static DropTable UpdateDropTableByLevel(DropTable dropTable, int level, float mod) {
             // Update For pure level based distance scaling on rocks
             if (level > 1) {
-                DropTable newDropTable = droptable.Clone();
+                DropTable newDropTable = dropTable.Clone();
                 List<DropTable.DropData> dropReplacement = new List<DropTable.DropData>();
-                foreach (DropTable.DropData drop in droptable.m_drops) {
+                foreach (DropTable.DropData drop in dropTable.m_drops) {
                     DropTable.DropData newDrop = drop;
                     newDrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + (mod * level)));
                     newDrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + (mod * level)));
@@ -330,10 +331,10 @@ namespace StarLevelSystem.modules.Loot {
                 newDropTable.m_drops = dropReplacement;
                 return newDropTable;
             }
-            return droptable;
+            return dropTable;
         }
 
-        internal static List<LootEntry> OptimizeToDropStacks(List<GameObject> drops, DropType dropType = DropType.None, float lootmult = 1) {
+        internal static List<LootEntry> OptimizeToDropStacks(List<GameObject> drops, DropType dropType = DropType.None, float lootMultiplier = 1) {
             List<LootEntry> optimizeDrops = new List<LootEntry>();
             Dictionary<GameObject, int> dropCollect = new Dictionary<GameObject, int>();
             foreach (GameObject drop in drops) {
@@ -345,17 +346,17 @@ namespace StarLevelSystem.modules.Loot {
             }
 
             // Apply loot increases or decreases if we have those set, else just add to the drop list
-            if (lootmult != 1) {
+            if (lootMultiplier != 1) {
                 foreach (KeyValuePair<GameObject, int> kvp in dropCollect) {
                     int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(kvp.Key.GetComponent<ItemDrop>(), dropType);
-                    int amount = Mathf.RoundToInt(kvp.Value * lootmult);
-                    Logger.LogDebug($"{kvp.Key} loot modified: {kvp.Value} * {lootmult} = {amount}");
+                    int amount = Mathf.RoundToInt(kvp.Value * lootMultiplier);
+                    Logger.LogDebug($"{kvp.Key} loot modified: {kvp.Value} * {lootMultiplier} = {amount}");
                     optimizeDrops.Add(new LootEntry() { Prefab = kvp.Key, Amount = amount, MaxAmountPerDrop = maxPerStack });
                 }
             } else {
-                foreach (KeyValuePair<GameObject, int> ddrop in dropCollect) {
-                    int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(ddrop.Key.GetComponent<ItemDrop>(), dropType);
-                    optimizeDrops.Add(new LootEntry() { Prefab = ddrop.Key, Amount = ddrop.Value, MaxAmountPerDrop = maxPerStack });
+                foreach (KeyValuePair<GameObject, int> detailDrop in dropCollect) {
+                    int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(detailDrop.Key.GetComponent<ItemDrop>(), dropType);
+                    optimizeDrops.Add(new LootEntry() { Prefab = detailDrop.Key, Amount = detailDrop.Value, MaxAmountPerDrop = maxPerStack });
                 }
             }
             return optimizeDrops;
@@ -363,16 +364,14 @@ namespace StarLevelSystem.modules.Loot {
 
         public static void SelectCharacterLootSettings(Character creature, out DistanceLootModifier distance_bonus) {
             Vector3 p = creature.gameObject.transform.position;
-            //ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
             //creature_biome = biome;
             float distance_from_center = Vector2.Distance(p, DistanceScaleSystem.center);
             distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
             //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");
         }
 
-        public static void SelectObjectDistanceBonus(Transform tform, out DistanceLootModifier distance_bonus) {
-            Vector3 p = tform.position;
-            //ZoneSystem.instance.GetGroundData(ref p, out var normal, out var biome, out var biomeArea, out var hmap);
+        public static void SelectObjectDistanceBonus(Transform transform, out DistanceLootModifier distance_bonus) {
+            Vector3 p = transform.position;
             float distance_from_center = Vector2.Distance(p, DistanceScaleSystem.center);
             distance_bonus = SelectDistanceFromCenterLootBonus(distance_from_center);
             //Logger.LogDebug($"{creature.gameObject.name} {biome} {p}");

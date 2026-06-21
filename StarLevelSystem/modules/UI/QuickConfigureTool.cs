@@ -332,11 +332,12 @@ namespace StarLevelSystem.modules.UI {
             // only when the Gaussian curve style is selected.
             float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
             GameObject gaussianRow = null;
-            List<GameObject> gen = new List<GameObject>();
-            gen.Add(AddHeaderRow(parent, RightColWidth, "Default level generator"));
-            gen.Add(AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => staged.generator.MinLevel = (int)v));
-            gen.Add(AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => staged.generator.MaxLevel = (int)v));
-            gen.Add(AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v));
+            List<GameObject> gen = new List<GameObject> {
+                AddHeaderRow(parent, RightColWidth, "Default level generator"),
+                AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => staged.generator.MinLevel = (int)v),
+                AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => staged.generator.MaxLevel = (int)v),
+                AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v)
+            };
             gen.Add(AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
                 if (gaussianRow != null) {
@@ -554,8 +555,9 @@ namespace StarLevelSystem.modules.UI {
 
         // A row sized by a LayoutElement so the scroll view's VerticalLayoutGroup stacks it correctly.
         private static GameObject NewLayoutRow(Transform content, float width, float height) {
-            GameObject row = new GameObject("ModRow", typeof(RectTransform), typeof(LayoutElement));
-            row.layer = GUIManager.UILayer;
+            GameObject row = new GameObject("ModRow", typeof(RectTransform), typeof(LayoutElement)) {
+                layer = GUIManager.UILayer
+            };
             RectTransform rt = row.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
@@ -632,12 +634,12 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.MinorModifiersFirstInName.Value = staged.minorFirst;
                 ValConfig.ModifierIconDisplayStyle.Value = staged.displayStyle.ToString();
 
-                // Write out the levelsettings
+                // Write out the level settings
                 CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
                 if (settings != null) {
                     settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
                     settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
-                    string yaml = DataObjects.yamlserializer.Serialize(settings);
+                    string yaml = DataObjects.yamlSerializer.Serialize(settings);
                     File.WriteAllText(ValConfig.levelsFilePath, yaml);
                     LevelSystemData.UpdateYamlConfig(yaml);
                 }
@@ -650,9 +652,9 @@ namespace StarLevelSystem.modules.UI {
                     ApplyEnabledFlags(src.BossModifiers, staged.modifierOn[ModifierType.Boss]);
                     ApplyEnabledFlags(src.MajorModifiers, staged.modifierOn[ModifierType.Major]);
                     ApplyEnabledFlags(src.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
-                    string myaml = DataObjects.yamlserializer.Serialize(src);
-                    File.WriteAllText(ValConfig.creatureModifierFilePath, myaml);
-                    CreatureModifiersData.UpdateModifierConfig(myaml);
+                    string modifiersYaml = DataObjects.yamlSerializer.Serialize(src);
+                    File.WriteAllText(ValConfig.creatureModifierFilePath, modifiersYaml);
+                    CreatureModifiersData.UpdateModifierConfig(modifiersYaml);
                     CreatureModifiersData.ClearProbabilityCaches();
                 }
 
@@ -667,14 +669,14 @@ namespace StarLevelSystem.modules.UI {
                 // when a toggle actually changed; work on a deserialized copy so the live config isn't mutated
                 // in place (all other per-raid settings are preserved).
                 if (RaidsChanged()) {
-                    RaidConfiguration rcfg = DataObjects.yamldeserializer.Deserialize<RaidConfiguration>(
-                        DataObjects.yamlserializer.Serialize(staged.raidSource));
-                    foreach (RaidDefinition raid in rcfg.Raids) {
+                    RaidConfiguration raidCFG = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(
+                        DataObjects.yamlSerializer.Serialize(staged.raidSource));
+                    foreach (RaidDefinition raid in raidCFG.Raids) {
                         raid.Enabled = staged.raidsOn.Contains(raid.Name);
                     }
-                    string ryaml = DataObjects.yamlserializer.Serialize(rcfg);
-                    File.WriteAllText(ValConfig.raidsFilePath, ryaml);
-                    RaidsData.UpdateYamlConfig(ryaml);
+                    string raidYaml = DataObjects.yamlSerializer.Serialize(raidCFG);
+                    File.WriteAllText(ValConfig.raidsFilePath, raidYaml);
+                    RaidsData.UpdateYamlConfig(raidYaml);
                 }
 
                 // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
@@ -682,22 +684,22 @@ namespace StarLevelSystem.modules.UI {
                 if (NemesisChanged()) {
                     // Work on a deserialized copy so the shared default/live instance is never mutated in place
                     // (and all other YAML sections + NemesisVersion are preserved).
-                    NemesisConfiguration ncfg = DataObjects.yamldeserializer.Deserialize<NemesisConfiguration>(
-                        DataObjects.yamlserializer.Serialize(staged.nemesisSource));
-                    ncfg.NemesisActionCooldownSeconds = staged.nemCooldown;
-                    ncfg.NemesisInfluenceRadius = staged.nemInfluence;
-                    ncfg.NemesisMinSpawnDistance = staged.nemMinSpawn;
-                    if (ncfg.ScoreSystem == null) { ncfg.ScoreSystem = new NemesisScore(); }
-                    ncfg.ScoreSystem.NeutralScore = staged.neutralScore;
-                    ncfg.ScoreSystem.MinScore = staged.minScore;
-                    ncfg.ScoreSystem.MaxScore = staged.maxScore;
-                    ncfg.ScoreSystem.DecayPerUpdate = staged.decayPerUpdate;
-                    ncfg.ScoreSystem.ScoreIntervalSeconds = staged.scoreInterval;
-                    ncfg.ScoreSystem.BossKillBonus = staged.bossKillBonus;
-                    ncfg.ScoreSystem.DeathScoreReduction = staged.deathReduction;
-                    string nyaml = DataObjects.yamlserializer.Serialize(ncfg);
-                    File.WriteAllText(ValConfig.nemesisFilePath, nyaml);
-                    NemesisSystemData.UpdateYamlConfig(nyaml);
+                    NemesisConfiguration nemesisCFG = DataObjects.yamlDeserializer.Deserialize<NemesisConfiguration>(
+                        DataObjects.yamlSerializer.Serialize(staged.nemesisSource));
+                    nemesisCFG.NemesisActionCooldownSeconds = staged.nemCooldown;
+                    nemesisCFG.NemesisInfluenceRadius = staged.nemInfluence;
+                    nemesisCFG.NemesisMinSpawnDistance = staged.nemMinSpawn;
+                    if (nemesisCFG.ScoreSystem == null) { nemesisCFG.ScoreSystem = new NemesisScore(); }
+                    nemesisCFG.ScoreSystem.NeutralScore = staged.neutralScore;
+                    nemesisCFG.ScoreSystem.MinScore = staged.minScore;
+                    nemesisCFG.ScoreSystem.MaxScore = staged.maxScore;
+                    nemesisCFG.ScoreSystem.DecayPerUpdate = staged.decayPerUpdate;
+                    nemesisCFG.ScoreSystem.ScoreIntervalSeconds = staged.scoreInterval;
+                    nemesisCFG.ScoreSystem.BossKillBonus = staged.bossKillBonus;
+                    nemesisCFG.ScoreSystem.DeathScoreReduction = staged.deathReduction;
+                    string nemesisYaml = DataObjects.yamlSerializer.Serialize(nemesisCFG);
+                    File.WriteAllText(ValConfig.nemesisFilePath, nemesisYaml);
+                    NemesisSystemData.UpdateYamlConfig(nemesisYaml);
                 }
 
                 Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
@@ -762,8 +764,9 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static GameObject NewRect(string name, Transform parent, float x, float y, float w, float h) {
-            GameObject go = new GameObject(name, typeof(RectTransform));
-            go.layer = GUIManager.UILayer;
+            GameObject go = new GameObject(name, typeof(RectTransform)) {
+                layer = GUIManager.UILayer
+            };
             RectTransform rt = go.GetComponent<RectTransform>();
             rt.SetParent(parent, false);
             rt.anchorMin = new Vector2(0f, 1f);
@@ -802,8 +805,9 @@ namespace StarLevelSystem.modules.UI {
         // Each configuration row lives in its own container GameObject so it can be referenced (e.g. to toggle
         // visibility) and so a whole column is laid out in one pass instead of tracking a running Y per entry.
         private static GameObject NewRow(Transform parent, float width, float height) {
-            GameObject go = new GameObject("Row", typeof(RectTransform));
-            go.layer = GUIManager.UILayer;
+            GameObject go = new GameObject("Row", typeof(RectTransform)) {
+                layer = GUIManager.UILayer
+            };
             RectTransform rt = go.GetComponent<RectTransform>();
             rt.SetParent(parent, false);
             rt.anchorMin = new Vector2(0f, 1f);
@@ -922,13 +926,13 @@ namespace StarLevelSystem.modules.UI {
             float topY = Mathf.Max(0f, (imgH - blockH) * 0.5f);
 
             // Main toggle, directly to the left of its title
-            GameObject mtgo = GUIManager.Instance.CreateToggle(row.transform, MainToggleSize, MainToggleSize);
-            mtgo.transform.SetParent(row.transform, false);
-            RectTransform mrt = (RectTransform)mtgo.transform;
+            GameObject mainToggleGO = GUIManager.Instance.CreateToggle(row.transform, MainToggleSize, MainToggleSize);
+            mainToggleGO.transform.SetParent(row.transform, false);
+            RectTransform mrt = (RectTransform)mainToggleGO.transform;
             mrt.localScale = Vector3.one;
             mrt.anchorMin = new Vector2(0f, 1f); mrt.anchorMax = new Vector2(0f, 1f); mrt.pivot = new Vector2(0f, 1f);
             mrt.anchoredPosition = new Vector2(0f, -(topY + 3f));
-            Toggle mt = mtgo.GetComponent<Toggle>();
+            Toggle mt = mainToggleGO.GetComponent<Toggle>();
             mt.isOn = mainValue;
             mt.onValueChanged.AddListener(b => onMain(b));
 
@@ -941,13 +945,13 @@ namespace StarLevelSystem.modules.UI {
 
             // Sub toggle (smaller, indented, below the description), directly to the left of its title
             float subY = descY + DescH + 4f;
-            GameObject stgo = GUIManager.Instance.CreateToggle(row.transform, SubToggleSize, SubToggleSize);
-            stgo.transform.SetParent(row.transform, false);
-            RectTransform srt = (RectTransform)stgo.transform;
+            GameObject subToggleGO = GUIManager.Instance.CreateToggle(row.transform, SubToggleSize, SubToggleSize);
+            subToggleGO.transform.SetParent(row.transform, false);
+            RectTransform srt = (RectTransform)subToggleGO.transform;
             srt.localScale = Vector3.one;
             srt.anchorMin = new Vector2(0f, 1f); srt.anchorMax = new Vector2(0f, 1f); srt.pivot = new Vector2(0f, 1f);
             srt.anchoredPosition = new Vector2(SubIndent, -(subY + 2f));
-            Toggle st = stgo.GetComponent<Toggle>();
+            Toggle st = subToggleGO.GetComponent<Toggle>();
             st.isOn = subValue;
             st.onValueChanged.AddListener(b => onSub(b));
 
@@ -964,7 +968,7 @@ namespace StarLevelSystem.modules.UI {
 
             // Editable value box, kept in sync with the slider both ways.
             float boxX = labelW + sliderW + 10f;
-            GameObject ifgo = GUIManager.Instance.CreateInputField(
+            GameObject inputGO = GUIManager.Instance.CreateInputField(
                 parent: row.transform,
                 anchorMin: new Vector2(0f, 1f),
                 anchorMax: new Vector2(0f, 1f),
@@ -974,10 +978,10 @@ namespace StarLevelSystem.modules.UI {
                 fontSize: 15,
                 width: valueW,
                 height: 28f);
-            RectTransform ifrt = (RectTransform)ifgo.transform;
-            ifrt.pivot = new Vector2(0f, 1f);
-            ifrt.anchoredPosition = new Vector2(boxX, -3f);
-            InputField vt = ifgo.GetComponent<InputField>();
+            RectTransform inputRT = (RectTransform)inputGO.transform;
+            inputRT.pivot = new Vector2(0f, 1f);
+            inputRT.anchoredPosition = new Vector2(boxX, -3f);
+            InputField vt = inputGO.GetComponent<InputField>();
             vt.SetTextWithoutNotify(Fmt(value, wholeNumbers));
 
             s.onValueChanged.AddListener(v => {
@@ -1017,10 +1021,10 @@ namespace StarLevelSystem.modules.UI {
 
         private static string Fmt(float v, bool whole) => whole ? ((int)Mathf.Round(v)).ToString() : v.ToString("0.00");
 
-        // Builds a standard Unity slider hierarchy and applies Valheim styling via Jotunn.
         private static Slider BuildSlider(Transform parent, float x, float y, float width, float min, float max, float value, bool wholeNumbers) {
-            GameObject go = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
-            go.layer = GUIManager.UILayer;
+            GameObject go = new GameObject("Slider", typeof(RectTransform), typeof(Slider)) {
+                layer = GUIManager.UILayer
+            };
             RectTransform rt = go.GetComponent<RectTransform>();
             rt.SetParent(parent, false);
             rt.anchorMin = new Vector2(0f, 1f);
@@ -1030,21 +1034,21 @@ namespace StarLevelSystem.modules.UI {
             rt.sizeDelta = new Vector2(width, 20f);
 
             GameObject bg = NewUI("Background", go.transform, typeof(Image));
-            RectTransform bgrt = (RectTransform)bg.transform;
-            bgrt.anchorMin = new Vector2(0f, 0.25f); bgrt.anchorMax = new Vector2(1f, 0.75f);
-            bgrt.offsetMin = Vector2.zero; bgrt.offsetMax = Vector2.zero;
+            RectTransform bgRT = (RectTransform)bg.transform;
+            bgRT.anchorMin = new Vector2(0f, 0.25f); bgRT.anchorMax = new Vector2(1f, 0.75f);
+            bgRT.offsetMin = Vector2.zero; bgRT.offsetMax = Vector2.zero;
             bg.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.5f);
 
             GameObject fillArea = NewUI("Fill Area", go.transform);
-            RectTransform filla = (RectTransform)fillArea.transform;
-            filla.anchorMin = new Vector2(0f, 0.25f); filla.anchorMax = new Vector2(1f, 0.75f);
-            filla.offsetMin = new Vector2(5f, 0f); filla.offsetMax = new Vector2(-15f, 0f);
+            RectTransform fillAreaRT = (RectTransform)fillArea.transform;
+            fillAreaRT.anchorMin = new Vector2(0f, 0.25f); fillAreaRT.anchorMax = new Vector2(1f, 0.75f);
+            fillAreaRT.offsetMin = new Vector2(5f, 0f); fillAreaRT.offsetMax = new Vector2(-15f, 0f);
 
             GameObject fill = NewUI("Fill", fillArea.transform, typeof(Image));
-            RectTransform fillrt = (RectTransform)fill.transform;
-            fillrt.anchorMin = new Vector2(0f, 0f); fillrt.anchorMax = new Vector2(1f, 1f);
-            fillrt.offsetMin = Vector2.zero; fillrt.offsetMax = Vector2.zero;
-            fillrt.sizeDelta = new Vector2(10f, 0f);
+            RectTransform fillRT = (RectTransform)fill.transform;
+            fillRT.anchorMin = new Vector2(0f, 0f); fillRT.anchorMax = new Vector2(1f, 1f);
+            fillRT.offsetMin = Vector2.zero; fillRT.offsetMax = Vector2.zero;
+            fillRT.sizeDelta = new Vector2(10f, 0f);
 
             GameObject handleArea = NewUI("Handle Slide Area", go.transform);
             RectTransform hart = (RectTransform)handleArea.transform;
@@ -1059,7 +1063,7 @@ namespace StarLevelSystem.modules.UI {
             handleImg.color = Color.white;
 
             Slider slider = go.GetComponent<Slider>();
-            slider.fillRect = fillrt;
+            slider.fillRect = fillRT;
             slider.handleRect = (RectTransform)handle.transform;
             slider.targetGraphic = handle.GetComponent<Image>();
             slider.direction = Slider.Direction.LeftToRight;
@@ -1074,8 +1078,9 @@ namespace StarLevelSystem.modules.UI {
         private static GameObject NewUI(string name, Transform parent, params Type[] components) {
             List<Type> comps = new List<Type> { typeof(RectTransform) };
             if (components != null) { comps.AddRange(components); }
-            GameObject go = new GameObject(name, comps.ToArray());
-            go.layer = GUIManager.UILayer;
+            GameObject go = new GameObject(name, comps.ToArray()) {
+                layer = GUIManager.UILayer
+            };
             go.transform.SetParent(parent, false);
             return go;
         }
@@ -1177,13 +1182,13 @@ namespace StarLevelSystem.modules.UI {
                     { ModifierType.Minor, KeysOf(s.modifierSource?.MinorModifiers) },
                 };
 
-                NemesisConfiguration ncfg = NemesisSystemData.SLE_Nemesis_Settings;
-                s.nemesisSource = ncfg;
-                if (ncfg != null) {
-                    s.nemCooldown = ncfg.NemesisActionCooldownSeconds;
-                    s.nemInfluence = ncfg.NemesisInfluenceRadius;
-                    s.nemMinSpawn = ncfg.NemesisMinSpawnDistance;
-                    NemesisScore score = ncfg.ScoreSystem ?? new NemesisScore();
+                NemesisConfiguration nemesisCFG = NemesisSystemData.SLE_Nemesis_Settings;
+                s.nemesisSource = nemesisCFG;
+                if (nemesisCFG != null) {
+                    s.nemCooldown = nemesisCFG.NemesisActionCooldownSeconds;
+                    s.nemInfluence = nemesisCFG.NemesisInfluenceRadius;
+                    s.nemMinSpawn = nemesisCFG.NemesisMinSpawnDistance;
+                    NemesisScore score = nemesisCFG.ScoreSystem ?? new NemesisScore();
                     s.neutralScore = score.NeutralScore;
                     s.minScore = score.MinScore;
                     s.maxScore = score.MaxScore;

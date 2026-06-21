@@ -19,7 +19,11 @@
 - Fix for rare race condition that could result in players seeing a creatures as a different level with enough latency
 - Adds a simple configuration for seperately limiting boss creatures levels
 - Adds two missing icons to modifier icon display style
+- Fixes a bug which would cause raids to silently fail almost immediately
 - Added MultiplayerEnemyMinDamageTaken which caps the damage reduction provided to creatures from multiplayer scaling (default creatures take a minimum of 20% damage)
+- Fixes DropThat compatibility so DropThat's item modifiers (durability/quality/custom stacks/EpicLoot/etc.) are applied to creature loot again
+	- Note: DropThat item modifiers still do not apply to SLS-handled object loot (rocks/trees/destructibles), which keep SLS's level/distance scaling
+- Some spelling fixes :) no promises, my spelling still sucks.
 ```
 
 **0.21.0**

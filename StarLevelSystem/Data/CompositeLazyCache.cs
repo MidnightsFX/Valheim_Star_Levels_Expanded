@@ -1,10 +1,10 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
-using StarLevelSystem.modules.Control;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
 using System;
@@ -84,7 +84,7 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSelection.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
 
-            characterEntry.creatureSettings = creatureSettings;
+            characterEntry.CreatureSettings = creatureSettings;
 
             // Set biome | used to deletion check
             characterEntry.Biome = biome;
@@ -183,7 +183,7 @@ namespace StarLevelSystem.Data
 
 
             // Reset character level if its overleveled
-            if (ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value + 1)
+            if (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value + 1)
             {
                 // Rebuild level?
                 characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
@@ -222,7 +222,7 @@ namespace StarLevelSystem.Data
                     characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(
                         chara,
                         creatureName: characterEntry.RefCreatureName,
-                        creature_settings: characterEntry.creatureSettings,
+                        creature_settings: characterEntry.CreatureSettings,
                         biome: characterEntry.Biome,
                         level: characterEntry.Level,
                         requiredModifiers: characterEntry.ModifiersRequired,
@@ -276,7 +276,7 @@ namespace StarLevelSystem.Data
             // Priority storage of V2 Mod format
             if (mods != null) {
                 try {
-                    return DataObjects.yamldeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+                    return DataObjects.yamlDeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
                 }
                 catch {  return null; }
             }
@@ -287,7 +287,7 @@ namespace StarLevelSystem.Data
 
         public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
-            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlserializerJsonCompat.Serialize(modifiers));
+            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlSerializerJsonCompat.Serialize(modifiers));
             CharacterCacheEntry cce = GetCacheEntry(chara);
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;

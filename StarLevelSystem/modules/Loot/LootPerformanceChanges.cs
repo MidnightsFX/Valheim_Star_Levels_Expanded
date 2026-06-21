@@ -1,4 +1,5 @@
-﻿using StarLevelSystem.Data;
+﻿using StarLevelSystem.common;
+using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
 using System;
 using System.Collections;
@@ -13,11 +14,11 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.Loot {
     internal class LootPerformanceChanges {
 
-        public static void DropItemsPreferAsync(Vector3 position, List<LootEntry> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
+        public static void DropItemsPreferAsync(Vector3 position, List<LootEntry> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
             if (immediate == false) {
-                TaskRunner.Run().StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f, dropThatCharacterDrop));
+                TaskRunner.Run().StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f, dropThatCharacterDrop, characterDropSource));
             } else {
-                DropItemsImmediate(optimizeDrops, position, 0.5f, dropThatCharacterDrop, dropThatNonCharacterDrop);
+                DropItemsImmediate(optimizeDrops, position, 0.5f, dropThatCharacterDrop, characterDropSource);
             }
         }
 
@@ -25,14 +26,17 @@ namespace StarLevelSystem.modules.Loot {
             List<LootEntry> LootDrops = new List<LootEntry>();
             int MaxDropSize = 1;
 
-            foreach(KeyValuePair<GameObject, int> drop in drops) {
+            // ReferenceIndex mirrors each entry's position in 'drops' so DropThat compat can look up the
+            // matching drop config (DropThat keys its config cache by the source list + index).
+            for (int sourceIndex = 0; sourceIndex < drops.Count; sourceIndex++) {
+                KeyValuePair<GameObject, int> drop = drops[sourceIndex];
                 if (dropIndividuals == false) {
                     ItemDrop id = drop.Key.GetComponent<ItemDrop>();
                     if (id != null) {
                         MaxDropSize = id.m_itemData.m_shared.m_maxStackSize;
                     }
                 }
-                LootDrops.Add(new LootEntry() { Amount = drop.Value, Prefab = drop.Key, MaxAmountPerDrop = MaxDropSize });
+                LootDrops.Add(new LootEntry() { Amount = drop.Value, Prefab = drop.Key, MaxAmountPerDrop = MaxDropSize, ReferenceIndex = sourceIndex });
             }
 
             return LootDrops;
@@ -76,11 +80,9 @@ namespace StarLevelSystem.modules.Loot {
         }
 
 
-        private static void DropItemsImmediate(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
-            int dropindex = 0;
-
+        private static void DropItemsImmediate(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
             foreach (LootEntry drop in drops) {
-                int max_stack_size = 0;
+                int max_stack_size;
                 if (ValConfig.EnableDebugLootDetails.Value) {
                     Logger.LogDebug($"Dropping {drop.Prefab.name} {drop.Amount}");
                 }
@@ -112,11 +114,9 @@ namespace StarLevelSystem.modules.Loot {
                         }
                     }
 
-
-                    // Compat for DropThat
-                    // Send the dropped items to drop that to allow modifications
-                    if (dropThatNonCharacterDrop && Compatibility.IsDropThatEnabled && Compatibility.DropThatMethodsAvailable) {
-                        Compatibility.DropThat_ModifyInstantiatedObjectDrop(droppedItem, dropindex);
+                    // Compat for DropThat: re-apply DropThat's item modifiers to creature loot SLS instantiated itself.
+                    if (dropThatCharacterDrop && characterDropSource != null && Compatibility.IsDropThatEnabled && Compatibility.DropThatCharacterModifyAvailable) {
+                        Compatibility.DropThat_ModifyCharacterDrop(droppedItem, characterDropSource, drop.ReferenceIndex);
                     }
 
                     // Poke the item to make it feel like a loot drop
@@ -130,15 +130,13 @@ namespace StarLevelSystem.modules.Loot {
                     }
                     i += dropped;
                 }
-                dropindex++;
             }
         }
 
 
 
-        private static IEnumerator DropItemsAsync(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, bool dropThatNonCharacterDrop = false) {
+        private static IEnumerator DropItemsAsync(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
             int obj_spawns = 0;
-            int dropindex = 0;
             foreach (LootEntry drop in drops) {
                 int max_stack_size = drop.MaxAmountPerDrop;
                 if (ValConfig.EnableDebugLootDetails.Value) {
@@ -177,10 +175,9 @@ namespace StarLevelSystem.modules.Loot {
                         }
                     }
 
-                    // Compat for DropThat
-                    // Send the dropped items to drop that to allow modifications
-                    if (dropThatNonCharacterDrop && Compatibility.IsDropThatEnabled && Compatibility.DropThatMethodsAvailable) {
-                        Compatibility.DropThat_ModifyInstantiatedObjectDrop(droppedItem, dropindex);
+                    // Compat for DropThat: re-apply DropThat's item modifiers to creature loot SLS instantiated itself.
+                    if (dropThatCharacterDrop && characterDropSource != null && Compatibility.IsDropThatEnabled && Compatibility.DropThatCharacterModifyAvailable) {
+                        Compatibility.DropThat_ModifyCharacterDrop(droppedItem, characterDropSource, drop.ReferenceIndex);
                     }
 
                     // Make the loot wiggle
@@ -194,7 +191,6 @@ namespace StarLevelSystem.modules.Loot {
                     }
                     i += dropped;
                 }
-                dropindex++;
             }
 
             yield break;

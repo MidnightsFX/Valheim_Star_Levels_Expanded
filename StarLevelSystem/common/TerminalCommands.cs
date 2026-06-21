@@ -2,7 +2,7 @@
 using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
-using StarLevelSystem.modules.Control;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections.Generic;
@@ -321,9 +321,9 @@ namespace StarLevelSystem.common
 
                 Logger.LogDebug($"Serializing data");
                 LootSettings lootSettings = new LootSettings();
-                lootSettings.characterSpecificLoot = characterModDrops;
-                lootSettings.nonCharacterSpecificLoot = objectDrops;
-                var yaml = DataObjects.yamlserializer.Serialize(lootSettings);
+                lootSettings.CharacterSpecificLoot = characterModDrops;
+                lootSettings.NonCharacterSpecificLoot = objectDrops;
+                var yaml = DataObjects.yamlSerializer.Serialize(lootSettings);
                 Logger.LogDebug($"Writing file to disk");
                 using (StreamWriter writetext = new StreamWriter(dumpfile))
                 {

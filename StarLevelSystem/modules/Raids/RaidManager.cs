@@ -142,14 +142,11 @@ namespace StarLevelSystem.modules.Raids {
                         Logger.LogRaid($"Raid {raid} checking activation chance: {randv} <= {raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar} | Forced? {forceRaidStart}");
                         if (forceRaidStart || randv <= raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar) {
                             Logger.LogRaid($"Activating Raid {raid.Name} for player {playerRaids.Key}");
-                            RaidControl.UpdatePlayerRaidHistory(playerRaids.Value, raid, raid.Name);
-                            playerRaids.Value.CurrentRaidPosition = raidPosition;
                             // Send RPC to player to start their raid
                             Logger.LogRaid($"Determining raid init style: integrated? {isIntegratedServer} && {localPlayerPlatformAndID} == {playerRaids.Key}");
                             if (isIntegratedServer && localPlayerPlatformAndID == playerRaids.Key) {
                                 Logger.LogRaid("Starting integrated raid runner.");
                                 RaidControl.StartRaidRunner(raid, raidPosition);
-                                MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString());
                             } else {
                                 Logger.LogRaid("Starting networked raid runner.");
                                 ZNetPeer zpeer = SLSExtensions.GetPeerByPlatformID(playerRaids.Key);
@@ -158,7 +155,11 @@ namespace StarLevelSystem.modules.Raids {
                                     continue;
                                 }
                             }
-                            RaidControl.ForceMusicForClientsInArea(raid.ForceMusic, raidPosition, raid.EventRange * 1.5f);
+                            // Cooldown + music are deferred until the client confirms the raid actually started
+                            // (RaidControl.FinalizeRaidCommit). Mark a short pending hold so this player isn't
+                            // re-dispatched before that confirmation arrives; a raid that never starts won't burn
+                            // the full cooldown.
+                            RaidControl.MarkRaidPending(playerRaids.Value, raid, raidPosition);
 
                             activatingRaids++;
                             break;
@@ -167,14 +168,14 @@ namespace StarLevelSystem.modules.Raids {
                 }
                 // Save player raid data after a set of raids has been run, this will have the most accurate cooldown information
                 forceRaidStart = false;
-                RaidsData.SaveServerRaidData(DataObjects.yamlserializer.Serialize(RaidControl.ServerPlayerRaidData));
+                RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
             }
         }
 
         public void Setup() {
             Logger.LogRaid("Starting setup for RaidManager.");
             try {
-                RaidControl.ServerPlayerRaidData = yamldeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(RaidsData.LoadServerRaidData());
+                RaidControl.ServerPlayerRaidData = yamlDeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(RaidsData.LoadServerRaidData());
             } catch (Exception e) {
                 Logger.LogWarning($"There was an error loading saved player raid data. New data will be requested from players. Exception: {e}");
             }
@@ -186,7 +187,7 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void OnDestroy() {
-            RaidsData.SaveServerRaidData(DataObjects.yamlserializer.Serialize(RaidControl.ServerPlayerRaidData));
+            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
         }
     }
 }

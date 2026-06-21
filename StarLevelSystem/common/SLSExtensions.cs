@@ -1,6 +1,6 @@
 ﻿using HarmonyLib;
 using Splatform;
-using StarLevelSystem.modules.Control;
+using StarLevelSystem.modules.Modifiers;
 using System;
 using System.Collections;
 using System.Collections.Generic;

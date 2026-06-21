@@ -21,6 +21,9 @@ namespace StarLevelSystem.modules.Raids {
         internal BoolZNetProperty RaidSpawnPointsReady;
         internal BoolZNetProperty RaidSpawnPointsGenerating;
         internal RaidMonitorListZNetProperty ActiveRaidSpawns;
+        // True only once the raid has actually committed (spawn points validated + start message sent). Gates the
+        // forced environment so a raid that aborts during spawn-point search never changes the weather.
+        internal BoolZNetProperty RaidStarted;
 
         private bool networkReady;
         private double Endtime = 0;
@@ -42,9 +45,12 @@ namespace StarLevelSystem.modules.Raids {
         public void Update() {
             if (ValConfig.UseVanillaRaidConfiguration.Value == true || RunningRaid == null || Znet.IsValid() == false) { return; }
 
-            // Clients all get this to set their music
+            // Force the raid environment only once the raid has actually committed, so an aborted raid (e.g. no
+            // valid spawn points) never flips the weather and then snaps it back.
             RaidDefinition raid = RunningRaid.Get();
-            EnvMan.instance.m_forceEnv = raid.ForceEnvironment.ToString();
+            if (RaidStarted.Get()) {
+                EnvMan.instance.m_forceEnv = raid.ForceEnvironment.ToString();
+            }
 
             if (Znet.IsOwner() == false) { return; }
 
@@ -184,6 +190,13 @@ namespace StarLevelSystem.modules.Raids {
             AddMapPins(this.transform.position, raid);
             Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.StartMessage);
 
+            // The raid is now committed. Flip the flag (gates the forced environment above), start our own music,
+            // and tell the server to set the cooldown + broadcast music to nearby clients. Everything above this
+            // point is side-effect-free, so a raid that aborted before here left no visible trace.
+            RaidStarted.Set(true);
+            if (MusicMan.instance != null) { MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString()); }
+            SendRaidCommitConfirmation(raid, this.transform.position);
+
             // Start all of the spawners
             RaidSpawners.Clear();
             foreach (var spawner in raid.Spawns) {
@@ -240,7 +253,29 @@ namespace StarLevelSystem.modules.Raids {
             RaidSpawnPointsReady = new BoolZNetProperty("SLS_RAID_SPAWN_READY", Znet, false);
             RaidSpawnPointsGenerating = new BoolZNetProperty("SLS_RAID_SPAWN_GEN", Znet, false);
             ActiveRaidSpawns = new RaidMonitorListZNetProperty("SLS_RAID_SPAWNS_ACTIVE", Znet, new List<RaidMonitor>());
+            RaidStarted = new BoolZNetProperty("SLS_RAID_STARTED", Znet, false);
             networkReady = true;
+        }
+
+        // The owner is the player being raided. If that's the integrated host, finalize the commit directly;
+        // otherwise tell the server (over RaidCommittedRPC) so it sets the cooldown and broadcasts music.
+        private void SendRaidCommitConfirmation(RaidDefinition raid, Vector3 pos) {
+            if (ZNet.instance == null) { return; }
+            if (ZNet.instance.IsServer()) {
+                RaidControl.FinalizeRaidCommit(SLSExtensions.GetLocalUserPlatformAndID(), raid.Name, pos);
+                return;
+            }
+            ZNetPeer serverPeer = ZNet.instance.GetServerPeer();
+            if (serverPeer == null) {
+                Logger.LogWarning($"Raid '{raid.Name}' committed but no server peer was available to confirm it; cooldown/music may not be applied.");
+                return;
+            }
+            ZPackage pkg = new ZPackage();
+            pkg.Write(raid.Name);
+            pkg.Write(pos.x);
+            pkg.Write(pos.y);
+            pkg.Write(pos.z);
+            ValConfig.RaidCommittedRPC.SendPackage(serverPeer.m_uid, pkg);
         }
 
         public void StartRaid(DataObjects.RaidDefinition raid, Player player) {

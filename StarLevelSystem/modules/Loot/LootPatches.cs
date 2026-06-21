@@ -19,7 +19,8 @@ namespace StarLevelSystem.modules.Loot {
             // effectively replace the drop items function since we need to drop things in a way that is not insane for large amounts of loot
             [HarmonyPatch(nameof(CharacterDrop.DropItems))]
             public static bool Prefix(CharacterDrop __instance, List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea) {
-                LootPerformanceChanges.DropItemsPreferAsync(centerPos, LootPerformanceChanges.DropItemsDetermineDropStackSize(drops), dropThatCharacterDrop: true);
+                // Pass the original drops list through so DropThat compat can map each instantiated drop back to its config.
+                LootPerformanceChanges.DropItemsPreferAsync(centerPos, LootPerformanceChanges.DropItemsDetermineDropStackSize(drops), dropThatCharacterDrop: true, characterDropSource: drops);
                 return false;
             }
         }
@@ -34,7 +35,7 @@ namespace StarLevelSystem.modules.Loot {
                 // Logger.LogDebug($"Checking if character drop is managed by SLS {name}");
                 // Per-creature custom loot stored on the ZDO (e.g. nemesis spawns) replaces the global table for this instance.
                 List<ExtendedCharacterDrop> customLoot = LootSystemData.GetCustomLoot(__instance.m_character);
-                bool hasGlobal = LootSystemData.SLS_Drop_Settings?.characterSpecificLoot?.ContainsKey(name) == true;
+                bool hasGlobal = LootSystemData.SLS_Drop_Settings?.CharacterSpecificLoot?.ContainsKey(name) == true;
                 if (customLoot == null && hasGlobal != true) { return true; }
 
                 __result = LootStyles.ModifyCharacterDrops(__instance, name, customLoot);
@@ -137,7 +138,7 @@ namespace StarLevelSystem.modules.Loot {
                 // Modify Loot Drop for minerock5
                 List<LootEntry> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSelection.DeterministicDetermineRockLevel(instance.gameObject.transform.position));
                 Vector3 position = hit.m_point - hit.m_dir * 0.2f + UnityEngine.Random.insideUnitSphere * 0.3f;
-                LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
+                LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops);
             }
         }
 
@@ -149,54 +150,25 @@ namespace StarLevelSystem.modules.Loot {
             [HarmonyPatch(nameof(MineRock5.DamageArea))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
                 var codeMatcher = new CodeMatcher(instructions, generator);
-                if (Compatibility.IsDropThatEnabled && Compatibility.DropThatMethodsAvailable == false) {
-                    Logger.LogDebug("DropThat detected, using non-performance based Minerock5 patch for compat.");
-                    codeMatcher
-                        .MatchStartForward(
-                            new CodeMatch(OpCodes.Ldarg_0),
-                            new CodeMatch(OpCodes.Ldfld),
-                            new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                            )
-                        .Advance(1) // includes the Ldarg_0
-                        .RemoveInstructions(2)
-                        .InsertAndAdvance(
-                            Transpilers.EmitDelegate(NonPerformanceBasedMineDrop)
-                        ).ThrowIfNotMatch("Unable to patch MineRock5 to provide loot modifications.");
-
-                } else {
-                    codeMatcher.MatchStartForward(
-                        new CodeMatch(OpCodes.Ldarg_0),
-                        new CodeMatch(OpCodes.Ldfld),
-                        new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                        )
-                    .Advance(1)
-                    .RemoveInstructions(27) //25? + 2
-                    .InsertAndAdvance(
-                        new CodeInstruction(OpCodes.Ldloc_3),
-                        Transpilers.EmitDelegate(MineDrop)
-                        )
-                    .ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops.");
-                }
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                    )
+                .Advance(1)
+                .RemoveInstructions(27) //25? + 2
+                .InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc_3),
+                    Transpilers.EmitDelegate(MineDrop)
+                    )
+                .ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops.");
                 return codeMatcher.Instructions();
             }
 
             internal static void MineDrop(MineRock5 instance, Vector3 vector) {
                 int level = LevelSelection.DeterministicDetermineRockLevel(vector);
                 List<LootEntry> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level);
-                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
-            }
-
-            // This is specifically used for compatibility with DropThat, as removing the loop will break DropThats functionality for Minerock5
-            internal static List<GameObject> NonPerformanceBasedMineDrop(MineRock5 instance) {
-                // Modify Loot Drop for minerock5
-                List<GameObject> drops = new List<GameObject>();
-                List<LootEntry> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSelection.DeterministicDetermineRockLevel(instance.transform.position));
-                foreach (LootEntry drop in optimizeDrops) {
-                    drop.Amount.Times(() => drops.Add(drop.Prefab));
-                }
-                //Vector3 position = vector + UnityEngine.Random.insideUnitSphere * 0.3f;
-                //LootLevelsExpanded.DropItemsPreferAsync(position, optimizeDrops);
-                return drops;
+                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
             }
         }
 
@@ -227,7 +199,7 @@ namespace StarLevelSystem.modules.Loot {
                 int level = LevelSelection.DetermineisticDetermineObjectLevel(instance.transform.position);
                 LootStyles.SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
                 List<LootEntry> optimizeDrops = LootStyles.ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);
-                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
+                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
             }
         }
 
@@ -241,53 +213,28 @@ namespace StarLevelSystem.modules.Loot {
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
                 var codeMatcher = new CodeMatcher(instructions);
 
-                if (Compatibility.IsDropThatEnabled && Compatibility.DropThatMethodsAvailable == false) {
-                    Logger.LogDebug("DropThat detected, using non-performance based TreeBase patch for compat.");
-                    codeMatcher
-                        .MatchStartForward(
-                            new CodeMatch(OpCodes.Ldarg_0),
-                            new CodeMatch(OpCodes.Ldfld),
-                            new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                            )
-                        .Advance(1) // includes the Ldarg_0
-                        .RemoveInstructions(2)
-                        .InsertAndAdvance(
-                            Transpilers.EmitDelegate(NonPerformanceBasedTreeBaseDrop)
-                        ).ThrowIfNotMatch("Unable to patch TreeBase to provide loot modifications.");
-                } else {
-                    codeMatcher.MatchStartForward(
-                        new CodeMatch(OpCodes.Ldarg_0),
-                        new CodeMatch(OpCodes.Ldfld),
-                        new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                        ).Advance(1)
-                        .InsertAndAdvance(
-                            Transpilers.EmitDelegate(TreebaseDropDestroyedItems)
-                        )
-                        //.MatchStartForward(
-                        //new CodeMatch(OpCodes.)
-                        .RemoveInstructions(54)
-                        .Insert(
-                            new CodeInstruction(OpCodes.Ldarg_0)
-                        )
-                        .ThrowIfNotMatch("Unable to patch Treebase to handle large drops.");
-                }
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                    ).Advance(1)
+                    .InsertAndAdvance(
+                        Transpilers.EmitDelegate(TreebaseDropDestroyedItems)
+                    )
+                    //.MatchStartForward(
+                    //new CodeMatch(OpCodes.)
+                    .RemoveInstructions(54)
+                    .Insert(
+                        new CodeInstruction(OpCodes.Ldarg_0)
+                    )
+                    .ThrowIfNotMatch("Unable to patch Treebase to handle large drops.");
 
                 return codeMatcher.Instructions();
             }
 
             private static void TreebaseDropDestroyedItems(TreeBase instance) {
                 List<LootEntry> optimizeDrops = LootStyles.ModifyTreeDropsOrDefault(instance);
-                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops, dropThatNonCharacterDrop: true);
-            }
-
-            internal static List<GameObject> NonPerformanceBasedTreeBaseDrop(TreeBase instance) {
-                // Modify Loot Drop for TreeBase
-                List<GameObject> drops = new List<GameObject>();
-                List<LootEntry> optimizeDrops = LootStyles.ModifyTreeDropsOrDefault(instance);
-                foreach (LootEntry drop in optimizeDrops) {
-                    drop.Amount.Times(() => drops.Add(drop.Prefab));
-                }
-                return drops;
+                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
             }
         }
     }

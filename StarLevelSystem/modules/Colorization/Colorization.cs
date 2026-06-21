@@ -18,9 +18,9 @@ namespace StarLevelSystem.modules
         public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;
         private static CreatureColorizationSettings defaultColorizationSettings = new CreatureColorizationSettings()
         {
-            characterSpecificColorization = ColorizationData.characterColorizationData,
-            defaultLevelColorization = ColorizationData.defaultColorizationData,
-            characterColorGenerators = ColorizationData.defaultColorGenerators,
+            CharacterSpecificColorization = ColorizationData.characterColorizationData,
+            DefaultLevelColorization = ColorizationData.defaultColorizationData,
+            CharacterColorGenerators = ColorizationData.defaultColorGenerators,
         };
 
         public static List<Color> mapRingColors = new List<Color>();
@@ -51,9 +51,9 @@ namespace StarLevelSystem.modules
 
         public static ColorDef defaultColorization = new ColorDef()
         {
-            hue = 0f,
-            saturation = 0f,
-            value = 0f,
+            Hue = 0f,
+            Saturation = 0f,
+            Value = 0f,
             IsEmissive = false
         };
 
@@ -65,29 +65,29 @@ namespace StarLevelSystem.modules
         }
 
         public static string YamlDefaultConfig() {
-            var yaml = DataObjects.yamlserializer.Serialize(defaultColorizationSettings);
+            var yaml = DataObjects.yamlSerializer.Serialize(defaultColorizationSettings);
             return yaml;
         }
 
         public static bool UpdateYamlConfig(string yaml) {
             try {
                 //Logger.LogInfo($"Updating ColorizationSettings from YAML:\n{yaml}");
-                creatureColorizationSettings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
+                creatureColorizationSettings = DataObjects.yamlDeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
-                foreach (var entry in defaultColorizationSettings.defaultLevelColorization) {
-                    if (!creatureColorizationSettings.defaultLevelColorization.Keys.Contains(entry.Key)) {
-                        creatureColorizationSettings.defaultLevelColorization.Add(entry.Key, entry.Value);
+                foreach (var entry in defaultColorizationSettings.DefaultLevelColorization) {
+                    if (!creatureColorizationSettings.DefaultLevelColorization.Keys.Contains(entry.Key)) {
+                        creatureColorizationSettings.DefaultLevelColorization.Add(entry.Key, entry.Value);
                     }
                 }
-                if (creatureColorizationSettings.characterColorGenerators != null) {
+                if (creatureColorizationSettings.CharacterColorGenerators != null) {
                     Logger.LogInfo("Running color generators");
-                    creatureColorizationSettings.characterSpecificColorization ??= new Dictionary<string, Dictionary<int, ColorDef>>();
-                    foreach (var entry in creatureColorizationSettings.characterColorGenerators) {
+                    creatureColorizationSettings.CharacterSpecificColorization ??= new Dictionary<string, Dictionary<int, ColorDef>>();
+                    foreach (var entry in creatureColorizationSettings.CharacterColorGenerators) {
                         Logger.LogInfo($"Building color range for {entry.Key}");
                         foreach (var colorRange in entry.Value) { BuildAddColorRange(entry.Key, colorRange); }
                     }
                     if (ValConfig.OutputColorizationGeneratorsData.Value) {
-                        File.WriteAllText(Path.Combine(Paths.ConfigPath, "StarLevelSystem", "DebugGeneratedColorValues.yaml"), DataObjects.yamlserializer.Serialize(creatureColorizationSettings));
+                        File.WriteAllText(Path.Combine(Paths.ConfigPath, "StarLevelSystem", "DebugGeneratedColorValues.yaml"), DataObjects.yamlSerializer.Serialize(creatureColorizationSettings));
                     }
                 }
 
@@ -135,8 +135,8 @@ namespace StarLevelSystem.modules
             if (cgo == null) { return null; }
             string cname = Utils.GetPrefabName(cgo.gameObject);
             //Logger.LogDebug($"Checking for character specific colorization {cname}");
-            if (creatureColorizationSettings.characterSpecificColorization != null && creatureColorizationSettings.characterSpecificColorization.ContainsKey(cname) && creatureColorizationSettings.characterSpecificColorization[cname].ContainsKey(level - 1)) {
-                if (creatureColorizationSettings.characterSpecificColorization[cname].TryGetValue((level-1), out ColorDef charspecific_color_def)) {
+            if (creatureColorizationSettings.CharacterSpecificColorization != null && creatureColorizationSettings.CharacterSpecificColorization.ContainsKey(cname) && creatureColorizationSettings.CharacterSpecificColorization[cname].ContainsKey(level - 1)) {
+                if (creatureColorizationSettings.CharacterSpecificColorization[cname].TryGetValue((level-1), out ColorDef charspecific_color_def)) {
                     //Logger.LogDebug($"Found character specific colorization for {cname} - {level}");
                     return charspecific_color_def;
                 }
@@ -148,7 +148,7 @@ namespace StarLevelSystem.modules
         internal static void ApplyColorizationWithoutLevelEffects(GameObject cgo, ColorDef colorization) {
             if (ValConfig.EnableColorization.Value == false) { return; }
             if (colorization == null) { return; }
-            LevelSetup genlvlup = colorization.toLevelEffect();
+            LevelSetup genlvlup = colorization.ToLevelEffect();
             // Material assignment changes must occur in a try block- they can quietly crash the game otherwise
             try {
                 foreach (var smr in cgo.gameObject.GetComponentsInChildren<SkinnedMeshRenderer>())
@@ -171,13 +171,13 @@ namespace StarLevelSystem.modules
         }
 
         internal static void BuildAddColorRange(string creatureKey, ColorRangeDef colorGen) {
-            float hueRange = Mathf.Abs(colorGen.EndColorDef.hue) + Mathf.Abs(colorGen.StartColorDef.hue);
+            float hueRange = Mathf.Abs(colorGen.EndColorDef.Hue) + Mathf.Abs(colorGen.StartColorDef.Hue);
             Mathf.Clamp(hueRange, 0f, 2f);
 
-            float satRange = Mathf.Abs(colorGen.EndColorDef.saturation) + Mathf.Abs(colorGen.StartColorDef.saturation);
+            float satRange = Mathf.Abs(colorGen.EndColorDef.Saturation) + Mathf.Abs(colorGen.StartColorDef.Saturation);
             Mathf.Clamp(satRange, 0f, 2f);
 
-            float valRange = Mathf.Abs(colorGen.EndColorDef.value) + Mathf.Abs(colorGen.StartColorDef.value);
+            float valRange = Mathf.Abs(colorGen.EndColorDef.Value) + Mathf.Abs(colorGen.StartColorDef.Value);
             Mathf.Clamp(valRange, 0f, 2f);
 
             int steps = colorGen.RangeEnd - colorGen.RangeStart;
@@ -185,12 +185,12 @@ namespace StarLevelSystem.modules
             float hueStep = hueRange / steps;
             float satStep = satRange / steps;
             float valStep = valRange / steps;
-            int hueDirection = colorGen.StartColorDef.hue > colorGen.EndColorDef.hue ? -1 : 1;
-            int satDirection = colorGen.StartColorDef.saturation > colorGen.EndColorDef.saturation ? -1 : 1;
-            int valueDirection = colorGen.StartColorDef.value > colorGen.EndColorDef.value ? -1 : 1;
+            int hueDirection = colorGen.StartColorDef.Hue > colorGen.EndColorDef.Hue ? -1 : 1;
+            int satDirection = colorGen.StartColorDef.Saturation > colorGen.EndColorDef.Saturation ? -1 : 1;
+            int valueDirection = colorGen.StartColorDef.Value > colorGen.EndColorDef.Value ? -1 : 1;
 
-            if (colorGen.CharacterSpecific && !creatureColorizationSettings.characterSpecificColorization.ContainsKey(creatureKey)) {
-                creatureColorizationSettings.characterSpecificColorization.Add(creatureKey, new Dictionary<int, ColorDef>());
+            if (colorGen.CharacterSpecific && !creatureColorizationSettings.CharacterSpecificColorization.ContainsKey(creatureKey)) {
+                creatureColorizationSettings.CharacterSpecificColorization.Add(creatureKey, new Dictionary<int, ColorDef>());
             }
 
             int currentLevel = colorGen.RangeStart;
@@ -198,31 +198,31 @@ namespace StarLevelSystem.modules
             while(currentLevel < colorGen.RangeEnd + 1) {
                 //Logger.LogDebug($"Generating ColorDef for {currentLevel}");
                 ColorDef colorRangeDef = new ColorDef() {
-                    hue = colorGen.StartColorDef.hue + (hueStep * currentSegment * hueDirection),
-                    saturation = colorGen.StartColorDef.saturation + (satStep * currentSegment * satDirection),
-                    value = colorGen.StartColorDef.value + (valStep * currentSegment * valueDirection),
+                    Hue = colorGen.StartColorDef.Hue + (hueStep * currentSegment * hueDirection),
+                    Saturation = colorGen.StartColorDef.Saturation + (satStep * currentSegment * satDirection),
+                    Value = colorGen.StartColorDef.Value + (valStep * currentSegment * valueDirection),
                     IsEmissive = false
                 };
 
                 if (colorGen.CharacterSpecific == true) {
-                    if (!creatureColorizationSettings.characterSpecificColorization.ContainsKey(creatureKey)) {
-                        creatureColorizationSettings.characterSpecificColorization.Add(creatureKey , new Dictionary<int, ColorDef>());
+                    if (!creatureColorizationSettings.CharacterSpecificColorization.ContainsKey(creatureKey)) {
+                        creatureColorizationSettings.CharacterSpecificColorization.Add(creatureKey , new Dictionary<int, ColorDef>());
                     }
 
-                    if (creatureColorizationSettings.characterSpecificColorization[creatureKey].ContainsKey(currentLevel)) {
+                    if (creatureColorizationSettings.CharacterSpecificColorization[creatureKey].ContainsKey(currentLevel)) {
                         if (colorGen.OverwriteExisting == true) {
-                            creatureColorizationSettings.characterSpecificColorization[creatureKey][currentLevel] = colorRangeDef;
+                            creatureColorizationSettings.CharacterSpecificColorization[creatureKey][currentLevel] = colorRangeDef;
                         }
                     } else {
-                        creatureColorizationSettings.characterSpecificColorization[creatureKey].Add(currentLevel, colorRangeDef);
+                        creatureColorizationSettings.CharacterSpecificColorization[creatureKey].Add(currentLevel, colorRangeDef);
                     }
                 } else {
-                    if (creatureColorizationSettings.defaultLevelColorization.ContainsKey(currentLevel)) {
+                    if (creatureColorizationSettings.DefaultLevelColorization.ContainsKey(currentLevel)) {
                         if (colorGen.OverwriteExisting == true) {
-                            creatureColorizationSettings.defaultLevelColorization[currentLevel] = colorRangeDef;
+                            creatureColorizationSettings.DefaultLevelColorization[currentLevel] = colorRangeDef;
                         }
                     } else {
-                        creatureColorizationSettings.defaultLevelColorization.Add(currentLevel, colorRangeDef);
+                        creatureColorizationSettings.DefaultLevelColorization.Add(currentLevel, colorRangeDef);
                     }
                 }
 
@@ -254,8 +254,8 @@ namespace StarLevelSystem.modules
         //}
 
         internal static ColorDef GetDefaultColorization(int level) {
-            if (creatureColorizationSettings.defaultLevelColorization.ContainsKey(level)) {
-                return creatureColorizationSettings.defaultLevelColorization[level];
+            if (creatureColorizationSettings.DefaultLevelColorization.ContainsKey(level)) {
+                return creatureColorizationSettings.DefaultLevelColorization[level];
             }  else {
                 return defaultColorization;
             }

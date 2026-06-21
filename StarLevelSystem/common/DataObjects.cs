@@ -24,11 +24,11 @@ namespace StarLevelSystem.common
     public class DataObjects
     {
 
-        public static IDeserializer yamldeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().Build();
-        public static ISerializer yamlserializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
+        public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().Build();
+        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
 
-        //public static IDeserializer yamldeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
-        public static ISerializer yamlserializerJsonCompat = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).JsonCompatible().Build();
+        //public static IDeserializer yamlDeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
+        public static ISerializer yamlSerializerJsonCompat = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).JsonCompatible().Build();
 
         public static BinaryFormatter binFormatter = new BinaryFormatter();
 
@@ -250,18 +250,18 @@ namespace StarLevelSystem.common
         }
 
         public class DNum {
-            private static Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
-            private static Dictionary<string, int> _enumData = new Dictionary<string, int>();
+            private static readonly Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
+            private static readonly Dictionary<string, int> _enumData = new Dictionary<string, int>();
 
             public DNum() { }
 
             public DNum(Array modnames)
             {
-                foreach(int enumvalue in modnames)
+                foreach(int enumValue in modnames)
                 {
-                    string name = Enum.GetName(typeof(ModifierNames), enumvalue);
-                    _enumData[name] = enumvalue;
-                    _enumReverseLookup[enumvalue] = name;
+                    string name = Enum.GetName(typeof(ModifierNames), enumValue);
+                    _enumData[name] = enumValue;
+                    _enumReverseLookup[enumValue] = name;
                 }
             }
             public DNum(Dictionary<string, int> initialValues) {
@@ -318,7 +318,7 @@ namespace StarLevelSystem.common
                 SortedDictionary<int, float> chances = new SortedDictionary<int, float>();
                 int min = MinLevel;
                 int max = MaxLevel;
-                if (max < min) { int swap = min; min = max; max = swap; }
+                if (max < min) { (max, min) = (min, max); }
 
                 // Single-level range always resolves to that level.
                 if (max == min) {
@@ -343,7 +343,7 @@ namespace StarLevelSystem.common
                     case LevelupCalculationStyle.Gaussian: {
                         // Build bell-shaped per-level weights, then convert to the descending threshold curve via
                         // the survival function (threshold[k] = 100 * P(level > k)) so the roller actually favors
-                        // mid levels. LevelUpChance controls peakedness; GaussianOffset shifts the center.
+                        // mid levels. LevelUpChance controls peak; GaussianOffset shifts the center.
                         float center = Mathf.Clamp(GaussianOffset, -1f, 1f);
                         float sigma = Mathf.Max(0.05f, 1f - Mathf.Clamp01(LevelUpChance));
                         double twoSigmaSq = 2.0 * sigma * sigma;
@@ -492,7 +492,16 @@ namespace StarLevelSystem.common
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
 
             [Description("Damage type and modifiers for all creatures spawned in this biome. This can be used to make creatures weak to, or immune to, certain damage types.")]
+            [YamlMember(Alias = "DamageReceivedModifiers")]
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
+
+            // Backwards compatibility: accept the previously misspelled "DamageRecievedModifiers" key on
+            // read. Getter returns null so OmitDefaults never serializes it back out.
+            [YamlMember(Alias = "DamageRecievedModifiers")]
+            public Dictionary<DamageType, float> DamageRecievedModifiers_Legacy {
+                get => null;
+                set => DamageRecievedModifiers = value;
+            }
 
             [Description("List of creature spawns which are disabled in this biome.")]
             public List<string> CreatureSpawnsDisabled { get; set; }
@@ -564,19 +573,28 @@ namespace StarLevelSystem.common
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
 
             [Description("Damage received modifiers for this creature.")]
+            [YamlMember(Alias = "DamageReceivedModifiers")]
             public Dictionary<DamageType, float> DamageRecievedModifiers { get; set; }
+
+            // Backwards compatibility: accept the previously misspelled "DamageRecievedModifiers" key on
+            // read. Getter returns null so OmitDefaults never serializes it back out.
+            [YamlMember(Alias = "DamageRecievedModifiers")]
+            public Dictionary<DamageType, float> DamageRecievedModifiers_Legacy {
+                get => null;
+                set => DamageRecievedModifiers = value;
+            }
         }
 
         [DataContract]
         public class CreatureColorizationSettings {
-            public Dictionary<string, Dictionary<int, ColorDef>> characterSpecificColorization { get; set; }
-            public Dictionary<int, ColorDef> defaultLevelColorization { get; set; }
-            public Dictionary<string, List<ColorRangeDef>> characterColorGenerators { get; set; }
+            public Dictionary<string, Dictionary<int, ColorDef>> CharacterSpecificColorization { get; set; }
+            public Dictionary<int, ColorDef> DefaultLevelColorization { get; set; }
+            public Dictionary<string, List<ColorRangeDef>> CharacterColorGenerators { get; set; }
         }
 
         public class LootSettings {
-            public Dictionary<string, List<ExtendedCharacterDrop>> characterSpecificLoot { get; set; }
-            public Dictionary<string, List<ExtendedObjectDrop>> nonCharacterSpecificLoot { get; set; }
+            public Dictionary<string, List<ExtendedCharacterDrop>> CharacterSpecificLoot { get; set; }
+            public Dictionary<string, List<ExtendedObjectDrop>> NonCharacterSpecificLoot { get; set; }
             public bool EnableDistanceLootModifier { get; set; } = false;
             public SortedDictionary<int, DistanceLootModifier> DistanceLootModifier { get; set; }
         }
@@ -585,6 +603,7 @@ namespace StarLevelSystem.common
             public int Amount { get; set; }
             public GameObject Prefab { get; set; }
             public int MaxAmountPerDrop { get; set; } = 1;
+            public int ReferenceIndex { get; set; } = 0;
         }
 
         public class DistanceLootModifier {
@@ -617,7 +636,7 @@ namespace StarLevelSystem.common
         public class CreatureModifierDefinition
         {
             public bool Enabled { get; set; } = true;
-            public NameSelectionStyle namingConvention { get; set; } = NameSelectionStyle.RandomBoth;
+            public NameSelectionStyle NamingConvention { get; set; } = NameSelectionStyle.RandomBoth;
             public string NamePrefix { get; set; }
             public string NameSuffix { get; set; }
             public string StarVisual { get; set; }
@@ -647,15 +666,15 @@ namespace StarLevelSystem.common
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(VisualEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
-                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(VisualEffect);
-                    CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockfixedgo);
+                    GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(VisualEffect);
+                    CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockFixedGO);
                 }
                 if (SecondaryEffect != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(SecondaryEffect)) {
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(SecondaryEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
-                    GameObject mockfixedgo = PrefabManager.Instance.GetPrefab(SecondaryEffect);
-                    CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockfixedgo);
+                    GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(SecondaryEffect);
+                    CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockFixedGO);
                 }
             }
 
@@ -768,9 +787,10 @@ namespace StarLevelSystem.common
             public Music ForceMusic { get; set; } = Music.Zcombat;
 
             public RandomEvent ToRaid(Vector3 position) {
-               RandomEvent raid = new RandomEvent();
-                raid.m_name = Name;
-                raid.m_duration = Duration;
+                RandomEvent raid = new RandomEvent {
+                    m_name = Name,
+                    m_duration = Duration
+                };
                 if (Activation != null) {
                     if (Activation.RequiredGlobalKeys != null) {
                         raid.m_requiredGlobalKeys = Activation.RequiredGlobalKeys;
@@ -1073,7 +1093,7 @@ namespace StarLevelSystem.common
                 { CreaturePerLevelAttribute.SpeedPerLevel, 0f },
                 { CreaturePerLevelAttribute.AttackSpeedPerLevel, 0f },
             };
-            public CreatureSpecificSetting creatureSettings { get; set; } = null;
+            public CreatureSpecificSetting CreatureSettings { get; set; } = null;
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
 
             public string GetDamageBonusDescription()
@@ -1163,30 +1183,30 @@ namespace StarLevelSystem.common
         [Serializable]
         public class ColorDef
         {
-            public float hue { get; set; } = 0f;
-            public float saturation { get; set; } = 0f;
-            public float value { get; set; } = 0f;
+            public float Hue { get; set; } = 0f;
+            public float Saturation { get; set; } = 0f;
+            public float Value { get; set; } = 0f;
             public bool IsEmissive { get; set; } = false;
 
             public ColorDef() { }
             public ColorDef(float hue = 0f, float saturation = 0f, float value = 0f, bool is_emissive = false)
             {
-                this.hue = hue;
-                this.saturation = saturation;
-                this.value = value;
+                this.Hue = hue;
+                this.Saturation = saturation;
+                this.Value = value;
                 this.IsEmissive = is_emissive;
             }
 
-            public LevelEffects.LevelSetup toLevelEffect()
+            public LevelEffects.LevelSetup ToLevelEffect()
             {
                 return new LevelEffects.LevelSetup()
                 {
                     m_scale = 1f,
-                    m_hue = hue,
-                    m_saturation = saturation,
-                    m_value = value,
+                    m_hue = Hue,
+                    m_saturation = Saturation,
+                    m_value = Value,
                     m_setEmissiveColor = IsEmissive,
-                    m_emissiveColor = new Color(hue, saturation, value)
+                    m_emissiveColor = new Color(Hue, Saturation, Value)
                 };
             }
         }
@@ -1254,7 +1274,7 @@ namespace StarLevelSystem.common
                 z = rZ;
             }
 
-            public override string ToString() {
+            public override readonly string ToString() {
                 return String.Format("[{0}, {1}, {2}]", x, y, z);
             }
 
@@ -1269,7 +1289,7 @@ namespace StarLevelSystem.common
 
         public class ListStringZNetProperty : ZNetProperty<List<string>>
         {
-            BinaryFormatter binFormatter = new BinaryFormatter();
+            readonly BinaryFormatter binFormatter = new BinaryFormatter();
             public ListStringZNetProperty(string key, ZNetView zNetView, List<string> defaultValue) : base(key, zNetView, defaultValue)
             {
             }
@@ -1293,7 +1313,6 @@ namespace StarLevelSystem.common
 
         public class CreatureModifiersZNetProperty : ZNetProperty<Dictionary<string, ModifierType>>
         {
-            BinaryFormatter binFormatter = new BinaryFormatter();
             public CreatureModifiersZNetProperty(string key, ZNetView zNetView, Dictionary<string, ModifierType> defaultValue) : base(key, zNetView, defaultValue)
             {
             }
@@ -1328,7 +1347,6 @@ namespace StarLevelSystem.common
 
         public class ListIntZNetProperty : ZNetProperty<List<int>>
         {
-            BinaryFormatter binFormatter = new BinaryFormatter();
             public ListIntZNetProperty(string key, ZNetView zNetView, List<int> defaultValue) : base(key, zNetView, defaultValue)
             {
             }
@@ -1350,7 +1368,6 @@ namespace StarLevelSystem.common
 
         public class ListModifierZNetProperty : ZNetProperty<List<ModifierNames>>
         {
-            BinaryFormatter binFormatter = new BinaryFormatter();
             public ListModifierZNetProperty(string key, ZNetView zNetView, List<ModifierNames> defaultValue) : base(key, zNetView, defaultValue)
             {
             }
@@ -1398,7 +1415,6 @@ namespace StarLevelSystem.common
 
         public class CreatureDetailsZNetProperty : ZNetProperty<CharacterCacheEntry>
         {
-            BinaryFormatter binFormatter = new BinaryFormatter();
             public CreatureDetailsZNetProperty(string key, ZNetView zNetView, CharacterCacheEntry defaultValue) : base(key, zNetView, defaultValue)
             {
             }

@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;

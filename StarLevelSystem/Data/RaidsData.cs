@@ -435,7 +435,7 @@ namespace StarLevelSystem.Data
                 if (File.Exists(ValConfig.raidsFilePath)) {
                     UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
                 } else {
-                    RaidsData.SaveServerRaidData(DataObjects.yamlserializer.Serialize(RaidControl.ServerPlayerRaidData));
+                    RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
                     UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
                 }
             }
@@ -443,13 +443,13 @@ namespace StarLevelSystem.Data
         }
 
         public static string YamlDefaultConfig() {
-            return DataObjects.yamlserializer.Serialize(DefaultConfiguration);
+            return DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
         }
 
         public static bool UpdateYamlConfig(string yaml) {
             try {
                 Logger.LogDebug("Loaded new Raid settings...");
-                SLE_Raid_Settings = DataObjects.yamldeserializer.Deserialize<RaidConfiguration>(yaml);
+                SLE_Raid_Settings = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(yaml);
 
                 RaidsByName.Clear();
                 foreach (RaidDefinition raid in SLE_Raid_Settings.Raids) {

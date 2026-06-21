@@ -47,7 +47,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
 
                 __instance.m_destroyedEffect.Create(position, __instance.transform.rotation);
-                LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops, dropThatNonCharacterDrop: true);
+                LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops);
 
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {

@@ -552,12 +552,12 @@ namespace StarLevelSystem.Data
             catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Creature Level values, defaults will be used. Exception: {e}"); }
         }
         public static string YamlDefaultConfig() {
-            var yaml = DataObjects.yamlserializer.Serialize(DefaultConfiguration);
+            var yaml = DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
             return yaml;
         }
         public static bool UpdateYamlConfig(string yaml) {
             try {
-                SLE_Level_Settings = DataObjects.yamldeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
+                SLE_Level_Settings = DataObjects.yamlDeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
                 ApplyLevelupGenerators();
                 Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
                 DistanceScaleSystem.DelayedMinimapSetup();

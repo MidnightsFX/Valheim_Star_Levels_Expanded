@@ -1,14 +1,14 @@
 ﻿using BepInEx.Logging;
+using StarLevelSystem.common;
 using System;
 
 
-namespace StarLevelSystem
-{
+namespace StarLevelSystem {
     internal class Logger
     {
         public static LogLevel Level = LogLevel.Info;
 
-        public static void enableDebugLogging(object sender, EventArgs e)
+        public static void EnableDebugLogging(object sender, EventArgs e)
         {
             if (ValConfig.EnableDebugMode.Value) {
                 Level = LogLevel.Debug;

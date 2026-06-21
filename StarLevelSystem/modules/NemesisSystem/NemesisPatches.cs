@@ -63,7 +63,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 mb.Minions = minions;
 
                 ZPackage zpack = new ZPackage();
-                zpack.Write(DataObjects.yamlserializer.Serialize(mb));
+                zpack.Write(DataObjects.yamlSerializer.Serialize(mb));
                 ValConfig.SendNewNemesisBossRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, zpack);
 
                 if (NemesisSystemData.SLE_Nemesis_Settings.CreationRemovesSourceCreature) {

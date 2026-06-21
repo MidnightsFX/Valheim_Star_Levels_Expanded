@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace StarLevelSystem.modules.Control {
+namespace StarLevelSystem.modules.Modifiers {
     internal class Visible_Toggle {
 
         [HarmonyPatch(typeof(Character), nameof(Character.SetVisible))]

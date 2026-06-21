@@ -164,7 +164,7 @@ namespace StarLevelSystem.Data {
                     Zones = ZoneScaleSystemData.Zones,
                     WorldName = ZNet.instance?.GetWorldName() ?? "unknown"
                 };
-                File.WriteAllText(ValConfig.zoneDataSavedDataPath, DataObjects.yamlserializer.Serialize(saveData));
+                File.WriteAllText(ValConfig.zoneDataSavedDataPath, DataObjects.yamlSerializer.Serialize(saveData));
             } catch (Exception e) {
                 Logger.LogWarning($"Failed to save zone data: {e.Message}");
             }
@@ -183,7 +183,7 @@ namespace StarLevelSystem.Data {
                 ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
                 if (!File.Exists(ValConfig.zoneDataSavedDataPath)) { return false; }
                 string yaml = File.ReadAllText(ValConfig.zoneDataSavedDataPath);
-                var loaded = DataObjects.yamldeserializer.Deserialize<ZoneSystemSaveData>(yaml);
+                var loaded = DataObjects.yamlDeserializer.Deserialize<ZoneSystemSaveData>(yaml);
                 if (loaded?.Zones == null || loaded.Zones.Count == 0) { return false; }
                 string currentWorld = ZNet.instance?.GetWorldName() ?? "";
                 if (!string.IsNullOrEmpty(loaded.WorldName) && loaded.WorldName != currentWorld) {
@@ -201,7 +201,7 @@ namespace StarLevelSystem.Data {
 
         internal static ZPackage SerializeDeaths(List<SerializableVector3> deaths) {
             ZPackage pkg = new ZPackage();
-            pkg.Write(DataObjects.yamlserializerJsonCompat.Serialize(deaths));
+            pkg.Write(DataObjects.yamlSerializerJsonCompat.Serialize(deaths));
             return pkg;
         }
 

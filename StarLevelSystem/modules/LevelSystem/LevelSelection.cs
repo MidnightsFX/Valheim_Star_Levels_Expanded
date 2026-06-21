@@ -22,15 +22,13 @@ namespace StarLevelSystem.modules.LevelSystem {
                 return 1;
             }
             if (leveloverride > 0) {
-                //character.m_level = leveloverride;
-                //character.SetLevel(leveloverride);
                 Logger.LogDebug($"Level override provided, setting level to {leveloverride}");
                 return leveloverride;
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > ValConfig.MaxLevel.Value}");
-            if (clevel <= 0 || ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value) {
+            if (clevel <= 0 || ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value) {
                 // Strict ZDO-owner authority: only the roller (the ZDO owner) ever rolls a level.
                 // A non-owner must never invent a value - it reads the synced ZDO and waits. Returning
                 // the synced level, or 0 when it hasn't replicated yet, signals "not ready" to the caller.
@@ -105,7 +103,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             float levelup_roll = UnityEngine.Random.Range(0f, 100f);
             // Logger.LogDebug($"levelroll: {levelup_roll}");
             // Check if the creature has an override level
-            // Use the default non-biom based levelup chances
+            // Use the default non-biome based levelup chances
             // Logger.LogDebug($"maxlevel default: {maxLevel}");
             maxLevel += 1;
             // Determine creature location to check its biome
@@ -303,13 +301,14 @@ namespace StarLevelSystem.modules.LevelSystem {
             tree.transform.localScale *= scale;
             List<DropTable.DropData> drops = new List<DropTable.DropData>();
             foreach (var drop in tree.m_dropWhenDestroyed.m_drops) {
-                DropTable.DropData lvlupdrop = new DropTable.DropData();
-                // Scale the amount of drops based on level
-                lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelTreeLootScale.Value * level));
-                lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + ValConfig.PerLevelTreeLootScale.Value * level));
-                // Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
-                lvlupdrop.m_item = drop.m_item;
-                drops.Add(lvlupdrop);
+                DropTable.DropData LvlUpDrop = new DropTable.DropData {
+                    // Scale the amount of drops based on level
+                    m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelTreeLootScale.Value * level)),
+                    m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + ValConfig.PerLevelTreeLootScale.Value * level)),
+                    // Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
+                    m_item = drop.m_item
+                };
+                drops.Add(LvlUpDrop);
             }
             Physics.SyncTransforms();
 

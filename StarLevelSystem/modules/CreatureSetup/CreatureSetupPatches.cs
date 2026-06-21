@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,8 +26,8 @@ namespace StarLevelSystem.modules.CreatureSetup {
         }
 
         [HarmonyPatch(typeof(Character), nameof(Character.SetLevel))]
-        public static class ModifyCharacterVisualsToLevel {
-            public static void Prefix(Character __instance, ref int level) {
+        public static class PreventInvalidLeveledCharacters {
+            public static void Prefix(ref int level) {
                 if (level <= 1) { level = 1; }
             }
         }

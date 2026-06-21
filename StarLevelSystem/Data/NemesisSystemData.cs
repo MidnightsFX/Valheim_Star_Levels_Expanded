@@ -40,11 +40,42 @@ namespace StarLevelSystem.Data
             },
             ChanceChanges = new NemesisChanceChanges() { 
                 CreatureOps = new Dictionary<string, NemesisChanceEntry>() {
+                    { "Ocean Serpent Attack", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Ocean },
+                        // Blackforest/meadows level players get hunted when they go to plains
+                        RequiredGlobalKeys = new List<string> { "defeated_gdking" },
+                        Action = NemesisAction.Spawn,
+                        ScoreChange = -1000,
+                        ScoreThreshold = 7000f,
+                        ExtraCooldownSeconds = 300,
+                        PlayerReqs = new NemesisPlayerStateRequirements() {
+                            PlayerCurrentBiome = Heightmap.Biome.Ocean,
+                        },
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Serpent", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.SeaMonsters, SpawnGroupSize = 1 },
+                    }}},
+                    { "Ocean Serpent Ambush", new NemesisChanceEntry() {
+                        Enabled = true,
+                        Chance = 0.3f,
+                        AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Ocean },
+                        // Blackforest/meadows level players get hunted when they go to plains
+                        RequiredGlobalKeys = new List<string> { "defeated_bonemass" },
+                        Action = NemesisAction.Spawn,
+                        ScoreChange = -1000,
+                        ScoreThreshold = 7000f,
+                        ExtraCooldownSeconds = 300,
+                        PlayerReqs = new NemesisPlayerStateRequirements() {
+                            PlayerCurrentBiome = Heightmap.Biome.Ocean,
+                        },
+                        SpawnConfig = new List<NemesisSpawn>(){
+                            new NemesisSpawn() { Prefab = "Serpent", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.SeaMonsters, SpawnGroupSize = 2 },
+                    }}},
                     { "TreasureTrolls", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.1f,
                         AllowedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands },
-                        // Blackforest/meadows level players get hunted when they go to plains
                         RequiredGlobalKeys = new List<string> { "defeated_goblinking" },
                         Action = NemesisAction.Spawn,
                         LevelBonus = 5,
@@ -119,7 +150,7 @@ namespace StarLevelSystem.Data
                     { "CharredAttack", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.3f,
-                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.DeepNorth },
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean },
                         RequiredGlobalKeys = new List<string> { "defeated_fader" },
                         ScoreThreshold = 9000f,
                         Action = NemesisAction.Spawn,
@@ -132,7 +163,7 @@ namespace StarLevelSystem.Data
                     { "SeekerAttack", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.3f,
-                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean },
                         RequiredGlobalKeys = new List<string> { "defeated_queen" },
                         ScoreThreshold = 9000f,
                         Action = NemesisAction.Spawn,
@@ -144,7 +175,7 @@ namespace StarLevelSystem.Data
                     { "GoblinAttack", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.3f,
-                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean },
                         RequiredGlobalKeys = new List<string> { "defeated_goblinking" },
                         ScoreThreshold = 9000f,
                         Action = NemesisAction.Spawn,
@@ -157,7 +188,7 @@ namespace StarLevelSystem.Data
                     { "FenringAttack", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.3f,
-                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean },
                         RequiredGlobalKeys = new List<string> { "defeated_dragon" },
                         ScoreThreshold = 9000f,
                         Action = NemesisAction.Spawn,
@@ -169,7 +200,7 @@ namespace StarLevelSystem.Data
                     { "SwampAttack", new NemesisChanceEntry() {
                         Enabled = true,
                         Chance = 0.3f,
-                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth },
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean },
                         RequiredGlobalKeys = new List<string> { "defeated_bonemass" },
                         ScoreThreshold = 9000f,
                         Action = NemesisAction.Spawn,
@@ -181,7 +212,7 @@ namespace StarLevelSystem.Data
                     { "BlackForestSwarm", new NemesisChanceEntry() { 
                         Enabled = true, 
                         Chance = 0.3f, 
-                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mountain, Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth }, 
+                        DeniedBiomes = new List<Heightmap.Biome>() { Heightmap.Biome.Mountain, Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean }, 
                         RequiredGlobalKeys = new List<string> { "defeated_gdking" }, 
                         ScoreThreshold = 9000f,
                         Action = NemesisAction.Spawn,
@@ -293,7 +324,7 @@ namespace StarLevelSystem.Data
         }
 
         public static string YamlDefaultConfig() {
-            return DataObjects.yamlserializer.Serialize(DefaultConfiguration);
+            return DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
         }
 
         internal static void UpdateNemesisLog(string data) {
@@ -312,7 +343,7 @@ namespace StarLevelSystem.Data
         public static bool UpdateYamlConfig(string yaml) {
             try {
                 Logger.LogNemesis("Loaded new Nemesis settings...");
-                SLE_Nemesis_Settings = DataObjects.yamldeserializer.Deserialize<NemesisConfiguration>(yaml);
+                SLE_Nemesis_Settings = DataObjects.yamlDeserializer.Deserialize<NemesisConfiguration>(yaml);
                 if (SLE_Nemesis_Settings.NemesisVersion != DefaultConfiguration.NemesisVersion) {
                     Logger.LogInfo("Nemesis Config version outdated, resetting to default.");
                     SLE_Nemesis_Settings = DefaultConfiguration;

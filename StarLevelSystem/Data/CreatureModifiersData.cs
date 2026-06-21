@@ -97,7 +97,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$bossSummoner_prefix1",
                         NameSuffix = "$bossSummoner_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "summoner",
                         SetupEvent = Summoner.Setup,
                     }
@@ -106,7 +106,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$SoulEater_prefix1",
                         NameSuffix = "$SoulEater_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "vortex",
                     }
                 },
@@ -114,7 +114,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$LifeLink_prefix1",
                         NameSuffix = "$LifeLink_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "LifeLink2",
                         SecondaryEffect = "LifelinkEffect",
                     }
@@ -122,7 +122,7 @@ namespace StarLevelSystem.Data
                 { ModifierNames.Evolving.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$Evolve_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
+                        NamingConvention = NameSelectionStyle.RandomFirst,
                         //VisualEffectStyle = VisualEffectStyle.bottom,
                         StarVisual = "evolve",
                     }
@@ -130,7 +130,7 @@ namespace StarLevelSystem.Data
                 { ModifierNames.Brutal.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$Brutal_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
+                        NamingConvention = NameSelectionStyle.RandomFirst,
                         VisualEffectStyle = VisualEffectStyle.bottom,
                         StarVisual = "brutal",
                         RunOnceEvent = Brutal.RunOnce,
@@ -140,7 +140,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$fire_prefix1",
                         NameSuffix = "$fire_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffectStyle = VisualEffectStyle.bottom,
                         VisualEffect = "creatureFire",
                         StarVisual = "flame",
@@ -151,7 +151,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$frost_prefix1",
                         NameSuffix = "$frost_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffect = "creatureFrost",
                         StarVisual = "snowflake",
                         RunOnceEvent = Frost.RunOnce,
@@ -161,7 +161,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$poison_prefix1",
                         NameSuffix = "$poison_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffect = "creaturePoison",
                         StarVisual = "poison",
                         RunOnceEvent = Poison.RunOnce,
@@ -171,7 +171,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$lightning_prefix1",
                         NameSuffix = "$lightning_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffectStyle = VisualEffectStyle.objectCenter,
                         VisualEffect = "creatureLightning",
                         StarVisual = "lightning",
@@ -182,7 +182,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ElementalChaos_prefix",
                         NameSuffix = "$ElementalChaos_suffix",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         VisualEffectStyle = VisualEffectStyle.objectCenter,
                         VisualEffect = "creatureLightning",
                         StarVisual = "eleChaos",
@@ -192,7 +192,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$Splitter_prefix1",
                         NameSuffix = "$Splitter_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect = "creatureLightning",
                         StarVisual = "splitting",
                     }
@@ -201,7 +201,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistPierce_prefix1",
                         NameSuffix = "$ResistPierce_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "pierceresist",
                         RunOnceEvent = ResistPierce.RunOnce
                     }
@@ -210,7 +210,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistSlash_prefix1",
                         NameSuffix = "$ResistSlash_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "slashresist",
                         RunOnceEvent = ResistSlash.RunOnce
                     }
@@ -219,7 +219,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistBlunt_prefix1",
                         NameSuffix = "$ResistBlunt_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "bluntresist",
                         RunOnceEvent = ResistBlunt.RunOnce
                     }
@@ -228,7 +228,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistFire_prefix1",
                         NameSuffix = "$ResistFire_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "FireRes",
                         RunOnceEvent = ResistFire.RunOnce
                     }
@@ -237,7 +237,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistFrost_prefix1",
                         NameSuffix = "$ResistFrost_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "FrostRes",
                         RunOnceEvent = ResistFrost.RunOnce
                     }
@@ -246,7 +246,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistPoison_prefix1",
                         NameSuffix = "$ResistPoison_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "PoisonRes",
                         RunOnceEvent = ResistPoison.RunOnce
                     }
@@ -255,7 +255,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$ResistSpirit_prefix1",
                         NameSuffix = "$ResistSpirit_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "SpiritRes",
                         RunOnceEvent = ResistSpirit.RunOnce
                     }
@@ -263,7 +263,7 @@ namespace StarLevelSystem.Data
                 { ModifierNames.FireNova.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$FireNova_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
+                        NamingConvention = NameSelectionStyle.RandomFirst,
                         //visualEffect = "creatureLightning",
                         StarVisual = "firenova",
                         SecondaryEffect = "DeathFireNova",
@@ -272,7 +272,7 @@ namespace StarLevelSystem.Data
                 { ModifierNames.PoisonNova.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$PoisonNova_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
+                        NamingConvention = NameSelectionStyle.RandomFirst,
                         //visualEffect = "creatureLightning",
                         StarVisual = "poisonnova",
                         SecondaryEffect = "DeathPoisonNova",
@@ -282,7 +282,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$Lootbags_prefix1",
                         NameSuffix = "$Lootbags_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect = "creatureLightning",
                         StarVisual = "lootbag",
                         RunOnceEvent = Lootbags.RunOnce
@@ -292,7 +292,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$alert_prefix1",
                         NameSuffix = "$alert_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect
                         SetupEvent = Alert.Setup
                     }
@@ -301,7 +301,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$big_prefix1",
                         NameSuffix = "$big_suffix1",
-                        namingConvention = NameSelectionStyle.RandomBoth,
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect
                         RunOnceEvent = Big.RunOnce
                     }
@@ -309,7 +309,7 @@ namespace StarLevelSystem.Data
                 { ModifierNames.Fast.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$fast_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
+                        NamingConvention = NameSelectionStyle.RandomFirst,
                         //visualEffect
                         RunOnceEvent = Fast.RunOnce
                     }
@@ -317,15 +317,15 @@ namespace StarLevelSystem.Data
                 { ModifierNames.StaminaDrain.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$staminaDrain_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
+                        NamingConvention = NameSelectionStyle.RandomFirst,
                         StarVisual = "staminadrain",
                     }
                 },
                 { ModifierNames.EitrDrain.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$staminaDrain_prefix1",
-                        namingConvention = NameSelectionStyle.RandomFirst,
-                        StarVisual = "staminadrain",
+                        NamingConvention = NameSelectionStyle.RandomFirst,
+                        StarVisual = "eitrdrain",
                     }
                 }
             };
@@ -334,7 +334,7 @@ namespace StarLevelSystem.Data
 
         static CreatureModifierCollection CustomModifiers = new CreatureModifierCollection();
         static CreatureModifierCollection APIAdded = new CreatureModifierCollection();
-        static CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
+        static readonly CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
             BossModifiers = new Dictionary<string, CreatureModifierConfiguration>() {
                 {ModifierNames.BossSummoner.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
@@ -753,7 +753,7 @@ namespace StarLevelSystem.Data
         }
 
         internal static string GetModifierDefaultConfig() {
-            var yaml = DataObjects.yamlserializer.Serialize(DefaultModifiers);
+            var yaml = DataObjects.yamlSerializer.Serialize(DefaultModifiers);
             return yaml;
         }
 
@@ -771,7 +771,7 @@ namespace StarLevelSystem.Data
         internal static bool UpdateModifierConfig(string yaml)
         {
             try {
-                CreatureModifierCollection modcollection = DataObjects.yamldeserializer.Deserialize<CreatureModifierCollection>(yaml);
+                CreatureModifierCollection modcollection = DataObjects.yamlDeserializer.Deserialize<CreatureModifierCollection>(yaml);
                 UpdateModifiers(creatureMods: modcollection);
                 LoadPrefabs();
                 // Resolve all of the prefab references

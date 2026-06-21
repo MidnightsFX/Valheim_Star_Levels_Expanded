@@ -1,4 +1,5 @@
 ﻿using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections;
@@ -27,7 +28,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             yield return new WaitForSeconds(10f);
             if (ZNet.instance.IsCurrentServerDedicated()) {
                 int iterations = 0;
-                while (ValConfig.RecievedConfigsFromServer == false) {
+                while (ValConfig.ServerConfigsSynced == false) {
                     Logger.LogDebug("Waiting for config sync to complete before drawing map rings on dedicated server.");
                     yield return new WaitForSeconds(5f);
                     iterations++;

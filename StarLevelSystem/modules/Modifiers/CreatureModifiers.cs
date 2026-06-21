@@ -1,6 +1,5 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
@@ -13,8 +12,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using static StarLevelSystem.common.DataObjects;
 
-namespace StarLevelSystem.modules.Control
-{
+namespace StarLevelSystem.modules.Modifiers {
     public static class CreatureModifiers
     {
         internal static readonly string NoMods = "None";
@@ -106,12 +104,12 @@ namespace StarLevelSystem.modules.Control
             SetupCreatureVFX(character, CreatureModifiersData.ModifierDefinitions[mod]);
         }
 
-        internal static void SetupCreatureVFX(Character character, CreatureModifierDefinition cmodifier) {
-            if (character == null || cmodifier == null || cmodifier.VisualEffect == null) { return; }
+        internal static void SetupCreatureVFX(Character character, CreatureModifierDefinition creatureModifier) {
+            if (character == null || creatureModifier == null || creatureModifier.VisualEffect == null) { return; }
 
             // Check to ensure that the effect prefab specified actually exists
-            //Logger.LogDebug($"Checking for visual effect {cmodifier.VisualEffect}");
-            GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[cmodifier.VisualEffect];
+            //Logger.LogDebug($"Checking for visual effect {creatureModifier.VisualEffect}");
+            GameObject effectPrefab = CreatureModifiersData.LoadedModifierEffects[creatureModifier.VisualEffect];
             if (effectPrefab == null) { return; }
 
             // Check to see if the creature already has the specific VFX
@@ -127,26 +125,26 @@ namespace StarLevelSystem.modules.Control
                     visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
                 }
                 //Logger.LogDebug($"Adding visual effects for {character.name}");
-                GameObject vfxadd = GameObject.Instantiate(effectPrefab, visualHolder);
-                if (vfxadd == null) { return; }
+                GameObject vfxAdd = GameObject.Instantiate(effectPrefab, visualHolder);
+                if (vfxAdd == null) { return; }
 
                 float height = character.GetHeight();
                 float scale = height / 5f;
-                float rscale = character.GetRadius() / 2f;
+                float radiusScale = character.GetRadius() / 2f;
 
-                switch (cmodifier.VisualEffectStyle) {
+                switch (creatureModifier.VisualEffectStyle) {
                     case VisualEffectStyle.top:
-                        vfxadd.transform.localPosition = new Vector3(0, height, 0);
+                        vfxAdd.transform.localPosition = new Vector3(0, height, 0);
                         break;
                     case VisualEffectStyle.bottom:
-                        vfxadd.transform.localPosition = new Vector3(0, 0, 0);
+                        vfxAdd.transform.localPosition = new Vector3(0, 0, 0);
                         break;
                     case VisualEffectStyle.objectCenter:
-                        vfxadd.transform.localPosition = new Vector3(0, height / 2, 0);
+                        vfxAdd.transform.localPosition = new Vector3(0, height / 2, 0);
                         break;
                 }
                 // Scale the visual effect based on the creatures height/width
-                vfxadd.transform.localScale = new Vector3(vfxadd.transform.localScale.x * scale, vfxadd.transform.localScale.y * rscale, vfxadd.transform.localScale.z * scale);
+                vfxAdd.transform.localScale = new Vector3(vfxAdd.transform.localScale.x * scale, vfxAdd.transform.localScale.y * radiusScale, vfxAdd.transform.localScale.z * scale);
             }
         }
 
@@ -180,33 +178,33 @@ namespace StarLevelSystem.modules.Control
                 nameEntries++;
                 if (modifierName == NoMods) { continue; }
 
-                ModifierType modtype = ModifierType.Major;
+                ModifierType modType = ModifierType.Major;
                 if (modifiers.ContainsKey(modifierName)) {
-                    modtype = modifiers[modifierName];
+                    modType = modifiers[modifierName];
                 }
-                CreatureModifierDefinition creaturemod = CreatureModifiersData.ModifierDefinitions[modifierName];
-                if (creaturemod == null) { continue; }
-                if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value && prefixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NamePrefix != null && creaturemod.NamePrefix.Length > 0)
+                CreatureModifierDefinition creatureMod = CreatureModifiersData.ModifierDefinitions[modifierName];
+                if (creatureMod == null) { continue; }
+                if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value && prefixSelectors.Contains(creatureMod.NamingConvention) && creatureMod.NamePrefix != null && creatureMod.NamePrefix.Length > 0)
                 {
                     selectedPrefixes++;
-                    prefix_names.Add(creaturemod.NamePrefix);
+                    prefix_names.Add(creatureMod.NamePrefix);
                     continue;
                 }
                 //Logger.LogDebug($"checking to add suffix");
-                if (suffixSelectors.Contains(creaturemod.namingConvention) && creaturemod.NameSuffix != null && creaturemod.NameSuffix.Length > 0)
+                if (suffixSelectors.Contains(creatureMod.NamingConvention) && creatureMod.NameSuffix != null && creatureMod.NameSuffix.Length > 0)
                 {
-                    suffix_names.Add(creaturemod.NameSuffix);
+                    suffix_names.Add(creatureMod.NameSuffix);
                 }
             }
 
-            string cname = chara.m_name;
+            string charName = chara.m_name;
             string customName = chara.m_nview.GetZDO().GetString(SLS_NAME, "");
-            if (string.IsNullOrEmpty(customName) == false) { cname = customName; }
+            if (string.IsNullOrEmpty(customName) == false) { charName = customName; }
 
             if (prefix_names.Count == 0 && suffix_names.Count == 0) {
-                return cname;
+                return charName;
             }
-            string creatureName = $"{string.Join(" ", prefix_names)} {cname}";
+            string creatureName = $"{string.Join(" ", prefix_names)} {charName}";
             if (suffix_names.Count > 0)
             {
                 creatureName += $" $suffix_moniker {string.Join(" ", suffix_names)}";
@@ -329,11 +327,11 @@ namespace StarLevelSystem.modules.Control
                 avoidedModifiers.AddRange(notAllowedModifiers);
             }
             
-            int mod_attemps = 0;
-            if (requiredMods != null) { mod_attemps += requiredMods.Count; }
+            int mod_attempts = 0;
+            if (requiredMods != null) { mod_attempts += requiredMods.Count; }
             //Logger.LogDebug($"Selecting {num_mods} modifiers, limited by level? {ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value} level:{level - 1}");
-            while (num_mods > mod_attemps) {
-                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value == true && mod_attemps + 1 + existingMods >= level) { break; }
+            while (num_mods > mod_attempts) {
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value == true && mod_attempts + 1 + existingMods >= level) { break; }
                 if (chance < 1) {
                     float roll = UnityEngine.Random.value;
                     //Logger.LogDebug($"Rolling Chance {roll} < {chance}");
@@ -347,7 +345,7 @@ namespace StarLevelSystem.modules.Control
                     selectedModifiers.Add(mod);
                     avoidedModifiers.Add(mod);
                 }
-                mod_attemps++;
+                mod_attempts++;
             }
             //Logger.LogDebug($"Selected {selectedModifiers.Count} modifiers {string.Join(",", selectedModifiers)} for creature {creature} of type {type} with chance {chance} limited by star level? {ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value} level:{level - 1}");
             if (selectedModifiers.Count == 0) { selectedModifiers.Add(NoMods); }

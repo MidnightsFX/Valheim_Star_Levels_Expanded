@@ -281,11 +281,11 @@ namespace StarLevelSystem.modules.Raids
                 //Logger.LogDebug($"Checking recent activations of specified raid");
                 if (playerData.LastRaidByName.Count > 0) {
                     if (playerData.NextRaidableTime > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogRaid($"Player {playerPlatformID} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Player {playerPlatformID} is next raidable in {ZNet.instance.GetTimeSeconds() - playerData.NextRaidableTime} seconds, skipping Raid: {raid.Name}");
                         continue;
                     }
                     if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)}");
+                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {ZNet.instance.GetTimeSeconds() - (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60))}");
                         continue;
                     }
                 }
@@ -405,6 +405,8 @@ namespace StarLevelSystem.modules.Raids
                     Logger.LogRaid($"Spawn location is in lava, skipping. | {determinedSpawn}");
                     continue;
                 }
+
+                determinedSpawn.y += 1f;
 
                 Logger.LogRaid($"Determined valid spawn target: {determinedSpawn}");
                 spawn_locations.Add(determinedSpawn);

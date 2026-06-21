@@ -169,6 +169,7 @@ namespace StarLevelSystem.modules.Raids
             //Logger.LogDebug("Base area check");
             bool inBase = EffectArea.IsPointInsideArea(position, EffectArea.Type.PlayerBase, 30f);
             //Logger.LogDebug("Biome check ");
+            if (WorldGenerator.instance == null) return playerAvailableRaids;
             Heightmap.Biome biome = WorldGenerator.instance.GetBiome(position);
 
             foreach (RaidDefinition raid in RaidsData.SLE_Raid_Settings.Raids) {
@@ -192,6 +193,7 @@ namespace StarLevelSystem.modules.Raids
                 //Logger.LogDebug($"Checking for global key requirements");
                 if (raid.Activation.RequiredGlobalKeys != null) {
                     bool hasRequiredGlobalKeys = true;
+                    if (ZoneSystem.instance == null) continue;
                     List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
                     foreach (string gkey in raid.Activation.RequiredGlobalKeys) {
                         if (currentGlobalKeys.Contains(gkey) == false) {
@@ -208,6 +210,7 @@ namespace StarLevelSystem.modules.Raids
                 // Global key Anti-key check
                 if (raid.Activation.NotRequiredGlobalKeys != null) {
                     bool hasAnAntiKey = false;
+                    if (ZoneSystem.instance == null) continue;
                     List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
                     foreach (string gkey in raid.Activation.NotRequiredGlobalKeys) {
                         if (currentGlobalKeys.Contains(gkey)) {

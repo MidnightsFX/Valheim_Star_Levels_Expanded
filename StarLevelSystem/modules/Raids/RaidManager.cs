@@ -149,7 +149,7 @@ namespace StarLevelSystem.modules.Raids {
                             if (isIntegratedServer && localPlayerPlatformAndID == playerRaids.Key) {
                                 Logger.LogRaid("Starting integrated raid runner.");
                                 RaidControl.StartRaidRunner(raid, raidPosition);
-                                MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString());
+                                MusicMan.instance?.TriggerMusic(raid.ForceMusic.ToString());
                             } else {
                                 Logger.LogRaid("Starting networked raid runner.");
                                 ZNetPeer zpeer = SLSExtensions.GetPeerByPlatformID(playerRaids.Key);

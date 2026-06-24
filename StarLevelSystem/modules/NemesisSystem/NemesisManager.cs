@@ -31,11 +31,14 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         public double nextRecalcTime;
         public double nextNemeisActionTime;
-        
 
-        public void FixedUpdate() {
+        public void Awake() {
+            InvokeRepeating("CheckAndUpdateNemesis", 5, 5);
+        }
+
+        public void CheckAndUpdateNemesis() {
             if (ValConfig.EnableNemesisSystem.Value == false) { return; }
-            if (setup == false|| ZNet.instance == null) { return; }
+            if (setup == false || ZNet.instance == null) { return; }
             if (player == null) { setup = false; return; }   // Unity == handles destroyed objects; re-setups on next Player.Load
 
             // Score updater
@@ -54,10 +57,6 @@ namespace StarLevelSystem.modules.NemesisSystem {
                     NemesisActionLog.Clear();
                 }
             }
-            // Nemesis action
-            //if (ReadyForNextNemesisAction()) {
-            //    nextNemeisActionTime = ZNet.instance.GetTimeSeconds() + NemesisSystemData.SLE_Nemesis_Settings.NemesisActionCooldownSeconds;
-            //}
         }
 
         public void RecordNemesisAction(string nemSummary) {

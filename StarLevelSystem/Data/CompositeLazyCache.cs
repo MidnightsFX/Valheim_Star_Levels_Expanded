@@ -313,11 +313,13 @@ namespace StarLevelSystem.Data
                 characterEntry.SpawnRateModifier = biomeRate;
             }
             if (creatureSettings != null) {
-                float creatureRate = creatureSettings.SpawnRateModifier;
-                if (isNight && creatureSettings.NightSettings != null && creatureSettings.NightSettings.SpawnRateModifier != 1f) {
-                    creatureRate = creatureSettings.NightSettings.SpawnRateModifier;
+                // Creature day rate overrides the biome value only when explicitly changed (1f = inherit).
+                if (creatureSettings.SpawnRateModifier != 1f) {
+                    characterEntry.SpawnRateModifier = creatureSettings.SpawnRateModifier;
                 }
-                characterEntry.SpawnRateModifier = creatureRate;
+                if (isNight && creatureSettings.NightSettings != null && creatureSettings.NightSettings.SpawnRateModifier != 1f) {
+                    characterEntry.SpawnRateModifier = creatureSettings.NightSettings.SpawnRateModifier;
+                }
             }
 
             // Night-time spawn disable checks

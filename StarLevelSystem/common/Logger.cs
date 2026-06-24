@@ -4,7 +4,7 @@ using System;
 
 
 namespace StarLevelSystem {
-    internal class Logger
+    internal static class Logger
     {
         public static LogLevel Level = LogLevel.Info;
 

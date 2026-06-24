@@ -307,6 +307,10 @@ namespace StarLevelSystem.common
             if (prioritycfg.CustomCreatureLevelUpChance != null) { biomecfg.CustomCreatureLevelUpChance = prioritycfg.CustomCreatureLevelUpChance; }
             biomecfg.BiomeMaxLevelOverride = prioritycfg.BiomeMaxLevelOverride;
             biomecfg.DistanceScaleModifier = prioritycfg.DistanceScaleModifier;
+            // Biome-specific spawn rate overrides the All-biome value only when explicitly changed.
+            if (prioritycfg.SpawnRateModifier != 1f) {
+                biomecfg.SpawnRateModifier = prioritycfg.SpawnRateModifier;
+            }
             if (biomecfg.CreatureBaseValueModifiers != null && prioritycfg.CreatureBaseValueModifiers != null)
             {
                 biomecfg.CreatureBaseValueModifiers.ToList().ForEach(x => prioritycfg.CreatureBaseValueModifiers[x.Key] = x.Value);

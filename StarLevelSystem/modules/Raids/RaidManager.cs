@@ -19,7 +19,11 @@ namespace StarLevelSystem.modules.Raids {
         double nextCheckForRaidsTime = 0;
         bool forceRaidStart = false;
 
-        public void FixedUpdate() {
+        public void Awake() {
+            InvokeRepeating("CheckForRaidUpdate", 30, 30);
+        }
+
+        public void CheckForRaidUpdate() {
             if (setup == false) { return; }
             if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }

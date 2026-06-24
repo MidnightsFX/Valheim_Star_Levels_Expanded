@@ -24,6 +24,7 @@
 - Fixes DropThat compatibility so DropThat's item modifiers (durability/quality/custom stacks/EpicLoot/etc.) are applied to creature loot again
 	- Note: DropThat item modifiers still do not apply to SLS-handled object loot (rocks/trees/destructibles), which keep SLS's level/distance scaling
 - Some spelling fixes :) no promises, my spelling still sucks.
+- Performance Optimizations for the Nemesis and Raid systems
 ```
 
 **0.21.0**

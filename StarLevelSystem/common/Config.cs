@@ -157,7 +157,9 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableEnemyHealthbarNumberDisplay;
         public static ConfigEntry<float> HealthDisplayFontSizeAdjustment;
         public static ConfigEntry<bool> StackMultipleBossHealthbars;
-        public static ConfigEntry<float> BossHealthbarStackSpacing;
+        public static ConfigEntry<float> BossHealthbarSpacing;
+        public static ConfigEntry<int> BossHudTopBuffer;
+        public static ConfigEntry<float> BossHealthbarWidthPercent;
         public static ConfigEntry<bool> EnableJewelCraftingBossHudCompat;
         public static ConfigEntry<bool> UseCustomHealthFont;
 
@@ -401,8 +403,18 @@ namespace StarLevelSystem.common {
             UseCustomHealthFont = Config.Bind("UI", "UseCustomHealthFont", false, "[Client side Config] Enable to use a custom version of the Norse font.");
             HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.");
             EnableEnemyHealthbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
-            StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row) instead of overlapping them.");
-            BossHealthbarStackSpacing = BindServerConfig("UI", "BossHealthbarStackSpacing", 6f, "Vertical gap, in pixels, between stacked boss healthbars.", true, 0f, 40f);
+            StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row). When disabled, the boss bars are squished horizontally so they sit side-by-side.");
+            BossHealthbarSpacing = BindServerConfig("UI", "BossHealthbarSpacing", 30f, "Gap, in pixels, between boss healthbars (vertical gap when stacked, horizontal gap when squished).", true, 0f, 120f);
+            BossHudTopBuffer = Config.Bind("UI", "BossHudTopBuffer", 120,
+                new ConfigDescription("[Client side Config] Space, in 1080p-equivalent pixels, between the top of the screen and the boss health HUD.",
+                new AcceptableValueRange<int>(0, 600)));
+            BossHealthbarWidthPercent = Config.Bind("UI", "BossHealthbarWidthPercent", 0.4f,
+                new ConfigDescription("[Client side Config] Boss health bar width as a fraction of the screen width.",
+                new AcceptableValueRange<float>(0.1f, 1f)));
+            StackMultipleBossHealthbars.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            BossHealthbarSpacing.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            BossHudTopBuffer.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            BossHealthbarWidthPercent.SettingChanged += UIHudControl.OnBossHudConfigChanged;
             EnableJewelCraftingBossHudCompat = BindServerConfig("UI", "EnableJewelcraftingBossHudCompat", true, "When Jewelcrafting is installed, suppress its multi-boss HUD layout (which rescales the boss health bar every frame) so SLS controls the boss healthbars. Has no effect if Jewelcrafting is not installed.", advanced: true);
 
 

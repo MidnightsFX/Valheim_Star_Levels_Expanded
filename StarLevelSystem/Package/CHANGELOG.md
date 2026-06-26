@@ -1,3 +1,13 @@
+**1.1.1**
+ ---
+ ```
+ - Fixes support for UI scales at extremes
+ - Adds configuration options to control all Boss HUD positioning
+	- Configure space to top of screen
+	- Configure vertical stacking or horizontal stacking
+	- Configure buffer space between boss entries
+ ```
+
 **1.1.0**
  ---
  ```

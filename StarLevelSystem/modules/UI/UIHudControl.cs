@@ -50,6 +50,11 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
+        // Marks the boss hud layout as needing re-application; the actual Unity work is done
+        // on the main thread inside StackBossHuds (called from the EnemyHud.UpdateHuds postfix).
+        internal static bool BossHudConfigDirty = true;
+        private static int lastBossHudCount = -1;
+
         public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject HealthText;
         static Sprite defaultStar;
@@ -475,6 +480,140 @@ namespace StarLevelSystem.modules.UI {
                 extended_hud.StarLevelNFrontImage.rectTransform.sizeDelta = new Vector2(17, 17);
                 extended_hud.StarLevelNBackImage.sprite = defaultStar;
                 extended_hud.StarLevelNBackImage.rectTransform.sizeDelta = new Vector2(21, 21);
+            }
+        }
+
+        public static void OnBossHudConfigChanged(object s, EventArgs e) {
+            BossHudConfigDirty = true;
+        }
+
+        // Valheim's HUD canvas is a ConstantPixelSize CanvasScaler whose scaleFactor is driven by
+        // GuiScaler (= Min(Screen.width/1920, Screen.height/1080) * GuiScale). Canvas-local units
+        // therefore equal pixels / scaleFactor, which is what localPosition/sizeDelta operate in.
+        internal static float GetHudScaleFactor(EnemyHud hud) {
+            Canvas canvas = hud != null ? hud.GetComponentInParent<Canvas>() : null;
+            float sf = canvas != null && canvas.rootCanvas != null ? canvas.rootCanvas.scaleFactor : 0f;
+            if (sf <= 0f) {
+                // CanvasScaler may not have run its first Update yet (e.g. during EnemyHud.Awake).
+                sf = Mathf.Min(Screen.width / 1920f, Screen.height / 1080f) * PlatformPrefs.GetFloat("GuiScale", 1f);
+            }
+            return sf <= 0f ? 1f : sf;
+        }
+
+        // Ensures BossHudRoot carries the correct layout group for the current stacking mode and
+        // applies the configured spacing + top buffer. Vertical = stacked rows, Horizontal = squished.
+        internal static HorizontalOrVerticalLayoutGroup EnsureBossLayoutGroup(bool stack) {
+            if (BossHudRoot == null) { return null; }
+            HorizontalOrVerticalLayoutGroup group = BossHudRoot.GetComponent<HorizontalOrVerticalLayoutGroup>();
+            bool wrongType = group == null
+                || (stack && group is HorizontalLayoutGroup)
+                || (!stack && group is VerticalLayoutGroup);
+            if (wrongType) {
+                if (group != null) { GameObject.DestroyImmediate(group); }
+                group = stack
+                    ? (HorizontalOrVerticalLayoutGroup)BossHudRoot.AddComponent<VerticalLayoutGroup>()
+                    : BossHudRoot.AddComponent<HorizontalLayoutGroup>();
+            }
+            group.childAlignment = TextAnchor.UpperCenter;
+            group.childForceExpandHeight = false;
+            group.spacing = ValConfig.BossHealthbarSpacing.Value;
+            group.padding = new RectOffset(0, 0, ValConfig.BossHudTopBuffer.Value, 0);
+            if (stack) {
+                // Stacked rows: each full-width bar centered, one per row.
+                group.childControlWidth = false;
+                group.childForceExpandWidth = false;
+                group.childControlHeight = true;
+            } else {
+                // Squished row: divide the configured total width evenly between the bars so they
+                // always fit within it (root rect width is set to that budget in StackBossHuds).
+                group.childControlWidth = true;
+                group.childForceExpandWidth = true;
+                group.childControlHeight = false;
+            }
+            return group;
+        }
+
+        // Applies a target width (canvas units) to a boss hud's name, health bars and backgrounds.
+        // Works for both the m_baseHudBoss template (sizes future clones) and already-shown clones.
+        internal static void SetBossBarWidth(GameObject bossGui, float width) {
+            if (bossGui == null) { return; }
+            LayoutElement le = bossGui.GetComponent<LayoutElement>();
+            if (le != null) {
+                le.minWidth = width;
+                le.preferredWidth = width;
+            }
+            if (bossGui.transform.Find("Name") is RectTransform nameRT) {
+                nameRT.sizeDelta = new Vector2(width, 40f);
+            }
+            Transform health = bossGui.transform.Find("Health");
+            if (health == null) { return; }
+            SetBossHealthBar(health.Find("health_slow"), width);
+            SetBossHealthBar(health.Find("health_fast"), width);
+            if (health.Find("Background/bkg") is RectTransform bkgRT) {
+                bkgRT.sizeDelta = new Vector2(width, 20f);
+            }
+            if (health.Find("Background/darken") is RectTransform darkRT) {
+                darkRT.sizeDelta = new Vector2(width, 24f);
+            }
+        }
+
+        private static void SetBossHealthBar(Transform healthBar, float width) {
+            if (healthBar == null) { return; }
+            if (healthBar.Find("bar") is RectTransform barRT) {
+                barRT.sizeDelta = new Vector2(width, 20f);
+                barRT.localPosition = new Vector2(width * -0.5f, 0f);
+            }
+            // GuiBar overrides the bar sizeDelta every LateUpdate from its captured m_width, so a live
+            // bar only resizes via SetWidth; setting sizeDelta above keeps fresh clones correct.
+            GuiBar gb = healthBar.GetComponent<GuiBar>();
+            if (gb != null) { gb.SetWidth(width); }
+        }
+
+        // Runs from the EnemyHud.UpdateHuds postfix (main thread). Gated on boss count / config change
+        // so widths are only rewritten when needed, not every frame.
+        internal static void StackBossHuds(EnemyHud instance) {
+            if (instance == null || BossHudRoot == null) { return; }
+
+            int count = 0;
+            foreach (KeyValuePair<Character, EnemyHud.HudData> kv in instance.m_huds) {
+                EnemyHud.HudData hd = kv.Value;
+                if (hd != null && hd.m_character != null && hd.m_character.IsBoss() && hd.m_gui != null && hd.m_gui.activeSelf) {
+                    count++;
+                }
+            }
+
+            if (BossHudConfigDirty == false && count == lastBossHudCount) { return; }
+            BossHudConfigDirty = false;
+            lastBossHudCount = count;
+
+            bool stack = ValConfig.StackMultipleBossHealthbars.Value;
+            EnsureBossLayoutGroup(stack);
+
+            // The configured percentage is the TOTAL width budget for the boss HUD.
+            float bossWidth = (Screen.width / GetHudScaleFactor(instance)) * ValConfig.BossHealthbarWidthPercent.Value;
+
+            RectTransform rootRT = BossHudRoot.GetComponent<RectTransform>();
+            float perBarWidth = bossWidth;
+            if (stack == false) {
+                // Give the layout group the configured width and split it evenly so the bars are
+                // shrunk to all fit side-by-side within that budget.
+                int bars = Mathf.Max(1, count);
+                float spacing = ValConfig.BossHealthbarSpacing.Value;
+                perBarWidth = Mathf.Max(1f, (bossWidth - (spacing * (bars - 1))) / bars);
+                if (rootRT != null) { rootRT.sizeDelta = new Vector2(bossWidth, rootRT.sizeDelta.y); }
+            } else if (rootRT != null) {
+                // Stacked: the root is a point; each full-width row is centered around it.
+                rootRT.sizeDelta = new Vector2(0f, rootRT.sizeDelta.y);
+            }
+
+            // Template controls how freshly-shown bosses are sized.
+            if (instance.m_baseHudBoss != null) { SetBossBarWidth(instance.m_baseHudBoss, perBarWidth); }
+            // Resize the bosses that are already on screen.
+            foreach (KeyValuePair<Character, EnemyHud.HudData> kv in instance.m_huds) {
+                EnemyHud.HudData hd = kv.Value;
+                if (hd != null && hd.m_character != null && hd.m_character.IsBoss() && hd.m_gui != null) {
+                    SetBossBarWidth(hd.m_gui, perBarWidth);
+                }
             }
         }
 

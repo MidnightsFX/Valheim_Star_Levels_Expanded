@@ -34,71 +34,59 @@ namespace StarLevelSystem.modules.UI {
 
                 // Setup boss huds for stacking support
                 Logger.LogDebug("Setting BossHud root");
-                float halfW = Screen.width * 0.4f;
                 UIHudControl.BossHudRoot = GameObject.Instantiate(new GameObject("BossHuds"), __instance.transform.Find("HudRoot").transform);
                 UIHudControl.BossHudRoot.name = "BossHuds"; // remove the "Cloned"
-                UIHudControl.BossHudRoot.transform.localPosition = new Vector3(0, (Screen.height/2.6f), 0);
-                VerticalLayoutGroup vlg = UIHudControl.BossHudRoot.AddComponent<VerticalLayoutGroup>();
-                vlg.childAlignment = TextAnchor.UpperCenter;
-                vlg.childControlHeight = true;
-                vlg.childControlWidth = false;
-                vlg.spacing = 30f;
-                vlg.childForceExpandHeight = false;
+
+                // Layout group (vertical = stacked, horizontal = squished) + spacing/top-buffer from config.
+                UIHudControl.EnsureBossLayoutGroup(ValConfig.StackMultipleBossHealthbars.Value);
+
+                // Pin the root to the top-center of the screen via anchors so it stays in place at any
+                // resolution / GUI scale. The buffer below the top edge is the layout group's top padding.
+                RectTransform rootRT = UIHudControl.BossHudRoot.GetComponent<RectTransform>();
+                if (rootRT != null) {
+                    rootRT.anchorMin = rootRT.anchorMax = rootRT.pivot = new Vector2(0.5f, 1f);
+                    rootRT.anchoredPosition = Vector2.zero;
+                }
 
                 // Add a layout element to the top level of this, if it doesn't already exist
                 Logger.LogDebug("Setting root layout element");
                 if (__instance.m_baseHudBoss.GetComponent<LayoutElement>() == null) {
                     LayoutElement le = __instance.m_baseHudBoss.AddComponent<LayoutElement>();
-                    le.minWidth = halfW;
                     le.minHeight = 50f;
-                    le.preferredWidth = halfW;
                 }
 
-                // Pull down the name tag slightly
+                // Pull down the name tag slightly (width is applied by SetBossBarWidth)
                 Logger.LogDebug("Modifying name position");
                 RectTransform nameRT = (RectTransform)__instance.m_baseHudBoss.transform.Find("Name");
-                nameRT.sizeDelta = new Vector3(halfW, 40, 0);
                 nameRT.localPosition = new Vector3(0, 42f, 0);
 
-                // Adjust the offset for the boss health bars
-                Logger.LogDebug("Modifying health bars");
-                Transform HealthTForm = __instance.m_baseHudBoss.transform.Find("Health");
-                RectTransform healthBarSlowRT = HealthTForm.Find("health_slow/bar").gameObject.GetComponent<RectTransform>();
-                healthBarSlowRT.sizeDelta = new Vector2(halfW, 20f);
-                healthBarSlowRT.localPosition = new Vector2((halfW * -0.5f), 0f);
-                RectTransform healthBarFastRT = HealthTForm.Find("health_fast/bar").gameObject.GetComponent<RectTransform>();
-                healthBarFastRT.sizeDelta = new Vector2(halfW, 20f);
-                healthBarFastRT.localPosition = new Vector2((halfW * -0.5f), 0f);
-
                 // Create a container for scaling the background shaders
+                Logger.LogDebug("Building boss health bar background container");
+                Transform HealthTForm = __instance.m_baseHudBoss.transform.Find("Health");
                 GameObject backgroundContainer = GameObject.Instantiate(new GameObject("Background"), HealthTForm);
                 backgroundContainer.name = "Background";
                 RectTransform bkgRT = (RectTransform)HealthTForm.Find("bkg").transform;
                 RectTransform darkenRT = (RectTransform)HealthTForm.Find("darken").transform;
                 bkgRT.SetParent(backgroundContainer.transform, false);
-                bkgRT.sizeDelta = new Vector2(halfW, 20f);
                 darkenRT.SetParent(backgroundContainer.transform, false);
-                darkenRT.sizeDelta = new Vector2(halfW, 24f);
                 // Setting as the first sibling to render behind other elements, ensuring this is the "background"
                 backgroundContainer.transform.SetSiblingIndex(0);
+
+                // Size the template (and request a re-layout on the next UpdateHuds for live bosses).
+                float bossWidth = (Screen.width / UIHudControl.GetHudScaleFactor(__instance)) * ValConfig.BossHealthbarWidthPercent.Value;
+                UIHudControl.SetBossBarWidth(__instance.m_baseHudBoss, bossWidth);
+                UIHudControl.BossHudConfigDirty = true;
             }
         }
 
-        // Runs after EnemyHud has updated every hud; stacks + compacts boss bars when more than one is shown.
-        //[HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.UpdateHuds))]
-        //public static class StackBossHealthbars {
-        //    public static void Postfix(EnemyHud __instance) {
-        //        UIHudControl.StackBossHuds(__instance);
-        //    }
-        //}
-
-        //[HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.UpdateHuds))]
-        //public static class TrackBossHuds {
-        //    [HarmonyPrefix]
-        //    public static void Prefix(EnemyHud __instance) {
-        //        UIHudControl.CurrentBossHuds.Clear();
-        //    }
-        //}
+        // Runs after EnemyHud has updated every hud; stacks (vertical) or squishes (horizontal) the boss
+        // bars depending on StackMultipleBossHealthbars. Gated on count/config change inside StackBossHuds.
+        [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.UpdateHuds))]
+        public static class StackBossHealthbars {
+            public static void Postfix(EnemyHud __instance) {
+                UIHudControl.StackBossHuds(__instance);
+            }
+        }
 
         [HarmonyPatch(typeof(Tameable), nameof(Tameable.SetName))]
         public static class UpdateTamedName {

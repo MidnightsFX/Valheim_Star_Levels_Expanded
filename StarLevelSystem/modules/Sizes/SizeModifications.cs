@@ -23,10 +23,17 @@ namespace StarLevelSystem.modules.Sizes {
                 return;
             }
 
-            
+            // Skip size scaling for creatures inside dungeons/interiors.
+            // Valheim places interiors at world y+5000; Character.InInterior() is y > 3000.
+            if (ValConfig.EnableScalingInDungeons.Value == false && Character.InInterior(obj.transform.position)) {
+                return;
+            }
 
             // Set or update the size
-            float scale = bonus + characterCache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + (characterCache.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * characterCache.Level);
+            float perLevelSize = ValConfig.EnableCreatureScalingPerLevel.Value
+                ? characterCache.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * characterCache.Level
+                : 0f;
+            float scale = bonus + characterCache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + perLevelSize;
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
             obj.transform.localScale = creatureScale;
             UpdateRidingCreaturesForSizeScaling(obj, characterCache);
@@ -91,7 +98,10 @@ namespace StarLevelSystem.modules.Sizes {
 
         private static void UpdateLoxCollider(GameObject go, CharacterCacheEntry cDetails) {
             CapsuleCollider loxCC = go.GetComponent<CapsuleCollider>();
-            float size_set = (cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cDetails.Level) + cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
+            float perLevelSize = ValConfig.EnableCreatureScalingPerLevel.Value
+                ? cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * cDetails.Level
+                : 0f;
+            float size_set = perLevelSize + cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.Size];
             float levelChange = (size_set - 1) * 0.1555f;
             //float levelChange = cDetails.Level * 0.016f;  // 3.31 -lvl 20 (size 3), 3.15 -lvl 10 (size 2) or 0.016f per level at default sizing
             loxCC.height = 3f + levelChange;
@@ -105,8 +115,12 @@ namespace StarLevelSystem.modules.Sizes {
 
         internal static void StarLevelScaleChanged(object s, EventArgs e) {
             // This might need to be async
+            if (ValConfig.EnableCreatureScalingPerLevel.Value == false) { return; }
             Logger.LogInfo($"Updating size scale: {ValConfig.PerLevelScaleBonus.Value}");
             foreach (var chara in Resources.FindObjectsOfTypeAll<Character>()) {
+                if (chara == null) { continue; }
+                // Don't resize creatures inside dungeons/interiors when dungeon scaling is disabled.
+                if (ValConfig.EnableScalingInDungeons.Value == false && chara.InInterior()) { continue; }
                 chara.transform.localScale = Vector3.one;
                 float scale = 1 + (ValConfig.PerLevelScaleBonus.Value * (chara.m_level - 1));
                 //Logger.LogDebug($"Setting {chara.name} size {scale}.");

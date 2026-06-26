@@ -159,6 +159,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> StackMultipleBossHealthbars;
         public static ConfigEntry<float> BossHealthbarStackSpacing;
         public static ConfigEntry<bool> EnableJewelCraftingBossHudCompat;
+        public static ConfigEntry<bool> UseCustomHealthFont;
 
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
         public static ConfigEntry<bool> OverrideCreatureModifiedHealth;
@@ -168,6 +169,8 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> MaxActiveRaids;
         public static ConfigEntry<int> MaxRaidAttemptsPerPlayer;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
+        public static ConfigEntry<int> RaidWindDownSeconds;
+        public static ConfigEntry<bool> RaidForceDeleteStragglers;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
 
@@ -177,6 +180,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableZoneScalingBonus;
         public static ConfigEntry<float> ZoneLevelBonusPerLevel;
         public static ConfigEntry<int> ZoneKillsPerLevelUp;
+        public static ConfigEntry<float> ZoneDecayLevelsPerHour;
         public static ConfigEntry<bool> EnableZoneMapOverlay;
         public static ConfigEntry<float> MinZoneSize;
         public static ConfigEntry<float> MaxZoneSize;
@@ -355,6 +359,8 @@ namespace StarLevelSystem.common {
             MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server will check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
+            RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
+            RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
@@ -362,6 +368,7 @@ namespace StarLevelSystem.common {
             EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
             ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
             ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
+            ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per real-time hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours.", false, 0f, 50f);
             EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
             MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 500f, 10000f);
             MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 1000f, 10000f);
@@ -391,11 +398,13 @@ namespace StarLevelSystem.common {
 
             EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
             EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
+            UseCustomHealthFont = Config.Bind("UI", "UseCustomHealthFont", false, "[Client side Config] Enable to use a custom version of the Norse font.");
             HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.");
             EnableEnemyHealthbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
             StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row) instead of overlapping them.");
             BossHealthbarStackSpacing = BindServerConfig("UI", "BossHealthbarStackSpacing", 6f, "Vertical gap, in pixels, between stacked boss healthbars.", true, 0f, 40f);
             EnableJewelCraftingBossHudCompat = BindServerConfig("UI", "EnableJewelcraftingBossHudCompat", true, "When Jewelcrafting is installed, suppress its multi-boss HUD layout (which rescales the boss health bar every frame) so SLS controls the boss healthbars. Has no effect if Jewelcrafting is not installed.", advanced: true);
+
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");

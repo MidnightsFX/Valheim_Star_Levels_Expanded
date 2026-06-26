@@ -145,14 +145,15 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
-        // SLS raids bypass the vanilla event selection, 
-        // This ensures that creatures set to hunt the player will actually follow through
-        // Note: This will make event creatures not despawn. TODO: custom despawn logic for raids/nemesis?
+        // SLS raids bypass the vanilla event selection. While a raid is genuinely in progress we report an active
+        // event so creatures set to hunt the player follow through and don't despawn. Once a raid finishes and enters
+        // its wind-down phase it unregisters (RaidControl.AnyActiveRaid becomes false), letting vanilla MonsterAI
+        // wander those event creatures off and despawn them naturally. See RaidRunner wind-down handling.
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.HaveActiveEvent))]
         public static class SlsRaidCountsAsActiveEvent {
             public static void Postfix(ref bool __result) {
                 if (__result || ValConfig.UseVanillaRaidConfiguration.Value) { return; }
-                __result = true;
+                if (RaidControl.AnyActiveRaid()) { __result = true; }
             }
         }
 

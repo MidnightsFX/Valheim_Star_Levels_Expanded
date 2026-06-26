@@ -307,8 +307,9 @@ namespace StarLevelSystem.modules.UI {
                     // Use a slightly diminishing scale as otherwise things get over scaled easily
                     extended_hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
 
-                    
-                    extended_hud.HealthText.font = extended_hud.HudLink.m_name.font;
+                    if (ValConfig.UseCustomHealthFont.Value == false) {
+                        extended_hud.HealthText.font = extended_hud.HudLink.m_name.font;
+                    }
                     // Health text boss fixes? resize?
                     if (extended_hud.IsBoss) {
                         RectTransform hthRT = HealthTextHolder.transform as RectTransform;

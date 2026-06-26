@@ -1,3 +1,22 @@
+**1.1.0**
+ ---
+ ```
+ - Fixes multi-fracture rocks not spawning drops at the broken position (was always falling back to rock center)
+ - Raids now wind down gracefully: when a raid ends its creatures stop hunting and wander off to despawn instead of being deleted instantly
+	- New config RaidWindDownSeconds (default 60) sets how long creatures linger before the backstop runs
+	- New config RaidForceDeleteStragglers (default on) force-deletes any creatures still present at the end of the window; disable to let them all despawn on their own
+ - Zone decay rate is now configurable
+	- New config ZoneDecayLevelsPerHour (default 0.25) sets how many zone levels decay per real hour; 0 disables decay, higher values speed it up
+	- Default decay slowed (one level every 4 hours, ~12 hours for a level-4 zone) and reduced frequency 
+ ```
+
+**1.0.1**
+ ---
+ ```
+ - Fixes monsters scaling in dungeons when not set
+ - Adds a configuration to enable the previous health font (UI, UseCustomHealthFont)
+ ```
+
 **1.0.0**
  ---
  ```

@@ -24,6 +24,17 @@ namespace StarLevelSystem.modules.Raids
 
         internal static GameObject RaidRunnerGO;
 
+        // Raids that have committed but not yet entered their wind-down phase. While any are active, SLS reports an
+        // active event (SlsRaidCountsAsActiveEvent) so event creatures keep hunting; once a raid winds down it
+        // unregisters here, letting vanilla MonsterAI wander those creatures off and despawn them.
+        private static readonly HashSet<RaidRunner> ActiveRaidRunners = new HashSet<RaidRunner>();
+        internal static void RegisterActiveRaid(RaidRunner runner) { if (runner != null) { ActiveRaidRunners.Add(runner); } }
+        internal static void UnregisterActiveRaid(RaidRunner runner) { if (runner != null) { ActiveRaidRunners.Remove(runner); } }
+        internal static bool AnyActiveRaid() {
+            ActiveRaidRunners.RemoveWhere(x => x == null);
+            return ActiveRaidRunners.Count > 0;
+        }
+
         internal static void LoadAssets() {
             RaidRunnerGO = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>("RaidRunner.prefab");
         }

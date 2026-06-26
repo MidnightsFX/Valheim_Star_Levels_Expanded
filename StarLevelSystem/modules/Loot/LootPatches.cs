@@ -138,6 +138,7 @@ namespace StarLevelSystem.modules.Loot {
                 // Modify Loot Drop for minerock5
                 List<LootEntry> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), LevelSelection.DeterministicDetermineRockLevel(instance.gameObject.transform.position));
                 Vector3 position = hit.m_point - hit.m_dir * 0.2f + UnityEngine.Random.insideUnitSphere * 0.3f;
+                position.y += 0.5f; // Offset the drops upwards slightly, this is primarily to fix ores which are partially in the ground
                 LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops);
             }
         }
@@ -168,7 +169,7 @@ namespace StarLevelSystem.modules.Loot {
             internal static void MineDrop(MineRock5 instance, Vector3 vector) {
                 int level = LevelSelection.DeterministicDetermineRockLevel(vector);
                 List<LootEntry> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level);
-                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
+                LootPerformanceChanges.DropItemsPreferAsync(vector, optimizeDrops);
             }
         }
 

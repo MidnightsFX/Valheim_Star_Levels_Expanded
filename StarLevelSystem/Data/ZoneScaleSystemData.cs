@@ -35,6 +35,9 @@ namespace StarLevelSystem.Data {
         internal static bool buildingZones = false;
         private static bool decayRunning = false;
         internal static bool overlayAvailable = false;
+        // How often the decay coroutine polls. Decay magnitude is time-based, so this only
+        // controls check frequency, not the effective rate (see ZoneDecayLevelsPerHour).
+        private const float DecayTickIntervalSeconds = 900f; // 15 minutes
         internal static int overlayUpdates = 0;
 
 
@@ -53,6 +56,10 @@ namespace StarLevelSystem.Data {
                     int levelsGained = (zone.TotalKills / threshold) - (oldKills / threshold);
                     if (levelsGained > 0) {
                         zone.ZoneLevel += levelsGained;
+                        // Restart the decay countdown: a kill-driven level-up is recent activity, so
+                        // decay should measure inactivity from here (otherwise a stale build-time
+                        // timestamp would let the next decay pass instantly undo the level-up).
+                        zone.LastDecayTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                         leveledZones.Add(zone);
                     }
                 }
@@ -75,20 +82,30 @@ namespace StarLevelSystem.Data {
 
         private static IEnumerator DecayZoneLevels() {
             while (true) {
-                yield return new WaitForSeconds(60f);
+                yield return new WaitForSeconds(DecayTickIntervalSeconds);
                 if (!zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) {
                     if (zonesDirty) { SaveZoneData(); zonesDirty = false; }
                     continue;
                 }
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                float decayRate = ValConfig.ZoneDecayLevelsPerHour.Value; // zone levels lost per real hour
+                if (decayRate <= 0f) {
+                    // Decay disabled: keep each zone's decay clock current so toggling it back on
+                    // doesn't cause a sudden catch-up drop. In-memory only, no broadcast/persist.
+                    foreach (var zone in ZoneScaleSystemData.Zones) { zone.LastDecayTimestamp = now; }
+                    if (zonesDirty) { SaveZoneData(); zonesDirty = false; }
+                    continue;
+                }
                 List<ZoneData> changedZones = new List<ZoneData>();
                 foreach (var zone in ZoneScaleSystemData.Zones) {
                     if (zone.ZoneLevel <= 1) { continue; }
-                    double elapsedHours = (now - zone.LastDecayTimestamp) / 3600.0;
-                    if (elapsedHours >= 1.0) {
-                        int hoursDecayed = (int)elapsedHours;
-                        zone.ZoneLevel = Mathf.Max(1, zone.ZoneLevel - hoursDecayed);
-                        zone.LastDecayTimestamp = now;
+                    double levelsToDecay = ((now - zone.LastDecayTimestamp) / 3600.0) * decayRate;
+                    if (levelsToDecay >= 1.0) {
+                        int decayAmount = (int)levelsToDecay;
+                        zone.ZoneLevel = Mathf.Max(1, zone.ZoneLevel - decayAmount);
+                        // Advance the clock only by the time we actually consumed so the sub-level
+                        // remainder carries over to the next pass.
+                        zone.LastDecayTimestamp += (decayAmount / decayRate) * 3600.0;
                         changedZones.Add(zone);
                     }
                 }

@@ -1,3 +1,75 @@
+**1.1.3**
+ ---
+ ```
+ - Fixes a bug where Nemesis boss creation could fail and cause an NRE
+ - Fixes Nemesis bosses not being removed from the potential spawn list when they are spawned
+ ```
+
+**1.1.2**
+ ---
+ ```
+ - Adds DespawnIfNotAlerted for Nemesis spawns configuration, as an optional way to cleanup
+ - Improves compatibility with mods that adjust creature health
+ ```
+
+**1.1.1**
+ ---
+ ```
+ - Fixes support for UI scales at extremes
+ - Adds configuration options to control all Boss HUD positioning
+	- Configure space to top of screen
+	- Configure vertical stacking or horizontal stacking
+	- Configure buffer space between boss entries
+ ```
+
+**1.1.0**
+ ---
+ ```
+ - Fixes multi-fracture rocks not spawning drops at the broken position (was always falling back to rock center)
+ - Raids now wind down gracefully: when a raid ends its creatures stop hunting and wander off to despawn instead of being deleted instantly
+	- New config RaidWindDownSeconds (default 60) sets how long creatures linger before the backstop runs
+	- New config RaidForceDeleteStragglers (default on) force-deletes any creatures still present at the end of the window; disable to let them all despawn on their own
+ - Zone decay rate is now configurable
+	- New config ZoneDecayLevelsPerHour (default 0.25) sets how many zone levels decay per real hour; 0 disables decay, higher values speed it up
+	- Default decay slowed (one level every 4 hours, ~12 hours for a level-4 zone) and reduced frequency 
+ ```
+
+**1.0.1**
+ ---
+ ```
+ - Fixes monsters scaling in dungeons when not set
+ - Adds a configuration to enable the previous health font (UI, UseCustomHealthFont)
+ ```
+
+**1.0.0**
+ ---
+ ```
+- Provides a simple configuration GUI
+	- Can be turned off through configuration
+	- Allows tuning some of the largest system knobs that otherwise require yaml editing
+- Levelup chance Generators
+	- Similar to color generators, these are simple definitions which allow building out complex or large level curves
+	- Define a min, max, style (linear, exponential, gaussian), and chance to configure levelup chances
+	- Multiple level generators can be used to provide unique level curves
+- Adds boss kill based, scaling
+	- As the world's bosses are defeated (global keys), levelup chances for creatures in each biome will change
+	- The highest entry is selected, and optionally influences any biomes with custom levelup chances (uses level generators)
+- Zone Scaling
+	- Zones fill the map, they scale independantly. Regular kills in a zone will cause it to spawn stronger enemies.
+	- Zones can be seen through a togglable overlay on the minimap
+- Current Zone & Distance level can be optionally shown on the minimap now
+- Fixes overlapping multiple boss name/healthbars, they are now stacked vertically at their full native width (spacing configurable via BossHealthbarStackSpacing)
+- Fix for rare race condition that could result in players seeing a creatures as a different level with enough latency
+- Adds a simple configuration for seperately limiting boss creatures levels
+- Adds two missing icons to modifier icon display style
+- Fixes a bug which would cause raids to silently fail almost immediately
+- Added MultiplayerEnemyMinDamageTaken which caps the damage reduction provided to creatures from multiplayer scaling (default creatures take a minimum of 20% damage)
+- Fixes DropThat compatibility so DropThat's item modifiers (durability/quality/custom stacks/EpicLoot/etc.) are applied to creature loot again
+	- Note: DropThat item modifiers still do not apply to SLS-handled object loot (rocks/trees/destructibles), which keep SLS's level/distance scaling
+- Some spelling fixes :) no promises, my spelling still sucks.
+- Performance Optimizations for the Nemesis and Raid systems
+```
+
 **0.21.0**
  ---
  ```

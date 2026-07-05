@@ -1,4 +1,13 @@
 {
+  "sls_cfg_scaling_selection_header": "Additional Scaling Mechanics",
+  "sls_cfg_distance_scale_header": "Distance Scaling",
+  "sls_cfg_distance_scale_desc": "Distance from the center increases creature levels. Each distance ring can increase creature levels further. By default Ashlands and Deep North are significantly less impacted from this for balance.",
+  "sls_cfg_distance_overlay_toggle": "Show distance rings on the map",
+  "sls_cfg_zone_scale_header": "Zone Scaling",
+  "sls_cfg_zone_scale_desc": "The world is split into zones, each zone track kills and levels up, causing higher level spawns. Over time zones levels decay.",
+  "sls_cfg_zone_overlay_toggle": "Show zone overlay on the map",
+  "sls_cfg_conditional_scale_header": "Conditional Scaling",
+  "sls_cfg_conditional_scale_desc": "Defeating bosses causes previous biomes to increase in difficulty. This helps to keep a more equal level of challenge between all biomes, and also provides higher rewards when returning to old biomes.",
   "suffix_moniker": "of",
   "alert_prefix1": "Alert",
   "alert_suffix1": "Scout",

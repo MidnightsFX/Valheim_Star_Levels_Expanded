@@ -2,7 +2,7 @@
 using Jotunn.Entities;
 using Jotunn.Managers;
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections.Generic;
@@ -26,6 +26,17 @@ namespace StarLevelSystem.common
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             CommandManager.Instance.AddConsoleCommand(new KillAllCreaturesNearby());
             CommandManager.Instance.AddConsoleCommand(new SetNemesisScore());
+            CommandManager.Instance.AddConsoleCommand(new RebuildZones());
+        }
+
+        internal class RebuildZones : ConsoleCommand {
+            public override string Name => "SLS-rebuild-zones";
+            public override string Help => "Clears existing zones and regenerates the zone map from the world, then redraws the minimap overlay. Resets zone kill counts and levels.";
+            public override bool IsCheat => true;
+
+            public override void Run(string[] args) {
+                modules.LevelSystem.ZoneScaleSystem.RebuildZones();
+            }
         }
 
         internal class KillAllCreaturesNearby : ConsoleCommand {
@@ -310,9 +321,9 @@ namespace StarLevelSystem.common
 
                 Logger.LogDebug($"Serializing data");
                 LootSettings lootSettings = new LootSettings();
-                lootSettings.characterSpecificLoot = characterModDrops;
-                lootSettings.nonCharacterSpecificLoot = objectDrops;
-                var yaml = DataObjects.yamlserializer.Serialize(lootSettings);
+                lootSettings.CharacterSpecificLoot = characterModDrops;
+                lootSettings.NonCharacterSpecificLoot = objectDrops;
+                var yaml = DataObjects.yamlSerializer.Serialize(lootSettings);
                 Logger.LogDebug($"Writing file to disk");
                 using (StreamWriter writetext = new StreamWriter(dumpfile))
                 {

@@ -17,7 +17,15 @@ namespace StarLevelSystem.modules.NemesisSystem {
             [HarmonyPostfix]
             public static void PlayerDiedCreateNemesis(Player __instance) {
                 if (NemesisSystemData.SLE_Nemesis_Settings == null || ValConfig.EnableNemesisSystem.Value == false) { return; }
-                
+
+                // Player.OnDeath is broadcast to every machine (m_nview.InvokeRPC(ZNetView.Everybody)),
+                // so this postfix also runs on the dedicated server and on remote clients that merely
+                // witnessed the death (the vanilla method logs "OnDeath call but not the owner" there).
+                // Only the machine whose local player actually died should create a nemesis — the boss
+                // is named after Player.m_localPlayer. On a dedicated server m_localPlayer is null (NRE);
+                // on a remote client this is someone else's death (misattributed + duplicated). Bail on both.
+                if (Player.m_localPlayer == null || __instance != Player.m_localPlayer) { return; }
+
                 if (NemesisSystemData.SLE_Nemesis_Settings.CreateMinibossFromPlayerKiller == false || __instance.m_lastHit == null) { return; }
                 Character killer = __instance.m_lastHit.GetAttacker();
                 if (killer == null) { return; }
@@ -47,24 +55,38 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 mb.Biome = Heightmap.FindBiome(killer.transform.position);
 
                 List<NemesisSpawn> minions = new List<NemesisSpawn>();
-                int numMinions = UnityEngine.Random.Range(1, 4);
-                int availableMinions = NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome[mb.Biome].Count;
-
-                while (numMinions > 0) {
-                    NemesisMinion nm = NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome[mb.Biome][UnityEngine.Random.Range(0, availableMinions)];
-                    GameObject minionGo = PrefabManager.Instance.GetPrefab(nm.PrefabName);
-                    Character mchara = minionGo.GetComponent<Character>();
-                    if (mchara != null) {
-                        NemesisSpawn nmspawn = new NemesisSpawn() { Faction = Character.Faction.Boss, CustomName = $"$SLS_minion {mchara.m_name}", Prefab = nm.PrefabName, SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount) };
-                        minions.Add(nmspawn);
+                // Only a subset of biomes has minion templates seeded. Dying in an unseeded biome
+                // (DeepNorth/Ocean/None) must not throw KeyNotFoundException, and an empty list would
+                // throw on Random.Range(0,0) indexing. In those cases the boss spawns with no minions.
+                if (NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome.TryGetValue(mb.Biome, out List<NemesisMinion> biomeMinions) && biomeMinions.Count > 0) {
+                    int numMinions = UnityEngine.Random.Range(1, 4);
+                    while (numMinions > 0) {
+                        numMinions--;
+                        NemesisMinion nm = biomeMinions[UnityEngine.Random.Range(0, biomeMinions.Count)];
+                        GameObject minionGo = PrefabManager.Instance.GetPrefab(nm.PrefabName);
+                        if (minionGo == null) { continue; }
+                        Character mchara = minionGo.GetComponent<Character>();
+                        if (mchara != null) {
+                            NemesisSpawn nmspawn = new NemesisSpawn() { Faction = Character.Faction.Boss, CustomName = $"$SLS_minion {mchara.m_name}", Prefab = nm.PrefabName, SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount) };
+                            minions.Add(nmspawn);
+                        }
                     }
-                    numMinions--;
                 }
                 mb.Minions = minions;
 
-                ZPackage zpack = new ZPackage();
-                zpack.Write(DataObjects.yamlserializer.Serialize(mb));
-                ValConfig.SendNewNemesisBossRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, zpack);
+                string mbYaml = DataObjects.yamlSerializer.Serialize(mb);
+                if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                    // Host/listen-server: we are the authority, so apply and broadcast directly.
+                    // GetServerPeer() is null on a server, so there is no peer to RPC to.
+                    ValConfig.ApplyNemesisBossAdd(mbYaml, ZNet.GetUID());
+                } else {
+                    ZNetPeer server = ZNet.instance?.GetServerPeer();
+                    if (server != null) {
+                        ZPackage zpack = new ZPackage();
+                        zpack.Write(mbYaml);
+                        ValConfig.SendNewNemesisBossRPC.SendPackage(server.m_uid, zpack);
+                    }
+                }
 
                 if (NemesisSystemData.SLE_Nemesis_Settings.CreationRemovesSourceCreature) {
                     killer.m_nview.ClaimOwnership();

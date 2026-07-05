@@ -1,9 +1,10 @@
-﻿using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
+﻿using StarLevelSystem.common;
+using StarLevelSystem.Data;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
@@ -325,7 +326,7 @@ namespace StarLevelSystem.modules
             }
 
             if (namingStyle > 2 || namingStyle < 0) { namingStyle = 2; }
-            newMod.namingConvention = (NameSelectionStyle)namingStyle;
+            newMod.NamingConvention = (NameSelectionStyle)namingStyle;
 
             if (visualStyle > 3 || visualStyle < 0) { visualStyle = 0; }
             newMod.VisualEffectStyle = (VisualEffectStyle)visualStyle;

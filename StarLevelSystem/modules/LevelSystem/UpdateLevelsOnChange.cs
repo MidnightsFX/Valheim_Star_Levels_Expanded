@@ -1,4 +1,5 @@
 ﻿using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
 using System;
@@ -20,7 +21,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             TaskRunner.Run().StartCoroutine(ModifyLoadedCreaturesLevels());
         }
 
-        public static void UpdateFishmaxLevel() {
+        public static void UpdateFishMaxLevel() {
             if (ValConfig.EnableScalingFish.Value == false) { return; }
             IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
             foreach (GameObject fish in fishes) {
@@ -84,33 +85,33 @@ namespace StarLevelSystem.modules.LevelSystem {
                     yield return new WaitForEndOfFrame();
                     Physics.SyncTransforms();
                 }
-                TreeBase treebase = tree.GetComponent<TreeBase>();
-                if (treebase == null || treebase.m_nview == null || treebase.m_nview.GetZDO() == null) { continue; }
-                string treename = Utils.GetPrefabName(tree.gameObject);
+                TreeBase treeBase = tree.GetComponent<TreeBase>();
+                if (treeBase == null || treeBase.m_nview == null || treeBase.m_nview.GetZDO() == null) { continue; }
+                string treeName = Utils.GetPrefabName(tree.gameObject);
                 // Check scalar objects, or fall back to the reference prefab scale
-                Vector3 baseSize = treebase.m_nview.GetZDO().GetVec3(ZDOVars.s_scaleHash, Vector3.zero);
+                Vector3 baseSize = treeBase.m_nview.GetZDO().GetVec3(ZDOVars.s_scaleHash, Vector3.zero);
                 if (baseSize == Vector3.zero) {
-                    float scaler = treebase.m_nview.GetZDO().GetFloat(ZDOVars.s_scaleScalarHash, 0f);
+                    float scaler = treeBase.m_nview.GetZDO().GetFloat(ZDOVars.s_scaleScalarHash, 0f);
                     baseSize = new Vector3(scaler, scaler, scaler);
                 }
                 // Falling back to the reference prefab scale will set tree size to be uniform, which will likely be adjusted when reloaded
                 if (baseSize == Vector3.zero) {
-                    baseSize = PrefabManager.Instance.GetPrefab(treename).gameObject.transform.localScale;
+                    baseSize = PrefabManager.Instance.GetPrefab(treeName).gameObject.transform.localScale;
                 }
                 if (ValConfig.EnableTreeScaling.Value == false) {
-                    treebase.transform.localScale = baseSize;
+                    treeBase.transform.localScale = baseSize;
                     continue;
                 }
 
                 if (ValConfig.UseDeterministicTreeScaling.Value) {
-                    float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * CompositeLazyCache.GetOrAddCachedTreeEntry(treebase.m_nview));
-                    treebase.transform.localScale = baseSize * scale;
+                    float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * CompositeLazyCache.GetOrAddCachedTreeEntry(treeBase.m_nview));
+                    treeBase.transform.localScale = baseSize * scale;
                 } else {
-                    int storedLevel = treebase.m_nview.GetZDO().GetInt(SLS_TREE, 0);
+                    int storedLevel = treeBase.m_nview.GetZDO().GetInt(SLS_TREE, 0);
                     if (storedLevel > 1) {
                         float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * storedLevel);
                         //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
-                        treebase.transform.localScale = baseSize * scale;
+                        treeBase.transform.localScale = baseSize * scale;
                     }
                 }
             }
@@ -127,22 +128,22 @@ namespace StarLevelSystem.modules.LevelSystem {
                     yield return new WaitForEndOfFrame();
                     Physics.SyncTransforms();
                 }
-                RandomFlyingBird randombird = bird.GetComponent<RandomFlyingBird>();
-                if (randombird == null || randombird.m_nview == null || randombird.m_nview.GetZDO() == null) { continue; }
-                string birdname = Utils.GetPrefabName(bird.gameObject);
-                if (BirdSizeReferences.ContainsKey(birdname) == false) {
-                    BirdSizeReferences.Add(birdname, PrefabManager.Instance.GetPrefab(birdname).gameObject.transform.localScale);
+                RandomFlyingBird randomBird = bird.GetComponent<RandomFlyingBird>();
+                if (randomBird == null || randomBird.m_nview == null || randomBird.m_nview.GetZDO() == null) { continue; }
+                string birdName = Utils.GetPrefabName(bird.gameObject);
+                if (BirdSizeReferences.ContainsKey(birdName) == false) {
+                    BirdSizeReferences.Add(birdName, PrefabManager.Instance.GetPrefab(birdName).gameObject.transform.localScale);
                 }
                 if (ValConfig.EnableScalingBirds.Value == false) {
-                    randombird.transform.localScale = BirdSizeReferences[birdname];
+                    randomBird.transform.localScale = BirdSizeReferences[birdName];
                     continue;
                 }
 
-                int storedLevel = randombird.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
+                int storedLevel = randomBird.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
                 if (storedLevel > 1) {
                     float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
                     //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
-                    randombird.transform.localScale = BirdSizeReferences[birdname] * scale;
+                    randomBird.transform.localScale = BirdSizeReferences[birdName] * scale;
                 }
             }
             yield break;

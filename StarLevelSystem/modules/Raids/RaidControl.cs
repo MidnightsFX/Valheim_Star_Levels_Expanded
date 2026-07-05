@@ -24,6 +24,17 @@ namespace StarLevelSystem.modules.Raids
 
         internal static GameObject RaidRunnerGO;
 
+        // Raids that have committed but not yet entered their wind-down phase. While any are active, SLS reports an
+        // active event (SlsRaidCountsAsActiveEvent) so event creatures keep hunting; once a raid winds down it
+        // unregisters here, letting vanilla MonsterAI wander those creatures off and despawn them.
+        private static readonly HashSet<RaidRunner> ActiveRaidRunners = new HashSet<RaidRunner>();
+        internal static void RegisterActiveRaid(RaidRunner runner) { if (runner != null) { ActiveRaidRunners.Add(runner); } }
+        internal static void UnregisterActiveRaid(RaidRunner runner) { if (runner != null) { ActiveRaidRunners.Remove(runner); } }
+        internal static bool AnyActiveRaid() {
+            ActiveRaidRunners.RemoveWhere(x => x == null);
+            return ActiveRaidRunners.Count > 0;
+        }
+
         internal static void LoadAssets() {
             RaidRunnerGO = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>("RaidRunner.prefab");
         }
@@ -80,7 +91,7 @@ namespace StarLevelSystem.modules.Raids
 
         internal static ZPackage CreateStartRaidPackage(RaidDefinition targetRaid, Vector3 pos) {
             ZPackage zpack = new ZPackage();
-            zpack.Write(DataObjects.yamlserializer.Serialize(new NetworkRaidRequest() { Raid = targetRaid, RaidPostion = pos}));
+            zpack.Write(DataObjects.yamlSerializer.Serialize(new NetworkRaidRequest() { Raid = targetRaid, RaidPostion = pos}));
             return zpack;
         }
 
@@ -119,7 +130,7 @@ namespace StarLevelSystem.modules.Raids
                 ServerPlayerRaidData.Add(playerPlatformID, new DataObjects.PlayerRaidData() { PlayerPrivatekeys = privatekeys });
             }
             //Logger.LogDebug("Player Private key data updated, preparing to persist to disk.");
-            RaidsData.SaveServerRaidData(DataObjects.yamlserializer.Serialize(RaidControl.ServerPlayerRaidData));
+            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
         }
 
         internal static void UpdatePlayerRaidHistory(PlayerRaidData playerRaidData, RaidDefinition raidDef, string key) {
@@ -133,6 +144,38 @@ namespace StarLevelSystem.modules.Raids
             playerRaidData.ActiveRaid = raidDef;
             // Update cooldown
             playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (raidDef.RaidCoolDownMinutes * 60 * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar);
+        }
+
+        // Lightweight dispatch-time marker. Holds the player off re-dispatch for one check interval and records the
+        // pending raid/position, but does NOT consume the real cooldown or per-raid history — that only happens once
+        // the client confirms the raid actually started (FinalizeRaidCommit). A raid that fails to start therefore
+        // won't burn the player's cooldown beyond this short hold.
+        internal static void MarkRaidPending(PlayerRaidData playerRaidData, RaidDefinition raidDef, Vector3 pos) {
+            playerRaidData.ActiveRaid = raidDef;
+            playerRaidData.CurrentRaidPosition = pos;
+            playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60);
+        }
+
+        // Server-side commit, invoked once the owning client confirms its raid started (directly on an integrated
+        // host, or via RaidCommittedRPC from a networked client). Sets the full cooldown and broadcasts combat music
+        // to nearby clients — both deferred from dispatch so an aborted raid produces no visible side effects.
+        internal static void FinalizeRaidCommit(string playerPlatformID, string raidName, Vector3 pos) {
+            if (string.IsNullOrEmpty(playerPlatformID)) {
+                Logger.LogWarning("Raid commit received without a resolvable player; cooldown will not be set.");
+                return;
+            }
+            if (RaidsData.RaidsByName.TryGetValue(raidName, out RaidDefinition raidDef) == false) {
+                Logger.LogWarning($"Raid commit received for unknown raid '{raidName}', ignoring.");
+                return;
+            }
+            if (ServerPlayerRaidData.TryGetValue(playerPlatformID, out PlayerRaidData playerData) == false) {
+                playerData = new PlayerRaidData();
+                ServerPlayerRaidData[playerPlatformID] = playerData;
+            }
+            Logger.LogRaid($"Finalizing raid commit '{raidName}' for {playerPlatformID} at {pos}");
+            UpdatePlayerRaidHistory(playerData, raidDef, raidDef.Name);
+            ForceMusicForClientsInArea(raidDef.ForceMusic, pos, raidDef.EventRange * 1.5f);
+            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(ServerPlayerRaidData));
         }
 
         internal static void ApplyRaidConfiguration(RandEventSystem res) {
@@ -169,6 +212,7 @@ namespace StarLevelSystem.modules.Raids
             //Logger.LogDebug("Base area check");
             bool inBase = EffectArea.IsPointInsideArea(position, EffectArea.Type.PlayerBase, 30f);
             //Logger.LogDebug("Biome check ");
+            if (WorldGenerator.instance == null) return playerAvailableRaids;
             Heightmap.Biome biome = WorldGenerator.instance.GetBiome(position);
 
             foreach (RaidDefinition raid in RaidsData.SLE_Raid_Settings.Raids) {
@@ -192,6 +236,7 @@ namespace StarLevelSystem.modules.Raids
                 //Logger.LogDebug($"Checking for global key requirements");
                 if (raid.Activation.RequiredGlobalKeys != null) {
                     bool hasRequiredGlobalKeys = true;
+                    if (ZoneSystem.instance == null) continue;
                     List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
                     foreach (string gkey in raid.Activation.RequiredGlobalKeys) {
                         if (currentGlobalKeys.Contains(gkey) == false) {
@@ -208,6 +253,7 @@ namespace StarLevelSystem.modules.Raids
                 // Global key Anti-key check
                 if (raid.Activation.NotRequiredGlobalKeys != null) {
                     bool hasAnAntiKey = false;
+                    if (ZoneSystem.instance == null) continue;
                     List<string> currentGlobalKeys = ZoneSystem.instance.GetGlobalKeys();
                     foreach (string gkey in raid.Activation.NotRequiredGlobalKeys) {
                         if (currentGlobalKeys.Contains(gkey)) {
@@ -281,11 +327,11 @@ namespace StarLevelSystem.modules.Raids
                 //Logger.LogDebug($"Checking recent activations of specified raid");
                 if (playerData.LastRaidByName.Count > 0) {
                     if (playerData.NextRaidableTime > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogRaid($"Player {playerPlatformID} has a NextRaidableTime of {playerData.NextRaidableTime} which is in the future, skipping Raid: {raid.Name}");
+                        Logger.LogRaid($"Player {playerPlatformID} is next raidable in {ZNet.instance.GetTimeSeconds() - playerData.NextRaidableTime} seconds, skipping Raid: {raid.Name}");
                         continue;
                     }
                     if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)}");
+                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {ZNet.instance.GetTimeSeconds() - (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60))}");
                         continue;
                     }
                 }
@@ -330,21 +376,29 @@ namespace StarLevelSystem.modules.Raids
             //Logger.LogDebug($"Starting spawn destination in incrments of {range_increment} from x{origin.x} y{origin.y} z{origin.z}");
             int spawn_location_attempts = 0;
             float originalMaxDistance = maxDistance;
+            bool allowBaseSpawns = false;
             Vector3 determinedSpawn = origin;
 
             while (spawn_locations.Count < numTargets) {
                 var offset = UnityEngine.Random.insideUnitCircle * (maxDistance * 0.8f);
                 determinedSpawn = origin + new Vector3(offset.x, 0, offset.y);
 
-                // Every 50 attempts after 300 attempts add distance
-                if (spawn_location_attempts > 300 && spawn_location_attempts % 50 == 0) {
+                // Progressively widen the search the longer we fail, then relax the base restriction as a last
+                // resort, so cramped/coastal/heavily-built-up areas still yield points instead of aborting the raid.
+                if (spawn_location_attempts > 100 && spawn_location_attempts % 50 == 0) {
                     if (spawn_locations.Count > 0) {
                         // At least one valid spawn has been found
                         break;
                     }
-                    maxDistance += 50f;
-                    if (maxDistance > originalMaxDistance * 2) {
-                        break; // Avoid infinite loop, if we have doubled the max distance and still can't find a valid spawn, its possible the player has completely surrounded themselves with an unspawnable area
+                    if (maxDistance < originalMaxDistance * 4) {
+                        maxDistance += 50f;
+                    } else if (allowBaseSpawns == false) {
+                        // Base detection is imperfect (esp. Ashlands POIs that read as "player base"); allow base
+                        // spawns rather than aborting the raid for lack of room.
+                        Logger.LogRaid("Spawn search exhausted normal range; relaxing the player-base restriction as a last resort.");
+                        allowBaseSpawns = true;
+                    } else {
+                        break; // Genuinely nowhere valid to spawn; the raid will abort harmlessly.
                     }
                 }
 
@@ -386,7 +440,7 @@ namespace StarLevelSystem.modules.Raids
                 // Prevent spawns in a players base | This does not work in the ashlands as all of the existing fortresses, POIs etc are considered "player bases"
                 // However ignoring player bases entirely means that the spawn can happen directly inside a players base/walls
                 // foundBiome != Heightmap.Biome.AshLands &&
-                if ((bool)EffectArea.IsPointInsideArea(determinedSpawn, EffectArea.Type.PlayerBase)) {
+                if (allowBaseSpawns == false && (bool)EffectArea.IsPointInsideArea(determinedSpawn, EffectArea.Type.PlayerBase)) {
                     Logger.LogRaid($"Spawn location in a players base zone, skipping. | {determinedSpawn}");
                     spawn_location_attempts += 1;
                     continue;
@@ -405,6 +459,8 @@ namespace StarLevelSystem.modules.Raids
                     Logger.LogRaid($"Spawn location is in lava, skipping. | {determinedSpawn}");
                     continue;
                 }
+
+                determinedSpawn.y += 1f;
 
                 Logger.LogRaid($"Determined valid spawn target: {determinedSpawn}");
                 spawn_locations.Add(determinedSpawn);

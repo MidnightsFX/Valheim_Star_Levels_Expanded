@@ -21,9 +21,18 @@ namespace StarLevelSystem.modules.Raids {
         internal BoolZNetProperty RaidSpawnPointsReady;
         internal BoolZNetProperty RaidSpawnPointsGenerating;
         internal RaidMonitorListZNetProperty ActiveRaidSpawns;
+        // True only once the raid has actually committed (spawn points validated + start message sent). Gates the
+        // forced environment so a raid that aborts during spawn-point search never changes the weather.
+        internal BoolZNetProperty RaidStarted;
+        // Time (ZNet seconds) at which the raid finished and began winding down; 0 while the raid is still running.
+        // ZDO-backed so wind-down survives owner-handoff and so all in-range clients can stop forcing the environment.
+        internal DoubleZNetProperty RaidWindDownStart;
 
         private bool networkReady;
         private double Endtime = 0;
+        // Set when a wind-down completes with stragglers intentionally left to despawn on their own, so OnDestroy
+        // skips the force-delete cleanup. Hard teardowns (admin reset, shutdown) leave this false and still clean up.
+        private bool skipCreatureCleanup = false;
         private List<RaidMonitor> RaidSpawners = new List<RaidMonitor>();
 
         // Should map pins be persisted between clients? probably
@@ -42,14 +51,26 @@ namespace StarLevelSystem.modules.Raids {
         public void Update() {
             if (ValConfig.UseVanillaRaidConfiguration.Value == true || RunningRaid == null || Znet.IsValid() == false) { return; }
 
-            // Clients all get this to set their music
+            // Force the raid environment only once the raid has actually committed, so an aborted raid (e.g. no
+            // valid spawn points) never flips the weather and then snaps it back.
             RaidDefinition raid = RunningRaid.Get();
-            EnvMan.instance.m_forceEnv = raid.ForceEnvironment.ToString();
+            // While the raid runs, force its environment for all in-range clients. Once it winds down, revert to Clear
+            // (mirrors OnDestroy) so the weather returns to normal immediately instead of lingering until the runner
+            // is finally destroyed at the end of the wind-down window.
+            if (RaidStarted.Get()) {
+                EnvMan.instance.m_forceEnv = IsWindingDown()
+                    ? DataObjects.Environment.Clear.ToString()
+                    : raid.ForceEnvironment.ToString();
+            }
 
             if (Znet.IsOwner() == false) { return; }
 
             // Network data is required before we start performing actions
             if (networkReady == false) { ConnectZData(); }
+
+            // Re-assert active-raid registration each owner tick while the raid is running (idempotent). Covers the
+            // owner-handoff/reconnect case where a new owner picks up an already-committed raid.
+            if (RaidStarted.Get() && IsWindingDown() == false) { RaidControl.RegisterActiveRaid(this); }
 
             // TODO: fallback for if/when the owner who starts generating points exits the game immediately etc
             if (RaidSpawnPointsReady.Get() == false && RaidSpawnPointsGenerating.Get() == false) {
@@ -114,8 +135,10 @@ namespace StarLevelSystem.modules.Raids {
                         }
                         rmonitor.TriggerCount += 1;
                         Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count - 1)];
-                        // Do custom level if custom level chances are set
-                        SortedDictionary<int, float> levelupChance = LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
+                        // Do custom level if custom level chances are set. Level generators (inline or referenced)
+                        // take precedence and overwrite the spawn's configured levelup chances when present.
+                        SortedDictionary<int, float> levelupChance = LevelGeneratorResolver.BuildLevelupChance(rmonitor.RaidSpawnDef.LevelupGenerators, rmonitor.RaidSpawnDef.LevelupGeneratorRefs)
+                            ?? LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
                         SortedDictionary<int, float> levelupDistanceBonus = LevelSelection.DetermineDistanceBonus(selectedSpawn);
 
                         int spawns = 0;
@@ -165,10 +188,11 @@ namespace StarLevelSystem.modules.Raids {
                     }
                     
                     if (raidComplete && spawnedMaxOnce) {
-                        Logger.LogRaid($"{raid.Name} Completed.");
-                        RemoveExistingMapPins();
-                        Player.MessageAllInRange(this.transform.position, RunningRaid.Get().EventRange * 1.5f, MessageHud.MessageType.Center, RunningRaid.Get().EndMessage);
-                        ZNetScene.Destroy(this);
+                        if (IsWindingDown() == false) {
+                            BeginWindDown(raid);
+                        } else {
+                            UpdateWindDown();
+                        }
                     }
                 }
 
@@ -181,6 +205,14 @@ namespace StarLevelSystem.modules.Raids {
             Endtime = RaitStartTime.Get() + raid.Duration;
             AddMapPins(this.transform.position, raid);
             Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.StartMessage);
+
+            // The raid is now committed. Flip the flag (gates the forced environment above), start our own music,
+            // and tell the server to set the cooldown + broadcast music to nearby clients. Everything above this
+            // point is side-effect-free, so a raid that aborted before here left no visible trace.
+            RaidStarted.Set(true);
+            RaidControl.RegisterActiveRaid(this);
+            if (MusicMan.instance != null) { MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString()); }
+            SendRaidCommitConfirmation(raid, this.transform.position);
 
             // Start all of the spawners
             RaidSpawners.Clear();
@@ -195,6 +227,9 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void OnDestroy() {
+            // No longer an active raid; drop registration so SLS stops reporting an active event for its creatures.
+            RaidControl.UnregisterActiveRaid(this);
+
             // Remove existing pins
             RemoveExistingMapPins();
 
@@ -202,17 +237,79 @@ namespace StarLevelSystem.modules.Raids {
             if (MusicMan.instance != null) {
                 MusicMan.instance.StopMusic();
             }
-            
+
 
             // Clear the environment
             if (EnvMan.instance != null) {
                 EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
             }
-            
-            // Skip clearing spawns etc if the network is shutting down
+
+            // A wind-down that intentionally left its stragglers to despawn on their own asks us to skip the
+            // force-delete. Hard teardowns (admin reset, shutdown) leave skipCreatureCleanup false and still clean up.
+            if (skipCreatureCleanup == false) {
+                ForceDestroyTrackedCreatures();
+            }
+        }
+
+        // Whether the raid has finished and entered its wind-down phase (creatures dispersing). ZDO-backed so it is
+        // consistent across owner-handoff and readable by all in-range clients.
+        private bool IsWindingDown() {
+            return RaidWindDownStart != null && RaidWindDownStart.Get() > 0;
+        }
+
+        // Called once when the raid completes. Performs the player-facing teardown (message, pins, music, weather) and
+        // unregisters the raid so vanilla MonsterAI starts wandering the event creatures off and despawning them.
+        // The runner stays alive afterwards to manage pruning and the force-delete backstop (see UpdateWindDown).
+        private void BeginWindDown(RaidDefinition raid) {
+            Logger.LogRaid($"{raid.Name} ending — creatures dispersing.");
+            RaidWindDownStart.Set(ZNet.instance.GetTimeSeconds());
+            RaidControl.UnregisterActiveRaid(this);
+
+            RemoveExistingMapPins();
+            Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.EndMessage);
+            if (MusicMan.instance != null) { MusicMan.instance.StopMusic(); }
+            if (EnvMan.instance != null) { EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString(); }
+        }
+
+        // Owner-side per-tick wind-down management: prune creatures that have already wandered off and self-despawned,
+        // finish early once none remain, and at the end of the configured window either force-delete any stragglers or
+        // (when disabled) leave them to despawn on their own.
+        private void UpdateWindDown() {
+            // Prune despawned creatures so the tracked set shrinks as vanilla MoveAwayAndDespawn removes them.
+            int remaining = 0;
+            foreach (RaidMonitor rmonitor in RaidSpawners) {
+                List<ZDOID> stillAlive = rmonitor.GetSpawnedZDOIDs().Where(x => ZDOMan.instance.GetZDO(x) != null).ToList();
+                rmonitor.StoreZDOIDS(stillAlive);
+                remaining += stillAlive.Count;
+            }
+            ActiveRaidSpawns.Set(RaidSpawners);
+
+            if (remaining == 0) {
+                // Everything wandered off and despawned on its own; nothing left to clean up.
+                Logger.LogRaid("Raid wind-down complete, all creatures dispersed.");
+                skipCreatureCleanup = true;
+                ZNetScene.Destroy(this);
+                return;
+            }
+
+            double windDownDeadline = RaidWindDownStart.Get() + ValConfig.RaidWindDownSeconds.Value;
+            if (ZNet.instance.GetTimeSeconds() <= windDownDeadline) { return; }
+
+            if (ValConfig.RaidForceDeleteStragglers.Value) {
+                Logger.LogRaid($"Raid wind-down window elapsed; force-deleting {remaining} remaining creature(s).");
+                ForceDestroyTrackedCreatures();
+            } else {
+                Logger.LogRaid($"Raid wind-down window elapsed; leaving {remaining} remaining creature(s) to despawn on their own.");
+                skipCreatureCleanup = true;
+            }
+            ZNetScene.Destroy(this);
+        }
+
+        // Force-deletes every tracked raid creature. Falls back to the ZDO-backed spawner list when the in-memory
+        // cache is empty (e.g. console-command teardown before Update populated RaidSpawners, or after owner-handoff).
+        private void ForceDestroyTrackedCreatures() {
+            // Skip if the network is shutting down.
             if (ZDOMan.instance == null || ZNetScene.instance == null) { return; }
-            // Clean up any spawns. Fall back to the ZDO-backed list when the in-memory cache is empty
-            // (e.g. console-command teardown before Update populated RaidSpawners, or after owner-handoff).
             List<RaidMonitor> spawnersToClean = (RaidSpawners != null && RaidSpawners.Count > 0)
                 ? RaidSpawners
                 : (networkReady && ActiveRaidSpawns != null ? ActiveRaidSpawns.Get() : null);
@@ -238,7 +335,30 @@ namespace StarLevelSystem.modules.Raids {
             RaidSpawnPointsReady = new BoolZNetProperty("SLS_RAID_SPAWN_READY", Znet, false);
             RaidSpawnPointsGenerating = new BoolZNetProperty("SLS_RAID_SPAWN_GEN", Znet, false);
             ActiveRaidSpawns = new RaidMonitorListZNetProperty("SLS_RAID_SPAWNS_ACTIVE", Znet, new List<RaidMonitor>());
+            RaidStarted = new BoolZNetProperty("SLS_RAID_STARTED", Znet, false);
+            RaidWindDownStart = new DoubleZNetProperty("SLS_RAID_WINDDOWN", Znet, 0);
             networkReady = true;
+        }
+
+        // The owner is the player being raided. If that's the integrated host, finalize the commit directly;
+        // otherwise tell the server (over RaidCommittedRPC) so it sets the cooldown and broadcasts music.
+        private void SendRaidCommitConfirmation(RaidDefinition raid, Vector3 pos) {
+            if (ZNet.instance == null) { return; }
+            if (ZNet.instance.IsServer()) {
+                RaidControl.FinalizeRaidCommit(SLSExtensions.GetLocalUserPlatformAndID(), raid.Name, pos);
+                return;
+            }
+            ZNetPeer serverPeer = ZNet.instance.GetServerPeer();
+            if (serverPeer == null) {
+                Logger.LogWarning($"Raid '{raid.Name}' committed but no server peer was available to confirm it; cooldown/music may not be applied.");
+                return;
+            }
+            ZPackage pkg = new ZPackage();
+            pkg.Write(raid.Name);
+            pkg.Write(pos.x);
+            pkg.Write(pos.y);
+            pkg.Write(pos.z);
+            ValConfig.RaidCommittedRPC.SendPackage(serverPeer.m_uid, pkg);
         }
 
         public void StartRaid(DataObjects.RaidDefinition raid, Player player) {

@@ -13,7 +13,7 @@ namespace StarLevelSystem.Modifiers
     internal static class Lootbags
     {
         [UsedImplicitly]
-        public static void RunOnce(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
+        public static void RunOnce(Character _, CreatureModConfig __, CharacterCacheEntry ccache) {
             if (ccache == null) { return; }
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Speed] += 0.15f;
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] += 0.3f;
@@ -32,6 +32,7 @@ namespace StarLevelSystem.Modifiers
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
                     
                     foreach (var kvp in __result) {
+                        if (kvp.Key == null) { continue; }
                         int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(kvp.Key.GetComponent<ItemDrop>(), DropType.Item);
                         ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier), MaxAmountPerDrop = maxPerStack });
                     }

@@ -1,10 +1,10 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
-using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
 using System;
@@ -44,6 +44,12 @@ namespace StarLevelSystem.Data
             SessionCache.Clear();
         }
 
+        // Safe check for zownership
+        public static bool IsZOwner(Character character) {
+            if (character == null || character.m_nview == null) { return false; }
+            return character.m_nview.IsOwner();
+        }
+
         public static CharacterCacheEntry GetCacheEntry(uint cid)
         {
             if (SessionCache.ContainsKey(cid)) {
@@ -78,7 +84,7 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug($"Checking Creature {character.gameObject.name} biome settings");
             LevelSelection.SelectCreatureBiomeSettings(character.gameObject, out string creatureName, out DataObjects.CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
 
-            characterEntry.creatureSettings = creatureSettings;
+            characterEntry.CreatureSettings = creatureSettings;
 
             // Set biome | used to deletion check
             characterEntry.Biome = biome;
@@ -106,10 +112,19 @@ namespace StarLevelSystem.Data
             characterEntry.ModifiersRequired = requiredModifiers;
 
             characterEntry.CreatureModifiers = GetCreatureModifiers(character);
-            // Check for level or set it
-            //Logger.LogDebug("Setting creature level");
-            characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, leveloverride);
 
+            // Only allowed to set levels if this is the ZOwner
+            bool isOwner = IsZOwner(character);
+            characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, biome, leveloverride, allowRoll: isOwner);
+
+            // Build creature name
+            characterEntry.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(character, characterEntry.CreatureModifiers);
+
+            // Update Level and health, for non-zowners, once it has been set.
+            if (isOwner == false && characterEntry.Level > 0 && character.m_level != characterEntry.Level) {
+                character.m_level = characterEntry.Level;
+                character.SetupMaxHealth();
+            }
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");
@@ -122,6 +137,11 @@ namespace StarLevelSystem.Data
 
             // skip setting cache if the creature is gone already
             uint uid = character.GetZDOID().ID;
+            
+            // If this creatures level wasn't setup yet, we do not cache it so it is refreshed until the values are set.
+            if (characterEntry.Level <= 0) {
+                return characterEntry;
+            }
             //Logger.LogDebug($"Determined {creatureName} level {characterEntry.Level} Setting cache {uid}");
             if (SessionCache.ContainsKey(uid)) {
                 if (updateCache) {
@@ -138,6 +158,8 @@ namespace StarLevelSystem.Data
         // SAFE to re-run
         public static void StartZOwnerCreatureRoutines(Character chara, CharacterCacheEntry characterEntry, bool spawnratecheck = true) {
             if (characterEntry == null || chara == null) { return; }
+            // This MUST only run on zowners
+            if (IsZOwner(chara) == false) { return; }
             if (characterEntry.Level == 0) { characterEntry.Level = 1; }
 
             // Destroy character if its selected for deletion
@@ -161,13 +183,13 @@ namespace StarLevelSystem.Data
 
 
             // Reset character level if its overleveled
-            if (ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value + 1)
+            if (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value + 1)
             {
                 // Rebuild level?
                 characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
                 int maxlevel = ValConfig.MaxLevel.Value + 1;
                 Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
-                chara.SetLevel(maxlevel);
+                chara.m_nview.GetZDO().Set(ZDOVars.s_level, maxlevel);
                 chara.m_level = maxlevel;
                 SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, characterEntry);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
@@ -176,8 +198,8 @@ namespace StarLevelSystem.Data
 
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
-            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value || LevelSelection.ForceLeveledCreatures.Contains(characterEntry.RefCreatureName)) {
-                chara.SetLevel(characterEntry.Level);
+            if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value) {
+                chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
             }
 
             //Logger.LogDebug($"Checking stored mods {characterEntry.CreatureModifiers.Count}");
@@ -200,7 +222,7 @@ namespace StarLevelSystem.Data
                     characterEntry.CreatureModifiers = CreatureModifiers.SelectModifiersForCreature(
                         chara,
                         creatureName: characterEntry.RefCreatureName,
-                        creature_settings: characterEntry.creatureSettings,
+                        creature_settings: characterEntry.CreatureSettings,
                         biome: characterEntry.Biome,
                         level: characterEntry.Level,
                         requiredModifiers: characterEntry.ModifiersRequired,
@@ -254,7 +276,7 @@ namespace StarLevelSystem.Data
             // Priority storage of V2 Mod format
             if (mods != null) {
                 try {
-                    return DataObjects.yamldeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+                    return DataObjects.yamlDeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
                 }
                 catch {  return null; }
             }
@@ -265,7 +287,7 @@ namespace StarLevelSystem.Data
 
         public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
-            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlserializerJsonCompat.Serialize(modifiers));
+            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlSerializerJsonCompat.Serialize(modifiers));
             CharacterCacheEntry cce = GetCacheEntry(chara);
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;
@@ -291,11 +313,13 @@ namespace StarLevelSystem.Data
                 characterEntry.SpawnRateModifier = biomeRate;
             }
             if (creatureSettings != null) {
-                float creatureRate = creatureSettings.SpawnRateModifier;
-                if (isNight && creatureSettings.NightSettings != null && creatureSettings.NightSettings.SpawnRateModifier != 1f) {
-                    creatureRate = creatureSettings.NightSettings.SpawnRateModifier;
+                // Creature day rate overrides the biome value only when explicitly changed (1f = inherit).
+                if (creatureSettings.SpawnRateModifier != 1f) {
+                    characterEntry.SpawnRateModifier = creatureSettings.SpawnRateModifier;
                 }
-                characterEntry.SpawnRateModifier = creatureRate;
+                if (isNight && creatureSettings.NightSettings != null && creatureSettings.NightSettings.SpawnRateModifier != 1f) {
+                    characterEntry.SpawnRateModifier = creatureSettings.NightSettings.SpawnRateModifier;
+                }
             }
 
             // Night-time spawn disable checks

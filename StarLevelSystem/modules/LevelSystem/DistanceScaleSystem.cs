@@ -1,4 +1,5 @@
 ﻿using Jotunn.Managers;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections;
@@ -27,7 +28,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             yield return new WaitForSeconds(10f);
             if (ZNet.instance.IsCurrentServerDedicated()) {
                 int iterations = 0;
-                while (ValConfig.RecievedConfigsFromServer == false) {
+                while (ValConfig.ServerConfigsSynced == false) {
                     Logger.LogDebug("Waiting for config sync to complete before drawing map rings on dedicated server.");
                     yield return new WaitForSeconds(5f);
                     iterations++;
@@ -66,6 +67,19 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             // No bonuses distance found
             return new SortedDictionary<int, float>() { };
+        }
+
+        // Which distance band the position sits in: the count of DistanceLevelBonus thresholds (the
+        // rings drawn on the minimap) at or below the 2D distance from the ring center. 0 = inside the
+        // innermost ring. Used by the minimap level indicator.
+        internal static int GetCurrentRingLevel(Vector3 pos) {
+            if (LevelSystemData.SLE_Level_Settings?.DistanceLevelBonus == null) { return 0; }
+            float distance = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(center.x, center.z));
+            int ring = 0;
+            foreach (int threshold in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {
+                if (distance >= threshold) { ring++; } else { break; }
+            }
+            return ring;
         }
 
         private static void CreateLevelBonusRingMapOverlays() {

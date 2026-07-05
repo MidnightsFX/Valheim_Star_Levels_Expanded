@@ -3,6 +3,7 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.LevelSystem;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -176,11 +177,20 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         NemesisCreatureSpawns = (List<NemesisSpawn>)(new List<NemesisSpawn>(nemBoss.Minions) ?? Enumerable.Empty<NemesisSpawn>());
                         NemesisCreatureSpawns.Add(nemBoss.BossSpawn);
 
-                        // Send remote removal
+                        // Propagate the removal so this boss isn't drawn again. On a host we ARE the
+                        // authority (GetServerPeer() is null on a server), so broadcast to peers directly;
+                        // a remote client tells the server, which rebroadcasts.
                         ZPackage removeBossPack = new ZPackage();
-                        removeBossPack.Write(DataObjects.yamlserializer.Serialize(nemBoss));
-                        ValConfig.RemoveNemeisBossRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, removeBossPack);
-                        // Locally remove
+                        removeBossPack.Write(DataObjects.yamlSerializer.Serialize(nemBoss));
+                        if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                            ZNet.instance.GetPeers().ForEach(peer => ValConfig.RemoveNemesisBossRPC.SendPackage(peer.m_uid, removeBossPack));
+                        } else {
+                            ZNetPeer server = ZNet.instance?.GetServerPeer();
+                            if (server != null) {
+                                ValConfig.RemoveNemesisBossRPC.SendPackage(server.m_uid, removeBossPack);
+                            }
+                        }
+                        // Locally remove (reliable reference removal on the machine that selected it)
                         NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemBoss);
                     } else {
                         continue;
@@ -203,6 +213,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
                             }
                             if (spawn.IsBoss) {
                                 spawnChara.m_boss = true;
+                                // Persist boss status so the wide boss healthbar survives reloads and shows
+                                // on other clients (Character.m_boss itself is not networked/saved).
+                                if (spawnChara.m_nview != null) {
+                                    spawnChara.m_nview.GetZDO().Set(SLS_NEMESIS_BOSS, true);
+                                }
                                 spawnedDetails += "Miniboss Spawn ";
                             }
                             if (string.IsNullOrEmpty(spawn.CustomName) == false) {
@@ -214,8 +229,14 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         MonsterAI spawnAI = cgo.GetComponent<MonsterAI>();
                         if (spawnAI != null) {
                             CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
+                            if (spawn.DespawnIfNotAlerted) {
+                                spawnAI.SetEventCreature(true);
+                            }
                         }
-                        CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawn.ForcedLevel);
+                        // Level generators (inline or referenced) roll a level that overrides ForcedLevel when configured.
+                        int rolledLevel = LevelGeneratorResolver.RollLevel(spawn.LevelupGenerators, spawn.LevelupGeneratorRefs);
+                        int spawnLevelOverride = rolledLevel > 0 ? rolledLevel : spawn.ForcedLevel;
+                        CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawnLevelOverride);
                         cce.Level = Mathf.Min(entry.Value.LevelBonus + cce.Level, ValConfig.MaxLevel.Value);
                         if (spawn.CreaturePerLevelValueModifiers != null) {
                             cce.CreaturePerLevelValueModifiers = spawn.CreaturePerLevelValueModifiers;
@@ -233,6 +254,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         if (spawn.CustomLoot != null && spawn.CustomLoot.Count > 0) {
                             LootSystemData.SetCustomLoot(spawnChara, spawn.CustomLoot);
                         }
+
                     }
                     spawnedDetails += $" {spawn.Prefab}x{spawn.SpawnGroupSize}";
                 }

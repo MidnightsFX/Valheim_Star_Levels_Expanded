@@ -11,7 +11,7 @@ namespace StarLevelSystem.Data
         public static LootSettings SLS_Drop_Settings { get; set; }
         public static LootSettings DefaultDropConfiguration = new LootSettings()
         {
-            characterSpecificLoot = new Dictionary<string, List<ExtendedCharacterDrop>>() {
+            CharacterSpecificLoot = new Dictionary<string, List<ExtendedCharacterDrop>>() {
                 { "BlobElite", new List<ExtendedCharacterDrop>() {
                     new ExtendedCharacterDrop{
                             Drop = new Drop
@@ -104,7 +104,7 @@ namespace StarLevelSystem.Data
                     }
                 }
             },
-            nonCharacterSpecificLoot = new Dictionary<string, List<ExtendedObjectDrop>>() {
+            NonCharacterSpecificLoot = new Dictionary<string, List<ExtendedObjectDrop>>() {
                 {"caverock_ice_stalagtite_falling", new List<ExtendedObjectDrop>() {
                     new ExtendedObjectDrop() {
                         Drop = new Drop {
@@ -193,7 +193,7 @@ namespace StarLevelSystem.Data
         }
         public static string YamlDefaultConfig()
         {
-            var yaml = DataObjects.yamlserializer.Serialize(DefaultDropConfiguration);
+            var yaml = DataObjects.yamlSerializer.Serialize(DefaultDropConfiguration);
             return yaml;
         }
 
@@ -203,15 +203,15 @@ namespace StarLevelSystem.Data
 
         public static void AttachLootPrefabs(LootSettings lootconfig) {
             if (lootconfig == null) { return; }
-            if (lootconfig.characterSpecificLoot != null) {
-                foreach (KeyValuePair<string, List<ExtendedCharacterDrop>> dropset in lootconfig.characterSpecificLoot) {
+            if (lootconfig.CharacterSpecificLoot != null) {
+                foreach (KeyValuePair<string, List<ExtendedCharacterDrop>> dropset in lootconfig.CharacterSpecificLoot) {
                     foreach (ExtendedCharacterDrop itemdrop in dropset.Value) {
                         itemdrop.ToCharacterDrop();
                     }
                 }
             }
-            if (lootconfig.nonCharacterSpecificLoot != null) {
-                foreach (KeyValuePair<string, List<ExtendedObjectDrop>> dropset in lootconfig.nonCharacterSpecificLoot) {
+            if (lootconfig.NonCharacterSpecificLoot != null) {
+                foreach (KeyValuePair<string, List<ExtendedObjectDrop>> dropset in lootconfig.NonCharacterSpecificLoot) {
                     foreach (ExtendedObjectDrop itemdrop in dropset.Value) {
                         itemdrop.ResolveDropPrefab();
                     }
@@ -223,7 +223,7 @@ namespace StarLevelSystem.Data
         public static bool UpdateYamlConfig(string yaml)
         {
             try {
-                SLS_Drop_Settings = DataObjects.yamldeserializer.Deserialize<LootSettings>(yaml);
+                SLS_Drop_Settings = DataObjects.yamlDeserializer.Deserialize<LootSettings>(yaml);
                 // Resolve all of the prefab references
                 AttachLootPrefabs(SLS_Drop_Settings);
                 Logger.LogDebug("Loaded new Creature loot configuration.");
@@ -241,7 +241,7 @@ namespace StarLevelSystem.Data
         public static void SetCustomLoot(Character chara, List<ExtendedCharacterDrop> loot)
         {
             if (chara?.m_nview == null || chara.m_nview.GetZDO() == null || loot == null) { return; }
-            chara.m_nview.GetZDO().Set(DataObjects.SLS_CUSTOM_LOOT, DataObjects.yamlserializer.Serialize(loot));
+            chara.m_nview.GetZDO().Set(DataObjects.SLS_CUSTOM_LOOT, DataObjects.yamlSerializer.Serialize(loot));
         }
 
         // Reads the per-creature custom loot table back from the ZDO, or null if none stored.
@@ -251,7 +251,7 @@ namespace StarLevelSystem.Data
             string raw = chara.m_nview.GetZDO().GetString(DataObjects.SLS_CUSTOM_LOOT, null);
             if (string.IsNullOrEmpty(raw)) { return null; }
             try {
-                var loot = DataObjects.yamldeserializer.Deserialize<List<ExtendedCharacterDrop>>(raw);
+                var loot = DataObjects.yamlDeserializer.Deserialize<List<ExtendedCharacterDrop>>(raw);
                 // Resolve prefab references (GameDrop) since the DoesNotScale path dereferences them directly.
                 foreach (ExtendedCharacterDrop d in loot) { d.ToCharacterDrop(); }
                 return loot;

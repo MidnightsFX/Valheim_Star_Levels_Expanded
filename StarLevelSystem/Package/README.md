@@ -6,9 +6,15 @@ Star Level Systems expands upon the Valheim star system and allows extensive cus
 
 Features:
 - Expand Creature Star levels (as high as you want)
-	- Sizing configuration for all creatures and their equipment
+	- Sizing configuration for all creatures
 - Customize Raids, complete control over creatures, activation mechanics etc
-    - Raids will be tailed to each players progress and multiple raids can occur at the same time 
+    - Raids will be tailed to each players progress and multiple raids can occur at the same time
+- Multiple different scaling strategies
+    - Scale levels by distance
+    - Scale levels by zones
+    - Scale levels by bosses killed
+- Nemesis System (personal/group dungeon master)
+    - Can modify the world around you to make things easier, harder or provide unique challenges/opportunities
 - Fine grained control of all creature aspects
 	- Health, damage, size, speed, attack speed, base and per level
 	- Resistance or weakness to all elements
@@ -121,7 +127,7 @@ distanceLevelBonus:
 Will give all creatures a +25% chance to reach the first star level, if they are at least 1250m from the center. This value is then modified based on biome settings.
 In our example biome file we have a `1.5` value for the distance modifier so `1.5 x 25 = 37.5` would be the increase provided to reach level 1.
 
-If the total bonus and base value exceeds `100` that level will be gaurenteed, every creature with that condition will be at a minimum that level.
+If the total bonus and base value exceeds `100` that level will be guaranteed, every creature with that condition will be at a minimum that level.
 You can see this in some of the later distance bonuses which slowly drive of the guaranteed spawn level of creatures up
 
 ```
@@ -152,7 +158,7 @@ distanceLevelBonus:
     4: 50
 ```
 
-With the above configuation the region closest to start up to 1250m will only be able to spawn level 1 and 2 creatures. Between 1250m and 5000m creatures can spawn up to level 3, and beyond 5000m creatures can spawn up to level 4.
+With the above configuration the region closest to start up to 1250m will only be able to spawn level 1 and 2 creatures. Between 1250m and 5000m creatures can spawn up to level 3, and beyond 5000m creatures can spawn up to level 4.
 
 
 Now, we've walked through a lot of the bonuses to level up chance but lets take a look at the base values too. 
@@ -177,12 +183,12 @@ defaultCreatureLevelUpChance:
 ```
 
 ### Nemesis System
-The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experiance and challenges are appropriate.
+The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
 
 It does this by analyzing things the player does and tracking statistics about the players combat performance. Lower combat scores result in reduced challenge,
 high combat scores result in increased challenge.
 
-This is all extremely configurable, and everyones experiance is likely to be very different due to differences in skill or playstyle and that is ok.
+This is all extremely configurable, and everyone's experience is likely to be very different due to differences in skill or playstyle and that is ok.
 Ideally everyone should feel times of challenge, and that setbacks do not feel overwhelmingly punishing.
 
 Nemesis system also contains the ability to make unique enemies that will attempt to hunt you (or a friend) down in the future (small chance to spawn).
@@ -258,7 +264,7 @@ NemesisMinionTemplatesByBiome:
 
 ### Colorization (Colorization.yaml)
 In vanilla there are few creatures which can be colorized when they level up. Star Level Systems changes that. 
-Most all creatures can be colorized, it should be noted that some creatures (Yagluth eg) do not colorize well and the effect is generally not very noticable.
+Most all creatures can be colorized, it should be noted that some creatures (Yagluth eg) do not colorize well and the effect is generally not very noticeable.
 
 There are two different ways to apply colorization values to creatures.
 
@@ -345,7 +351,7 @@ characterSpecificLoot:
 #### Non Character specific loot configuration
 
 This is the section which allows you to configure all of the non-creature related loot in detail. It follows a similar structure to character loot configuration.
-You can use this to modify or add loot to any existing objects which have the option to drop loot. For example, falling stalagtites. This configuration gives them a chance to drop crystals.
+You can use this to modify or add loot to any existing objects which have the option to drop loot. For example, falling stalactites. This configuration gives them a chance to drop crystals.
 The chance scales per level (yes inanimate objects can be leveled, tree, rock or destructible based on type). If loot configuration is not defined here then the generic configuration values from
 the main config file apply here `PerLevelDestructibleLootScale`, `PerLevelMineRockLootScale`, and `PerLevelTreeLootScale` along with their max level values.
 Level scaling can be ignored by setting `dontScale: true`
@@ -369,7 +375,7 @@ nonCharacterSpecificLoot:
 
 #### Distance Loot Modifier
 This is similar to the character distance modifier in that it applies a bonus to the minimum and maximum drops that an entry can have based on distance.
-Loot rings are not drawn on the map, but behave exactly the same as Character distance rings (if the object is greater than x distance and less than the next once it recieves that bonus).
+Loot rings are not drawn on the map, but behave exactly the same as Character distance rings (if the object is greater than x distance and less than the next once it receives that bonus).
 
 ```
 distanceLootModifier:
@@ -500,7 +506,7 @@ Otherwise localizations are available at `Bepinex/config/StarLevelSystems/locali
 
 ### Terminal Commands
 Star Level Systems provides a number of terminal commands for debugging and testing and cleanup.
-- `sls-killall [range:500]` - kills creatures within the specfiied range (default 500m), skips players and tamed creatures.
+- `sls-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures.
 - `sls-give-modifier [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
 - `sls-dump-loottables` - provides dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
 
@@ -514,7 +520,7 @@ Check out the API Documentation [here](https://github.com/MidnightsFX/Valheim_St
 - [Valheim Armory](https://thunderstore.io/c/valheim/p/MidnightMods/ValheimArmory/) - Fill in vanilla weapon gaps with fitting weapons
 - [Impactful Skills](https://thunderstore.io/c/valheim/p/MidnightMods/ImpactfulSkills/) - Make your skills meaningful
 - [Deathlink](https://thunderstore.io/c/valheim/p/MidnightMods/Deathlink/) - Death choices for all your players with progression
-- [InfiniteFire](https://thunderstore.io/c/valheim/p/MidnightMods/ValheimInfiniteFire/) - Torches/Fires configurably dont require fuel
+- [InfiniteFire](https://thunderstore.io/c/valheim/p/MidnightMods/ValheimInfiniteFire/) - Torches/Fires configurable don't require fuel
 - [Valheim Fortress](https://thunderstore.io/c/valheim/p/MidnightMods/ValheimFortress/) - Build a base, defend it, reap the rewards!
 - [Recipe Manager](https://thunderstore.io/c/valheim/p/MidnightMods/RecipeManager/) - Configure Recipes, build pieces, and conversions
 - [Epic Jewels](https://thunderstore.io/c/valheim/p/MidnightMods/EpicJewels/) - More Jewelcrafting gem options
@@ -552,5 +558,3 @@ Planned Features
 - Refinement to the existing modifers
 - New modifiers!
 - Generic and biome specific loot multipliers
-- World leveling system based on boss kills
-- Zonal scaling system

@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using StarLevelSystem.common;
 using UnityEngine;
 
 namespace StarLevelSystem.modules
@@ -13,12 +14,12 @@ namespace StarLevelSystem.modules
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
                 if (playerDifficulty >= ValConfig.MultiplayerScalingRequiredPlayersNearby.Value) {
-                    float dmgscaler = (1f + playerDifficulty) * ValConfig.MultiplayerEnemyDamageModifier.Value;
-                    __result = 1f + dmgscaler;
+                    float dmgScaler = (1f + playerDifficulty) * ValConfig.MultiplayerEnemyDamageModifier.Value;
+                    __result = 1f + dmgScaler;
                 } else {
                     __result = 1f;
                 }
-                //Logger.LogDebug($"Multiplayer scaling Player recieves damage increase: {__result}");
+                //Logger.LogDebug($"Multiplayer scaling Player receives damage increase: {__result}");
                 return false;
             }
         }
@@ -34,7 +35,7 @@ namespace StarLevelSystem.modules
                 }
                 int playerDifficulty = __instance.GetPlayerDifficulty(pos);
                 if (playerDifficulty >= ValConfig.MultiplayerScalingRequiredPlayersNearby.Value) {
-                    __result = 1f - (playerDifficulty * ValConfig.MultiplayerEnemyHealthModifier.Value);
+                    __result = Mathf.Max(1f - (playerDifficulty * ValConfig.MultiplayerEnemyHealthModifier.Value), ValConfig.MultiplayerEnemyMinDamageTaken.Value);
                 } else {
                     __result = 1f;
                 }

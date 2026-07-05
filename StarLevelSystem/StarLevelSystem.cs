@@ -26,7 +26,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "0.21.0";
+        public const string PluginVersion = "1.1.2";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -47,20 +47,23 @@ namespace StarLevelSystem
 
             EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
+            Compatibility.ApplyConditionalPatches(HarmonyInstance);
             Colorization.Init();
             LevelSystemData.Init();
             LootSystemData.Init();
             CreatureModifiersData.Init();
             RaidsData.Init();
             NemesisSystemData.Init();
+            QuickConfigureTool.Init();
             LocalizationLoader.AddLocalizations();
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
-            PrefabManager.OnVanillaPrefabsAvailable += UpdateLevelsOnChange.UpdateFishmaxLevel;
+            PrefabManager.OnVanillaPrefabsAvailable += UpdateLevelsOnChange.UpdateFishMaxLevel;
             PrefabManager.OnVanillaPrefabsAvailable += UIHudControl.SetDefaultStar;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
             MinimapManager.OnVanillaMapDataLoaded += DistanceScaleSystem.DelayedMinimapSetup;
+            MinimapManager.OnVanillaMapDataLoaded += ZoneScaleSystem.Initialize;
             PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
-            SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.RecievedServerUpdates();
+            SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.HasServerUpdates();
             UIHudControl.LoadAssets();
             RaidControl.LoadAssets();
             TerminalCommands.AddCommands();

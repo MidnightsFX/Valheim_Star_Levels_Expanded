@@ -3,13 +3,13 @@ using BepInEx.Configuration;
 using Jotunn.Entities;
 using Jotunn.Managers;
 using Splatform;
-using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Loot;
 using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,8 +18,7 @@ using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
-namespace StarLevelSystem
-{
+namespace StarLevelSystem.common {
     internal class ValConfig
     {
         public static ConfigFile cfg;
@@ -41,8 +40,10 @@ namespace StarLevelSystem
         internal static String nemesisFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisSettingsFileName);
         internal static String nemesisLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisLogFileName);
         internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
+        internal const string ZoneDataFileName = "ZoneData.yaml";
+        internal static String zoneDataSavedDataPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ZoneDataFileName);
 
-        internal static bool RecievedConfigsFromServer = false;
+        internal static bool ServerConfigsSynced = false;
 
         private static CustomRPC LevelSettingsRPC;
         private static CustomRPC ColorSettingsRPC;
@@ -52,21 +53,24 @@ namespace StarLevelSystem
         private static CustomRPC NemesisRPC;
         internal static CustomRPC ClientSendPlayerPrivateKeysRPC;
         internal static CustomRPC ClientStartRaidRPC;
+        internal static CustomRPC RaidCommittedRPC;
         internal static CustomRPC ClientForcePlayMusicRPC;
         internal static CustomRPC ClientClearNearbyEventsRPC;
         internal static CustomRPC SendNewNemesisBossRPC;
-        internal static CustomRPC RemoveNemeisBossRPC;
+        internal static CustomRPC RemoveNemesisBossRPC;
+        internal static CustomRPC ZoneKillReportRPC;
+        internal static CustomRPC ZoneLevelSyncRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<int> MaxLevel;
-        public static ConfigEntry<bool> OverlevedCreaturesGetRerolledOnLoad;
+        public static ConfigEntry<int> MaxBossLevel;
+        public static ConfigEntry<bool> OverLevelCreaturesGetRerolledOnLoad;
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
         public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;
         public static ConfigEntry<bool> ControlSpawnerLevels;
         public static ConfigEntry<bool> ForceControlAllSpawns;
-        public static ConfigEntry<string> SpawnsAlwaysControlled;
         public static ConfigEntry<bool> ControlBossSpawns;
         public static ConfigEntry<bool> ControlAbilitySpawnedCreatures;
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
@@ -137,6 +141,7 @@ namespace StarLevelSystem
         public static ConfigEntry<int> MultiplayerScalingRequiredPlayersNearby;
         public static ConfigEntry<float> MultiplayerEnemyDamageModifier;
         public static ConfigEntry<float> MultiplayerEnemyHealthModifier;
+        public static ConfigEntry<float> MultiplayerEnemyMinDamageTaken;
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
         public static ConfigEntry<bool> OutputColorizationGeneratorsData;
@@ -149,8 +154,14 @@ namespace StarLevelSystem
 
         public static ConfigEntry<float> EnemyHealthbarScalarX;
         public static ConfigEntry<float> EnemyHealthbarScalarY;
-        public static ConfigEntry<bool> EnableEnemyHeathbarNumberDisplay;
+        public static ConfigEntry<bool> EnableEnemyHealthbarNumberDisplay;
         public static ConfigEntry<float> HealthDisplayFontSizeAdjustment;
+        public static ConfigEntry<bool> StackMultipleBossHealthbars;
+        public static ConfigEntry<float> BossHealthbarSpacing;
+        public static ConfigEntry<int> BossHudTopBuffer;
+        public static ConfigEntry<float> BossHealthbarWidthPercent;
+        public static ConfigEntry<bool> EnableJewelCraftingBossHudCompat;
+        public static ConfigEntry<bool> UseCustomHealthFont;
 
         public static ConfigEntry<bool> OnlyControlVanillaAreaSpawners;
         public static ConfigEntry<bool> OverrideCreatureModifiedHealth;
@@ -159,13 +170,27 @@ namespace StarLevelSystem
         public static ConfigEntry<float> RaidEventRate;
         public static ConfigEntry<int> MaxActiveRaids;
         public static ConfigEntry<int> MaxRaidAttemptsPerPlayer;
-        public static ConfigEntry<float> RaidPerPlayerUpdateCheck;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
+        public static ConfigEntry<int> RaidWindDownSeconds;
+        public static ConfigEntry<bool> RaidForceDeleteStragglers;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
 
         public static ConfigEntry<bool> EnableNemesisSystem;
         public static ConfigEntry<bool> EnableDebugNemesisDetails;
+
+        public static ConfigEntry<bool> EnableZoneScalingBonus;
+        public static ConfigEntry<float> ZoneLevelBonusPerLevel;
+        public static ConfigEntry<int> ZoneKillsPerLevelUp;
+        public static ConfigEntry<float> ZoneDecayLevelsPerHour;
+        public static ConfigEntry<bool> EnableZoneMapOverlay;
+        public static ConfigEntry<float> MinZoneSize;
+        public static ConfigEntry<float> MaxZoneSize;
+        public static ConfigEntry<float> KillReportFlushIntervalSeconds;
+        public static ConfigEntry<string> ZoneOverlayColorOptions;
+        public static ConfigEntry<bool> ShowMinimapLevelIndicator;
+        public static ConfigEntry<float> ZoneOverlayColorTransparency;
+        public static ConfigEntry<bool> ShowQuickConfigureButton;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
 
@@ -179,18 +204,23 @@ namespace StarLevelSystem
         }
 
         public void SetupConfigRPCs() {
-            LevelSettingsRPC = NetworkManager.Instance.AddRPC("SLS_LevelsRPC", OnServerRecieveConfigs, OnClientReceiveLevelConfigs);
-            ColorSettingsRPC = NetworkManager.Instance.AddRPC("SLS_ColorsRPC", OnServerRecieveConfigs, OnClientReceiveColorConfigs);
-            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerRecieveConfigs, OnClientReceiveCreatureLootConfigs);
-            ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerRecieveConfigs, OnClientReceiveModifiersConfigs);
-            RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerRecieveConfigs, OnClientReceiveRaidConfigs);
-            NemesisRPC = NetworkManager.Instance.AddRPC("SLS_NemesisRPC", OnServerRecieveConfigs, OnClientReceiveNemesisConfigs);
-            ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerRecievePlayerPrivateKeys, OnClientRecieveRequestForPrivatekeys);
-            ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerRecieveConfigs, OnClientRecieveRaidStart);
-            ClientForcePlayMusicRPC = NetworkManager.Instance.AddRPC("SLS_ClientForcePlayMusicRPC", OnServerRecieveConfigs, OnClientRecieveForcePlayMusic);
-            ClientClearNearbyEventsRPC = NetworkManager.Instance.AddRPC("SLS_ClientForceRemoveNearbyEventsRPC", OnServerRecieveConfigs, OnClientRecieveForceRemoveNearbyEvents);
-            SendNewNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_SendNewNemesisBossRPC", OnServerRecieveNemesisBossAdd, OnClientRecieveMiniBossAdd);
-            RemoveNemeisBossRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossRPC", OnServerRecieveNemesisBossRemove, OnClientRecieveMiniBossRemove);
+            LevelSettingsRPC = NetworkManager.Instance.AddRPC("SLS_LevelsRPC", OnServerReceiveConfigs, OnClientReceiveLevelConfigs);
+            ColorSettingsRPC = NetworkManager.Instance.AddRPC("SLS_ColorsRPC", OnServerReceiveConfigs, OnClientReceiveColorConfigs);
+            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerReceiveConfigs, OnClientReceiveCreatureLootConfigs);
+            ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerReceiveConfigs, OnClientReceiveModifiersConfigs);
+            RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerReceiveConfigs, OnClientReceiveRaidConfigs);
+            NemesisRPC = NetworkManager.Instance.AddRPC("SLS_NemesisRPC", OnServerReceiveConfigs, OnClientReceiveNemesisConfigs);
+            ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerReceivePlayerPrivateKeys, OnClientReceiveRequestForPrivateKeys);
+            ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerReceiveConfigs, OnClientReceiveRaidStart);
+            // Owning (raided) client confirms its raid actually started; server then sets the cooldown and broadcasts music.
+            RaidCommittedRPC = NetworkManager.Instance.AddRPC("SLS_RaidCommittedRPC", OnServerReceiveRaidCommitted, NOOPReceive);
+            ClientForcePlayMusicRPC = NetworkManager.Instance.AddRPC("SLS_ClientForcePlayMusicRPC", OnServerReceiveConfigs, OnClientReceiveForcePlayMusic);
+            ClientClearNearbyEventsRPC = NetworkManager.Instance.AddRPC("SLS_ClientForceRemoveNearbyEventsRPC", OnServerReceiveConfigs, OnClientReceiveForceRemoveNearbyEvents);
+            SendNewNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_SendNewNemesisBossRPC", OnServerReceivedNemesisBossAdd, OnClientReceiveMiniBossAdd);
+            RemoveNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossRPC", OnServerReceiveNemesisBossRemove, OnClientReceiveMiniBossRemove);
+            // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
+            ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
+            ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
@@ -199,6 +229,8 @@ namespace StarLevelSystem
             SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(NemesisRPC, SendNemesisConfigs);
+            // Give joining clients the current (non-default) zone levels for their overlay / level bonuses.
+            SynchronizationManager.Instance.AddInitialSynchronization(ZoneLevelSyncRPC, ZoneScaleSystemData.SerializeLeveledZonesForSync);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -207,7 +239,7 @@ namespace StarLevelSystem
                 new ConfigDescription("Enables Debug logging.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
-            EnableDebugMode.SettingChanged += Logger.enableDebugLogging;
+            EnableDebugMode.SettingChanged += Logger.EnableDebugLogging;
             Logger.CheckEnableDebugLogging();
             EnableDebugOutputForDamage = Config.Bind("Client config", "EnableDebugOutputForDamage", false,
                 new ConfigDescription("Enables Detailed logging for damage calculations, warning, lots of logging.",
@@ -229,11 +261,22 @@ namespace StarLevelSystem
                 new ConfigDescription("Enables Detailed logging for the Raid system.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
+            ShowMinimapLevelIndicator = Config.Bind("Client config", "ShowMinimapLevelIndicator", true,
+                new ConfigDescription("Show a small ring/zone level readout next to the minimap. Each section is hidden when its scaling system is disabled.",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowMinimapLevelIndicator.SettingChanged += MinimapLevelIndicator.OnShowIndicatorChanged;
+            ShowQuickConfigureButton = Config.Bind("Client config", "ShowQuickConfigureButton", true,
+                new ConfigDescription("Show the StarLevelSystem quick configuration button on the main menu and (for hosts/admins) the pause menu.",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowQuickConfigureButton.SettingChanged += QuickConfigureTool.OnShowButtonChanged;
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have", false, 1, 200);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have.", false, 1, 200);
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
-            OverlevedCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up overleveled creatures if you reduce the max level.");
+            MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The Maximum number of stars that a boss creature can have.", false, 1, 200);
+            OverLevelCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up over leveled creatures if you reduce the max level.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
 
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
@@ -286,25 +329,23 @@ namespace StarLevelSystem
 
             MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
             MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
+            MultiplayerEnemyMinDamageTaken = BindServerConfig("Multiplayer", "MultiplayerEnemyMinDamageTaken", 0.2f, "Minimum amount of damage that enemies can take from multiplayer scaling. 0.2 = 20%", advanced: true);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);
-            EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Wether or not creatures gain more health when players are grouped up.");
-            EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Wether or not creatures gain more damage when players are grouped up.");
+            EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Creatures gain more health when players are grouped up.");
+            EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Creatures gain more damage when players are grouped up.");
             
             ControlSpawnerLevels = BindServerConfig("LevelSystem", "ControlSpawnerLevels", true, "Overrides spawner levels to be controlled by SLS (this impacts all naturally spawning creatures)");
             ControlAbilitySpawnedCreatures = BindServerConfig("LevelSystem", "ControlAbilitySpawnedCreatures", true, "Forces creatures spawned from abilities to be controlled by SLS. This primarily impacts things such as the roots from Elder.");
             ControlBossSpawns = BindServerConfig("LevelSystem", "ControlBossSpawns", true, "Forces boss creatures to be controlled by SLS. Bosses will not get star levels if this is disabled.");
             ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");
             //DistanceBonusMapsCanIncludeLowerLevels = BindServerConfig("LevelSystem", "DistanceBonusMapsCanIncludeLowerLevels", true, "When enabled makes the distance bonus configuration include the highest previously lower level defined keys, if they are not defined in the current level.");
-            SpawnsAlwaysControlled = BindServerConfig("LevelSystem", "SpawnsAlwaysControlled", "piece_TrainingDummy", "A list of creatures which always get their level set");
-            SpawnsAlwaysControlled.SettingChanged += LevelSelection.LeveledCreatureListChanged;
-            LevelSelection.SetupForceLeveledCreatureList();
             OffspringCanBeStrongerThanParents = BindServerConfig("LevelSystem", "OffspringCanBeStrongerThanParents", false, "When enabled, creatures that are bred can have higher levels than their parents. Otherwise, they will be capped at the highest parent level.");
             OffspringGainExtraLevelChance = BindServerConfig("LevelSystem", "OffspringGainExtraLevelChance", 0.05f, "When enabled, creatures that are bred have a chance to gain an extra level above their parents. Chance is based on this value, 0.1 = 10% chance.", false, 0f, 1f);
             OffspringCanBeInfertile = BindServerConfig("LevelSystem", "OffspringCanBeInfertile", false, "When enabled, creatures produced from breeding have a chance to be infertile.");
             OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f, 1f);
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
-            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCaluationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootStyles.AllowedLootFactors, false);
+            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCalculationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootStyles.AllowedLootFactors, false);
             LootDropCalculationType.SettingChanged += LootStyles.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
             ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");
@@ -318,12 +359,26 @@ namespace StarLevelSystem
             UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
             MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
-            RaidPerPlayerUpdateCheck = BindServerConfig("Raids", "RaidPerPlayerUpdateCheck", 10f, "The Interval in minutes between updating the valid raids for each player. Reduce if you want new raids to become available faster for players, increase to reduce pressure on server.", true, 1f, 120f);
-            ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server whill check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
+            ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server will check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
-            EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.");
+            RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
+            RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
+            EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
+
+            EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
+            ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
+            ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
+            ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per real-time hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours.", false, 0f, 50f);
+            EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
+            MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 500f, 10000f);
+            MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 1000f, 10000f);
+            KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters.", true);
+            ZoneOverlayColorOptions = BindServerConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
+            ZoneOverlayColorOptions.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
+            ZoneOverlayColorTransparency = BindServerConfig("ZoneScaling", "ZoneOverlayColorTransparency", 0.5f, "Transparency value of the color used for zone boundaries.", true, 0f, 1f);
+            ZoneOverlayColorTransparency.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
@@ -332,11 +387,11 @@ namespace StarLevelSystem
             ChanceMajorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             ChanceMinorModifier = BindServerConfig("Modifiers", "ChanceMinorModifier", 0.25f, "The chance that a creature will have a minor modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
             ChanceMinorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
-            EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Wether or not bosses can spawn with modifiers.");
+            EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Bosses can spawn with modifiers.");
             ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 0.75f, "The chance that a boss will have a modifier.", false, 0, 1f);
             ChanceOfBossModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
-            SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Wether or not creatures spawned from the Splitter modifier inherit the level of the parent creature.");
+            SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Creatures spawned from the Splitter modifier inherit the level of the parent creature.");
             LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
             ModifierIconDisplayStyle = BindServerConfig("Modifiers", "ModifierIconDisplayStyle", ModifierDisplayStyle.Stars.ToString(), "Style to display modifiers as on the creature HUD. Icons = detailed modifier icons, Stars = star-shaped modifier icons, None = plain default stars.", new AcceptableValueList<string>(ModifierDisplayStyle.Icons.ToString(), ModifierDisplayStyle.Stars.ToString(), ModifierDisplayStyle.None.ToString()));
@@ -345,8 +400,23 @@ namespace StarLevelSystem
 
             EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
             EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
+            UseCustomHealthFont = Config.Bind("UI", "UseCustomHealthFont", false, "[Client side Config] Enable to use a custom version of the Norse font.");
             HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.");
-            EnableEnemyHeathbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHeathbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
+            EnableEnemyHealthbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
+            StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row). When disabled, the boss bars are squished horizontally so they sit side-by-side.");
+            BossHealthbarSpacing = BindServerConfig("UI", "BossHealthbarSpacing", 30f, "Gap, in pixels, between boss healthbars (vertical gap when stacked, horizontal gap when squished).", true, 0f, 120f);
+            BossHudTopBuffer = Config.Bind("UI", "BossHudTopBuffer", 120,
+                new ConfigDescription("[Client side Config] Space, in 1080p-equivalent pixels, between the top of the screen and the boss health HUD.",
+                new AcceptableValueRange<int>(0, 600)));
+            BossHealthbarWidthPercent = Config.Bind("UI", "BossHealthbarWidthPercent", 0.4f,
+                new ConfigDescription("[Client side Config] Boss health bar width as a fraction of the screen width.",
+                new AcceptableValueRange<float>(0.1f, 1f)));
+            StackMultipleBossHealthbars.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            BossHealthbarSpacing.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            BossHudTopBuffer.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            BossHealthbarWidthPercent.SettingChanged += UIHudControl.OnBossHudConfigChanged;
+            EnableJewelCraftingBossHudCompat = BindServerConfig("UI", "EnableJewelcraftingBossHudCompat", true, "When Jewelcrafting is installed, suppress its multi-boss HUD layout (which rescales the boss health bar every frame) so SLS controls the boss healthbars. Has no effect if Jewelcrafting is not installed.", advanced: true);
+
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
@@ -359,8 +429,8 @@ namespace StarLevelSystem
             OverrideCreatureModifiedHealth = BindServerConfig("ModCompat", "OverrideCreatureModifiedHealth", false, "When enabled, will always set creatures health based on the SLS settings for the creature. This overrides other mods changes to creatures.");
         }
 
-        internal static void RecievedServerUpdates() {
-            RecievedConfigsFromServer = true;
+        internal static void HasServerUpdates() {
+            ServerConfigsSynced = true;
         }
 
         internal void LoadYamlConfigs()
@@ -418,79 +488,71 @@ namespace StarLevelSystem
             if (foundModifierFile == false)
             {
                 Logger.LogDebug("Loot config missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(creatureModifierFilePath))
-                {
-                    String header = @"#################################################
+                using StreamWriter writetext = new StreamWriter(creatureModifierFilePath);
+                String header = @"#################################################
 # Star Level System Expanded - Creature Modifier Configuration
 #################################################
 ";
-                    writetext.WriteLine(header);
-                    writetext.WriteLine(CreatureModifiersData.GetModifierDefaultConfig());
-                }
+                writetext.WriteLine(header);
+                writetext.WriteLine(CreatureModifiersData.GetModifierDefaultConfig());
             }
 
             if (foundLootFile == false)
             {
                 Logger.LogDebug("Loot config missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(creatureLootFilePath))
-                {
-                    String header = @"#################################################
+                using StreamWriter writetext = new StreamWriter(creatureLootFilePath);
+                String header = @"#################################################
 # Star Level System Expanded - Creature loot configuration
 #################################################
 ";
-                    writetext.WriteLine(header);
-                    writetext.WriteLine(LootSystemData.YamlDefaultConfig());
-                }
+                writetext.WriteLine(header);
+                writetext.WriteLine(LootSystemData.YamlDefaultConfig());
             }
 
             if (foundLevelsFile == false) {
                 Logger.LogDebug("Level config file missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(levelsFilePath)) {
-                    String header = @"#################################################
+                using StreamWriter writetext = new StreamWriter(levelsFilePath);
+                String header = @"#################################################
 # Star Level System Expanded - Level Settings
 #################################################
 ";
-                    writetext.WriteLine(header);
-                    writetext.WriteLine(LevelSystemData.YamlDefaultConfig());
-                }
+                writetext.WriteLine(header);
+                writetext.WriteLine(LevelSystemData.YamlDefaultConfig());
             }
 
             if (foundColorFile == false)
             {
                 Logger.LogDebug("Color config file missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(colorsFilePath)) {
-                    String header = @"#################################################
+                using StreamWriter writetext = new StreamWriter(colorsFilePath);
+                String header = @"#################################################
 # Star Level System Expanded - Creature Level Color Settings
 #################################################
 ";
-                    writetext.WriteLine(header);
-                    writetext.WriteLine(Colorization.YamlDefaultConfig());
-                }
+                writetext.WriteLine(header);
+                writetext.WriteLine(Colorization.YamlDefaultConfig());
             }
 
             if (foundRaidFile == false) {
                 Logger.LogDebug("Raid config file missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(raidsFilePath)) {
-                    String header = @"#################################################
+                using StreamWriter writetext = new StreamWriter(raidsFilePath);
+                String header = @"#################################################
 # Star Level System Expanded - Raid Settings
 #################################################
 ";
-                    writetext.WriteLine(header);
-                    writetext.WriteLine(RaidsData.YamlDefaultConfig());
-                }
+                writetext.WriteLine(header);
+                writetext.WriteLine(RaidsData.YamlDefaultConfig());
 
             }
 
             if (foundNemesisFile == false) {
                 Logger.LogDebug("Nemesis config file missing, recreating.");
-                using (StreamWriter writetext = new StreamWriter(nemesisFilePath)) {
-                    String header = @"#################################################
+                using StreamWriter writetext = new StreamWriter(nemesisFilePath);
+                String header = @"#################################################
 # Star Level System Expanded - Nemesis Settings
 #################################################
 ";
-                    writetext.WriteLine(header);
-                    writetext.WriteLine(NemesisSystemData.YamlDefaultConfig());
-                }
+                writetext.WriteLine(header);
+                writetext.WriteLine(NemesisSystemData.YamlDefaultConfig());
             }
 
             ConfigFileWatcher.Register(colorsFilePath, UpdateColorSettings);
@@ -551,10 +613,10 @@ namespace StarLevelSystem
             cfg.Reload();
         }
 
-        private static ZPackage SendFileAsZPackage(string filepath) {
-            string filecontents = File.ReadAllText(filepath);
+        private static ZPackage SendFileAsZPackage(string fp) {
+            string contents = File.ReadAllText(fp);
             ZPackage package = new ZPackage();
-            package.Write(filecontents);
+            package.Write(contents);
             return package;
         }
 
@@ -587,61 +649,104 @@ namespace StarLevelSystem
             return package;
         }
 
-        public static IEnumerator OnServerRecieveConfigs(long sender, ZPackage package) {
-            Logger.LogDebug("Server recieved config from client, rejecting due to being the server.");
+        public static IEnumerator OnServerReceiveConfigs(long sender, ZPackage package) {
+            Logger.LogDebug("Server received config from client, rejecting due to being the server.");
             yield return null;
         }
 
-        public static IEnumerator OnServerRecieveNemesisBossAdd(long sender, ZPackage package) {
-            // Write the update to the local file and memory
-            var yaml = package.ReadString();
-            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
-            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemboss);
-            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlserializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
-            // Send the update to all of the other clients
-            ZNet.instance.GetPeers().ForEach(peer => {
-                if (peer.m_uid != sender) {
-                    ClientSendPlayerPrivateKeysRPC.SendPackage(peer.m_uid, package);
-                }
-            });
-
+        public static IEnumerator OnServerReceivedNemesisBossAdd(long sender, ZPackage package) {
+            ApplyNemesisBossAdd(package.ReadString(), sender);
             yield return null;
         }
 
-        public static IEnumerator OnServerRecieveNemesisBossRemove(long sender, ZPackage package) {
-            // Write the update to the local file and memory
-            var yaml = package.ReadString();
-            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
-            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemboss);
-            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlserializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
-            // Send the update to all of the other clients
+        public static IEnumerator OnServerReceiveNemesisBossRemove(long sender, ZPackage package) {
+            ApplyNemesisBossRemove(package.ReadString(), sender);
+            yield return null;
+        }
+
+        // Authoritatively add a nemesis miniboss to the shared pool, persist it, and propagate it
+        // to every peer except senderToExclude. Called both from the server RPC handler (excluding
+        // the originating client) and directly on a host/listen-server, where GetServerPeer() is
+        // null so there is no server peer to send an RPC to. Pass ZNet.GetUID() to exclude nobody.
+        internal static void ApplyNemesisBossAdd(string yaml, long senderToExclude) {
+            NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
+            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemesisBoss);
+            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+            if (ZNet.instance == null) { return; }
+            // Send the update to all of the other clients via the correct nemesis-add channel
+            // (OnClientReceiveMiniBossAdd), not the private-keys RPC.
+            ZPackage package = new ZPackage();
+            package.Write(yaml);
             ZNet.instance.GetPeers().ForEach(peer => {
-                if (peer.m_uid != sender) {
-                    ClientSendPlayerPrivateKeysRPC.SendPackage(peer.m_uid, package);
+                if (peer.m_uid != senderToExclude) {
+                    SendNewNemesisBossRPC.SendPackage(peer.m_uid, package);
                 }
             });
+        }
 
-            yield return null;
+        // Authoritatively remove a nemesis miniboss from the shared pool, persist it, and propagate
+        // the removal to every peer except senderToExclude. See ApplyNemesisBossAdd for the host case.
+        internal static void ApplyNemesisBossRemove(string yaml, long senderToExclude) {
+            int idx = FindMinibossIndex(yaml);
+            if (idx >= 0) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.RemoveAt(idx);
+                File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+            }
+            if (ZNet.instance == null) { return; }
+            // Forward the removal to peers even if we had already removed it locally, so their pools converge.
+            ZPackage package = new ZPackage();
+            package.Write(yaml);
+            ZNet.instance.GetPeers().ForEach(peer => {
+                if (peer.m_uid != senderToExclude) {
+                    RemoveNemesisBossRPC.SendPackage(peer.m_uid, package);
+                }
+            });
+        }
+
+        // Locate a miniboss in the shared pool matching the given serialized boss. NemesisMiniboss has
+        // no value-equality override, so a freshly deserialized copy never matches a stored instance by
+        // reference — matching by the serialized form is required. Both sides are normalized through the
+        // same deserialize→serialize round-trip so equal bosses compare equal regardless of incidental
+        // formatting. Returns the index of the first match, or -1 if none / the yaml is unparseable.
+        private static int FindMinibossIndex(string yaml) {
+            string target;
+            try { target = DataObjects.yamlSerializer.Serialize(DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml)); }
+            catch { return -1; }
+            return NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses
+                .FindIndex(b => DataObjects.yamlSerializer.Serialize(b) == target);
         }
 
         private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
-            var levelsyaml = package.ReadString();
-            LevelSystemData.UpdateYamlConfig(levelsyaml);
+            string levelsYaml = package.ReadString();
+            LevelSystemData.UpdateYamlConfig(levelsYaml);
 
+            yield return null;
+        }
+
+        internal static IEnumerator NOOPReceive(long sender, ZPackage package) {
+            yield break;
+        }
+
+        // Server handler for ZoneKillReportRPC: a remote client reported a batch of death positions.
+        internal static IEnumerator OnServerReceiveZoneKills(long sender, ZPackage package) {
+            if (ZNet.instance == null || !ZNet.instance.IsServer()) { yield break; }
+            List<SerializableVector3> deaths = DataObjects.yamlDeserializer.Deserialize<List<SerializableVector3>>(package.ReadString());
+            if (deaths == null) { yield break; }
+            ZoneScaleSystemData.ApplyDeaths(deaths);
             yield return null;
         }
 
         private static IEnumerator OnClientReceiveColorConfigs(long sender, ZPackage package) {
-            var colorsyaml = package.ReadString();
-            Colorization.UpdateYamlConfig(colorsyaml);
+            var colorsYaml = package.ReadString();
+            Colorization.UpdateYamlConfig(colorsYaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
         private static IEnumerator OnClientReceiveCreatureLootConfigs(long sender, ZPackage package) {
-            var colorsyaml = package.ReadString();
-            LootSystemData.UpdateYamlConfig(colorsyaml);
+            var colorsYaml = package.ReadString();
+            LootSystemData.UpdateYamlConfig(colorsYaml);
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
@@ -655,27 +760,29 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientRecieveMiniBossAdd(long sender, ZPackage package) {
+        private static IEnumerator OnClientReceiveMiniBossAdd(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
-            if (NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Contains(nemboss) == false) {
-                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemboss);
+            // Dedupe by serialized form (reference-equality Contains never matches a deserialized copy).
+            if (FindMinibossIndex(yaml) < 0) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml));
             }
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
-        private static IEnumerator OnClientRecieveMiniBossRemove(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            NemesisMiniboss nemboss = DataObjects.yamldeserializer.Deserialize<NemesisMiniboss>(yaml);
-            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemboss);
+        private static IEnumerator OnClientReceiveMiniBossRemove(long sender, ZPackage package) {
+            // Remove by serialized form (reference-equality Remove never matches a deserialized copy).
+            int idx = FindMinibossIndex(package.ReadString());
+            if (idx >= 0) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.RemoveAt(idx);
+            }
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
-        private static IEnumerator OnClientRecieveRaidStart(long sender, ZPackage package) {
+        private static IEnumerator OnClientReceiveRaidStart(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            NetworkRaidRequest raidNetRequest = DataObjects.yamldeserializer.Deserialize<NetworkRaidRequest>(yaml);
+            NetworkRaidRequest raidNetRequest = DataObjects.yamlDeserializer.Deserialize<NetworkRaidRequest>(yaml);
             Vector3 raidPosition = Player.m_localPlayer != null ? Player.m_localPlayer.transform.position : Vector3.zero;
             if (raidNetRequest.RaidPostion != Vector3.zero) {
                 raidPosition = raidNetRequest.RaidPostion;
@@ -687,7 +794,18 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientRecieveForcePlayMusic(long sender, ZPackage package) {
+        // The owning client tells the server its raid actually started (passed spawn-point validation and showed
+        // its start message). Only now do we commit the full cooldown and broadcast combat music to the area —
+        // a raid that aborts before this never reaches here, so it leaves no trace.
+        private static IEnumerator OnServerReceiveRaidCommitted(long sender, ZPackage package) {
+            string raidName = package.ReadString();
+            Vector3 pos = new Vector3(package.ReadSingle(), package.ReadSingle(), package.ReadSingle());
+            string playerPlatformID = SLSExtensions.GetPlatformUserID(sender).ToString();
+            RaidControl.FinalizeRaidCommit(playerPlatformID, raidName, pos);
+            yield break;
+        }
+
+        private static IEnumerator OnClientReceiveForcePlayMusic(long sender, ZPackage package) {
             string musicName = package.ReadString();
             if (Enum.TryParse<Music>(musicName, out Music music) == false) {
                 Logger.LogWarning($"Music {musicName} not found.");
@@ -700,30 +818,30 @@ namespace StarLevelSystem
             yield return null;
         }
 
-        private static IEnumerator OnClientRecieveForceRemoveNearbyEvents(long sender, ZPackage package) {
+        private static IEnumerator OnClientReceiveForceRemoveNearbyEvents(long sender, ZPackage package) {
             RaidControl.RemoveNearbyRunningEvents();
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
-        internal static IEnumerator OnClientRecieveRequestForPrivatekeys(long sender, ZPackage _) {
+        internal static IEnumerator OnClientReceiveRequestForPrivateKeys(long sender, ZPackage _) {
             if (Player.m_localPlayer == null) { yield break; }
             //Logger.LogDebug("Collecting players private keys");
             List<string> playerKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
-            string filecontents = DataObjects.yamlserializerJsonCompat.Serialize(playerKeys);
+            string fileContents = DataObjects.yamlSerializerJsonCompat.Serialize(playerKeys);
             ZPackage package = new ZPackage();
-            package.Write(filecontents);
-            if (string.IsNullOrEmpty(filecontents) || playerKeys.Count <= 0) {
-                Logger.LogDebug($"No private keys recieved from player: {Player.m_localPlayer.m_name}, skipping update to the server.");
+            package.Write(fileContents);
+            if (string.IsNullOrEmpty(fileContents) || playerKeys.Count <= 0) {
+                Logger.LogDebug($"No private keys received from player: {Player.m_localPlayer.m_name}, skipping update to the server.");
                 yield break;
             }
             
             if (ZNet.instance.GetServerPeer() != null && ZNet.instance.IsCurrentServerDedicated()) {
-                Logger.LogDebug($"Sending private keys to server: {filecontents}");
+                Logger.LogDebug($"Sending private keys to server: {fileContents}");
                 ClientSendPlayerPrivateKeysRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, package);
             } else {
-                // This is to handle integrated servers (singleplayer) where the server is the same as the client
-                Logger.LogDebug($"Updating server with private keys: {filecontents}");
+                // This is to handle integrated servers (single player) where the server is the same as the client
+                Logger.LogDebug($"Updating server with private keys: {fileContents}");
                 string PlatformAndID = SLSExtensions.GetLocalUserPlatformAndID();
                 if (string.IsNullOrEmpty(PlatformAndID)) {
                     Logger.LogWarning("Could not update player private keys. Players platform was not detected.");
@@ -733,9 +851,9 @@ namespace StarLevelSystem
             }
         }
 
-        private static IEnumerator OnServerRecievePlayerPrivateKeys(long sender, ZPackage package) {
+        private static IEnumerator OnServerReceivePlayerPrivateKeys(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            List<string> playerKeys = DataObjects.yamldeserializer.Deserialize<List<string>>(yaml);
+            List<string> playerKeys = DataObjects.yamlDeserializer.Deserialize<List<string>>(yaml);
             RaidControl.UpdateOrAddPlayerPrivateKeys(sender, playerKeys);
             yield break;
         }
@@ -771,15 +889,15 @@ namespace StarLevelSystem
         ///  Helper to bind configs for bool types
         /// </summary>
         /// <param name="config_file"></param>
-        /// <param name="catagory"></param>
+        /// <param name="category"></param>
         /// <param name="key"></param>
         /// <param name="value"></param>
         /// <param name="description"></param>
         /// <param name="acceptableValues"></param>>
         /// <param name="advanced"></param>
         /// <returns></returns>
-        public static ConfigEntry<bool> BindServerConfig(string catagory, string key, bool value, string description, AcceptableValueBase acceptableValues = null, bool advanced = false) {
-            return cfg.Bind(catagory, key, value,
+        public static ConfigEntry<bool> BindServerConfig(string category, string key, bool value, string description, AcceptableValueBase acceptableValues = null, bool advanced = false) {
+            return cfg.Bind(category, key, value,
                 new ConfigDescription(description,
                     acceptableValues,
                 new ConfigurationManagerAttributes { IsAdminOnly = true, IsAdvanced = advanced })
@@ -790,18 +908,18 @@ namespace StarLevelSystem
         /// Helper to bind configs for int types
         /// </summary>
         /// <param name="config_file"></param>
-        /// <param name="catagory"></param>
+        /// <param name="category"></param>
         /// <param name="key"></param>
         /// <param name="value"></param>
         /// <param name="description"></param>
         /// <param name="advanced"></param>
-        /// <param name="valmin"></param>
-        /// <param name="valmax"></param>
+        /// <param name="valMin"></param>
+        /// <param name="valMax"></param>
         /// <returns></returns>
-        public static ConfigEntry<int> BindServerConfig(string catagory, string key, int value, string description, bool advanced = false, int valmin = 0, int valmax = 150) {
-            return cfg.Bind(catagory, key, value,
+        public static ConfigEntry<int> BindServerConfig(string category, string key, int value, string description, bool advanced = false, int valMin = 0, int valMax = 150) {
+            return cfg.Bind(category, key, value,
                 new ConfigDescription(description,
-                new AcceptableValueRange<int>(valmin, valmax),
+                new AcceptableValueRange<int>(valMin, valMax),
                 new ConfigurationManagerAttributes { IsAdminOnly = true, IsAdvanced = advanced })
                 );
         }
@@ -810,18 +928,18 @@ namespace StarLevelSystem
         /// Helper to bind configs for float types
         /// </summary>
         /// <param name="config_file"></param>
-        /// <param name="catagory"></param>
+        /// <param name="category"></param>
         /// <param name="key"></param>
         /// <param name="value"></param>
         /// <param name="description"></param>
         /// <param name="advanced"></param>
-        /// <param name="valmin"></param>
-        /// <param name="valmax"></param>
+        /// <param name="valMin"></param>
+        /// <param name="valMax"></param>
         /// <returns></returns>
-        public static ConfigEntry<float> BindServerConfig(string catagory, string key, float value, string description, bool advanced = false, float valmin = 0, float valmax = 150) {
-            return cfg.Bind(catagory, key, value,
+        public static ConfigEntry<float> BindServerConfig(string category, string key, float value, string description, bool advanced = false, float valMin = 0, float valMax = 150) {
+            return cfg.Bind(category, key, value,
                 new ConfigDescription(description,
-                new AcceptableValueRange<float>(valmin, valmax),
+                new AcceptableValueRange<float>(valMin, valMax),
                 new ConfigurationManagerAttributes { IsAdminOnly = true, IsAdvanced = advanced })
                 );
         }
@@ -830,14 +948,14 @@ namespace StarLevelSystem
         /// Helper to bind configs for strings
         /// </summary>
         /// <param name="config_file"></param>
-        /// <param name="catagory"></param>
+        /// <param name="category"></param>
         /// <param name="key"></param>
         /// <param name="value"></param>
         /// <param name="description"></param>
         /// <param name="advanced"></param>
         /// <returns></returns>
-        public static ConfigEntry<string> BindServerConfig(string catagory, string key, string value, string description, AcceptableValueList<string> acceptableValues = null, bool advanced = false) {
-            return cfg.Bind(catagory, key, value,
+        public static ConfigEntry<string> BindServerConfig(string category, string key, string value, string description, AcceptableValueList<string> acceptableValues = null, bool advanced = false) {
+            return cfg.Bind(category, key, value,
                 new ConfigDescription(
                     description,
                     acceptableValues,

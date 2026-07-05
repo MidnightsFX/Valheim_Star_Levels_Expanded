@@ -1,8 +1,8 @@
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
 using System;

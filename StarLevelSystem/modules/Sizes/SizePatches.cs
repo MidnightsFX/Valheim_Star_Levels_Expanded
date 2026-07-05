@@ -24,14 +24,15 @@ namespace StarLevelSystem.modules.Sizes {
         //}
 
 
-        // This duplicates the size of modifications on visual equipment if the creature already has the size modifications applied to it.
-        // Alternatively, it can also fix size modifications that are applied _AFTER_ the creature is scaled
+        // Locally sync size to the creatures set size
+        // NOTE: This MASSIVELY over scales, as creatures constantly re-quip equipment
         //[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.AttachItem))]
         //public static class VisualEquipmentScaleToFit {
         //    public static void Postfix(VisEquipment __instance, GameObject __result) {
-        //        if (__instance.m_isPlayer == true || __instance.m_nview == null || __instance.m_nview.GetZDO() == null || __result == null) { return; }
-        //        CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(__instance.m_nview.GetZDO().m_uid.ID);
-        //        SetSizeModification(__result, __instance.m_nview, cDetails);
+        //        if (__instance == null || __instance.m_isPlayer || __result == null) { return; }
+        //        Transform parent = __result.transform.parent;
+        //        if (parent == null) { return; }
+        //        __result.transform.localScale = Vector3.Scale(__result.transform.localScale, parent.lossyScale);
         //    }
         //}
 

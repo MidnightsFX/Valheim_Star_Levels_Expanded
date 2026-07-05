@@ -1,8 +1,8 @@
 ﻿using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using StarLevelSystem.Modifiers.Control;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.Modifiers;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,6 +17,7 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.UI {
     internal static class UIHudControl {
 
+        internal static List<StarLevelHud> CurrentBossHuds = new List<StarLevelHud>();
         internal static Color StarColor = new Color(1, 0.8174f, 0.3382f, 1f);
 
         public class StarLevelHud {
@@ -41,7 +42,7 @@ namespace StarLevelSystem.modules.UI {
             public Text StarLevelNText {
                 get; set;
             }
-            public EnemyHud.HudData Hudlink {
+            public EnemyHud.HudData HudLink {
                 get; set;
             }
             public TextMeshProUGUI HealthText {
@@ -49,9 +50,16 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
+        // Marks the boss hud layout as needing re-application; the actual Unity work is done
+        // on the main thread inside StackBossHuds (called from the EnemyHud.UpdateHuds postfix).
+        internal static bool BossHudConfigDirty = true;
+        private static int lastBossHudCount = -1;
+
         public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
         private static GameObject HealthText;
         static Sprite defaultStar;
+
+        internal static GameObject BossHudRoot;
 
         internal static void SetDefaultStar() {
             defaultStar = PrefabManager.Cache.GetPrefab<Sprite>("craft_icon");
@@ -78,25 +86,25 @@ namespace StarLevelSystem.modules.UI {
                 if (cce == null) { return; }
             }
 
-            StarLevelHud exthud = characterExtendedHuds[id];
-            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(exthud.Hudlink.m_character);
+            StarLevelHud extendedHUD = characterExtendedHuds[id];
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(extendedHUD.HudLink.m_character);
             cce.CreatureModifiers = mods;
-            cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(exthud.Hudlink.m_character, mods);
+            cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(extendedHUD.HudLink.m_character, mods);
 
-            exthud.Level = cce.Level;
-            UpdateHudModifiers(id, exthud, mods);
+            extendedHUD.Level = cce.Level;
+            UpdateHudModifiers(id, extendedHUD, mods);
         }
 
-        internal static void StarLevelHudDisplay(GameObject star, Transform basehud, Transform bosshud) {
-            SetupStar(star, 2, basehud);
-            SetupStar(star, 3, basehud);
-            SetupStar(star, 4, basehud);
-            SetupStar(star, 5, basehud);
-            SetupStar(star, 6, basehud);
+        internal static void StarLevelHudDisplay(GameObject star, Transform baseHud, Transform bossHud) {
+            SetupStar(star, 2, baseHud);
+            SetupStar(star, 3, baseHud);
+            SetupStar(star, 4, baseHud);
+            SetupStar(star, 5, baseHud);
+            SetupStar(star, 6, baseHud);
 
             // Star N | this position is set as the same 
             GameObject star_7 = new GameObject(name: "SLS_level_n");
-            star_7.transform.SetParent(basehud);
+            star_7.transform.SetParent(baseHud);
             GameObject star7 = UnityEngine.Object.Instantiate(star, star_7.transform);
             // star7.transform.SetParent(star_7.transform);
             star_7.transform.localPosition = new Vector3(x: -42, y: 19, z: 0);
@@ -121,15 +129,15 @@ namespace StarLevelSystem.modules.UI {
                 addContentSizeFitter: false);
             star_7.SetActive(false);
 
-            SetupStar(star, 2, bosshud, true);
-            SetupStar(star, 3, bosshud, true);
-            SetupStar(star, 4, bosshud, true);
-            SetupStar(star, 5, bosshud, true);
-            SetupStar(star, 6, bosshud, true);
+            SetupStar(star, 2, bossHud, true);
+            SetupStar(star, 3, bossHud, true);
+            SetupStar(star, 4, bossHud, true);
+            SetupStar(star, 5, bossHud, true);
+            SetupStar(star, 6, bossHud, true);
 
             // Star N | this position is set as the same 
             GameObject star_7_boss = new GameObject(name: "SLS_level_n");
-            star_7_boss.transform.SetParent(bosshud);
+            star_7_boss.transform.SetParent(bossHud);
             GameObject star7_boss = UnityEngine.Object.Instantiate(star, star_7_boss.transform);
             // Size increase boss stars
             star7_boss.GetComponent<RectTransform>().sizeDelta = new Vector2(20, 20);
@@ -223,7 +231,7 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
-        public static void UpdateHudforAllLevels(EnemyHud.HudData ehud) {
+        public static void UpdateHudForAllLevels(EnemyHud.HudData ehud) {
             if (ehud == null || ehud.m_character == null) return;
             if (ehud.m_character.IsPlayer()) return;
             int level = ehud.m_character.GetLevel();
@@ -231,8 +239,9 @@ namespace StarLevelSystem.modules.UI {
             // Logger.LogInfo($"Creature Level {level}");
             uint czid = ehud.m_character.GetZDOID().ID;
             if (czid == 0L) { return; }
-            StarLevelHud extended_hud = new StarLevelHud();
-            extended_hud.Level = level;
+            StarLevelHud extended_hud = new StarLevelHud {
+                Level = level
+            };
             Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(ehud.m_character);
             if (characterExtendedHuds.ContainsKey(czid)) {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
@@ -245,11 +254,11 @@ namespace StarLevelSystem.modules.UI {
                     return;
                 }
 
-                List<string> cmods = mods.Keys.ToList();
+                List<string> currentMods = mods.Keys.ToList();
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
-                int levelcheck = ehud.m_character.GetLevel();
-                if (cmods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelcheck != extended_hud.Level) {
-                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.Hudlink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
+                int levelCheck = ehud.m_character.GetLevel();
+                if (currentMods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelCheck != extended_hud.Level) {
+                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.HudLink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     InvalidateCacheEntry(ehud.m_character);
                     
@@ -259,17 +268,22 @@ namespace StarLevelSystem.modules.UI {
                     return;
                 }
 
-                extended_hud.Hudlink.m_name.text = extended_hud.CreatureNameLocalized;
+                extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
 
-                if (ValConfig.EnableEnemyHeathbarNumberDisplay.Value && extended_hud.HealthText != null) {
+                if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value && extended_hud.HealthText != null) {
                     extended_hud.HealthText.text = $"{ehud.m_character.GetHealth():N0}/{ehud.m_character.GetMaxHealth():N0}";
                 }
             } else {
-                extended_hud.Hudlink = ehud;
+                extended_hud.HudLink = ehud;
                 // if (mods == null) { return; }
                 Logger.LogDebug($"Creating new hud for {ehud.m_character} with level {level}");
 
                 extended_hud.IsBoss = ehud.m_character.IsBoss();
+
+                // Track this boss hud for boss hud sizing and ordering
+                if (extended_hud.IsBoss) {
+                    CurrentBossHuds.Add(extended_hud);
+                }
 
                 // Modify the size of the health bar if its enabled
                 if ((ValConfig.EnemyHealthbarScalarX.Value != 1f || ValConfig.EnemyHealthbarScalarY.Value != 1f) && extended_hud.IsBoss == false) {
@@ -291,12 +305,23 @@ namespace StarLevelSystem.modules.UI {
                 }
 
                 // Setup the health text if enabled
-                if (ValConfig.EnableEnemyHeathbarNumberDisplay.Value && extended_hud.HealthText == null) {
+                if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value && extended_hud.HealthText == null) {
                     if (HealthText == null) { LoadAssets(); }
                     GameObject HealthTextHolder = GameObject.Instantiate(HealthText, ehud.m_gui.transform.Find("Health"));
                     extended_hud.HealthText = HealthTextHolder.GetComponent<TextMeshProUGUI>();
-                    // Use a slightly diminishing scale as otherwise things get overscaled easily
+                    // Use a slightly diminishing scale as otherwise things get over scaled easily
                     extended_hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
+
+                    if (ValConfig.UseCustomHealthFont.Value == false) {
+                        extended_hud.HealthText.font = extended_hud.HudLink.m_name.font;
+                    }
+                    // Health text boss fixes? resize?
+                    if (extended_hud.IsBoss) {
+                        RectTransform hthRT = HealthTextHolder.transform as RectTransform;
+                        hthRT.localPosition = new Vector3(0, 4, 0);
+                        extended_hud.HealthText.fontSize = 20f;
+                        extended_hud.HealthText.characterSpacing = 12f;
+                    }
                 }
 
                 UpdateHudModifiers(czid, extended_hud, mods);
@@ -353,31 +378,31 @@ namespace StarLevelSystem.modules.UI {
 
             // Enable dynamic levels
             if (level > 6) {
-                // Logger.LogInfo("Setting Nstar levels active");
+                // Logger.LogInfo("Setting NStar levels active");
                 extended_hud.StarLevelN.SetActive(true);
-                // get the text componet here and set its display
+                // get the text component here and set its display
                 extended_hud.StarLevelNText.text = (level - 1).ToString();
             } else {
                 extended_hud.StarLevelN.SetActive(false);
             }
         }
 
-        public static void UpdateHudModifiers(uint zdid, StarLevelHud extended_hud, Dictionary<string, ModifierType> mods) {
-            if (extended_hud.Hudlink == null || extended_hud.Hudlink.m_gui == null) {
-                RemoveExtendedHudFromCache(zdid);
+        public static void UpdateHudModifiers(uint zdoid, StarLevelHud extended_hud, Dictionary<string, ModifierType> mods) {
+            if (extended_hud.HudLink == null || extended_hud.HudLink.m_gui == null) {
+                RemoveExtendedHudFromCache(zdoid);
                 return;
             }
 
-            CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(extended_hud.Hudlink.m_character);
+            CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(extended_hud.HudLink.m_character);
             if (cce != null) {
                 if (cce.CreatureModifiers == null || cce.CreatureModifiers.Keys.ToList().CompareListContents(mods.Keys.ToList()) == false) {
-                    //Logger.LogDebug($"Creature cache is outdated for {zdid}-{cce.RefCreatureName}-{cce.Level}");
-                    CompositeLazyCache.ClearCachedCreature(extended_hud.Hudlink.m_character);
-                    cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.Hudlink.m_character);
+                    //Logger.LogDebug($"Creature cache is outdated for {zdoid}-{cce.RefCreatureName}-{cce.Level}");
+                    CompositeLazyCache.ClearCachedCreature(extended_hud.HudLink.m_character);
+                    cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.HudLink.m_character);
                 }
-                //Logger.LogDebug($"Updating hud Name for {zdid} with modifiers {string.Join(", ", mods.Keys)}");
-                extended_hud.CreatureNameLocalized = extended_hud.Hudlink.m_character.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, Localization.instance.Localize(cce.CreatureNameLocalizable));
-                extended_hud.Hudlink.m_name.text = extended_hud.CreatureNameLocalized;
+                //Logger.LogDebug($"Updating hud Name for {zdoid} with modifiers {string.Join(", ", mods.Keys)}");
+                extended_hud.CreatureNameLocalized = extended_hud.HudLink.m_character.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, Localization.instance.Localize(cce.CreatureNameLocalizable));
+                extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
             }
 
             Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
@@ -393,8 +418,8 @@ namespace StarLevelSystem.modules.UI {
                     CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
                     if (cmd.StarVisual != null) {
                         if (CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
-                            Sprite starsprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
-                            starReplacements.Add(star, starsprite);
+                            Sprite starSprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
+                            starReplacements.Add(star, starSprite);
                         }
                     }
                     star++;
@@ -404,13 +429,13 @@ namespace StarLevelSystem.modules.UI {
             int star_index = 2;
             while (star_index < 7) {
                 if (extended_hud.Starlevel.ContainsKey(star_index) == false) {
-                    extended_hud.Starlevel.Add(star_index, extended_hud.Hudlink.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
+                    extended_hud.Starlevel.Add(star_index, extended_hud.HudLink.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
                 }
                 if (extended_hud.StarLevelBack.ContainsKey(star_index) == false) {
-                    extended_hud.StarLevelBack.Add(star_index, extended_hud.Hudlink.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
+                    extended_hud.StarLevelBack.Add(star_index, extended_hud.HudLink.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
                 }
                 if (extended_hud.StarLevelFront.ContainsKey(star_index) == false) {
-                    extended_hud.StarLevelFront.Add(star_index, extended_hud.Hudlink.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
+                    extended_hud.StarLevelFront.Add(star_index, extended_hud.HudLink.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
                 }
                 //Logger.LogDebug($"Assigning star level {star_index}");
                 if (starReplacements.ContainsKey(star_index)) {
@@ -441,10 +466,10 @@ namespace StarLevelSystem.modules.UI {
             }
 
             //Logger.LogDebug($"Assigning star level N");
-            extended_hud.StarLevelN = extended_hud.Hudlink.m_gui.transform.Find("SLS_level_n").gameObject;
-            extended_hud.StarLevelNBackImage = extended_hud.Hudlink.m_gui.transform.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
-            extended_hud.StarLevelNFrontImage = extended_hud.Hudlink.m_gui.transform.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-            extended_hud.StarLevelNText = extended_hud.Hudlink.m_gui.transform.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
+            extended_hud.StarLevelN = extended_hud.HudLink.m_gui.transform.Find("SLS_level_n").gameObject;
+            extended_hud.StarLevelNBackImage = extended_hud.HudLink.m_gui.transform.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
+            extended_hud.StarLevelNFrontImage = extended_hud.HudLink.m_gui.transform.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
+            extended_hud.StarLevelNText = extended_hud.HudLink.m_gui.transform.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
             if (starReplacements.Count > 0) {
                 extended_hud.StarLevelNFrontImage.sprite = starReplacements.First().Value;
                 extended_hud.StarLevelNFrontImage.rectTransform.sizeDelta = new Vector2(17, 17);
@@ -456,7 +481,141 @@ namespace StarLevelSystem.modules.UI {
                 extended_hud.StarLevelNBackImage.sprite = defaultStar;
                 extended_hud.StarLevelNBackImage.rectTransform.sizeDelta = new Vector2(21, 21);
             }
-        } 
+        }
+
+        public static void OnBossHudConfigChanged(object s, EventArgs e) {
+            BossHudConfigDirty = true;
+        }
+
+        // Valheim's HUD canvas is a ConstantPixelSize CanvasScaler whose scaleFactor is driven by
+        // GuiScaler (= Min(Screen.width/1920, Screen.height/1080) * GuiScale). Canvas-local units
+        // therefore equal pixels / scaleFactor, which is what localPosition/sizeDelta operate in.
+        internal static float GetHudScaleFactor(EnemyHud hud) {
+            Canvas canvas = hud != null ? hud.GetComponentInParent<Canvas>() : null;
+            float sf = canvas != null && canvas.rootCanvas != null ? canvas.rootCanvas.scaleFactor : 0f;
+            if (sf <= 0f) {
+                // CanvasScaler may not have run its first Update yet (e.g. during EnemyHud.Awake).
+                sf = Mathf.Min(Screen.width / 1920f, Screen.height / 1080f) * PlatformPrefs.GetFloat("GuiScale", 1f);
+            }
+            return sf <= 0f ? 1f : sf;
+        }
+
+        // Ensures BossHudRoot carries the correct layout group for the current stacking mode and
+        // applies the configured spacing + top buffer. Vertical = stacked rows, Horizontal = squished.
+        internal static HorizontalOrVerticalLayoutGroup EnsureBossLayoutGroup(bool stack) {
+            if (BossHudRoot == null) { return null; }
+            HorizontalOrVerticalLayoutGroup group = BossHudRoot.GetComponent<HorizontalOrVerticalLayoutGroup>();
+            bool wrongType = group == null
+                || (stack && group is HorizontalLayoutGroup)
+                || (!stack && group is VerticalLayoutGroup);
+            if (wrongType) {
+                if (group != null) { GameObject.DestroyImmediate(group); }
+                group = stack
+                    ? (HorizontalOrVerticalLayoutGroup)BossHudRoot.AddComponent<VerticalLayoutGroup>()
+                    : BossHudRoot.AddComponent<HorizontalLayoutGroup>();
+            }
+            group.childAlignment = TextAnchor.UpperCenter;
+            group.childForceExpandHeight = false;
+            group.spacing = ValConfig.BossHealthbarSpacing.Value;
+            group.padding = new RectOffset(0, 0, ValConfig.BossHudTopBuffer.Value, 0);
+            if (stack) {
+                // Stacked rows: each full-width bar centered, one per row.
+                group.childControlWidth = false;
+                group.childForceExpandWidth = false;
+                group.childControlHeight = true;
+            } else {
+                // Squished row: divide the configured total width evenly between the bars so they
+                // always fit within it (root rect width is set to that budget in StackBossHuds).
+                group.childControlWidth = true;
+                group.childForceExpandWidth = true;
+                group.childControlHeight = false;
+            }
+            return group;
+        }
+
+        // Applies a target width (canvas units) to a boss hud's name, health bars and backgrounds.
+        // Works for both the m_baseHudBoss template (sizes future clones) and already-shown clones.
+        internal static void SetBossBarWidth(GameObject bossGui, float width) {
+            if (bossGui == null) { return; }
+            LayoutElement le = bossGui.GetComponent<LayoutElement>();
+            if (le != null) {
+                le.minWidth = width;
+                le.preferredWidth = width;
+            }
+            if (bossGui.transform.Find("Name") is RectTransform nameRT) {
+                nameRT.sizeDelta = new Vector2(width, 40f);
+            }
+            Transform health = bossGui.transform.Find("Health");
+            if (health == null) { return; }
+            SetBossHealthBar(health.Find("health_slow"), width);
+            SetBossHealthBar(health.Find("health_fast"), width);
+            if (health.Find("Background/bkg") is RectTransform bkgRT) {
+                bkgRT.sizeDelta = new Vector2(width, 20f);
+            }
+            if (health.Find("Background/darken") is RectTransform darkRT) {
+                darkRT.sizeDelta = new Vector2(width, 24f);
+            }
+        }
+
+        private static void SetBossHealthBar(Transform healthBar, float width) {
+            if (healthBar == null) { return; }
+            if (healthBar.Find("bar") is RectTransform barRT) {
+                barRT.sizeDelta = new Vector2(width, 20f);
+                barRT.localPosition = new Vector2(width * -0.5f, 0f);
+            }
+            // GuiBar overrides the bar sizeDelta every LateUpdate from its captured m_width, so a live
+            // bar only resizes via SetWidth; setting sizeDelta above keeps fresh clones correct.
+            GuiBar gb = healthBar.GetComponent<GuiBar>();
+            if (gb != null) { gb.SetWidth(width); }
+        }
+
+        // Runs from the EnemyHud.UpdateHuds postfix (main thread). Gated on boss count / config change
+        // so widths are only rewritten when needed, not every frame.
+        internal static void StackBossHuds(EnemyHud instance) {
+            if (instance == null || BossHudRoot == null) { return; }
+
+            int count = 0;
+            foreach (KeyValuePair<Character, EnemyHud.HudData> kv in instance.m_huds) {
+                EnemyHud.HudData hd = kv.Value;
+                if (hd != null && hd.m_character != null && hd.m_character.IsBoss() && hd.m_gui != null && hd.m_gui.activeSelf) {
+                    count++;
+                }
+            }
+
+            if (BossHudConfigDirty == false && count == lastBossHudCount) { return; }
+            BossHudConfigDirty = false;
+            lastBossHudCount = count;
+
+            bool stack = ValConfig.StackMultipleBossHealthbars.Value;
+            EnsureBossLayoutGroup(stack);
+
+            // The configured percentage is the TOTAL width budget for the boss HUD.
+            float bossWidth = (Screen.width / GetHudScaleFactor(instance)) * ValConfig.BossHealthbarWidthPercent.Value;
+
+            RectTransform rootRT = BossHudRoot.GetComponent<RectTransform>();
+            float perBarWidth = bossWidth;
+            if (stack == false) {
+                // Give the layout group the configured width and split it evenly so the bars are
+                // shrunk to all fit side-by-side within that budget.
+                int bars = Mathf.Max(1, count);
+                float spacing = ValConfig.BossHealthbarSpacing.Value;
+                perBarWidth = Mathf.Max(1f, (bossWidth - (spacing * (bars - 1))) / bars);
+                if (rootRT != null) { rootRT.sizeDelta = new Vector2(bossWidth, rootRT.sizeDelta.y); }
+            } else if (rootRT != null) {
+                // Stacked: the root is a point; each full-width row is centered around it.
+                rootRT.sizeDelta = new Vector2(0f, rootRT.sizeDelta.y);
+            }
+
+            // Template controls how freshly-shown bosses are sized.
+            if (instance.m_baseHudBoss != null) { SetBossBarWidth(instance.m_baseHudBoss, perBarWidth); }
+            // Resize the bosses that are already on screen.
+            foreach (KeyValuePair<Character, EnemyHud.HudData> kv in instance.m_huds) {
+                EnemyHud.HudData hd = kv.Value;
+                if (hd != null && hd.m_character != null && hd.m_character.IsBoss() && hd.m_gui != null) {
+                    SetBossBarWidth(hd.m_gui, perBarWidth);
+                }
+            }
+        }
 
         internal static void LoadAssets() {
             HealthText = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>("HealthText.prefab");

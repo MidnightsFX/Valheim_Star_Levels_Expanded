@@ -177,11 +177,20 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         NemesisCreatureSpawns = (List<NemesisSpawn>)(new List<NemesisSpawn>(nemBoss.Minions) ?? Enumerable.Empty<NemesisSpawn>());
                         NemesisCreatureSpawns.Add(nemBoss.BossSpawn);
 
-                        // Send remote removal
+                        // Propagate the removal so this boss isn't drawn again. On a host we ARE the
+                        // authority (GetServerPeer() is null on a server), so broadcast to peers directly;
+                        // a remote client tells the server, which rebroadcasts.
                         ZPackage removeBossPack = new ZPackage();
                         removeBossPack.Write(DataObjects.yamlSerializer.Serialize(nemBoss));
-                        ValConfig.RemoveNemesisBossRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, removeBossPack);
-                        // Locally remove
+                        if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                            ZNet.instance.GetPeers().ForEach(peer => ValConfig.RemoveNemesisBossRPC.SendPackage(peer.m_uid, removeBossPack));
+                        } else {
+                            ZNetPeer server = ZNet.instance?.GetServerPeer();
+                            if (server != null) {
+                                ValConfig.RemoveNemesisBossRPC.SendPackage(server.m_uid, removeBossPack);
+                            }
+                        }
+                        // Locally remove (reliable reference removal on the machine that selected it)
                         NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemBoss);
                     } else {
                         continue;
@@ -220,6 +229,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         MonsterAI spawnAI = cgo.GetComponent<MonsterAI>();
                         if (spawnAI != null) {
                             CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
+                            if (spawn.DespawnIfNotAlerted) {
+                                spawnAI.SetEventCreature(true);
+                            }
                         }
                         // Level generators (inline or referenced) roll a level that overrides ForcedLevel when configured.
                         int rolledLevel = LevelGeneratorResolver.RollLevel(spawn.LevelupGenerators, spawn.LevelupGeneratorRefs);
@@ -242,6 +254,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         if (spawn.CustomLoot != null && spawn.CustomLoot.Count > 0) {
                             LootSystemData.SetCustomLoot(spawnChara, spawn.CustomLoot);
                         }
+
                     }
                     spawnedDetails += $" {spawn.Prefab}x{spawn.SpawnGroupSize}";
                 }

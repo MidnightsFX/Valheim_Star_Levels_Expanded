@@ -189,7 +189,7 @@ namespace StarLevelSystem.Data
                 characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
                 int maxlevel = ValConfig.MaxLevel.Value + 1;
                 Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
-                chara.SetLevel(maxlevel);
+                chara.m_nview.GetZDO().Set(ZDOVars.s_level, maxlevel);
                 chara.m_level = maxlevel;
                 SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, characterEntry);
                 Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, characterEntry.Colorization);
@@ -199,7 +199,7 @@ namespace StarLevelSystem.Data
             // Logger.LogDebug($"{characterEntry.RefCreatureName} Level check {chara.GetLevel()} - {characterEntry.Level}");
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
             if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value) {
-                chara.SetLevel(characterEntry.Level);
+                chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
             }
 
             //Logger.LogDebug($"Checking stored mods {characterEntry.CreatureModifiers.Count}");

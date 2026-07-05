@@ -256,7 +256,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             // Fallback
             Logger.LogDebug($"Setting creature level from fallback provided {fallbackLevel}");
-            chara.SetLevel(fallbackLevel);
+            chara.m_nview.GetZDO().Set(ZDOVars.s_level, fallbackLevel);
         }
 
         public static void SelectCreatureBiomeSettings(GameObject creature, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome creature_biome) {

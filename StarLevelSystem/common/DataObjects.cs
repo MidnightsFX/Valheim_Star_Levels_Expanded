@@ -656,6 +656,10 @@ namespace StarLevelSystem.common
                     LoadAPIGameObjects();
                     return;
                 }
+                if (StarLevelSystem.EmbeddedResourceBundle == null) {
+                    Logger.LogDebug("Embedded asset bundle is unavailable; skipping modifier asset load.");
+                    return;
+                }
                 if (StarVisual != null && !CreatureModifiersData.LoadedModifierSprites.ContainsKey(StarVisual)) {
                     string path = $"assets/custom/starlevels/icons/{StarVisual}.png";
                     if (CreatureModifiersData.SelectedModifierDisplayStyle == ModifierDisplayStyle.Stars) { path = $"assets/custom/starlevels/icons2/{StarVisual}.png"; }
@@ -972,6 +976,8 @@ namespace StarLevelSystem.common
             public List<LevelGenerator> LevelupGenerators { get; set; } = null;
             [DefaultValue(null)]
             public List<string> LevelupGeneratorRefs { get; set; } = null;
+            [DefaultValue(false)]
+            public bool DespawnIfNotAlerted { get; set; } = false;
             [DefaultValue(false)]
             public bool IsBoss { get; set; } = false;
             public int SpawnGroupSize { get; set; } = 1;

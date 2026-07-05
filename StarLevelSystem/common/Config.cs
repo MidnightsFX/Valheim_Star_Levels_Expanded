@@ -655,35 +655,65 @@ namespace StarLevelSystem.common {
         }
 
         public static IEnumerator OnServerReceivedNemesisBossAdd(long sender, ZPackage package) {
-            // Write the update to the local file and memory
-            string yaml = package.ReadString();
-            NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
-            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemesisBoss);
-            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
-            // Send the update to all of the other clients
-            ZNet.instance.GetPeers().ForEach(peer => {
-                if (peer.m_uid != sender) {
-                    ClientSendPlayerPrivateKeysRPC.SendPackage(peer.m_uid, package);
-                }
-            });
-
+            ApplyNemesisBossAdd(package.ReadString(), sender);
             yield return null;
         }
 
         public static IEnumerator OnServerReceiveNemesisBossRemove(long sender, ZPackage package) {
-            // Write the update to the local file and memory
-            string yaml = package.ReadString();
+            ApplyNemesisBossRemove(package.ReadString(), sender);
+            yield return null;
+        }
+
+        // Authoritatively add a nemesis miniboss to the shared pool, persist it, and propagate it
+        // to every peer except senderToExclude. Called both from the server RPC handler (excluding
+        // the originating client) and directly on a host/listen-server, where GetServerPeer() is
+        // null so there is no server peer to send an RPC to. Pass ZNet.GetUID() to exclude nobody.
+        internal static void ApplyNemesisBossAdd(string yaml, long senderToExclude) {
             NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
-            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemesisBoss);
+            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemesisBoss);
             File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
-            // Send the update to all of the other clients
+            if (ZNet.instance == null) { return; }
+            // Send the update to all of the other clients via the correct nemesis-add channel
+            // (OnClientReceiveMiniBossAdd), not the private-keys RPC.
+            ZPackage package = new ZPackage();
+            package.Write(yaml);
             ZNet.instance.GetPeers().ForEach(peer => {
-                if (peer.m_uid != sender) {
-                    ClientSendPlayerPrivateKeysRPC.SendPackage(peer.m_uid, package);
+                if (peer.m_uid != senderToExclude) {
+                    SendNewNemesisBossRPC.SendPackage(peer.m_uid, package);
                 }
             });
+        }
 
-            yield return null;
+        // Authoritatively remove a nemesis miniboss from the shared pool, persist it, and propagate
+        // the removal to every peer except senderToExclude. See ApplyNemesisBossAdd for the host case.
+        internal static void ApplyNemesisBossRemove(string yaml, long senderToExclude) {
+            int idx = FindMinibossIndex(yaml);
+            if (idx >= 0) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.RemoveAt(idx);
+                File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+            }
+            if (ZNet.instance == null) { return; }
+            // Forward the removal to peers even if we had already removed it locally, so their pools converge.
+            ZPackage package = new ZPackage();
+            package.Write(yaml);
+            ZNet.instance.GetPeers().ForEach(peer => {
+                if (peer.m_uid != senderToExclude) {
+                    RemoveNemesisBossRPC.SendPackage(peer.m_uid, package);
+                }
+            });
+        }
+
+        // Locate a miniboss in the shared pool matching the given serialized boss. NemesisMiniboss has
+        // no value-equality override, so a freshly deserialized copy never matches a stored instance by
+        // reference — matching by the serialized form is required. Both sides are normalized through the
+        // same deserialize→serialize round-trip so equal bosses compare equal regardless of incidental
+        // formatting. Returns the index of the first match, or -1 if none / the yaml is unparseable.
+        private static int FindMinibossIndex(string yaml) {
+            string target;
+            try { target = DataObjects.yamlSerializer.Serialize(DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml)); }
+            catch { return -1; }
+            return NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses
+                .FindIndex(b => DataObjects.yamlSerializer.Serialize(b) == target);
         }
 
         private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
@@ -732,18 +762,20 @@ namespace StarLevelSystem.common {
 
         private static IEnumerator OnClientReceiveMiniBossAdd(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
-            if (NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Contains(nemesisBoss) == false) {
-                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemesisBoss);
+            // Dedupe by serialized form (reference-equality Contains never matches a deserialized copy).
+            if (FindMinibossIndex(yaml) < 0) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml));
             }
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
         private static IEnumerator OnClientReceiveMiniBossRemove(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
-            NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemesisBoss);
+            // Remove by serialized form (reference-equality Remove never matches a deserialized copy).
+            int idx = FindMinibossIndex(package.ReadString());
+            if (idx >= 0) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.RemoveAt(idx);
+            }
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }

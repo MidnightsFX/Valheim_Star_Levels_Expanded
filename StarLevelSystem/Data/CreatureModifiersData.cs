@@ -788,6 +788,10 @@ namespace StarLevelSystem.Data
         }
 
         internal static void LoadPrefabs() {
+            if (StarLevelSystem.EmbeddedResourceBundle == null) {
+                Logger.LogDebug("Embedded asset bundle is unavailable (game exiting or world unloading); skipping modifier prefab load.");
+                return;
+            }
             if (ActiveCreatureModifiers.MinorModifiers != null) {
                 foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.MinorModifiers) {
                     Logger.LogDebug($"Loading assets for: {mod}");

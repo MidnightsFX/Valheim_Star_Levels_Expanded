@@ -1,3 +1,17 @@
+**1.1.3**
+ ---
+ ```
+ - Fixes a bug where Nemesis boss creation could fail and cause an NRE
+ - Fixes Nemesis bosses not being removed from the potential spawn list when they are spawned
+ ```
+
+**1.1.2**
+ ---
+ ```
+ - Adds DespawnIfNotAlerted for Nemesis spawns configuration, as an optional way to cleanup
+ - Improves compatibility with mods that adjust creature health
+ ```
+
 **1.1.1**
  ---
  ```

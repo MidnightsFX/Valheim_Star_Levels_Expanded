@@ -88,11 +88,17 @@ namespace StarLevelSystem.common
 
         internal class SpawnNemesisRemote : ConsoleCommand {
             public override string Name => "SLS-spawn-nemesis-remote";
-            public override string Help => "Format: [optional: biome] Force-scouts and places one remote Nemesis boss. Host/server only.";
+            public override string Help => "Format: [optional: biome] Force-scouts and places one remote Nemesis boss. On a dedicated server, admins can run it from a connected client.";
 
             public override void Run(string[] args) {
-                if (NemesisRemoteSpawnControl.Manager == null) {
-                    Logger.LogInfo("Remote Nemesis spawning is host/server-only; run this on the machine hosting the world.");
+                if (ZNet.instance == null) {
+                    Logger.LogInfo("You must be in a world to spawn a remote Nemesis boss.");
+                    return;
+                }
+                // Remote spawning is server-authoritative. A connected client routes the request to the server,
+                // which honors it only for admins, so reject non-admins here for a clearer message.
+                if (ZNet.instance.IsServer() == false && SynchronizationManager.Instance.PlayerIsAdmin == false) {
+                    Logger.LogInfo("Only server admins can force-spawn a remote Nemesis boss.");
                     return;
                 }
                 Heightmap.Biome biome = Heightmap.Biome.Meadows;
@@ -101,8 +107,14 @@ namespace StarLevelSystem.common
                 } else if (Player.m_localPlayer != null) {
                     biome = Heightmap.FindBiome(Player.m_localPlayer.transform.position);
                 }
-                Logger.LogInfo($"Force-spawning a remote Nemesis boss for biome {biome}...");
-                NemesisRemoteSpawnControl.Manager.DebugSpawnForBiome(biome);
+                if (ZNet.instance.IsServer()) {
+                    Logger.LogInfo($"Force-spawning a remote Nemesis boss for biome {biome}...");
+                } else {
+                    Logger.LogInfo($"Requesting the server force-spawn a remote Nemesis boss for biome {biome}...");
+                }
+                if (NemesisRemoteSpawnControl.RequestForceSpawn(biome) == false) {
+                    Logger.LogInfo("Unable to request a remote Nemesis spawn (no server connection or remote spawning is unavailable).");
+                }
             }
         }
 

@@ -58,7 +58,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     }
                 }
                 if (ValConfig.EnableTreeScaling.Value == true) {
-                    if (__instance.m_nview != null && __instance.m_nview.GetZDO() != null) { CompositeLazyCache.RemoveTreeCacheEntry(__instance.m_nview.GetZDO().m_uid.ID); }
+                    if (__instance.m_nview != null && __instance.m_nview.GetZDO() != null) { CompositeLazyCache.RemoveTreeCacheEntry(__instance.m_nview.GetZDO().m_uid); }
                 }
                 ZNetScene.instance.Destroy(__instance.gameObject);
                 // Skip the original, we entirely rewrite it.

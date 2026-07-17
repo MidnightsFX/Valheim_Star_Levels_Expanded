@@ -63,6 +63,7 @@ namespace StarLevelSystem.common {
         internal static CustomRPC AddNemesisBossPinRPC;
         internal static CustomRPC RemoveNemesisBossPinRPC;
         internal static CustomRPC ReportNemesisBossDeathRPC;
+        internal static CustomRPC ClientRequestNemesisRemoteSpawnRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
 
@@ -71,6 +72,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> MaxBossLevel;
         public static ConfigEntry<bool> OverLevelCreaturesGetRerolledOnLoad;
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
+        public static ConfigEntry<bool> MapRingsAboveFog;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
         public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;
@@ -190,6 +192,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> ZoneKillsPerLevelUp;
         public static ConfigEntry<float> ZoneDecayLevelsPerHour;
         public static ConfigEntry<bool> EnableZoneMapOverlay;
+        public static ConfigEntry<bool> ZoneOverlayAboveFog;
         public static ConfigEntry<float> MinZoneSize;
         public static ConfigEntry<float> MaxZoneSize;
         public static ConfigEntry<float> KillReportFlushIntervalSeconds;
@@ -230,6 +233,8 @@ namespace StarLevelSystem.common {
             RemoveNemesisBossPinRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossPinRPC", OnServerReceiveConfigs, OnClientReceiveNemesisBossPinRemove);
             // Owner of a dying remote boss reports it to the server, which removes the registry entry + pin.
             ReportNemesisBossDeathRPC = NetworkManager.Instance.AddRPC("SLS_ReportNemesisBossDeathRPC", OnServerReceiveNemesisBossDeath, NOOPReceive);
+            // Admin client asks the server to force-spawn a remote Nemesis boss for a biome (console command).
+            ClientRequestNemesisRemoteSpawnRPC = NetworkManager.Instance.AddRPC("SLS_ClientRequestNemesisRemoteSpawnRPC", OnServerReceiveNemesisRemoteSpawnRequest, NOOPReceive);
             // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
             ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
@@ -296,6 +301,8 @@ namespace StarLevelSystem.common {
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
             EnableMapRingsForDistanceBonus.SettingChanged += DistanceScaleSystem.UpdateMapRingEnableSettingOnChange;
+            MapRingsAboveFog = BindServerConfig("LevelSystem", "MapRingsAboveFog", false, "When enabled, distance map rings draw above the map fog so they are visible even in unexplored areas. When disabled, rings sit below the fog and only appear once an area has been explored.");
+            MapRingsAboveFog.SettingChanged += DistanceScaleSystem.UpdateMapRingFogSettingOnChange;
             DistanceBonusIsFromStarterTemple = BindServerConfig("LevelSystem", "DistanceBonusIsFromStarterTemple", false, "When enabled the distance bonus is calculated from the starter temple instead of world center, typically this makes little difference. But can help ensure your starting area is more correctly calculated.");
             DistanceBonusIsFromStarterTemple.SettingChanged += DistanceScaleSystem.OnRingCenterChanged;
             DistanceRingColorOptions = BindServerConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
@@ -387,6 +394,8 @@ namespace StarLevelSystem.common {
             ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
             ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per real-time hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours.", false, 0f, 50f);
             EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
+            ZoneOverlayAboveFog = BindServerConfig("ZoneScaling", "ZoneOverlayAboveFog", false, "When enabled, zone boundaries draw above the map fog so they are visible even in unexplored areas. When disabled, boundaries sit below the fog and only appear once an area has been explored.");
+            ZoneOverlayAboveFog.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayFogOnChange;
             MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 500f, 10000f);
             MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 1000f, 10000f);
             KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters.", true);
@@ -760,6 +769,29 @@ namespace StarLevelSystem.common {
             string id = package.ReadString();
             global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.RemovePin(id);
             yield return null;
+        }
+
+        // Server handler: an admin client asked to force-spawn a remote Nemesis boss for a biome. The console
+        // command is authoritative on the host, but on a dedicated server clients have no manager of their own,
+        // so the request is routed here. Gate on admin because any peer could craft this RPC.
+        public static IEnumerator OnServerReceiveNemesisRemoteSpawnRequest(long sender, ZPackage package) {
+            if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                if (SenderIsAdmin(sender) == false) {
+                    Logger.LogWarning($"Rejecting remote Nemesis spawn request from non-admin peer {sender}.");
+                    yield break;
+                }
+                Heightmap.Biome biome = (Heightmap.Biome)package.ReadInt();
+                global::StarLevelSystem.modules.NemesisSystem.NemesisRemoteSpawnControl.Manager?.ForceSpawnForBiome(biome);
+            }
+            yield return null;
+        }
+
+        // True when the given peer uid belongs to a connected admin. Used to authorize client-issued
+        // server-side actions; the integrated host itself never routes through an RPC so is not considered here.
+        private static bool SenderIsAdmin(long sender) {
+            ZNetPeer peer = ZNet.instance?.GetPeer(sender);
+            if (peer == null || peer.m_socket == null) { return false; }
+            return ZNet.instance.IsAdmin(peer.m_socket.GetHostName());
         }
 
         // Server handler: the owner of a dying remote boss reported its pin id; drop it and broadcast removal.

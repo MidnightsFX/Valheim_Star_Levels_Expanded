@@ -1,3 +1,11 @@
+**1.2.1**
+ ---
+ ```
+ - Fix cache collision causing incorrect naming in multiplayer
+ - New configuration (default enabled) to hide zone and rings below fog layer
+ - Improves the force spawn command for Nemesis minibosses to allow usage on dedicated servers
+ ```
+
 **1.2.0**
  ---
  ```

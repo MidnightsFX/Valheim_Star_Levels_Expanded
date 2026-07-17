@@ -8,7 +8,9 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.CreatureSetup {
     internal static class CreatureSetupQueue {
 
-        private static readonly HashSet<uint> InProgress = new HashSet<uint>();
+        // Keyed by the full ZDOID (not the bare uint ZDOID.ID) so setup tracking for creatures created
+        // by different peers with overlapping per-peer ID counters does not collide. See CompositeLazyCache.
+        private static readonly HashSet<ZDOID> InProgress = new HashSet<ZDOID>();
 
         // Adds a creature to the queue. Returns false when the request is a duplicate
         // (a setup coroutine is already running for this creature) or the character is invalid.
@@ -17,8 +19,8 @@ namespace StarLevelSystem.modules.CreatureSetup {
             if (chara.IsPlayer()) { return false; }
             if (chara.m_nview == null || chara.m_nview.IsValid() == false) { return false; }
 
-            uint id = chara.GetZDOID().ID;
-            if (id == 0) { return false; }
+            ZDOID id = chara.GetZDOID();
+            if (id == ZDOID.None) { return false; }
             if (InProgress.Add(id) == false) { return false; }
 
             TaskRunner.Run().StartCoroutine(ProcessEntry(chara, id, levelOverride, spawnMultiply, delay, requiredModifiers, notAllowedModifiers));
@@ -27,15 +29,15 @@ namespace StarLevelSystem.modules.CreatureSetup {
 
 
         // Cleanup hook for destroyed creatures - drops all tracking.
-        internal static void RemoveTracking(uint id) {
-            if (id == 0) { return; }
+        internal static void RemoveTracking(ZDOID id) {
+            if (id == ZDOID.None) { return; }
             InProgress.Remove(id);
         }
 
         // Per-creature setup worker. Waits for the requested delay, then waits for a valid ZNetView,
         // prepares the cache, and runs CharacterSetup. Retries up to FallbackDelayBeforeCreatureSetup
         // attempts before giving up.
-        private static IEnumerator ProcessEntry(Character chara, uint id, int levelOverride, bool spawnMultiply, float delay, Dictionary<string, ModifierType> requiredModifiers, List<string> notAllowedModifiers) {
+        private static IEnumerator ProcessEntry(Character chara, ZDOID id, int levelOverride, bool spawnMultiply, float delay, Dictionary<string, ModifierType> requiredModifiers, List<string> notAllowedModifiers) {
             if (delay > 0f) {
                 yield return new WaitForSeconds(delay);
             }
@@ -101,7 +103,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
                 }
             }
 
-            if (id != 0) { InProgress.Remove(id); }
+            if (id != ZDOID.None) { InProgress.Remove(id); }
         }
     }
 }

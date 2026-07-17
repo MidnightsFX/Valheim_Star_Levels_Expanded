@@ -55,7 +55,9 @@ namespace StarLevelSystem.modules.UI {
         internal static bool BossHudConfigDirty = true;
         private static int lastBossHudCount = -1;
 
-        public static Dictionary<uint, StarLevelHud> characterExtendedHuds = new Dictionary<uint, StarLevelHud>();
+        // Keyed by the full ZDOID (not the bare uint ZDOID.ID) so creatures created by different
+        // peers with the same per-peer ID counter value don't collide. See CompositeLazyCache.
+        public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>();
         private static GameObject HealthText;
         static Sprite defaultStar;
 
@@ -65,7 +67,7 @@ namespace StarLevelSystem.modules.UI {
             defaultStar = PrefabManager.Cache.GetPrefab<Sprite>("craft_icon");
         }
 
-        internal static void RemoveExtendedHudFromCache(uint id) {
+        internal static void RemoveExtendedHudFromCache(ZDOID id) {
             if (characterExtendedHuds.ContainsKey(id)) {
                 //Logger.LogDebug($"Removing extended hud from cache for {id}");
                 if (characterExtendedHuds[id].HealthText != null) {
@@ -77,7 +79,7 @@ namespace StarLevelSystem.modules.UI {
 
         public static void InvalidateCacheEntry(Character chara) {
             if (chara == null || chara.GetZDOID() == ZDOID.None) { return; }
-            uint id = chara.GetZDOID().ID;
+            ZDOID id = chara.GetZDOID();
             if (characterExtendedHuds.ContainsKey(id) == false) { return; }
 
             CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
@@ -237,8 +239,8 @@ namespace StarLevelSystem.modules.UI {
             int level = ehud.m_character.GetLevel();
             // if (level <= 1) return;
             // Logger.LogInfo($"Creature Level {level}");
-            uint czid = ehud.m_character.GetZDOID().ID;
-            if (czid == 0L) { return; }
+            ZDOID czid = ehud.m_character.GetZDOID();
+            if (czid == ZDOID.None) { return; }
             StarLevelHud extended_hud = new StarLevelHud {
                 Level = level
             };
@@ -387,7 +389,7 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
-        public static void UpdateHudModifiers(uint zdoid, StarLevelHud extended_hud, Dictionary<string, ModifierType> mods) {
+        public static void UpdateHudModifiers(ZDOID zdoid, StarLevelHud extended_hud, Dictionary<string, ModifierType> mods) {
             if (extended_hud.HudLink == null || extended_hud.HudLink.m_gui == null) {
                 RemoveExtendedHudFromCache(zdoid);
                 return;

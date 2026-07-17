@@ -46,7 +46,7 @@ namespace StarLevelSystem.Data
             LoadPrefabs();
             // Existing on-screen HUDs only rebuild icons when level/mods change (see UpdateHudforAllLevels),
             // so force a rebuild for a style-only change.
-            foreach (uint id in modules.UI.UIHudControl.characterExtendedHuds.Keys.ToList()) {
+            foreach (ZDOID id in modules.UI.UIHudControl.characterExtendedHuds.Keys.ToList()) {
                 modules.UI.UIHudControl.RemoveExtendedHudFromCache(id);
             }
         }

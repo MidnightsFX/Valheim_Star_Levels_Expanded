@@ -19,21 +19,24 @@ namespace StarLevelSystem.Data
         public static readonly Vector2 Center = new Vector2(0, 0);
 
         // Add check to delete creature from Znet that removes the creature from the cache
-        private static Dictionary<uint, CharacterCacheEntry> SessionCache = new Dictionary<uint, CharacterCacheEntry>();
+        // Keyed by the full ZDOID: the bare ZDOID.ID (uint) is only unique per creator peer, so on a
+        // dedicated server two creatures spawned by different players share low IDs (1,2,3,...) and
+        // would collide, cross-contaminating name/level/modifiers/etc. between unrelated creatures.
+        private static Dictionary<ZDOID, CharacterCacheEntry> SessionCache = new Dictionary<ZDOID, CharacterCacheEntry>();
 
         // Session tree cache, to avoid recalculating tree levels multiple times
-        private static Dictionary<uint, int> TreeSessionCache = new Dictionary<uint, int>();
+        private static Dictionary<ZDOID, int> TreeSessionCache = new Dictionary<ZDOID, int>();
 
         public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
             if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
-            uint cid = zgo.GetZDO().m_uid.ID;
+            ZDOID cid = zgo.GetZDO().m_uid;
             if (TreeSessionCache.ContainsKey(cid)) { return TreeSessionCache[cid]; }
             int level = LevelSelection.DeterministicDetermineTreeLevel(zgo.gameObject);
             TreeSessionCache.Add(cid, level);
             return level;
         }
 
-        public static void RemoveTreeCacheEntry(uint id) {
+        public static void RemoveTreeCacheEntry(ZDOID id) {
             if (TreeSessionCache.ContainsKey(id)) {
                 TreeSessionCache.Remove(id);
             }
@@ -50,7 +53,7 @@ namespace StarLevelSystem.Data
             return character.m_nview.IsOwner();
         }
 
-        public static CharacterCacheEntry GetCacheEntry(uint cid)
+        public static CharacterCacheEntry GetCacheEntry(ZDOID cid)
         {
             if (SessionCache.ContainsKey(cid)) {
                 return SessionCache[cid];
@@ -66,7 +69,7 @@ namespace StarLevelSystem.Data
 
         public static void ClearCachedCreature(Character character) {
             if (character == null || character.m_nview == null || character.IsPlayer() || character.m_nview.GetZDO() == null) { return; }
-            uint cid = character.GetZDOID().ID;
+            ZDOID cid = character.GetZDOID();
             SessionCache.Remove(cid);
         }
 
@@ -136,8 +139,8 @@ namespace StarLevelSystem.Data
             characterEntry.CreatureBaseValueModifiers = DamageModifications.DetermineCreatureBaseStats(biomeSettings, creatureSettings);
 
             // skip setting cache if the creature is gone already
-            uint uid = character.GetZDOID().ID;
-            
+            ZDOID uid = character.GetZDOID();
+
             // If this creatures level wasn't setup yet, we do not cache it so it is refreshed until the values are set.
             if (characterEntry.Level <= 0) {
                 return characterEntry;
@@ -253,14 +256,14 @@ namespace StarLevelSystem.Data
         {
             //Logger.LogDebug($"Retrieving cached creature data for ( {character == null} || {character.m_nview == null} || {character.IsPlayer()} || {character.m_nview.GetZDO() == null})");
             if (character == null || character.GetZDOID() == ZDOID.None || character.IsPlayer()) { return null; }
-            uint cid = character.GetZDOID().ID;
+            ZDOID cid = character.GetZDOID();
             if (SessionCache.ContainsKey(cid)) { return SessionCache[cid]; }
             return null;
         }
 
         public static void UpdateCharacterCacheEntry(Character character, CharacterCacheEntry scd)
         {
-            uint cid = character.GetZDOID().ID;
+            ZDOID cid = character.GetZDOID();
             if (SessionCache.ContainsKey(cid))
             {
                 SessionCache[cid] = scd; 
@@ -345,7 +348,7 @@ namespace StarLevelSystem.Data
             private static void Prefix(ZNetScene __instance, GameObject go) {
                 ZNetView component = go.GetComponent<ZNetView>();
                 if (component == null || __instance == null || component.GetZDO() == null) { return; }
-                uint id = component.GetZDO().m_uid.ID;
+                ZDOID id = component.GetZDO().m_uid;
                 if (SessionCache.ContainsKey(id)) {
                     SessionCache.Remove(id);
                     //Logger.LogDebug($"Removed deleted creature from cache {id}");

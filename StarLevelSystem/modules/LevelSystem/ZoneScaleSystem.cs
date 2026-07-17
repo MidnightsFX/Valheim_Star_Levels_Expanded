@@ -168,7 +168,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             // Clear the existing minimap overlay so stale boundaries don't linger during the rebuild.
             if (ZoneScaleSystemData.overlayAvailable && !ZNet.instance.IsDedicated() && MinimapManager.Instance != null) {
-                var existing = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: true);
+                var existing = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: ValConfig.ZoneOverlayAboveFog.Value);
                 if (existing != null) {
                     int mapSize = existing.TextureSize * existing.TextureSize;
                     existing.OverlayTex.SetPixels(new Color[mapSize]);
@@ -254,14 +254,24 @@ namespace StarLevelSystem.modules.LevelSystem {
             DrawMinimapOverlay();
         }
 
+        // SettingChanged handler for ZoneOverlayAboveFog: redraw so the overlay's fog flag is
+        // re-synced (see BuildZoneMapOverlay) and recomposed above/below the fog as configured.
+        public static void UpdateZoneOverlayFogOnChange(object s, EventArgs e) {
+            if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
+            DrawMinimapOverlay();
+        }
+
         private static IEnumerator BuildZoneMapOverlay() {
             if (!ValConfig.EnableZoneMapOverlay.Value || ZNet.instance.IsDedicated()) { yield break; }
             if (!ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) { yield break; }
             if (Minimap.instance == null) { yield break; }
 
-            // ignoreFog: true so zone boundaries render across the whole map
-            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: true);
+            // ZoneOverlayAboveFog controls whether boundaries render across the whole map (above the
+            // fog) or only in explored areas (below the fog). Sync the flag in case the config was
+            // toggled after the overlay was first created; the SetPixels/Apply below recomposes it.
+            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: ValConfig.ZoneOverlayAboveFog.Value);
             zoneOverlay.Enabled = true;
+            MinimapOverlayFog.SetIgnoreFog(zoneOverlay, ValConfig.ZoneOverlayAboveFog.Value);
             int texSize = zoneOverlay.TextureSize;
             int mapSize = texSize * texSize;
             // Build the whole frame into this local buffer; the live OverlayTex is left untouched

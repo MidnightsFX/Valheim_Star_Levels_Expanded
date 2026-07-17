@@ -117,13 +117,20 @@ namespace StarLevelSystem.modules.LevelSystem {
             DelayedMinimapSetup();
         }
 
+        // SettingChanged handler for MapRingsAboveFog: rebuild so the overlay's fog flag is re-synced
+        // (see BuildMapRingOverlay) and recomposed above/below the fog as configured.
+        public static void UpdateMapRingFogSettingOnChange(object s, EventArgs e) {
+            if (!ValConfig.EnableMapRingsForDistanceBonus.Value) { return; }
+            DelayedMinimapSetup();
+        }
+
         public static void UpdateMapRingEnableSettingOnChange(object s, EventArgs e) {
             if (ValConfig.EnableMapRingsForDistanceBonus.Value) {
                 DelayedMinimapSetup();
             } else {
                 // prevent invoking the minimap manager if we don't need it
                 if (ringAvailable == true) {
-                    MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
+                    MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: ValConfig.MapRingsAboveFog.Value);
                     if (ringbonuses == null) { return; }
                     ringbonuses.Enabled = false;
                 }
@@ -139,8 +146,12 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Logger.LogDebug("Server is headless, skipping minimap generation");
                 yield break;
             }
-            MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus");
+            // MapRingsAboveFog controls whether the rings render across the whole map (above the fog)
+            // or only in explored areas (below the fog). Sync the flag in case the config was toggled
+            // after the overlay was first created; the SetPixels/Apply below recomposes it.
+            MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: ValConfig.MapRingsAboveFog.Value);
             ringbonuses.Enabled = true;
+            MinimapOverlayFog.SetIgnoreFog(ringbonuses, ValConfig.MapRingsAboveFog.Value);
 
             // Create a Color array with space for every pixel of the map
             int mapSize = ringbonuses.TextureSize * ringbonuses.TextureSize;

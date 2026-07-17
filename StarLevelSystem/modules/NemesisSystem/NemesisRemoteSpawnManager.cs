@@ -113,7 +113,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Console-triggered single placement for a biome, bypassing the interval and caps (testing).
         // Uses the same world-wide scout as the interval system, so the boss is placed at a scouted remote
         // location and its map pin guides you there.
-        public void DebugSpawnForBiome(Heightmap.Biome biome) {
+        public void ForceSpawnForBiome(Heightmap.Biome biome) {
             NemesisMiniboss boss = SelectOrGenerateBoss(biome);
             if (boss == null) {
                 Logger.LogInfo($"[NemesisRemote] Could not select or generate a Nemesis boss for biome {biome}.");

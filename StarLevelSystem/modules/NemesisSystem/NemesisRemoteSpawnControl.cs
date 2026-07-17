@@ -57,6 +57,25 @@ namespace StarLevelSystem.modules.NemesisSystem {
             Logger.LogInfo($"[NemesisRemote] LoadAssets: registered={(SpawnerPrefab != null)} name='{(SpawnerPrefab != null ? SpawnerPrefab.name : "null")}'");
         }
 
+        // Console-command entry point for a one-off force-spawn. On the server (integrated host or dedicated
+        // server console) this drives the manager directly; on a connected client the spawn is server-authoritative,
+        // so it asks the server over an RPC (which admin-gates the request). Returns false when the request could
+        // not be issued (no world, no server connection, or the server-side manager is unavailable).
+        internal static bool RequestForceSpawn(Heightmap.Biome biome) {
+            if (ZNet.instance == null) { return false; }
+            if (ZNet.instance.IsServer()) {
+                if (Manager == null) { return false; }
+                Manager.ForceSpawnForBiome(biome);
+                return true;
+            }
+            ZNetPeer server = ZNet.instance.GetServerPeer();
+            if (server == null) { return false; }
+            ZPackage pkg = new ZPackage();
+            pkg.Write((int)biome);
+            ValConfig.ClientRequestNemesisRemoteSpawnRPC.SendPackage(server.m_uid, pkg);
+            return true;
+        }
+
         // -------------------------------------------------------------------------------------------------
         // Registry / persistence (server only)
         // -------------------------------------------------------------------------------------------------

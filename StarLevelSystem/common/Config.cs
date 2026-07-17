@@ -64,6 +64,7 @@ namespace StarLevelSystem.common {
         internal static CustomRPC RemoveNemesisBossPinRPC;
         internal static CustomRPC ReportNemesisBossDeathRPC;
         internal static CustomRPC ClientRequestNemesisRemoteSpawnRPC;
+        internal static CustomRPC ClientPlaceNemesisSpawnerRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
 
@@ -235,6 +236,9 @@ namespace StarLevelSystem.common {
             ReportNemesisBossDeathRPC = NetworkManager.Instance.AddRPC("SLS_ReportNemesisBossDeathRPC", OnServerReceiveNemesisBossDeath, NOOPReceive);
             // Admin client asks the server to force-spawn a remote Nemesis boss for a biome (console command).
             ClientRequestNemesisRemoteSpawnRPC = NetworkManager.Instance.AddRPC("SLS_ClientRequestNemesisRemoteSpawnRPC", OnServerReceiveNemesisRemoteSpawnRequest, NOOPReceive);
+            // Server -> a chosen client: instantiate + own the dormant remote-boss placeholder. A dedicated
+            // server can't own/drive it itself, so it delegates instantiation to the nearest ready peer.
+            ClientPlaceNemesisSpawnerRPC = NetworkManager.Instance.AddRPC("SLS_ClientPlaceNemesisSpawnerRPC", OnServerReceiveConfigs, OnClientReceivePlaceNemesisSpawner);
             // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
             ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
@@ -800,6 +804,15 @@ namespace StarLevelSystem.common {
                 string pinId = package.ReadString();
                 global::StarLevelSystem.modules.NemesisSystem.NemesisRemoteSpawnControl.RemoveActiveBoss(pinId);
             }
+            yield return null;
+        }
+
+        // Client handler: the server asked this client to instantiate + own the dormant remote-boss
+        // placeholder (dedicated servers can't own/drive it themselves). The client owns the resulting ZDO,
+        // so its NemesisRemoteSpawner.Update drives the spawn once a player reaches the pinned location.
+        private static IEnumerator OnClientReceivePlaceNemesisSpawner(long sender, ZPackage package) {
+            string yaml = package.ReadString();
+            global::StarLevelSystem.modules.NemesisSystem.NemesisRemoteSpawnControl.InstantiateSpawnerFromRequest(yaml);
             yield return null;
         }
 

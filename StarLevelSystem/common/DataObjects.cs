@@ -766,6 +766,18 @@ namespace StarLevelSystem.common
             public RaidDefinition Raid { get; set; }
         }
 
+        // Sent server -> a client so that client instantiates and owns the dormant Nemesis remote-boss
+        // placeholder (mirrors EpicLoot's client-owned AdventureSpawnController). A dedicated server can't
+        // own/drive the placeholder itself (no local player, so its ZNetScene never loads that area), so it
+        // delegates instantiation to the nearest ready peer. See NemesisRemoteSpawnControl.PlaceSpawner.
+        public class NemesisRemotePlacementRequest {
+            public NemesisMiniboss Boss { get; set; }
+            public int Biome { get; set; }
+            public string PinId { get; set; }
+            public string BossName { get; set; }
+            public SerializableVector3 PlacePos { get; set; } = Vector3.zero;
+        }
+
         [Serializable]
         public class RaidDefinition {
             public string Name { get; set; }

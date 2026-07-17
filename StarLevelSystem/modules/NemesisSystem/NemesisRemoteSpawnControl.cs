@@ -154,27 +154,68 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Placement
         // -------------------------------------------------------------------------------------------------
 
-        // Instantiate a dormant spawner at a validated ground point, register the boss, and broadcast its pin.
+        // Register a scouted remote boss (pin + registry + caps) and place its dormant sky placeholder.
+        //
+        // The placeholder ZDO MUST be owned by a client. A dedicated server has no local player, so its
+        // ZNetScene reference position never moves near the remote scouted area, it never re-instantiates the
+        // placeholder, and a server-owned placeholder therefore just sits dormant forever (the dedicated-server
+        // bug this fixes). Mirroring EpicLoot's client-owned AdventureSpawnController and
+        // RaidControl.DispatchForcedRaid: an integrated host instantiates locally (it is a client with a local
+        // player that owns + drives the placeholder), while a dedicated server delegates instantiation to the
+        // nearest ready peer over an RPC so that peer owns and drives it.
         internal static void PlaceSpawner(NemesisMiniboss boss, Vector3 groundPoint, Heightmap.Biome biome) {
             if (boss == null) { return; }
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
             string pinId = Guid.NewGuid().ToString("N");
             string bossName = boss.BossSpawn != null ? boss.BossSpawn.CustomName : "";
-
             Vector3 placePos = groundPoint + Vector3.up * PlacementHeightOffset;
-            GameObject go = GameObject.Instantiate(SpawnerPrefab, placePos, Quaternion.identity);
-            NemesisRemoteSpawner spawner = go.GetComponent<NemesisRemoteSpawner>();
-            spawner.Setup(boss, biome, pinId, bossName);
 
-            ZNetView goView = go.GetComponent<ZNetView>();
-            ZDO goZdo = goView != null ? goView.GetZDO() : null;
-            Logger.LogDebug($"[NemesisRemote] PlaceSpawner: instantiated '{SpawnerPrefab.name}' at {placePos} biome={biome} boss='{boss.BossSpawn?.Prefab}' " +
-                $"zdoValid={(goZdo != null && goZdo.IsValid())} persistent={(goZdo != null && goZdo.Persistent)} owner={(goZdo != null && goView.IsOwner())} pin={pinId}");
+            if (ZNet.instance.IsDedicated()) {
+                ZNetPeer peer = SLSExtensions.GetNearestReadyPeer(groundPoint);
+                if (peer == null) {
+                    Logger.LogNemesis($"[NemesisRemote] PlaceSpawner: no ready peer available to host the placeholder for '{boss.BossSpawn?.Prefab}' ({biome}); skipping this cycle.");
+                    return;
+                }
+                NemesisRemotePlacementRequest req = new NemesisRemotePlacementRequest() {
+                    Boss = boss, Biome = (int)biome, PinId = pinId, BossName = bossName, PlacePos = placePos
+                };
+                ZPackage pkg = new ZPackage();
+                pkg.Write(DataObjects.yamlSerializer.Serialize(req));
+                ValConfig.ClientPlaceNemesisSpawnerRPC.SendPackage(peer.m_uid, pkg);
+                Logger.LogInfo($"[NemesisRemote] PlaceSpawner: dispatched placeholder for '{boss.BossSpawn?.Prefab}' ({biome}) at {placePos} to peer {peer.m_uid} ({peer.m_playerName}) pin={pinId}");
+            } else {
+                // Integrated host: instantiate locally (host is a client that owns and drives the placeholder).
+                InstantiateSpawnerLocally(boss, placePos, biome, pinId, bossName);
+            }
 
             NemesisBossPin pin = new NemesisBossPin() { Id = pinId, Position = groundPoint, Biome = biome, Name = bossName };
             RegisterActiveBoss(pin);
             if (NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.ShowMapPin) {
                 ValConfig.BroadcastNemesisBossPinAdd(pin);
             }
+        }
+
+        // Client-side entry point for ClientPlaceNemesisSpawnerRPC: rebuild the request and instantiate the
+        // placeholder this machine will own and drive.
+        internal static void InstantiateSpawnerFromRequest(string yaml) {
+            NemesisRemotePlacementRequest req = null;
+            try { req = DataObjects.yamlDeserializer.Deserialize<NemesisRemotePlacementRequest>(yaml); }
+            catch (Exception ex) { Logger.LogWarning($"[NemesisRemote] Failed to parse remote placement request: {ex.Message}"); return; }
+            if (req == null || req.Boss == null) { Logger.LogWarning("[NemesisRemote] Remote placement request had no boss data; ignoring."); return; }
+            InstantiateSpawnerLocally(req.Boss, req.PlacePos, (Heightmap.Biome)req.Biome, req.PinId, req.BossName);
+        }
+
+        // Instantiate + set up the dormant placeholder on THIS machine, which becomes its ZDO owner.
+        private static void InstantiateSpawnerLocally(NemesisMiniboss boss, Vector3 placePos, Heightmap.Biome biome, string pinId, string bossName) {
+            if (SpawnerPrefab == null) { Logger.LogWarning("[NemesisRemote] SpawnerPrefab not loaded; cannot instantiate placeholder."); return; }
+            GameObject go = GameObject.Instantiate(SpawnerPrefab, placePos, Quaternion.identity);
+            NemesisRemoteSpawner spawner = go.GetComponent<NemesisRemoteSpawner>();
+            spawner.Setup(boss, biome, pinId, bossName);
+
+            ZNetView goView = go.GetComponent<ZNetView>();
+            ZDO goZdo = goView != null ? goView.GetZDO() : null;
+            Logger.LogDebug($"[NemesisRemote] instantiated placeholder '{SpawnerPrefab.name}' at {placePos} biome={biome} boss='{boss.BossSpawn?.Prefab}' " +
+                $"zdoValid={(goZdo != null && goZdo.IsValid())} persistent={(goZdo != null && goZdo.Persistent)} owner={(goZdo != null && goView.IsOwner())} pin={pinId}");
         }
 
         // -------------------------------------------------------------------------------------------------

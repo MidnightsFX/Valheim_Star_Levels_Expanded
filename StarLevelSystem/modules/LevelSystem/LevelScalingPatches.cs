@@ -22,6 +22,16 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
         }
 
+        // Leaving a world/server: tear down zone state so the next world rebuilds and re-syncs
+        // cleanly instead of reusing stale geometry (static state + coroutines otherwise persist).
+        [HarmonyPatch(typeof(ZNet), nameof(ZNet.Shutdown))]
+        public static class ZoneWorldUnload {
+            [HarmonyPrefix]
+            static void ResetZonesOnLeave() {
+                ZoneScaleSystem.ResetForWorldChange();
+            }
+        }
+
         // Dedicated server entry point, as it does not need to generate maps
         [HarmonyPatch(typeof(ZoneSystem), nameof(ZoneSystem.Start))]
         public static class DedicatedServerZoneInit {

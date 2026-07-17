@@ -14,11 +14,15 @@ namespace StarLevelSystem.modules.AnimationAndSpeed {
         [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
         public static class ModifyCharacterAnimationSpeed {
             public static void Postfix(CharacterAnimEvent __instance) {
-                if (__instance.m_character != null && __instance.m_character.InAttack()) {
-                    CharacterCacheEntry cdc = CompositeLazyCache.GetCacheEntry(__instance.m_character);
-                    if (cdc != null && cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] != 1 || cdc != null && cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] != 0f) {
-                        __instance.m_animator.speed = cdc.CreatureBaseValueModifiers[CreatureBaseAttribute.AttackSpeed] + (cdc.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SpeedPerLevel] * __instance.m_character.m_level);
-                    }
+                if (__instance.m_character == null || !__instance.m_character.InAttack()) { return; }
+                CharacterCacheEntry cdc = CompositeLazyCache.GetCacheEntry(__instance.m_character);
+                if (cdc == null) { return; }
+                // Read defensively: a cache entry may carry a partial stat dictionary (e.g. from config-driven
+                // spawns), so fall back to the neutral defaults rather than throwing KeyNotFoundException.
+                float attackSpeed = cdc.CreatureBaseValueModifiers.TryGetValue(CreatureBaseAttribute.AttackSpeed, out float aspd) ? aspd : 1f;
+                float attackSpeedPerLevel = cdc.CreaturePerLevelValueModifiers.TryGetValue(CreaturePerLevelAttribute.AttackSpeedPerLevel, out float aspl) ? aspl : 0f;
+                if (attackSpeed != 1f || attackSpeedPerLevel != 0f) {
+                    __instance.m_animator.speed = attackSpeed + (attackSpeedPerLevel * __instance.m_character.m_level);
                 }
             }
         }

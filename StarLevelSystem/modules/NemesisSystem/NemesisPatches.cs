@@ -54,25 +54,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 mb.BossCreatedFromKillingPlayer = true;
                 mb.Biome = Heightmap.FindBiome(killer.transform.position);
 
-                List<NemesisSpawn> minions = new List<NemesisSpawn>();
                 // Only a subset of biomes has minion templates seeded. Dying in an unseeded biome
-                // (DeepNorth/Ocean/None) must not throw KeyNotFoundException, and an empty list would
-                // throw on Random.Range(0,0) indexing. In those cases the boss spawns with no minions.
-                if (NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome.TryGetValue(mb.Biome, out List<NemesisMinion> biomeMinions) && biomeMinions.Count > 0) {
-                    int numMinions = UnityEngine.Random.Range(1, 4);
-                    while (numMinions > 0) {
-                        numMinions--;
-                        NemesisMinion nm = biomeMinions[UnityEngine.Random.Range(0, biomeMinions.Count)];
-                        GameObject minionGo = PrefabManager.Instance.GetPrefab(nm.PrefabName);
-                        if (minionGo == null) { continue; }
-                        Character mchara = minionGo.GetComponent<Character>();
-                        if (mchara != null) {
-                            NemesisSpawn nmspawn = new NemesisSpawn() { Faction = Character.Faction.Boss, CustomName = $"$SLS_minion {mchara.m_name}", Prefab = nm.PrefabName, SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount) };
-                            minions.Add(nmspawn);
-                        }
-                    }
-                }
-                mb.Minions = minions;
+                // (DeepNorth/Ocean/None) yields no minions rather than throwing.
+                mb.Minions = NemesisMiniBossManager.GenerateMinionsForBiome(mb.Biome);
 
                 string mbYaml = DataObjects.yamlSerializer.Serialize(mb);
                 if (ZNet.instance != null && ZNet.instance.IsServer()) {
@@ -158,6 +142,40 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         NemesisScoreSystem.RecordBossKill(__instance.gameObject.name.Replace("(Clone)", ""));
                     }
                 }
+            }
+        }
+
+        // When a remotely-spawned boss dies, remove its shared map pin. Runs on the creature's owner (which
+        // may be a dedicated server or a client), reporting to the server so the registry + pins converge.
+        [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
+        public static class RemoveNemesisBossPinOnDeath {
+            public static void Prefix(Character __instance) {
+                if (__instance == null || __instance.m_nview == null || __instance.m_nview.IsValid() == false) { return; }
+                if (__instance.m_nview.IsOwner() == false) { return; }   // report exactly once, from the owner
+                if (__instance.m_nview.GetZDO() == null) { return; }
+                string pinId = __instance.m_nview.GetZDO().GetString(SLS_NEMESIS_PIN, "");
+                if (string.IsNullOrEmpty(pinId)) { return; }
+
+                if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                    NemesisRemoteSpawnControl.RemoveActiveBoss(pinId);
+                    return;
+                }
+                ZNetPeer server = ZNet.instance?.GetServerPeer();
+                if (server != null) {
+                    ZPackage pkg = new ZPackage();
+                    pkg.Write(pinId);
+                    ValConfig.ReportNemesisBossDeathRPC.SendPackage(server.m_uid, pkg);
+                }
+            }
+        }
+
+        // Attach the server-side remote spawn manager to the RandEventSystem, mirroring the Raid manager.
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
+        public static class AttachNemesisRemoteSpawnManager {
+            public static void Postfix(RandEventSystem __instance) {
+                if (__instance.GetComponent<NemesisRemoteSpawnManager>() != null) { return; }
+                NemesisRemoteSpawnControl.Manager = __instance.gameObject.AddComponent<NemesisRemoteSpawnManager>();
+                NemesisRemoteSpawnControl.Manager.Setup();
             }
         }
 

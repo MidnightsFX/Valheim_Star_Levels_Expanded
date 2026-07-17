@@ -19,6 +19,8 @@ namespace StarLevelSystem.modules.CreatureSetup {
                 ZDO zdo = __instance.m_nview != null ? __instance.m_nview.GetZDO() : null;
                 if (zdo != null && zdo.GetBool(SLS_NEMESIS_BOSS, false)) {
                     __instance.m_boss = true;
+                    // Match vanilla bosses: persist the wide boss healthbar within range even after de-alert.
+                    __instance.m_dontHideBossHud = true;
                 }
 
                 CreatureSetupControl.CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value);

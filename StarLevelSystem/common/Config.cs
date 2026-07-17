@@ -42,6 +42,8 @@ namespace StarLevelSystem.common {
         internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
         internal const string ZoneDataFileName = "ZoneData.yaml";
         internal static String zoneDataSavedDataPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ZoneDataFileName);
+        internal const string NemesisRemoteStateFileName = "NemesisRemoteState.yaml";
+        internal static String nemesisRemoteStateFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisRemoteStateFileName);
 
         internal static bool ServerConfigsSynced = false;
 
@@ -58,6 +60,9 @@ namespace StarLevelSystem.common {
         internal static CustomRPC ClientClearNearbyEventsRPC;
         internal static CustomRPC SendNewNemesisBossRPC;
         internal static CustomRPC RemoveNemesisBossRPC;
+        internal static CustomRPC AddNemesisBossPinRPC;
+        internal static CustomRPC RemoveNemesisBossPinRPC;
+        internal static CustomRPC ReportNemesisBossDeathRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
 
@@ -177,6 +182,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
 
         public static ConfigEntry<bool> EnableNemesisSystem;
+        public static ConfigEntry<bool> EnableNemesisRemoteSpawning;
         public static ConfigEntry<bool> EnableDebugNemesisDetails;
 
         public static ConfigEntry<bool> EnableZoneScalingBonus;
@@ -218,6 +224,12 @@ namespace StarLevelSystem.common {
             ClientClearNearbyEventsRPC = NetworkManager.Instance.AddRPC("SLS_ClientForceRemoveNearbyEventsRPC", OnServerReceiveConfigs, OnClientReceiveForceRemoveNearbyEvents);
             SendNewNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_SendNewNemesisBossRPC", OnServerReceivedNemesisBossAdd, OnClientReceiveMiniBossAdd);
             RemoveNemesisBossRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossRPC", OnServerReceiveNemesisBossRemove, OnClientReceiveMiniBossRemove);
+            // Server -> client shared world map pins for remote Nemesis bosses. Add carries a list of pins
+            // (used for both incremental updates and the initial full-set sync); remove carries a pin id.
+            AddNemesisBossPinRPC = NetworkManager.Instance.AddRPC("SLS_AddNemesisBossPinRPC", OnServerReceiveConfigs, OnClientReceiveNemesisBossPinAdd);
+            RemoveNemesisBossPinRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossPinRPC", OnServerReceiveConfigs, OnClientReceiveNemesisBossPinRemove);
+            // Owner of a dying remote boss reports it to the server, which removes the registry entry + pin.
+            ReportNemesisBossDeathRPC = NetworkManager.Instance.AddRPC("SLS_ReportNemesisBossDeathRPC", OnServerReceiveNemesisBossDeath, NOOPReceive);
             // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
             ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
@@ -229,6 +241,8 @@ namespace StarLevelSystem.common {
             SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(NemesisRPC, SendNemesisConfigs);
+            // Joining clients receive the current set of active remote-boss map pins.
+            SynchronizationManager.Instance.AddInitialSynchronization(AddNemesisBossPinRPC, SendNemesisBossPins);
             // Give joining clients the current (non-default) zone levels for their overlay / level bonuses.
             SynchronizationManager.Instance.AddInitialSynchronization(ZoneLevelSyncRPC, ZoneScaleSystemData.SerializeLeveledZonesForSync);
         }
@@ -366,6 +380,7 @@ namespace StarLevelSystem.common {
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
+            EnableNemesisRemoteSpawning = BindServerConfig("Nemesis", "EnableNemesisRemoteSpawning", false, "Enables ambient, server-driven remote spawning of Nemesis minibosses across the world (a second, finer gate lives in NemesisSettings.yaml under RemoteSpawning.Enabled).");
 
             EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
             ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
@@ -714,6 +729,64 @@ namespace StarLevelSystem.common {
             catch { return -1; }
             return NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses
                 .FindIndex(b => DataObjects.yamlSerializer.Serialize(b) == target);
+        }
+
+        // Initial-sync payload: the current set of active remote-boss map pins, derived by the server
+        // from live boss/spawner ZDOs. Returns an empty list off-server.
+        private static ZPackage SendNemesisBossPins() {
+            ZPackage package = new ZPackage();
+            List<NemesisBossPin> pins = null;
+            if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                pins = global::StarLevelSystem.modules.NemesisSystem.NemesisRemoteSpawnControl.GetActiveBossPins();
+            }
+            package.Write(DataObjects.yamlSerializer.Serialize(pins ?? new List<NemesisBossPin>()));
+            return package;
+        }
+
+        private static IEnumerator OnClientReceiveNemesisBossPinAdd(long sender, ZPackage package) {
+            string yaml = package.ReadString();
+            List<NemesisBossPin> pins = null;
+            try { pins = DataObjects.yamlDeserializer.Deserialize<List<NemesisBossPin>>(yaml); }
+            catch (Exception ex) { Logger.LogWarning($"Failed to parse Nemesis boss pin add: {ex.Message}"); }
+            if (pins != null) {
+                foreach (NemesisBossPin pin in pins) {
+                    global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.AddOrUpdatePin(pin);
+                }
+            }
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveNemesisBossPinRemove(long sender, ZPackage package) {
+            string id = package.ReadString();
+            global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.RemovePin(id);
+            yield return null;
+        }
+
+        // Server handler: the owner of a dying remote boss reported its pin id; drop it and broadcast removal.
+        public static IEnumerator OnServerReceiveNemesisBossDeath(long sender, ZPackage package) {
+            if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                string pinId = package.ReadString();
+                global::StarLevelSystem.modules.NemesisSystem.NemesisRemoteSpawnControl.RemoveActiveBoss(pinId);
+            }
+            yield return null;
+        }
+
+        // Server-side: broadcast a pin add to every peer and apply it locally (integrated host).
+        internal static void BroadcastNemesisBossPinAdd(NemesisBossPin pin) {
+            if (pin == null || ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            ZPackage package = new ZPackage();
+            package.Write(DataObjects.yamlSerializer.Serialize(new List<NemesisBossPin>() { pin }));
+            ZNet.instance.GetPeers().ForEach(peer => AddNemesisBossPinRPC.SendPackage(peer.m_uid, package));
+            global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.AddOrUpdatePin(pin);
+        }
+
+        // Server-side: broadcast a pin removal to every peer and apply it locally (integrated host).
+        internal static void BroadcastNemesisBossPinRemove(string id) {
+            if (string.IsNullOrEmpty(id) || ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            ZPackage package = new ZPackage();
+            package.Write(id);
+            ZNet.instance.GetPeers().ForEach(peer => RemoveNemesisBossPinRPC.SendPackage(peer.m_uid, package));
+            global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.RemovePin(id);
         }
 
         private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {

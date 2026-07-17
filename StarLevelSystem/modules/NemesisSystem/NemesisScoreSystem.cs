@@ -178,5 +178,21 @@ namespace StarLevelSystem.modules.NemesisSystem {
             if (NemesisSystem.PlayerScore == null || amt <= 0f) { return; }
             NemesisSystem.PlayerScore.DamageTaken += amt;
         }
+
+        internal static void UpdatePlayerRecentBiomes() {
+            // Add the players current biome
+            NemesisSystem.PlayerRecentBiomes.Add(Heightmap.FindBiome(Player.m_localPlayer.transform.position));
+
+            // Trim the players current biome history length
+            if (NemesisSystem.PlayerRecentBiomes.Count > NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.RecentBiomeHistoryLength) {
+                while (NemesisSystem.PlayerRecentBiomes.Count > NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.RecentBiomeHistoryLength) {
+                    NemesisSystem.PlayerRecentBiomes.RemoveAt(0);
+                }
+            }
+        }
+
+        internal static int PlayerRecentBiomeCount(Heightmap.Biome biome) {
+            return NemesisSystem.PlayerRecentBiomes.Count(b => b == biome);
+        }
     }
 }

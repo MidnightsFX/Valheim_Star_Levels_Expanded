@@ -26,6 +26,7 @@ namespace StarLevelSystem.common
             CommandManager.Instance.AddConsoleCommand(new DumpLootTablesCommand());
             CommandManager.Instance.AddConsoleCommand(new KillAllCreaturesNearby());
             CommandManager.Instance.AddConsoleCommand(new SetNemesisScore());
+            CommandManager.Instance.AddConsoleCommand(new SpawnNemesisRemote());
             CommandManager.Instance.AddConsoleCommand(new RebuildZones());
         }
 
@@ -82,6 +83,26 @@ namespace StarLevelSystem.common
                 NemesisScoreSystem.SetScore(Player.m_localPlayer, score);
                 NemesisSystem.CachedPlayerScore = score;
                 Logger.LogInfo($"Set Local player Nemesis score to {score}");
+            }
+        }
+
+        internal class SpawnNemesisRemote : ConsoleCommand {
+            public override string Name => "SLS-spawn-nemesis-remote";
+            public override string Help => "Format: [optional: biome] Force-scouts and places one remote Nemesis boss. Host/server only.";
+
+            public override void Run(string[] args) {
+                if (NemesisRemoteSpawnControl.Manager == null) {
+                    Logger.LogInfo("Remote Nemesis spawning is host/server-only; run this on the machine hosting the world.");
+                    return;
+                }
+                Heightmap.Biome biome = Heightmap.Biome.Meadows;
+                if (args.Length >= 1 && Enum.TryParse(args[0], true, out Heightmap.Biome parsed) && parsed != Heightmap.Biome.None) {
+                    biome = parsed;
+                } else if (Player.m_localPlayer != null) {
+                    biome = Heightmap.FindBiome(Player.m_localPlayer.transform.position);
+                }
+                Logger.LogInfo($"Force-spawning a remote Nemesis boss for biome {biome}...");
+                NemesisRemoteSpawnControl.Manager.DebugSpawnForBiome(biome);
             }
         }
 

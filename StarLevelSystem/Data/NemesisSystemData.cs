@@ -11,7 +11,7 @@ namespace StarLevelSystem.Data
         public static NemesisConfiguration SLE_Nemesis_Settings = DefaultConfiguration;
 
         public static readonly NemesisConfiguration DefaultConfiguration = new NemesisConfiguration() {
-            NemesisVersion = 3,
+            NemesisVersion = 5,
             NemesisActionCooldownSeconds = 10,
             NemesisInfluenceRadius = 300f,
             NemesisMinSpawnDistance = 30f,
@@ -52,6 +52,7 @@ namespace StarLevelSystem.Data
                         ExtraCooldownSeconds = 300,
                         PlayerReqs = new NemesisPlayerStateRequirements() {
                             PlayerCurrentBiome = Heightmap.Biome.Ocean,
+                            MinBiomeHistory = 2,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Serpent", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.SeaMonsters, SpawnGroupSize = 1 },
@@ -68,6 +69,7 @@ namespace StarLevelSystem.Data
                         ExtraCooldownSeconds = 300,
                         PlayerReqs = new NemesisPlayerStateRequirements() {
                             PlayerCurrentBiome = Heightmap.Biome.Ocean,
+                            MinBiomeHistory = 5,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Serpent", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.SeaMonsters, SpawnGroupSize = 2 },
@@ -83,6 +85,7 @@ namespace StarLevelSystem.Data
                         ExtraCooldownSeconds = 60,
                         PlayerReqs = new NemesisPlayerStateRequirements() {
                             PlayerCurrentBiome = Heightmap.Biome.Plains,
+                            MinBiomeHistory = 3,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { 
@@ -111,6 +114,7 @@ namespace StarLevelSystem.Data
                         ExtraCooldownSeconds = 60,
                         PlayerReqs = new NemesisPlayerStateRequirements() {
                             PlayerCurrentBiome = Heightmap.Biome.Mistlands,
+                            MinBiomeHistory = 3,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Seeker", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.MistlandsMonsters, SpawnGroupSize = 3 },
@@ -127,6 +131,7 @@ namespace StarLevelSystem.Data
                         ExtraCooldownSeconds = 60,
                         PlayerReqs = new NemesisPlayerStateRequirements() {
                             PlayerCurrentBiome = Heightmap.Biome.Plains,
+                            MinBiomeHistory = 2,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Goblin", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.PlainsMonsters, SpawnGroupSize = 6 },
@@ -143,6 +148,7 @@ namespace StarLevelSystem.Data
                         ExtraCooldownSeconds = 60,
                         PlayerReqs = new NemesisPlayerStateRequirements() {
                             PlayerCurrentBiome = Heightmap.Biome.Mountain,
+                            MinBiomeHistory = 2,
                         },
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Hatchling", CreatureAI = AI.HuntPlayer, Faction = Character.Faction.MountainMonsters, SpawnGroupSize = 4 },
@@ -309,8 +315,412 @@ namespace StarLevelSystem.Data
                     new NemesisMinion() { PrefabName = "Charred_Mage", MinAmount = 1, MaxAmount = 3, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
                     new NemesisMinion() { PrefabName = "Charred_Melee", MinAmount = 3, MaxAmount = 5, CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.BaseHealth, 2f } }, CreaturePerLevelValueModifiers = new Dictionary<CreaturePerLevelAttribute, float>() { { CreaturePerLevelAttribute.DamagePerLevel, 0.01f } } },
                 }},
+            },
+            RemoteSpawning = new RemoteNemesisSpawnSettings() {
+                Enabled = true,
+                CheckIntervalMinutes = 30f,
+                MaxSpawnsPerInterval = 3,
+                MaxConcurrentTotal = 10,
+                ShowMapPin = true,
+                MapPinAreaRadius = 60f,
+                MapPinSpriteAsset = "",
+                FallbackPinType = Minimap.PinType.Boss,
+                PinShowsBossName = true,
+                TargetPerBiome = new Dictionary<Heightmap.Biome, int>() {
+                    { Heightmap.Biome.Meadows, 1 },
+                    { Heightmap.Biome.BlackForest, 1 },
+                    { Heightmap.Biome.Swamp, 1 },
+                    { Heightmap.Biome.Mountain, 1 },
+                    { Heightmap.Biome.Plains, 1 },
+                    { Heightmap.Biome.Mistlands, 1 },
+                    { Heightmap.Biome.AshLands, 1 },
+                },
+                MaxConcurrentPerBiome = new Dictionary<Heightmap.Biome, int>() {
+                    { Heightmap.Biome.Meadows, 2 },
+                    { Heightmap.Biome.BlackForest, 2 },
+                    { Heightmap.Biome.Swamp, 2 },
+                    { Heightmap.Biome.Mountain, 2 },
+                    { Heightmap.Biome.Plains, 2 },
+                    { Heightmap.Biome.Mistlands, 2 },
+                    { Heightmap.Biome.AshLands, 2 },
+                },
+                BiomeRadiusRanges = new Dictionary<Heightmap.Biome, BiomeSpawnRadius>() {
+                    { Heightmap.Biome.Meadows, new BiomeSpawnRadius() { Min = 500f, Max = 3000f } },
+                    { Heightmap.Biome.BlackForest, new BiomeSpawnRadius() { Min = 600f, Max = 4000f } },
+                    { Heightmap.Biome.Swamp, new BiomeSpawnRadius() { Min = 1000f, Max = 5000f } },
+                    { Heightmap.Biome.Mountain, new BiomeSpawnRadius() { Min = 1000f, Max = 6000f } },
+                    { Heightmap.Biome.Plains, new BiomeSpawnRadius() { Min = 2000f, Max = 7000f } },
+                    { Heightmap.Biome.Mistlands, new BiomeSpawnRadius() { Min = 3000f, Max = 8000f } },
+                    { Heightmap.Biome.AshLands, new BiomeSpawnRadius() { Min = 8000f, Max = 10000f } },
+                },
+                BossCandidatesByBiome = new Dictionary<Heightmap.Biome, List<NemesisSpawn>>() {
+                    { Heightmap.Biome.Meadows, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "Boar",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Neck",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 9, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Greyling",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 7, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.BlackForest, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "Greydwarf",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 10, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Skeleton",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 11, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Troll",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 8, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.Swamp, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "DraugrElite",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 11, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Wraith",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 11, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Abomination",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 8, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.Mountain, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "Fenring",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 10, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Fenring_Cultist",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 10, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "StoneGolem",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 10, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.Plains, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "GoblinBrute",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 6, MaxLevel = 11, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Unbjorn",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 6, MaxLevel = 11, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Deathsquito",
+                            SelectionWeight = 0.1f,
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 6, MaxLevel = 11, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 10f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.Mistlands, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "SeekerBrute",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 7, MaxLevel = 12, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Gjall",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 7, MaxLevel = 14, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Dverger",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 7, MaxLevel = 14, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.AshLands, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "Charred_Melee",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 8, MaxLevel = 16, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "Charred_Mage",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 8, MaxLevel = 16, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "FallenValkyrie",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 8, MaxLevel = 16, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 2f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                    { Heightmap.Biome.Ocean, new List<NemesisSpawn>() {
+                        new NemesisSpawn() {
+                            Prefab = "Serpent",
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 16, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                        new NemesisSpawn() {
+                            Prefab = "BonemawSerpent",
+                            SelectionWeight = 0.1f,
+                            IsBoss = true,
+                            Faction = Character.Faction.Boss,
+                            CreatureAI = AI.Alerted,
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 16, LevelUpChance = 0.3f }
+                            },
+                            CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() {
+                                { CreatureBaseAttribute.BaseHealth, 4f },
+                                { CreatureBaseAttribute.BaseDamage, 1.5f },
+                            }
+                        },
+                    }},
+                },
+            },
+            NemesisBossLootTables = new Dictionary<Heightmap.Biome, List<ExtendedCharacterDrop>>() {
+                { Heightmap.Biome.Meadows, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 50, Max = 150, Prefab = "Coins", Chance = 100f } },
+                }},
+                { Heightmap.Biome.BlackForest, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 100, Max = 250, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 25f } },
+                }},
+                { Heightmap.Biome.Swamp, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 150, Max = 300, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 25f } },
+                }},
+                { Heightmap.Biome.Mountain, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 200, Max = 350, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 10f } },
+                }},
+                { Heightmap.Biome.Plains, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 250, Max = 400, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 50f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 5f } },
+                }},
+                { Heightmap.Biome.Mistlands, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 300, Max = 500, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 50f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 10f } },
+                }},
+                { Heightmap.Biome.AshLands, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 400, Max = 600, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 60f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 35f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 15f } },
+                }},
+                { Heightmap.Biome.Ocean, new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 500, Max = 800, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 75f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 50f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 30f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 25f } },
+                }},
             }
-
         };
 
         internal static void Init() {

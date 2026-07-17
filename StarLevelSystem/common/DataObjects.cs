@@ -51,6 +51,7 @@ namespace StarLevelSystem.common
         public static readonly string SLS_RAIDS_ACTIVE = "SLS_RAIDS_ACTIVE";
         public static readonly string SLS_CUSTOM_LOOT = "SLS_CUSTOM_LOOT";
         public static readonly string SLS_NEMESIS_BOSS = "SLS_NEM_BOSS";
+        public static readonly string SLS_NEMESIS_PIN = "SLS_NEM_PIN";
         public static readonly string SLS_MOD_CAP = "EffectCap";
 
         public enum CreatureBaseAttribute {
@@ -923,6 +924,67 @@ namespace StarLevelSystem.common
             public NemesisChanceChanges ChanceChanges { get; set; } = new NemesisChanceChanges();
             public List<NemesisMiniboss> AvailableMiniBosses { get; set; } = new List<NemesisMiniboss>();
             public Dictionary<Heightmap.Biome, List<NemesisMinion>> NemesisMinionTemplatesByBiome = new Dictionary<Heightmap.Biome, List<NemesisMinion>>();
+
+            [Description("Server-driven ambient remote spawning of Nemesis minibosses across the world.")]
+            public RemoteNemesisSpawnSettings RemoteSpawning { get; set; } = new RemoteNemesisSpawnSettings();
+
+            [Description("Biome-keyed extra loot granted to remotely-spawned Nemesis bosses and their minions. Merged onto each creature's per-instance loot table.")]
+            public Dictionary<Heightmap.Biome, List<ExtendedCharacterDrop>> NemesisBossLootTables { get; set; } = new Dictionary<Heightmap.Biome, List<ExtendedCharacterDrop>>();
+        }
+
+        public class RemoteNemesisSpawnSettings {
+            [Description("Enables remote spawning. Also gated by the 'EnableNemesisRemoteSpawning' server config.")]
+            [DefaultValue(true)]
+            public bool Enabled { get; set; } = true;
+
+            [Description("Minutes between server checks that scout and place remote bosses.")]
+            [DefaultValue(30f)]
+            public float CheckIntervalMinutes { get; set; } = 30f;
+
+            [Description("Maximum number of new remote bosses that can be placed in a single interval.")]
+            [DefaultValue(3)]
+            public int MaxSpawnsPerInterval { get; set; } = 3;
+
+            [Description("Maximum number of live remote bosses server-wide across all biomes.")]
+            [DefaultValue(10)]
+            public int MaxConcurrentTotal { get; set; } = 10;
+
+            [Description("Desired number of live remote bosses to maintain per biome.")]
+            public Dictionary<Heightmap.Biome, int> TargetPerBiome { get; set; }
+
+            [Description("Maximum number of live remote bosses allowed per biome.")]
+            public Dictionary<Heightmap.Biome, int> MaxConcurrentPerBiome { get; set; }
+
+            [Description("World-distance band (from world center) used when scouting a spawn point for each biome.")]
+            public Dictionary<Heightmap.Biome, BiomeSpawnRadius> BiomeRadiusRanges { get; set; }
+
+            [Description("NemesisSpawn boss archetypes generated per biome when the AvailableMiniBosses pool has no biome-appropriate entry. Weighted by SelectionWeight; level comes from ForcedLevel/LevelupGenerators.")]
+            public Dictionary<Heightmap.Biome, List<NemesisSpawn>> BossCandidatesByBiome { get; set; }
+
+            [Description("Show a map pin at each remote boss location.")]
+            [DefaultValue(true)]
+            public bool ShowMapPin { get; set; } = true;
+
+            [Description("Radius (meters) of the red circular EventArea overlay drawn under each boss pin.")]
+            [DefaultValue(60f)]
+            public float MapPinAreaRadius { get; set; } = 60f;
+
+            [Description("Name of the pin sprite in the embedded asset bundle. Empty uses the fallback vanilla pin type.")]
+            [DefaultValue("")]
+            public string MapPinSpriteAsset { get; set; } = "";
+
+            [Description("Vanilla pin type used when no custom sprite is configured or the sprite is missing.")]
+            [DefaultValue(Minimap.PinType.Boss)]
+            public Minimap.PinType FallbackPinType { get; set; } = Minimap.PinType.Boss;
+
+            [Description("Label the map pin with the boss name.")]
+            [DefaultValue(true)]
+            public bool PinShowsBossName { get; set; } = true;
+        }
+
+        public class BiomeSpawnRadius {
+            public float Min { get; set; }
+            public float Max { get; set; }
         }
 
         public class NemesisMinion {
@@ -962,6 +1024,8 @@ namespace StarLevelSystem.common
         public class NemesisPlayerStateRequirements {
             [DefaultValue(Heightmap.Biome.None)]
             public Heightmap.Biome PlayerCurrentBiome { get; set; } = Heightmap.Biome.None;
+            [DefaultValue(0)]
+            public int MinBiomeHistory { get; set; } = 0;
             [DefaultValue(0f)]
             public float PlayerHealthPercentAbove { get; set; } = 0f;
             public float PlayerHealthPercentBelow { get; set; } = 0f;
@@ -980,6 +1044,9 @@ namespace StarLevelSystem.common
             public bool DespawnIfNotAlerted { get; set; } = false;
             [DefaultValue(false)]
             public bool IsBoss { get; set; } = false;
+            // Relative weight when this spawn is used as a remote boss archetype in BossCandidatesByBiome.
+            [DefaultValue(1f)]
+            public float SelectionWeight { get; set; } = 1f;
             public int SpawnGroupSize { get; set; } = 1;
             [DefaultValue("")]
             public string CustomName { get; set; } = "";
@@ -1004,6 +1071,14 @@ namespace StarLevelSystem.common
         public class NemesisGaurenteedChanges {
             public bool FirstBossSetLevel { get; set; } = true;
             public int FirstBossLevel { get; set; } = 0;
+        }
+
+        // A shared world map pin marking a remote Nemesis boss location. Broadcast server -> clients.
+        public class NemesisBossPin {
+            public string Id { get; set; }
+            public SerializableVector3 Position { get; set; }
+            public Heightmap.Biome Biome { get; set; }
+            public string Name { get; set; }
         }
 
         public class NemesisScore {
@@ -1035,6 +1110,8 @@ namespace StarLevelSystem.common
             public float BossKillBonus { get; set; } = 250f;
             [DefaultValue(100f)]
             public float BossKillRadius { get; set; } = 100f;
+            [DefaultValue(5f)]
+            public int RecentBiomeHistoryLength { get; set; } = 5;
         }
 
         [Serializable]

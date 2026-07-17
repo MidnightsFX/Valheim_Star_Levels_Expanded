@@ -26,7 +26,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.1.2";
+        public const string PluginVersion = "1.2.0";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -59,9 +59,11 @@ namespace StarLevelSystem
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
             PrefabManager.OnVanillaPrefabsAvailable += UpdateLevelsOnChange.UpdateFishMaxLevel;
             PrefabManager.OnVanillaPrefabsAvailable += UIHudControl.SetDefaultStar;
+            PrefabManager.OnVanillaPrefabsAvailable += NemesisRemoteSpawnControl.LoadAssets;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
             MinimapManager.OnVanillaMapDataLoaded += DistanceScaleSystem.DelayedMinimapSetup;
             MinimapManager.OnVanillaMapDataLoaded += ZoneScaleSystem.Initialize;
+            MinimapManager.OnVanillaMapDataLoaded += NemesisMinimap.OnMapReady;
             PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
             SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.HasServerUpdates();
             UIHudControl.LoadAssets();

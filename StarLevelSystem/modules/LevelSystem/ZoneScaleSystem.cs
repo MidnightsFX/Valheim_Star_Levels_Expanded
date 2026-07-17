@@ -21,6 +21,10 @@ namespace StarLevelSystem.modules.LevelSystem {
         private static bool flushRunning = false;
         // Tracks Overlay rebuilds to prevent flickering
         private static Coroutine overlayRebuildCoroutine;
+        // Handles for the long-running zone coroutines so they can be stopped on world unload
+        // (TaskRunner is DontDestroyOnLoad, so they would otherwise survive across worlds).
+        private static Coroutine flushCoroutine;
+        private static Coroutine buildCoroutine;
 
         public static void Initialize() {
             if (!ValConfig.EnableZoneScalingBonus.Value) { return; }
@@ -37,7 +41,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             Logger.LogInfo("No zone data found, building zone map from world...");
             ZoneScaleSystemData.buildingZones = true;
-            TaskRunner.Run().StartCoroutine(BuildZoneMap());
+            buildCoroutine = TaskRunner.Run().StartCoroutine(BuildZoneMap());
         }
 
         private static IEnumerator BuildZoneMap() {
@@ -125,6 +129,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                     float cellMinX = -worldRadius + gcx * cellSize;
                     float cellMinZ = -worldRadius + gcz * cellSize;
                     cellZones[key] = new ZoneData {
+                        // Deterministic id from the cell coords so every peer agrees (see ZoneIdForCell).
+                        ZoneId = ZoneScaleSystemData.ZoneIdForCell(gcx, gcz),
                         MinX = cellMinX, MaxX = cellMinX + cellSize,
                         MinZ = cellMinZ, MaxZ = cellMinZ + cellSize
                     };
@@ -132,10 +138,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             var finalZones = cellZones.Values.ToList();
 
-            // Assign IDs and finalize
-            int idCounter = 0;
+            // Finalize (ids are already assigned deterministically from cell coords above).
             foreach (var zone in finalZones) {
-                zone.ZoneId = idCounter++;
                 zone.LastDecayTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             }
             ZoneScaleSystemData.Zones = finalZones;
@@ -179,7 +183,20 @@ namespace StarLevelSystem.modules.LevelSystem {
             ZoneScaleSystemData.overlayAvailable = false;
             ZoneScaleSystemData.buildingZones = true;
             Logger.LogInfo("Rebuilding zone map from world...");
-            TaskRunner.Run().StartCoroutine(BuildZoneMap());
+            buildCoroutine = TaskRunner.Run().StartCoroutine(BuildZoneMap());
+        }
+
+        // Invoked on leaving a world (ZNet.Shutdown). Stops the zone coroutines and clears all zone
+        // state so joining another world/server rebuilds and re-syncs from scratch instead of reusing
+        // stale geometry. TaskRunner persists across worlds, so these must be stopped explicitly.
+        internal static void ResetForWorldChange() {
+            Orchestrator runner = TaskRunner.Run();
+            if (buildCoroutine != null) { runner.StopCoroutine(buildCoroutine); buildCoroutine = null; }
+            if (flushCoroutine != null) { runner.StopCoroutine(flushCoroutine); flushCoroutine = null; }
+            if (overlayRebuildCoroutine != null) { runner.StopCoroutine(overlayRebuildCoroutine); overlayRebuildCoroutine = null; }
+            pendingDeaths.Clear();
+            flushRunning = false;
+            ZoneScaleSystemData.ResetState();
         }
 
         private static IEnumerable<(int, int)> Neighbors(int x, int z) {
@@ -200,7 +217,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         private static void StartKillReportFlush() {
             if (flushRunning) { return; }
             flushRunning = true;
-            TaskRunner.Run().StartCoroutine(FlushKillReports());
+            flushCoroutine = TaskRunner.Run().StartCoroutine(FlushKillReports());
         }
 
         // Periodically drains pendingDeaths. The authority (dedicated server or host) applies them

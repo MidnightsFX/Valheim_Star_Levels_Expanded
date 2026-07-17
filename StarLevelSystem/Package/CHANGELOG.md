@@ -1,3 +1,11 @@
+**1.2.0**
+ ---
+ ```
+ - Adds Nemesis world-boss spawns! (disabled by default EnableNemesisRemoteSpawning)
+	- Configuration allows generating world bosses from any enemy prefab
+	- Custom names, custom loot tables, modify boss stats
+ ```
+
 **1.1.3**
  ---
  ```

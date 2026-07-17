@@ -141,6 +141,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         Logger.LogNemesis($"{entry.Key} skipped due to player health percentage not below the requirement ({playerHealthP}) req: {entry.Value.PlayerReqs.PlayerHealthPercentBelow}.");
                         continue;
                     }
+                    if (entry.Value.PlayerReqs.MinBiomeHistory > 0 && NemesisScoreSystem.PlayerRecentBiomeCount(targetBiome) < entry.Value.PlayerReqs.MinBiomeHistory) {
+                        Logger.LogNemesis($"{entry.Key} skipped due to not meeting the minimum biome history requirement ({NemesisScoreSystem.PlayerRecentBiomeCount(targetBiome)} < {entry.Value.PlayerReqs.MinBiomeHistory}).");
+                        continue;
+                    }
                 }
 
                 if (entry.Value.ScoreThreshold != 0 && MeetsScoreThreshold(entry.Value.ScoreThreshold) == false) {
@@ -198,64 +202,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
 
                 foreach(NemesisSpawn spawn in NemesisCreatureSpawns) {
-                    var offset = UnityEngine.Random.insideUnitCircle * 0.8f;
-                    Vector3 determinedSpawn = chara.transform.position + new Vector3(offset.x, 0, offset.y);
-                    int count = 0;
-                    while (count < spawn.SpawnGroupSize) {
-                        count++;
-                        GameObject go = PrefabManager.Instance.GetPrefab(spawn.Prefab);
-                        if (go == null) { continue; }
-                        GameObject cgo = GameObject.Instantiate(go, determinedSpawn, chara.transform.rotation);
-                        Character spawnChara = cgo.GetComponent<Character>();
-                        if (spawnChara != null) {
-                            if (spawn.Faction != Character.Faction.TrainingDummy) {
-                                spawnChara.m_faction = spawn.Faction;
-                            }
-                            if (spawn.IsBoss) {
-                                spawnChara.m_boss = true;
-                                // Persist boss status so the wide boss healthbar survives reloads and shows
-                                // on other clients (Character.m_boss itself is not networked/saved).
-                                if (spawnChara.m_nview != null) {
-                                    spawnChara.m_nview.GetZDO().Set(SLS_NEMESIS_BOSS, true);
-                                }
-                                spawnedDetails += "Miniboss Spawn ";
-                            }
-                            if (string.IsNullOrEmpty(spawn.CustomName) == false) {
-                                spawnChara.m_nview.GetZDO().Set(SLS_NAME, spawn.CustomName);
-                            }
-                        } else {
-                            continue;
-                        }
-                        MonsterAI spawnAI = cgo.GetComponent<MonsterAI>();
-                        if (spawnAI != null) {
-                            CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
-                            if (spawn.DespawnIfNotAlerted) {
-                                spawnAI.SetEventCreature(true);
-                            }
-                        }
-                        // Level generators (inline or referenced) roll a level that overrides ForcedLevel when configured.
-                        int rolledLevel = LevelGeneratorResolver.RollLevel(spawn.LevelupGenerators, spawn.LevelupGeneratorRefs);
-                        int spawnLevelOverride = rolledLevel > 0 ? rolledLevel : spawn.ForcedLevel;
-                        CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawnLevelOverride);
-                        cce.Level = Mathf.Min(entry.Value.LevelBonus + cce.Level, ValConfig.MaxLevel.Value);
-                        if (spawn.CreaturePerLevelValueModifiers != null) {
-                            cce.CreaturePerLevelValueModifiers = spawn.CreaturePerLevelValueModifiers;
-                        }
-                        if (spawn.CreatureBaseValueModifiers != null) {
-                            cce.CreatureBaseValueModifiers = spawn.CreatureBaseValueModifiers;
-                        }
-                        // Persist the nemesis-required modifiers to the ZDO
-                        if (spawn.RequiredModifiers != null && spawn.RequiredModifiers.Count > 0) {
-                            cce.CreatureModifiers = spawn.RequiredModifiers;
-                            CompositeLazyCache.SetCreatureModifiers(spawnChara, spawn.RequiredModifiers);
-                        }
-                        CreatureSetupControl.CreatureSetup(spawnChara, cce.Level, delay: 0);
-                        // Persist any custom loot table for this spawn onto the creature's ZDO
-                        if (spawn.CustomLoot != null && spawn.CustomLoot.Count > 0) {
-                            LootSystemData.SetCustomLoot(spawnChara, spawn.CustomLoot);
-                        }
-
-                    }
+                    if (spawn.IsBoss) { spawnedDetails += "Miniboss Spawn "; }
+                    // Reactive spawns keep their existing behavior (no biome loot, no map pin): pass null for both.
+                    NemesisRemoteSpawnControl.SpawnNemesisSpawn(spawn, chara.transform.position, chara.transform.rotation, entry.Value.LevelBonus, null, null);
                     spawnedDetails += $" {spawn.Prefab}x{spawn.SpawnGroupSize}";
                 }
 

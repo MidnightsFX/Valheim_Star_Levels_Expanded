@@ -39,6 +39,27 @@ namespace StarLevelSystem.Data {
         // controls check frequency, not the effective rate (see ZoneDecayLevelsPerHour).
         private const float DecayTickIntervalSeconds = 900f; // 15 minutes
         internal static int overlayUpdates = 0;
+        // Handle for the running decay loop so it can be stopped on world unload (TaskRunner is
+        // DontDestroyOnLoad, so a running loop would otherwise leak across worlds).
+        private static Coroutine decayCoroutine = null;
+
+        // Zone identity is derived from grid-cell coordinates so it is stable across independent
+        // builds (authority load vs. client rebuild) and network syncs line up. Sequential build
+        // order is non-deterministic between peers; cell coordinates are a pure function of world
+        // position + MaxZoneSize. Cell indices are tiny (worldSize 10000 / MaxZoneSize >= 1000 ->
+        // <= ~20 per axis), so this packing never overflows an int.
+        private const int ZoneIdStride = 100000;
+
+        internal static int ZoneIdForCell(int cellX, int cellZ) => cellX * ZoneIdStride + cellZ;
+
+        // Recovers the cell coordinates from a zone's min corner (MinX = -worldSize + cellX * cellSize)
+        // and packs them into the same id used at build time. Used to normalize ids loaded from disk.
+        internal static int ZoneIdForBounds(float minX, float minZ) {
+            float cellSize = ValConfig.MaxZoneSize.Value;
+            int cellX = Mathf.RoundToInt((minX + WorldGenerator.worldSize) / cellSize);
+            int cellZ = Mathf.RoundToInt((minZ + WorldGenerator.worldSize) / cellSize);
+            return ZoneIdForCell(cellX, cellZ);
+        }
 
 
         // Authority-only: aggregate a batch of deaths into zone kill counts and levels. Level-ups are
@@ -77,7 +98,24 @@ namespace StarLevelSystem.Data {
             // Decay and persistence are authority-only; clients receive level changes via sync.
             if (ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
             decayRunning = true;
-            TaskRunner.Run().StartCoroutine(DecayZoneLevels());
+            decayCoroutine = TaskRunner.Run().StartCoroutine(DecayZoneLevels());
+        }
+
+        // Tears down all in-memory zone state and stops the decay loop so a world/server switch
+        // starts clean. Flushes any unsaved authority changes first (no-op off the server).
+        internal static void ResetState() {
+            FlushPendingSave();
+            if (decayCoroutine != null) { TaskRunner.Run().StopCoroutine(decayCoroutine); decayCoroutine = null; }
+            Zones = new List<ZoneData>();
+            zoneIndex = new Dictionary<long, List<ZoneData>>();
+            zoneById = new Dictionary<int, ZoneData>();
+            pendingLevelUpdates.Clear();
+            lastZone = null;
+            zonesBuilt = false;
+            buildingZones = false;
+            overlayAvailable = false;
+            decayRunning = false;
+            zonesDirty = false;
         }
 
         private static IEnumerator DecayZoneLevels() {
@@ -208,6 +246,9 @@ namespace StarLevelSystem.Data {
                     return false;
                 }
                 Zones = loaded.Zones;
+                // Normalize persisted ids to the deterministic cell-based scheme so authority ids
+                // match what clients derive from a fresh build (ignores any stale build-order id).
+                foreach (var z in Zones) { z.ZoneId = ZoneIdForBounds(z.MinX, z.MinZ); }
                 BuildZoneIndex();
                 return true;
             } catch (Exception e) {

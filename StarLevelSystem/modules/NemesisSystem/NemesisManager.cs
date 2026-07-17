@@ -1,5 +1,6 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,6 +13,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         internal static ScoreData PlayerScore = null;
         internal static NemesisManager NemesisManager = null;
         internal static float CachedPlayerScore = 0;
+        internal static List<Heightmap.Biome> PlayerRecentBiomes = new List<Heightmap.Biome>();
 
         internal static void Initialize() {
             if (NemesisManager != null) return;
@@ -46,6 +48,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 NemesisScoreSystem.UpdateScore(player);
                 nextRecalcTime = ZNet.instance.GetTimeSeconds() + NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.ScoreIntervalSeconds;
                 NemesisScoreSystem.SaveScoreData(player);
+                NemesisScoreSystem.UpdatePlayerRecentBiomes();
 
                 if (NemesisActionLog.Count > 0) {
                     StringBuilder sb = new StringBuilder();

@@ -169,6 +169,18 @@ namespace StarLevelSystem.modules.NemesisSystem {
             }
         }
 
+        // Guarantee the dormant remote-boss placeholder prefab is registered into ZNetScene on every machine
+        // (clients AND the dedicated server), so its persistent ZDO can be reconstructed instead of being
+        // destroyed as an "invalid prefab". Jotunn's own ZNetScene registration relies on
+        // OnVanillaPrefabsAvailable (a FejdStartup/main-menu event) having run first, which isn't guaranteed
+        // on a dedicated server. Idempotent; safe to run alongside Jotunn's registration.
+        [HarmonyPatch(typeof(ZNetScene), nameof(ZNetScene.Awake))]
+        public static class RegisterNemesisRemoteSpawnerPrefab {
+            public static void Postfix(ZNetScene __instance) {
+                NemesisRemoteSpawnControl.EnsureRegisteredToZNetScene();
+            }
+        }
+
         // Attach the server-side remote spawn manager to the RandEventSystem, mirroring the Raid manager.
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
         public static class AttachNemesisRemoteSpawnManager {

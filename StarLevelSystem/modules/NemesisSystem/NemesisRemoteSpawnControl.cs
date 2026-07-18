@@ -57,6 +57,25 @@ namespace StarLevelSystem.modules.NemesisSystem {
             Logger.LogInfo($"[NemesisRemote] LoadAssets: registered={(SpawnerPrefab != null)} name='{(SpawnerPrefab != null ? SpawnerPrefab.name : "null")}'");
         }
 
+        // Guarantee the placeholder prefab is present in ZNetScene.m_prefabs/m_namedPrefabs on THIS machine.
+        // Adding it to Jotunn's PrefabManager only makes it directly Instantiate-able; reconstructing the
+        // persistent ZDO (ZNetScene.CreateObject) requires it to be in m_namedPrefabs. Jotunn copies
+        // PrefabManager prefabs into ZNetScene via its ZNetScene.Awake postfix, but that relies on
+        // OnVanillaPrefabsAvailable (fired from FejdStartup's ObjectDB.CopyOtherDB) having run first, which is
+        // not guaranteed on a dedicated server. Without the registration, CreateObject returns null: the ZDO
+        // can never re-materialize and the server destroys it as an "invalid prefab". Called from a
+        // ZNetScene.Awake postfix so it runs on every machine, including the dedicated server. Idempotent.
+        internal static void EnsureRegisteredToZNetScene() {
+            LoadAssets();
+            if (SpawnerPrefab == null || ZNetScene.instance == null) { return; }
+            int hash = SpawnerPrefabName.GetStableHashCode();
+            bool alreadyRegistered = ZNetScene.instance.HasPrefab(hash);
+            if (!alreadyRegistered) {
+                PrefabManager.Instance.RegisterToZNetScene(SpawnerPrefab);
+            }
+            Logger.LogInfo($"[NemesisRemote] EnsureRegisteredToZNetScene: znetsceneHadPrefab={alreadyRegistered} nowRegistered={ZNetScene.instance.HasPrefab(hash)}");
+        }
+
         // Console-command entry point for a one-off force-spawn. On the server (integrated host or dedicated
         // server console) this drives the manager directly; on a connected client the spawn is server-authoritative,
         // so it asks the server over an RPC (which admin-gates the request). Returns false when the request could

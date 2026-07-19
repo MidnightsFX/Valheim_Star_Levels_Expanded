@@ -1,3 +1,9 @@
+**1.2.2**
+ ---
+ ```
+ - Trims Nemesis score data to prevent unbounded history
+ ```
+
 **1.2.1**
  ---
  ```

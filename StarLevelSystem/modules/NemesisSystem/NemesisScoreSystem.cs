@@ -80,7 +80,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 DamageTaken = NemesisSystem.PlayerScore.DamageTaken
             };
 
-            var (dmgDealtMeleeTrend, dmgDealtRangedTrend, dmgTakenTrend) = DamageTrendCalculation(dsd_recent);
+            var (dmgDealtMeleeTrend, dmgDealtRangedTrend, dmgTakenTrend) = DamageTrendCalculation(dsd_recent, cfg.DamageScoreHistoryLength);
             float score = GetScore(player); // Current score before applying changes
 
             score += (dmgDealtMeleeTrend * cfg.MeleeDamageDealtFactor) + (dmgDealtRangedTrend * cfg.RangedDamageDealtFactor) + (NemesisSystem.PlayerScore.DamageDealtMagic * cfg.MagicDamageDealtFactor);
@@ -107,6 +107,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
             NemesisSystem.CachedPlayerScore = score;
 
             NemesisSystem.PlayerScore.DamageScoreHistory.Insert(0, dsd_recent);
+            // Trim the damage score history length
+            while (NemesisSystem.PlayerScore.DamageScoreHistory.Count > cfg.DamageScoreHistoryLength) {
+                NemesisSystem.PlayerScore.DamageScoreHistory.RemoveAt(NemesisSystem.PlayerScore.DamageScoreHistory.Count - 1);
+            }
             SaveScoreData(player);
 
             if (ValConfig.EnableDebugMode.Value) {

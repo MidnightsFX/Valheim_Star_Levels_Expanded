@@ -1124,6 +1124,8 @@ namespace StarLevelSystem.common
             public float BossKillRadius { get; set; } = 100f;
             [DefaultValue(5f)]
             public int RecentBiomeHistoryLength { get; set; } = 5;
+            [DefaultValue(3)]
+            public int DamageScoreHistoryLength { get; set; } = 3;
         }
 
         [Serializable]

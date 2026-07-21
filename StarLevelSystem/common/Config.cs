@@ -85,6 +85,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> PerLevelLootScale;
+        public static ConfigEntry<float> PerLevelLootChanceScale;
         public static ConfigEntry<bool> ScaleAllLootByLevel;
         public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<string> LootDropCalculationType;
@@ -370,7 +371,9 @@ namespace StarLevelSystem.common {
             OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f, 1f);
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
-            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCalculationType", "PerLevel", "The type of loot calculation to use. Per Level ", LootStyles.AllowedLootFactors, false);
+            PerLevelLootChanceScale = BindServerConfig("LootSystem", "PerLevelLootChanceScale", 0.05f, "Under the PerLevel loot style only: additional chance per level that a sub-100% loot drop will occur, added on top of any per-drop ChanceScaleFactor. E.g. 0.05 = +5% drop chance per level. Has no effect on drops with a base Chance of 1.", false, 0f, 1f);
+            LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCalculationType", "PerLevel", "How loot amounts scale with level. PerLevel: amount scales linearly with level. Exponential: amount scales exponentially with level. ChancePerLevel: amount stays at its base, but each drop is an all-or-nothing lottery whose chance to drop grows with level (base amount or nothing).", LootStyles.AllowedLootFactors, false);
+            LootStyles.ParseLootFactor();
             LootDropCalculationType.SettingChanged += LootStyles.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
             ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");

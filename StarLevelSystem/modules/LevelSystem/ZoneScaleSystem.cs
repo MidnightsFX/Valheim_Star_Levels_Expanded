@@ -242,7 +242,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         // Single entrypoint for map overlay building
         internal static void DrawMinimapOverlay() {
             if (!ValConfig.EnableZoneMapOverlay.Value) { return; }
-            if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
+            // Skip while in the main menu or on a loading screen (no live minimap yet); the overlay is
+            // (re)drawn from OnVanillaMapDataLoaded once the map is ready. Also skip on a headless server.
+            if (!MinimapOverlayFog.CanDrawOverlays() || ZNet.instance.IsDedicated()) { return; }
             Orchestrator runner = TaskRunner.Run();
             if (overlayRebuildCoroutine != null) { runner.StopCoroutine(overlayRebuildCoroutine); }
             overlayRebuildCoroutine = runner.StartCoroutine(BuildZoneMapOverlay());

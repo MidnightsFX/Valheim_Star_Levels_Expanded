@@ -109,7 +109,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // Determine creature location to check its biome
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
-            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             SortedDictionary<int, float> distance_levelup_bonuses = new SortedDictionary<int, float>() { };
             SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
             if (levelup_chances == null) { levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance; }
@@ -227,7 +227,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static int DeterministicDetermineTreeLevel(GameObject go) {
             if (ValConfig.EnableTreeScaling.Value == false) { return 1; }
             Vector3 p = go.transform.position;
-            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;
@@ -235,14 +235,14 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         public static int DeterministicDetermineRockLevel(Vector3 pos) {
             if (ValConfig.EnableRockLevels.Value == false) { return 1; }
-            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.RockMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;
         }
 
         public static int DetermineisticDetermineObjectLevel(Vector3 pos) {
-            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.y), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
+            float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
             int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.DestructibleMaxLevel.Value));
             if (level < 1) { level = 1; }
             return level;

@@ -83,8 +83,12 @@ namespace StarLevelSystem.modules.Loot {
 
             // This determines the "level" that is used to generate loot multipled by level in vanilla configurations
             private static int DetermineLootScale(Character character) {
-                int char_level = 1;
-                if (character != null) { char_level = character.GetLevel(); }
+                // A missing character, or a base (0-star, level 1) creature, scales to 1x. This matches the
+                // custom-loot path's level==1 short-circuit (MultiplyLootPerLevel/ExponentLootPerLevel) and
+                // avoids a null deref inside SelectCharacterLootSettings.
+                if (character == null) { return 1; }
+                int char_level = character.GetLevel();
+                if (char_level <= 1) { return 1; }
                 LootStyles.SelectCharacterLootSettings(character, out DistanceLootModifier distance_bonus);
                 float min;
                 float max;
@@ -94,6 +98,12 @@ namespace StarLevelSystem.modules.Loot {
                 } else if (LootStyles.SelectedLootFactor == LootFactorType.Exponential) {
                     min = Mathf.Pow((ValConfig.PerLevelLootScale.Value + distance_bonus.MinAmountScaleFactorBonus), char_level);
                     max = Mathf.Pow((ValConfig.PerLevelLootScale.Value + distance_bonus.MaxAmountScaleFactorBonus), char_level);
+                } else if (LootStyles.SelectedLootFactor == LootFactorType.ChancePerLevel) {
+                    // Vanilla drop tables have no per-drop chance fields to run the all-or-nothing lottery
+                    // against, so ChancePerLevel simply leaves their amounts unscaled (multiplier 1). The
+                    // lottery applies only to custom SLS loot entries (see LootStyles.ChancePerLevel).
+                    min = 1;
+                    max = 1;
                 } else {
                     // Fallback just leveled loot scale without distance bonus
                     // With a min of 1 to prevent 0 drops
@@ -103,7 +113,7 @@ namespace StarLevelSystem.modules.Loot {
                 int result = Mathf.RoundToInt(UnityEngine.Random.Range(min, max));
                 if (result < 1) { result = 1; }
                 if (ValConfig.EnableDebugLootDetails.Value) {
-                    Logger.LogDebug($"Loot Scale {LootStyles.SelectedLootFactor} select {min} <-> {max} selected {result}.");
+                    Logger.LogDebug($"Loot Factor {LootStyles.SelectedLootFactor} | lvl {char_level} select {min} <-> {max} selected {result}.");
                 }
                 return result;
             }
@@ -236,6 +246,60 @@ namespace StarLevelSystem.modules.Loot {
             private static void TreebaseDropDestroyedItems(TreeBase instance) {
                 List<LootEntry> optimizeDrops = LootStyles.ModifyTreeDropsOrDefault(instance);
                 LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
+            }
+        }
+
+        [HarmonyPatch(typeof(Pickable))]
+        public static class PickableDropPatch {
+            [HarmonyTranspiler]
+            [HarmonyPatch("RPC_Pick")]
+            [HarmonyEmitIL(".dumps")]
+            static public IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions) {
+                var codeMatcher = new CodeMatcher(instructions);
+                // Start of the vanilla main-item drop calculation: `this.m_dontScale ? ...`
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Pickable), nameof(Pickable.m_dontScale)))
+                ).ThrowIfNotMatch("Unable to patch Pickable drop: drop calculation start not found.");
+                int start = codeMatcher.Pos;
+
+                // End of the section: the `if (!m_extraDrops.IsEmpty())` block begins right after the drop loop.
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Pickable), nameof(Pickable.m_extraDrops)))
+                ).ThrowIfNotMatch("Unable to patch Pickable drop: extra-drops section not found.");
+                int end = codeMatcher.Pos;
+
+                codeMatcher.Start().Advance(start)
+                    .RemoveInstructions(end - start)
+                    .InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldarg_0), // The pickable
+                        new CodeInstruction(OpCodes.Ldarg_2), // bonus amount
+                        Transpilers.EmitDelegate(HandlePickableDrop)
+                    );
+
+                return codeMatcher.Instructions();
+            }
+
+            internal static void HandlePickableDrop(Pickable instance, int bonus) {
+                string name = Utils.GetPrefabName(instance.gameObject);
+                //Logger.LogDebug($"Checking for custom loot for {name} available: {string.Join(",", LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot.Keys)}");
+                if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot.ContainsKey(name) == true) {
+                    //Logger.LogDebug($"Custom Pickable loot set for {name}");
+                    Vector3 dropPos = instance.transform.position + Vector3.up * instance.m_spawnOffset;
+                    int level = LevelSelection.DetermineisticDetermineObjectLevel(instance.transform.position);
+                    List<LootEntry> drops = LootStyles.ModifyPickableDropsOrDefault(instance.transform, name, level);
+                    LootPerformanceChanges.DropItemsPreferAsync(dropPos, drops);
+                    return;
+                }
+
+                // Vanilla behavior preserved for non-configured pickables.
+                int num = instance.m_dontScale ? instance.m_amount : Mathf.Max(instance.m_minAmountScaled, Game.instance.ScaleDrops(instance.m_itemPrefab, instance.m_amount));
+                num += bonus;
+                int num2 = 0;
+                for (int i = 0; i < num; i++) {
+                    instance.Drop(instance.m_itemPrefab, num2++, 1);
+                }
             }
         }
     }

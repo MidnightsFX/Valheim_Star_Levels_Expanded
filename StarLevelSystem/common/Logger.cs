@@ -38,6 +38,11 @@ namespace StarLevelSystem {
             StarLevelSystem.Log.LogInfo("[Raid] " + message);
         }
 
+        public static void LogLoot(string message) {
+            if (ValConfig.EnableDebugLootDetails.Value == false) { return; }
+            StarLevelSystem.Log.LogInfo("[Loot] " + message);
+        }
+
         public static void LogDebug(string message)
         {
             if (Level >= LogLevel.Debug)

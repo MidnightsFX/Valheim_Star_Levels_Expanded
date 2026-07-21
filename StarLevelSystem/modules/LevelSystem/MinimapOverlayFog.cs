@@ -2,6 +2,7 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using System;
 using System.Reflection;
+using UnityEngine.SceneManagement;
 
 namespace StarLevelSystem.modules.LevelSystem {
     // Jotunn's MinimapManager.MapOverlay.IgnoreFog is internal and only honoured at overlay creation
@@ -13,6 +14,17 @@ namespace StarLevelSystem.modules.LevelSystem {
     internal static class MinimapOverlayFog {
         private static readonly FieldInfo IgnoreFogField =
             typeof(MinimapManager.MapOverlay).GetField("IgnoreFog", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // Readiness gate shared by the ring and zone overlay systems. Returns true only when we're in
+        // a fully loaded world with a live minimap. Overlay (re)draws are gated on this so config
+        // changes (fog toggle, colors, ring center) that fire while the player is in the main menu or
+        // on a loading screen don't run against a world/minimap that doesn't exist yet. Once the map is
+        // ready the overlays are (re)built from MinimapManager.OnVanillaMapDataLoaded.
+        internal static bool CanDrawOverlays() {
+            return ZNet.instance != null
+                && Minimap.instance != null
+                && SceneManager.GetActiveScene().name == "main";
+        }
 
         // Force an existing overlay's IgnoreFog flag to match the desired value. The caller should
         // follow this with a texture Apply/redraw so the flag change is composed into the map.

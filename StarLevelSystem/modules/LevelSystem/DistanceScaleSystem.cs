@@ -6,7 +6,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class DistanceScaleSystem {
@@ -15,17 +14,17 @@ namespace StarLevelSystem.modules.LevelSystem {
         private static bool ringAvailable = false;
 
         public static void DelayedMinimapSetup() {
-            if (SceneManager.GetActiveScene().name != "main") {
-                // Dont try to draw the map when we are not in the game
-                return;
-            }
+            // Don't try to draw while in the main menu or on a loading screen (no live world/minimap
+            // yet); the rings are drawn from OnVanillaMapDataLoaded once the map is ready.
+            if (!MinimapOverlayFog.CanDrawOverlays()) { return; }
             TaskRunner.Run().StartCoroutine(CheckAndDrawMapRings());
         }
 
         private static IEnumerator CheckAndDrawMapRings() {
-            // Check to ensure that the config synchronziation has occured if we are on a dedicated server
-            Logger.LogDebug("Waiting to draw map");
-            yield return new WaitForSeconds(10f);
+            // On a dedicated-server client the distance thresholds arrive via config sync; wait for
+            // that so the rings are drawn from the synced values rather than local defaults. Callers
+            // gate on CanDrawOverlays, so ZNet.instance is non-null here; for a live in-game toggle the
+            // config is already synced, so this loop is skipped and the redraw happens immediately.
             if (ZNet.instance.IsCurrentServerDedicated()) {
                 int iterations = 0;
                 while (ValConfig.ServerConfigsSynced == false) {
@@ -93,6 +92,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static void OnRingCenterChanged(object s, EventArgs e) {
+            // Guard first: in the main menu/loading ZNet.instance is null and SetRingCenter's object
+            // scan is pointless. DelayedMinimapSetup re-checks before actually drawing.
+            if (!MinimapOverlayFog.CanDrawOverlays()) { return; }
             if (ZNet.instance.IsCurrentServerDedicated()) { return; }
             SetRingCenter();
             DelayedMinimapSetup();
@@ -127,13 +129,12 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static void UpdateMapRingEnableSettingOnChange(object s, EventArgs e) {
             if (ValConfig.EnableMapRingsForDistanceBonus.Value) {
                 DelayedMinimapSetup();
-            } else {
-                // prevent invoking the minimap manager if we don't need it
-                if (ringAvailable == true) {
-                    MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: ValConfig.MapRingsAboveFog.Value);
-                    if (ringbonuses == null) { return; }
-                    ringbonuses.Enabled = false;
-                }
+            } else if (ringAvailable && MinimapOverlayFog.CanDrawOverlays()) {
+                // Hide the existing overlay, but only touch the minimap manager when in a live world
+                // (not while in the main menu or loading).
+                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: ValConfig.MapRingsAboveFog.Value);
+                if (ringbonuses == null) { return; }
+                ringbonuses.Enabled = false;
             }
         }
 

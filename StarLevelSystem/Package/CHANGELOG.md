@@ -1,3 +1,18 @@
+**1.3.0**
+ ---
+ ```
+ - Adds ChancePerLevel as a loot style, which gives each drop a chance to happen that scales on the creatures level (drops amounts scale linearly)
+ - Pickables are now fully supported for custom loot drops via nonCharacterSpecificLoot in LootSettings.yaml, keyed by pickable prefab name (e.g. Pickable_Turnip)
+ - Improves Lootdebug logging to show more details of how loot is calculated
+ - Adds ChancePerLevel as a selectable LootDropCalculationType: each drop becomes an all-or-nothing lottery whose chance grows with level (base amount or nothing), applied to creature, tree, rock, pickable and destructible loot
+ - Adds PerLevelLootChanceScale config (default 0.05): under the PerLevel loot style, increases the chance a sub-100% drop occurs by this amount per level, on top of any per-drop ChanceScaleFactor
+ - Improves accuracy of distance loot scaling
+ - Fixes incorrect logging of tamed loot drop skips
+ - EnableDistanceLootModifier Bepinex config (along with enableDistanceLootModifier in Lootsettings.yaml) now both control distance scaling fully
+ - Fixes LootDropCalculationType not being applied on load (Exponential scaling was ignored until the setting was changed)
+ - Improves minimap redraw conditions
+ ```
+
 **1.2.2**
  ---
  ```

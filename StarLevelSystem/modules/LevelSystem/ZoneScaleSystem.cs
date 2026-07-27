@@ -268,12 +268,13 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (!ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) { yield break; }
             if (Minimap.instance == null) { yield break; }
 
-            // ZoneOverlayAboveFog controls whether boundaries render across the whole map (above the
-            // fog) or only in explored areas (below the fog). Sync the flag in case the config was
-            // toggled after the overlay was first created; the SetPixels/Apply below recomposes it.
-            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: ValConfig.ZoneOverlayAboveFog.Value);
+            // The overlay is always created above-fog (ignoreFog: true) because Jotunn's own below-fog
+            // masking doesn't work here; ZoneOverlayAboveFog is honoured instead by masking the pixels
+            // we write (see the aboveFog check in DrawZoneEdge).
+            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: true);
+            if (zoneOverlay == null) { yield break; }
             zoneOverlay.Enabled = true;
-            MinimapOverlayFog.SetIgnoreFog(zoneOverlay, ValConfig.ZoneOverlayAboveFog.Value);
+            bool aboveFog = ValConfig.ZoneOverlayAboveFog.Value;
             int texSize = zoneOverlay.TextureSize;
             int mapSize = texSize * texSize;
             // Build the whole frame into this local buffer; the live OverlayTex is left untouched
@@ -304,10 +305,10 @@ namespace StarLevelSystem.modules.LevelSystem {
                 float ix0 = zone.MinX + outlineInset, ix1 = zone.MaxX - outlineInset;
                 float iz0 = zone.MinZ + outlineInset, iz1 = zone.MaxZ - outlineInset;
                 if (ix1 <= ix0 || iz1 <= iz0) { ix0 = zone.MinX; ix1 = zone.MaxX; iz0 = zone.MinZ; iz1 = zone.MaxZ; }
-                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix1, iz0, zoneColor); // bottom
-                yield return DrawZoneEdge(pixels, texSize, ix0, iz1, ix1, iz1, zoneColor); // top
-                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix0, iz1, zoneColor); // left
-                yield return DrawZoneEdge(pixels, texSize, ix1, iz0, ix1, iz1, zoneColor); // right
+                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix1, iz0, zoneColor, aboveFog); // bottom
+                yield return DrawZoneEdge(pixels, texSize, ix0, iz1, ix1, iz1, zoneColor, aboveFog); // top
+                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix0, iz1, zoneColor, aboveFog); // left
+                yield return DrawZoneEdge(pixels, texSize, ix1, iz0, ix1, iz1, zoneColor, aboveFog); // right
             }
 
             if (zoneOverlay == null) { yield break; }
@@ -317,7 +318,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             Logger.LogDebug($"Zone map overlay drawn for {ZoneScaleSystemData.Zones.Count} zones.");
         }
 
-        private static IEnumerator DrawZoneEdge(Color[] pixels, int texSize, float x0, float z0, float x1, float z1, Color color) {
+        private static IEnumerator DrawZoneEdge(Color[] pixels, int texSize, float x0, float z0, float x1, float z1, Color color, bool aboveFog) {
             float dx = x1 - x0;
             float dz = z1 - z0;
             float length = Mathf.Sqrt(dx * dx + dz * dz);
@@ -330,6 +331,15 @@ namespace StarLevelSystem.modules.LevelSystem {
                 float wx = x0 + dx * t;
                 float wz = z0 + dz * t;
                 Minimap.instance.WorldToPixel(new Vector3(wx, 0, wz), out int px, out int pz);
+                // Below fog: only draw the boundary over explored terrain (we self-mask because
+                // Jotunn's below-fog masking is broken in this build).
+                if (!aboveFog && !MinimapOverlayFog.IsPixelExplored(px, pz)) {
+                    ZoneScaleSystemData.overlayUpdates++;
+                    if (ZoneScaleSystemData.overlayUpdates % 3000 == 0) {
+                        yield return new WaitForEndOfFrame();
+                    }
+                    continue;
+                }
                 for (int oz = lo; oz <= hi; oz++) {
                     int bz = pz + oz;
                     if (bz < 0 || bz >= texSize) { continue; }

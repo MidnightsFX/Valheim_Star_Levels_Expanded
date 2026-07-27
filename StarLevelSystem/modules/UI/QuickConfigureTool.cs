@@ -60,8 +60,8 @@ namespace StarLevelSystem.modules.UI {
             { "Alert", "Increases the creature's hearing range." },
             { "Big", "Increases the creature's size." },
             { "Fast", "Increases the creature's movement speed." },
-            { "StaminaDrain", "Its attacks drain your stamina." },
-            { "EitrDrain", "Its attacks drain your eitr." },
+            { "StaminaDrain", "Its attacks drain your stamina. Dodging avoids it; blocking or parrying lessens it." },
+            { "EitrDrain", "Its attacks drain your eitr. Dodging avoids it; blocking or parrying lessens it." },
             { "Brutal", "Increases the creature's attack speed." },
             { "ElementalChaos", "Adds random elemental damage on each hit." },
         };

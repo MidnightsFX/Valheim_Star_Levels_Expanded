@@ -16,6 +16,20 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class LevelSelection {
 
+        // The highest legal ZDO level for a creature. Levels are stored as stars + 1 (1 star is level 2),
+        // so a creature at its configured maximum sits at maxStars + 1.
+        // Both the reroll gate in DetermineLevel and the over-level correction in
+        // CompositeLazyCache.StartZOwnerCreatureRoutines MUST use this same bound. If they drift, a creature
+        // sitting at exactly the maximum re-rolls a fresh random level on every cache build while nothing
+        // ever writes the correction back to its ZDO - which turns the per-frame EnemyHud cache check into
+        // a permanent invalidate/rebuild loop.
+        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null) {
+            int max_level = (character != null && character.IsBoss()) ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value;
+            if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
+            if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
+            return max_level + 1;
+        }
+
         public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, int leveloverride = 0, bool allowRoll = true) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
@@ -27,28 +41,24 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
-            //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > ValConfig.MaxLevel.Value}");
-            if (clevel <= 0 || ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value) {
+            // Already includes the +1 star offset, so this is directly comparable to the stored ZDO level.
+            int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings);
+            //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > max_level}");
+            if (clevel <= 0 || (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > max_level)) {
                 // Strict ZDO-owner authority: only the roller (the ZDO owner) ever rolls a level.
                 // A non-owner must never invent a value - it reads the synced ZDO and waits. Returning
                 // the synced level, or 0 when it hasn't replicated yet, signals "not ready" to the caller.
                 if (allowRoll == false) {
                     return clevel <= 0 ? 0 : clevel;
                 }
-                // Determine max level
-                int max_level = ValConfig.MaxLevel.Value;
-                if (character.IsBoss()) { max_level = ValConfig.MaxBossLevel.Value; }
                 int min_level = 0;
 
                 // Global key based generator built levelup replaces default, if it exists, otherwise its null
                 SortedDictionary<int, float> conditional_levelup = ConditionalScaleSystem.GetConditionalLevelupChance(biome);
 
-                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
                 if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
-                if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
                 min_level += 1;
-                max_level += 1;
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 float distance_level_modifier = 1;

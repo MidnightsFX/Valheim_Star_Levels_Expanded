@@ -132,93 +132,105 @@ namespace StarLevelSystem.modules.LevelSystem {
             } else if (ringAvailable && MinimapOverlayFog.CanDrawOverlays()) {
                 // Hide the existing overlay, but only touch the minimap manager when in a live world
                 // (not while in the main menu or loading).
-                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: ValConfig.MapRingsAboveFog.Value);
+                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: true);
                 if (ringbonuses == null) { return; }
                 ringbonuses.Enabled = false;
             }
         }
 
         private static IEnumerator BuildMapRingOverlay() {
-            // Skip if distances are not defined.
-            if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
-                yield break;
-            }
-            if (ZNet.instance.IsDedicated()) {
-                Logger.LogDebug("Server is headless, skipping minimap generation");
-                yield break;
-            }
-            // MapRingsAboveFog controls whether the rings render across the whole map (above the fog)
-            // or only in explored areas (below the fog). Sync the flag in case the config was toggled
-            // after the overlay was first created; the SetPixels/Apply below recomposes it.
-            MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: ValConfig.MapRingsAboveFog.Value);
-            ringbonuses.Enabled = true;
-            MinimapOverlayFog.SetIgnoreFog(ringbonuses, ValConfig.MapRingsAboveFog.Value);
-
-            // Create a Color array with space for every pixel of the map
-            int mapSize = ringbonuses.TextureSize * ringbonuses.TextureSize;
-            Color[] mainPixels = new Color[mapSize];
-
-            // Clear the existing map?
-            ringbonuses.OverlayTex.SetPixels(mainPixels);
-            // Determine size of the world
-            //float worlddiameter = WorldGenerator.worldSize * 2; // - to + range, we need the diameter
-            // float meters_per_pixel = (Minimap.instance.m_textureSize / 2) + ValConfig.PixelMapOffsetRatio.Value; // ValConfig.PixelMapOffsetRatio.Value; // worlddiameter / ringbonuses.TextureSize; // 9.765625
-
-            Minimap.instance.WorldToPixel(center, out int world_x, out int world_y);
-            Logger.LogDebug($"Map centered: x:{world_x} y:{world_y}");
-
-            if (LevelSystemData.SLE_Level_Settings == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || Colorization.mapRingColors == null || Colorization.mapRingColors.Count == 0) {
-                yield break;
-            }
-
-            int updates = 0;
-            int levelring_color_index = 0;
-            foreach (int ringDistance in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {
-                if (levelring_color_index >= Colorization.mapRingColors.Count) {
-                    levelring_color_index = 0;
+            // buildingMapRings guards against overlapping rebuilds and is set true before this coroutine
+            // starts. Reset it on every exit path (try/finally) so an early yield break -- e.g. distance
+            // bonuses or ring colors not ready yet -- can't leave it stuck true and permanently block
+            // later redraws, including the above/below-fog toggle.
+            try {
+                // Skip if distances are not defined.
+                if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
+                    yield break;
                 }
-                Color selectedColor = Colorization.mapRingColors[levelring_color_index];
-                levelring_color_index++;
-
-                int granularity = ringDistance * 10; // number of vertices per ring
-
-                Vector3 radii = new Vector3(center.x + ringDistance, center.y, center.z);
-                Minimap.instance.WorldToPixel(radii, out int radii_x, out int raddi_y);
-                int map_radii = radii_x - world_x;
-                Logger.LogDebug($"Set Ringsize: {ringDistance} -PixelMap-> {radii_x} | {map_radii}");
-                //Vector2[] circle = new Vector2[granularity];
-                float delta = (2 * Mathf.PI) / granularity;
-
-                for (int i = 0; i < granularity; i++) {
-                    // Ensure we do not overwhelm the system and get the task killed
-                    updates++;
-                    if (updates % 3_000 == 0) {
-                        yield return new WaitForEndOfFrame();
-                    }
-
-                    float t = delta * i;
-                    int x = Mathf.RoundToInt(world_x + Mathf.Cos(t) * map_radii);
-                    int y = Mathf.RoundToInt(world_y + Mathf.Sin(t) * map_radii);
-                    //circle[i] = new Vector2(x, y);
-                    if (ringbonuses == null) { yield break; }
-
-                    int index = (y * ringbonuses.TextureSize) + x;
-                    // Index must be less than pixels due to zero indexing and greater than zero
-                    if (index >= mainPixels.Length || index < 0) {
-                        continue;
-                    }
-                    //Logger.LogDebug($"Drawing ring for distance {ringDistance} pixels idx:{index}[{mainPixels.Length}] x:{x} y:{y}");
-                    mainPixels[index] = selectedColor;
+                if (ZNet.instance.IsDedicated()) {
+                    Logger.LogDebug("Server is headless, skipping minimap generation");
+                    yield break;
                 }
-            }
+                // The overlay is always created above-fog (ignoreFog: true) because Jotunn's own
+                // below-fog masking doesn't work here; MapRingsAboveFog is honoured instead by masking
+                // the pixels we write (see the aboveFog check in the draw loop below).
+                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: true);
+                if (ringbonuses == null) { yield break; }
+                ringbonuses.Enabled = true;
+                bool aboveFog = ValConfig.MapRingsAboveFog.Value;
 
-            if (ringbonuses == null) { yield break; }
-            ringbonuses.OverlayTex.SetPixels(mainPixels);
-            ringbonuses.OverlayTex.Apply();
-            Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
-            buildingMapRings = false;
-            ringAvailable = true;
-            yield break;
+                // Create a Color array with space for every pixel of the map
+                int mapSize = ringbonuses.TextureSize * ringbonuses.TextureSize;
+                Color[] mainPixels = new Color[mapSize];
+
+                // Clear the existing map?
+                ringbonuses.OverlayTex.SetPixels(mainPixels);
+                // Determine size of the world
+                //float worlddiameter = WorldGenerator.worldSize * 2; // - to + range, we need the diameter
+                // float meters_per_pixel = (Minimap.instance.m_textureSize / 2) + ValConfig.PixelMapOffsetRatio.Value; // ValConfig.PixelMapOffsetRatio.Value; // worlddiameter / ringbonuses.TextureSize; // 9.765625
+
+                Minimap.instance.WorldToPixel(center, out int world_x, out int world_y);
+                Logger.LogDebug($"Map centered: x:{world_x} y:{world_y}");
+
+                if (LevelSystemData.SLE_Level_Settings == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || Colorization.mapRingColors == null || Colorization.mapRingColors.Count == 0) {
+                    yield break;
+                }
+
+                int updates = 0;
+                int levelring_color_index = 0;
+                foreach (int ringDistance in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {
+                    if (levelring_color_index >= Colorization.mapRingColors.Count) {
+                        levelring_color_index = 0;
+                    }
+                    Color selectedColor = Colorization.mapRingColors[levelring_color_index];
+                    levelring_color_index++;
+
+                    int granularity = ringDistance * 10; // number of vertices per ring
+
+                    Vector3 radii = new Vector3(center.x + ringDistance, center.y, center.z);
+                    Minimap.instance.WorldToPixel(radii, out int radii_x, out int raddi_y);
+                    int map_radii = radii_x - world_x;
+                    Logger.LogDebug($"Set Ringsize: {ringDistance} -PixelMap-> {radii_x} | {map_radii}");
+                    //Vector2[] circle = new Vector2[granularity];
+                    float delta = (2 * Mathf.PI) / granularity;
+
+                    for (int i = 0; i < granularity; i++) {
+                        // Ensure we do not overwhelm the system and get the task killed
+                        updates++;
+                        if (updates % 3_000 == 0) {
+                            yield return new WaitForEndOfFrame();
+                        }
+
+                        float t = delta * i;
+                        int x = Mathf.RoundToInt(world_x + Mathf.Cos(t) * map_radii);
+                        int y = Mathf.RoundToInt(world_y + Mathf.Sin(t) * map_radii);
+                        //circle[i] = new Vector2(x, y);
+                        if (ringbonuses == null) { yield break; }
+
+                        int index = (y * ringbonuses.TextureSize) + x;
+                        // Index must be less than pixels due to zero indexing and greater than zero
+                        if (index >= mainPixels.Length || index < 0) {
+                            continue;
+                        }
+                        // Below fog: only draw the ring over explored terrain (we self-mask because
+                        // Jotunn's below-fog masking is broken in this build).
+                        if (!aboveFog && !MinimapOverlayFog.IsPixelExplored(x, y)) {
+                            continue;
+                        }
+                        //Logger.LogDebug($"Drawing ring for distance {ringDistance} pixels idx:{index}[{mainPixels.Length}] x:{x} y:{y}");
+                        mainPixels[index] = selectedColor;
+                    }
+                }
+
+                if (ringbonuses == null) { yield break; }
+                ringbonuses.OverlayTex.SetPixels(mainPixels);
+                ringbonuses.OverlayTex.Apply();
+                Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
+                ringAvailable = true;
+            } finally {
+                buildingMapRings = false;
+            }
         }
     }
 }

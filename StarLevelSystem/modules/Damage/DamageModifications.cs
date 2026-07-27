@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 using DamageType = StarLevelSystem.common.DataObjects.DamageType;
 
@@ -207,6 +208,12 @@ namespace StarLevelSystem.modules.Damage {
                     creatureBaseValueModifiers[entry.Key] = entry.Value;
                 }
             }
+            // Base Size is the whole multiplier, not a bonus, so a zero or negative value would mean an
+            // invisible or inside-out creature no matter what the per-level value does. SizePerLevel is
+            // deliberately left unclamped here - negative values are a supported way to shrink per star,
+            // and the combined result is floored in SizeModifications.DetermineScaleMultiplier.
+            creatureBaseValueModifiers[CreatureBaseAttribute.Size] =
+                Mathf.Max(ValConfig.MinimumCreatureScale.Value, creatureBaseValueModifiers[CreatureBaseAttribute.Size]);
             return creatureBaseValueModifiers;
         }
     }

@@ -20,12 +20,24 @@ namespace StarLevelSystem.modules.UI {
         internal static List<StarLevelHud> CurrentBossHuds = new List<StarLevelHud>();
         internal static Color StarColor = new Color(1, 0.8174f, 0.3382f, 1f);
 
+        // How long to wait before retrying a HUD whose creature cache isn't ready yet. Creatures whose level
+        // hasn't resolved are deliberately not cached (see CompositeLazyCache.GetAndSetLocalCache), so without
+        // a backoff the miss would drive a full cache rebuild every single frame for the whole time a
+        // non-owner waits on ZDO replication.
+        private const float NotReadyRetryInterval = 0.5f;
+
         public class StarLevelHud {
             public bool IsBoss { get; set; }
             public string CreatureNameLocalized { get; set; }
             public int Level { get; set; } = 1;
 
             public List<string> DisplayedMods { get; set; } = new List<string>();
+
+            // Raw SLS_MODSV2 ZDO string the DisplayedMods/CreatureModifiers were last built from.
+            // Used to skip the YAML deserialize when nothing has changed - this runs per visible
+            // creature per frame off EnemyHud.UpdateHuds.
+            public string ModifierSource { get; set; }
+            public Dictionary<string, ModifierType> CachedModifiers { get; set; }
 
             public Dictionary<int, GameObject> Starlevel = new Dictionary<int, GameObject>();
             public Dictionary<int, Image> StarLevelFront = new Dictionary<int, Image>();
@@ -46,6 +58,13 @@ namespace StarLevelSystem.modules.UI {
                 get; set;
             }
             public TextMeshProUGUI HealthText {
+                get; set;
+            }
+
+            // Time.time after which an unresolved creature may rebuild its cache again. Creatures whose
+            // level/modifiers have not replicated yet fail the staleness check every frame; without this
+            // they would run a full GetAndSetLocalCache (biome lookup, colorization, damage tables) per frame.
+            public float NextResolveAttempt {
                 get; set;
             }
         }
@@ -70,11 +89,31 @@ namespace StarLevelSystem.modules.UI {
         internal static void RemoveExtendedHudFromCache(ZDOID id) {
             if (characterExtendedHuds.ContainsKey(id)) {
                 //Logger.LogDebug($"Removing extended hud from cache for {id}");
-                if (characterExtendedHuds[id].HealthText != null) {
-                    GameObject.Destroy(characterExtendedHuds[id].HealthText.gameObject);
+                StarLevelHud removed = characterExtendedHuds[id];
+                if (removed.HealthText != null) {
+                    GameObject.Destroy(removed.HealthText.gameObject);
                 }
+                // CurrentBossHuds is otherwise append-only and grows for the whole session.
+                if (removed.IsBoss) { CurrentBossHuds.Remove(removed); }
                 characterExtendedHuds.Remove(id);
             }
+        }
+
+        // Reads the creature's modifiers, reusing the previously deserialized dictionary when the backing
+        // ZDO string is unchanged. GetCreatureModifiers runs a YAML deserialize on every call, and this is
+        // on the per-frame EnemyHud path, so the fast path here matters.
+        private static Dictionary<string, ModifierType> GetModifiersCached(StarLevelHud hud, Character chara) {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { return null; }
+            string source = chara.m_nview.GetZDO().GetString(SLS_MODSV2, null);
+            if (hud != null && hud.CachedModifiers != null && hud.ModifierSource == source) {
+                return hud.CachedModifiers;
+            }
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(chara);
+            if (hud != null) {
+                hud.ModifierSource = source;
+                hud.CachedModifiers = mods;
+            }
+            return mods;
         }
 
         public static void InvalidateCacheEntry(Character chara) {
@@ -82,18 +121,25 @@ namespace StarLevelSystem.modules.UI {
             ZDOID id = chara.GetZDOID();
             if (characterExtendedHuds.ContainsKey(id) == false) { return; }
 
+            StarLevelHud extendedHUD = characterExtendedHuds[id];
             CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(id);
             if (cce == null) {
                 cce = CompositeLazyCache.GetAndSetLocalCache(chara);
-                if (cce == null) { return; }
+                // A creature whose level hasn't resolved yet is never stored in the session cache, so this
+                // stays a miss until the owner's roll replicates. Back off instead of retrying every frame.
+                if (cce == null || CompositeLazyCache.GetCacheEntry(id) == null) {
+                    extendedHUD.NextResolveAttempt = Time.time + NotReadyRetryInterval;
+                    return;
+                }
             }
 
-            StarLevelHud extendedHUD = characterExtendedHuds[id];
-            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(extendedHUD.HudLink.m_character);
+            Dictionary<string, ModifierType> mods = GetModifiersCached(extendedHUD, extendedHUD.HudLink.m_character);
             cce.CreatureModifiers = mods;
             cce.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(extendedHUD.HudLink.m_character, mods);
 
-            extendedHUD.Level = cce.Level;
+            // Must track the same value the outdated-check below compares against (and that the star display
+            // renders from), otherwise the check can never converge and re-invalidates every frame.
+            extendedHUD.Level = chara.GetLevel();
             UpdateHudModifiers(id, extendedHUD, mods);
         }
 
@@ -233,6 +279,45 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
+        // The health numbers come straight off the Character, so this is deliberately independent of the
+        // level/modifier cache: it has to keep running for creatures SLS has not resolved yet, otherwise the
+        // instantiated HealthText keeps showing the placeholder text baked into the prefab.
+        // Also handles creating/hiding the text so the config toggle applies to huds that already exist.
+        private static void UpdateHealthText(StarLevelHud hud, Character chara) {
+            if (hud == null || chara == null) { return; }
+            if (hud.HudLink == null || hud.HudLink.m_gui == null) { return; }
+
+            if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value == false) {
+                if (hud.HealthText != null) { hud.HealthText.gameObject.SetActive(false); }
+                return;
+            }
+
+            if (hud.HealthText == null) {
+                Transform healthTForm = hud.HudLink.m_gui.transform.Find("Health");
+                if (healthTForm == null) { return; }
+                if (HealthText == null) { LoadAssets(); }
+                GameObject HealthTextHolder = GameObject.Instantiate(HealthText, healthTForm);
+                hud.HealthText = HealthTextHolder.GetComponent<TextMeshProUGUI>();
+                if (hud.HealthText == null) { return; }
+                // Use a slightly diminishing scale as otherwise things get over scaled easily
+                hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
+
+                if (ValConfig.UseCustomHealthFont.Value == false) {
+                    hud.HealthText.font = hud.HudLink.m_name.font;
+                }
+                // Health text boss fixes? resize?
+                if (hud.IsBoss) {
+                    RectTransform hthRT = HealthTextHolder.transform as RectTransform;
+                    hthRT.localPosition = new Vector3(0, 4, 0);
+                    hud.HealthText.fontSize = 20f;
+                    hud.HealthText.characterSpacing = 12f;
+                }
+            }
+
+            if (hud.HealthText.gameObject.activeSelf == false) { hud.HealthText.gameObject.SetActive(true); }
+            hud.HealthText.text = $"{chara.GetHealth():N0}/{chara.GetMaxHealth():N0}";
+        }
+
         public static void UpdateHudForAllLevels(EnemyHud.HudData ehud) {
             if (ehud == null || ehud.m_character == null) return;
             if (ehud.m_character.IsPlayer()) return;
@@ -244,7 +329,14 @@ namespace StarLevelSystem.modules.UI {
             StarLevelHud extended_hud = new StarLevelHud {
                 Level = level
             };
-            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(ehud.m_character);
+            // GetCreatureModifiers returns null when the ZDO value is missing or fails to deserialize;
+            // treat that as "no modifiers" so the staleness comparison below can't NRE inside the
+            // transpiled UpdateHuds (which would abort the hud update for every other creature too).
+            // Read through the hud's cache so the underlying YAML deserialize only runs when the backing
+            // ZDO string actually changed - this method runs per visible creature per frame.
+            characterExtendedHuds.TryGetValue(czid, out StarLevelHud known_hud);
+            Dictionary<string, ModifierType> mods = GetModifiersCached(known_hud, ehud.m_character);
+            if (mods == null) { mods = new Dictionary<string, ModifierType>(); }
             if (characterExtendedHuds.ContainsKey(czid)) {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
@@ -256,25 +348,34 @@ namespace StarLevelSystem.modules.UI {
                     return;
                 }
 
+                // Kept above the staleness guard below: the health numbers do not depend on the level or
+                // modifier cache, so a creature SLS has not resolved yet must still show real numbers.
+                UpdateHealthText(extended_hud, ehud.m_character);
+
                 List<string> currentMods = mods.Keys.ToList();
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
                 int levelCheck = ehud.m_character.GetLevel();
                 if (currentMods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelCheck != extended_hud.Level) {
-                    Logger.LogDebug($"UI Cache for {czid} outdated (level {ehud.m_character.GetLevel()}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.HudLink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
+                    // A creature whose level/modifiers have not replicated yet fails this check every frame.
+                    // Rebuilding the cache is expensive, so back off between attempts instead of thrashing.
+                    if (Time.time < extended_hud.NextResolveAttempt) { return; }
+                    extended_hud.NextResolveAttempt = Time.time + NotReadyRetryInterval;
+
+                    // Interpolating this string is not free on the per-frame hud path, so only build it
+                    // when debug output is actually going somewhere.
+                    if (ValConfig.EnableDebugMode.Value) {
+                        Logger.LogDebug($"UI Cache for {czid} outdated (level {levelCheck}-{extended_hud.Level} or mods {extended_hud.DisplayedMods.Count}-{mods.Count} or name {extended_hud.HudLink.m_name.text}-{extended_hud.CreatureNameLocalized}), updating cache.");
+                    }
                     CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     InvalidateCacheEntry(ehud.m_character);
-                    
+
                     //Colorization.ApplyColorizationWithoutLevelEffects();
                     // Re set up the character, to ensure it gets updated visual effects, and sizing
-                    
+
                     return;
                 }
 
                 extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
-
-                if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value && extended_hud.HealthText != null) {
-                    extended_hud.HealthText.text = $"{ehud.m_character.GetHealth():N0}/{ehud.m_character.GetMaxHealth():N0}";
-                }
             } else {
                 extended_hud.HudLink = ehud;
                 // if (mods == null) { return; }
@@ -306,25 +407,9 @@ namespace StarLevelSystem.modules.UI {
                     hf_guib.sizeDelta = newHudSize;
                 }
 
-                // Setup the health text if enabled
-                if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value && extended_hud.HealthText == null) {
-                    if (HealthText == null) { LoadAssets(); }
-                    GameObject HealthTextHolder = GameObject.Instantiate(HealthText, ehud.m_gui.transform.Find("Health"));
-                    extended_hud.HealthText = HealthTextHolder.GetComponent<TextMeshProUGUI>();
-                    // Use a slightly diminishing scale as otherwise things get over scaled easily
-                    extended_hud.HealthText.fontSize = 10 * (ValConfig.EnemyHealthbarScalarY.Value * ValConfig.HealthDisplayFontSizeAdjustment.Value);
-
-                    if (ValConfig.UseCustomHealthFont.Value == false) {
-                        extended_hud.HealthText.font = extended_hud.HudLink.m_name.font;
-                    }
-                    // Health text boss fixes? resize?
-                    if (extended_hud.IsBoss) {
-                        RectTransform hthRT = HealthTextHolder.transform as RectTransform;
-                        hthRT.localPosition = new Vector3(0, 4, 0);
-                        extended_hud.HealthText.fontSize = 20f;
-                        extended_hud.HealthText.characterSpacing = 12f;
-                    }
-                }
+                // Setup the health text if enabled. Assigning the value here (rather than waiting for the
+                // next frame's update branch) stops the prefab's placeholder text rendering on frame one.
+                UpdateHealthText(extended_hud, ehud.m_character);
 
                 UpdateHudModifiers(czid, extended_hud, mods);
                 // Need to find and add the N level text for updating here
@@ -395,6 +480,10 @@ namespace StarLevelSystem.modules.UI {
                 return;
             }
 
+            // InvalidateCacheEntry passes the raw GetCreatureModifiers result, which is null when the ZDO
+            // value is missing or fails to deserialize. Normalize before anything dereferences it.
+            if (mods == null) { mods = new Dictionary<string, ModifierType>(); }
+
             CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(extended_hud.HudLink.m_character);
             if (cce != null) {
                 if (cce.CreatureModifiers == null || cce.CreatureModifiers.Keys.ToList().CompareListContents(mods.Keys.ToList()) == false) {
@@ -402,6 +491,8 @@ namespace StarLevelSystem.modules.UI {
                     CompositeLazyCache.ClearCachedCreature(extended_hud.HudLink.m_character);
                     cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.HudLink.m_character);
                 }
+            }
+            if (cce != null) {
                 //Logger.LogDebug($"Updating hud Name for {zdoid} with modifiers {string.Join(", ", mods.Keys)}");
                 extended_hud.CreatureNameLocalized = extended_hud.HudLink.m_character.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, Localization.instance.Localize(cce.CreatureNameLocalizable));
                 extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
@@ -409,7 +500,6 @@ namespace StarLevelSystem.modules.UI {
 
             Dictionary<int, Sprite> starReplacements = new Dictionary<int, Sprite>();
             int star = 2;
-            if (mods == null) { mods = new Dictionary<string, ModifierType>(); }
             // Logger.LogDebug($"Building sprite list");
             extended_hud.DisplayedMods = mods.Keys.ToList();
             // When the display style is None, leave starReplacements empty so the slots fall through to the default stars below.

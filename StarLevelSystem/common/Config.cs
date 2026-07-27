@@ -84,6 +84,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableCreatureScalingPerLevel;
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
+        public static ConfigEntry<float> MinimumCreatureScale;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<float> PerLevelLootChanceScale;
         public static ConfigEntry<bool> ScaleAllLootByLevel;
@@ -313,8 +314,10 @@ namespace StarLevelSystem.common {
             DistanceRingColorOptions = BindServerConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
             DistanceRingColorOptions.SettingChanged += DistanceScaleSystem.UpdateMapColorSettingsOnChange;
             MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRingGeneratorUpdatesPerFrame", 1000, "The number of ring points to calculate per frame when generating the minimap rings. Higher values make this go faster, but can get it killed or cause instability.", true);
-            PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The additional size that a creature grows each star level.", true, 0f, 2f);
+            PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The size a creature gains each star level. Negative values shrink creatures each star, down to MinimumCreatureScale.", true, -0.5f, 2f);
             PerLevelScaleBonus.SettingChanged += SizeModifications.StarLevelScaleChanged;
+            MinimumCreatureScale = BindServerConfig("LevelSystem", "MinimumCreatureScale", 0.1f, "The smallest scale multiplier a creature can shrink to. Stops negative size-per-level values from producing zero-sized or inside-out creatures.", true, 0.01f, 1f);
+            MinimumCreatureScale.SettingChanged += SizeModifications.StarLevelScaleChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             EnableColorization = BindServerConfig("LevelSystem", "EnableColorization", true, "Enables this mods colorization of creatures based on their star level.");
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x.", false, 0f, 5f);

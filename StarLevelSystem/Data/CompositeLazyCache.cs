@@ -172,9 +172,14 @@ namespace StarLevelSystem.Data
             }
 
             int clevel = chara.GetLevel();
-            // Set level ZDO, only if its not been set, and only if its not what the cache is expecting
-            //Logger.LogDebug($"ZOwner Setup: {characterEntry.RefCreatureName} | {clevel} <= 1 && {characterEntry.Level} != {clevel} ({clevel <= 1 && characterEntry.Level != clevel})");
-            if (clevel <= 1 && characterEntry.Level != clevel) {
+            // Set level ZDO, only if its not been set, and only if its not what the cache is expecting.
+            // Character.m_level defaults to 1 when s_level is absent, so clevel==1 cannot distinguish
+            // "rolled a 1" from "never rolled". Leaving the key unset makes DetermineLevel (which reads
+            // it with a default of 0) treat the creature as unresolved forever on non-owner peers, and
+            // re-roll a fresh level on the owner on every cache rebuild. Persist it even when it is 1.
+            int storedLevel = chara.m_nview.GetZDO().GetInt(ZDOVars.s_level, 0);
+            //Logger.LogDebug($"ZOwner Setup: {characterEntry.RefCreatureName} | {clevel} <= 1 && ({storedLevel} <= 0 || {characterEntry.Level} != {clevel})");
+            if (clevel <= 1 && (storedLevel <= 0 || characterEntry.Level != clevel)) {
                 // Can't use the standard set level here- as we want to set the character level to 1 sometimes, and that will be ignored here.
                 chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
                 chara.m_level = characterEntry.Level;
@@ -185,12 +190,15 @@ namespace StarLevelSystem.Data
             //Logger.LogDebug($"Activating ZOwner setup routines {chara.GetZDOID().ID} {characterEntry.RefCreatureName} - level cache: {characterEntry.Level} character: {clevel}");
 
 
-            // Reset character level if its overleveled
-            if (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > ValConfig.MaxLevel.Value + 1)
+            // Reset character level if its overleveled.
+            // Must use the exact same bound as LevelSelection.DetermineLevel's reroll gate - see the comment
+            // on GetMaxCreatureLevel. If this bound is looser, over-level creatures re-roll forever without
+            // ever having their ZDO corrected.
+            int maxlevel = LevelSelection.GetMaxCreatureLevel(chara, characterEntry.CreatureSettings);
+            if (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > maxlevel)
             {
                 // Rebuild level?
                 characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
-                int maxlevel = ValConfig.MaxLevel.Value + 1;
                 Logger.LogDebug($"{characterEntry.RefCreatureName} level {clevel} over max {maxlevel}, resetting to {maxlevel}");
                 chara.m_nview.GetZDO().Set(ZDOVars.s_level, maxlevel);
                 chara.m_level = maxlevel;
@@ -354,6 +362,10 @@ namespace StarLevelSystem.Data
                     //Logger.LogDebug($"Removed deleted creature from cache {id}");
                 }
                 CreatureSetupQueue.RemoveTracking(id);
+                // Every other per-ZDOID cache has to be dropped here too, otherwise they grow for the
+                // whole session (trees/creature huds are never otherwise evicted on despawn).
+                RemoveTreeCacheEntry(id);
+                UIHudControl.RemoveExtendedHudFromCache(id);
             }
         }
     }

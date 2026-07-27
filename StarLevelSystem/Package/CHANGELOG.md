@@ -1,3 +1,21 @@
+**1.4.0**
+ ---
+ ```
+ - Adds support for negative SizePerLevel, so creatures can be configured to shrink with each star
+ 	- Adds MinimumCreatureScale config (default 0.1), the floor a creature can shrink to. Prevents zero sized or inside-out creatures
+	- PerLevelScaleBonus now accepts negative values (range is -0.5 to 2)
+	- Fixes changed size settings not applying to already spawned creatures until they respawned
+ - Fixes creatures at exactly the max level re-rolling their level
+ - Fixes bosses between MaxLevel and MaxBossLevel being treated as over-levelled and constantly re-rolled
+ - Fixes ragdolls of creatures whose prefab is not unit-scaled (lox, troll) being sized incorrectly
+ - Improved HUD performance slightly
+ - Improves cache eviction of HUDs slightly
+ - Improves drainer effects to be modified based on how you handle the attack
+	- Dodging a drainer attack will prevent the full drain effect
+	- Blocking a drain attack will prevent a small amount of the effect
+	- Parrying a drain attack will prevent a moderate amount of the effect
+ ```
+
 **1.3.0**
  ---
  ```

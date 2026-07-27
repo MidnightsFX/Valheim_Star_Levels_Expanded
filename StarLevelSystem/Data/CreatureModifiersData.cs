@@ -572,7 +572,13 @@ namespace StarLevelSystem.Data
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {
                         PerlevelPower = 2.0f,
-                        BasePower = 3.0f
+                        BasePower = 3.0f,
+                        // Fraction of the drain removed when the player defends. Dodge fully negates by default.
+                        Config = new Dictionary<string, float>() {
+                            { "BlockReduction", 0.25f },
+                            { "ParryReduction", 0.75f },
+                            { "DodgeReduction", 1.0f },
+                        },
                         },
                     UnallowedCreatures = NonCombatCreatures
                     }
@@ -590,7 +596,13 @@ namespace StarLevelSystem.Data
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {
                         PerlevelPower = 4.0f,
-                        BasePower = 10.0f
+                        BasePower = 10.0f,
+                        // Fraction of the drain removed when the player defends. Dodge fully negates by default.
+                        Config = new Dictionary<string, float>() {
+                            { "BlockReduction", 0.25f },
+                            { "ParryReduction", 0.75f },
+                            { "DodgeReduction", 1.0f },
+                        },
                         },
                     UnallowedCreatures = NonCombatCreatures,
                     AllowedBiomes = new List<Biome>() {

@@ -604,6 +604,9 @@ namespace StarLevelSystem.Data
             int i = 0;
             WaitForSeconds sleep = new WaitForSeconds(0.1f);
             HealthModifications.ForceUpdateHealth = true;
+            // Without this, SetSizeModification short-circuits on the persisted SLS_SIZE and a changed
+            // Size/SizePerLevel would not apply to already-spawned creatures.
+            SizeModifications.ForceUpdateSize = true;
             foreach (var character in characters) {
                 if (i >= ValConfig.NumberOfCacheUpdatesPerFrame.Value) {
                     yield return sleep;
@@ -614,6 +617,7 @@ namespace StarLevelSystem.Data
                 i++;
             }
             HealthModifications.ForceUpdateHealth = false;
+            SizeModifications.ForceUpdateSize = false;
         }
     }
 }

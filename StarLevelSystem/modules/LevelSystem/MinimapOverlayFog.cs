@@ -1,19 +1,23 @@
-using Jotunn.Managers;
+using HarmonyLib;
 using StarLevelSystem.common;
-using System;
-using System.Reflection;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace StarLevelSystem.modules.LevelSystem {
-    // Jotunn's MinimapManager.MapOverlay.IgnoreFog is internal and only honoured at overlay creation
-    // time (GetMapOverlay's ignoreFog argument is ignored once an overlay with that name already
-    // exists). To let the "above/below fog" config be flipped at runtime we reflectively sync the
-    // existing overlay's flag with config, then let the normal rebuild re-apply the texture so the
-    // compose pass (which reads IgnoreFog) picks up the change. Recreating the overlay instead would
-    // leak duplicate toggles into Jotunn's overlay panel, so we mutate the flag in place.
+    // Jotunn's built-in "below fog" overlay masking (MapOverlay.IgnoreFog=false) does not work in this
+    // game/Jotunn build: even a freshly created below-fog overlay renders across the whole map. Only
+    // IgnoreFog=true (draw everywhere) is reliable. So SLS always creates its overlays above-fog and
+    // masks the content itself -- in "below fog" mode the ring/zone builders only write pixels for
+    // explored map locations (see IsPixelExplored). Exploration reveals new terrain over time, so a
+    // Harmony hook on Minimap.Explore flags new exploration and MaybeRefreshForExploration throttle-
+    // redraws the below-fog overlays.
     internal static class MinimapOverlayFog {
-        private static readonly FieldInfo IgnoreFogField =
-            typeof(MinimapManager.MapOverlay).GetField("IgnoreFog", BindingFlags.NonPublic | BindingFlags.Instance);
+        // Set true whenever the player uncovers a new fog pixel; consumed (throttled) to redraw the
+        // self-masked below-fog overlays so newly explored areas gain their outlines.
+        internal static bool ExplorationChanged = false;
+
+        private static float nextFogRefresh = 0f;
+        private const float FogRefreshInterval = 10f;
 
         // Readiness gate shared by the ring and zone overlay systems. Returns true only when we're in
         // a fully loaded world with a live minimap. Overlay (re)draws are gated on this so config
@@ -26,15 +30,45 @@ namespace StarLevelSystem.modules.LevelSystem {
                 && SceneManager.GetActiveScene().name == "main";
         }
 
-        // Force an existing overlay's IgnoreFog flag to match the desired value. The caller should
-        // follow this with a texture Apply/redraw so the flag change is composed into the map.
-        internal static void SetIgnoreFog(MinimapManager.MapOverlay overlay, bool ignoreFog) {
-            if (overlay == null || IgnoreFogField == null) { return; }
-            try {
-                if ((bool)IgnoreFogField.GetValue(overlay) == ignoreFog) { return; }
-                IgnoreFogField.SetValue(overlay, ignoreFog);
-            } catch (Exception e) {
-                Logger.LogWarning($"Failed to set minimap overlay fog flag: {e.Message}");
+        // Mirrors vanilla Minimap.IsExplored but takes overlay pixel coords directly (the ring/zone
+        // builders already work in this grid). SLS overlay drawing assumes the vanilla map texture and
+        // Jotunn's overlay texture are the same size (m_textureSize == overlay.TextureSize == 2048), so
+        // a pixel index maps straight into the exploration arrays. Returns true when there is no live
+        // map yet so a premature draw doesn't hide everything.
+        internal static bool IsPixelExplored(int px, int py) {
+            Minimap mm = Minimap.instance;
+            if (mm == null || mm.m_explored == null) { return true; }
+            int size = mm.m_textureSize;
+            if (px < 0 || py < 0 || px >= size || py >= size) { return false; }
+            int idx = py * size + px;
+            return mm.m_explored[idx] || mm.m_exploredOthers[idx];
+        }
+
+        // Called from the Minimap.Update patch. When the player has uncovered new terrain and a
+        // below-fog overlay is active, throttle-redraw those overlays so the new area gains its
+        // outlines. Above-fog overlays already draw everywhere, so they never need this. Standing still
+        // uncovers nothing (ExplorationChanged stays false) and therefore costs nothing.
+        internal static void MaybeRefreshForExploration() {
+            if (!ExplorationChanged) { return; }
+            if (Time.unscaledTime < nextFogRefresh) { return; }
+            nextFogRefresh = Time.unscaledTime + FogRefreshInterval;
+            if (!CanDrawOverlays()) { return; }
+
+            bool ringsBelowFog = ValConfig.EnableMapRingsForDistanceBonus.Value && !ValConfig.MapRingsAboveFog.Value;
+            bool zonesBelowFog = ValConfig.EnableZoneScalingBonus.Value && ValConfig.EnableZoneMapOverlay.Value && !ValConfig.ZoneOverlayAboveFog.Value;
+            if (!ringsBelowFog && !zonesBelowFog) { return; }
+
+            ExplorationChanged = false;
+            if (ringsBelowFog) { DistanceScaleSystem.DelayedMinimapSetup(); }
+            if (zonesBelowFog) { ZoneScaleSystem.DrawMinimapOverlay(); }
+        }
+
+        // Vanilla Minimap.Explore(int,int) returns true only when it reveals a previously-fogged pixel,
+        // so this fires exactly on new exploration -- not while standing in already-explored terrain.
+        [HarmonyPatch(typeof(Minimap), nameof(Minimap.Explore), typeof(int), typeof(int))]
+        internal static class Minimap_Explore_Patch {
+            private static void Postfix(bool __result) {
+                if (__result) { ExplorationChanged = true; }
             }
         }
     }

@@ -48,7 +48,13 @@ namespace StarLevelSystem.modules.Sizes {
                 if (__instance.m_level > 1 && cDetails != null) {
                     Vector3 size = __instance.m_nview.m_zdo.GetVec3(SLS_SIZE, Vector3.zero);
                     if (size != Vector3.zero) {
-                        ragdoll.transform.localScale = GetSizeReferenceForObject(ragdoll.gameObject.name) * size.x;
+                        // SLS_SIZE stores the creature's final localScale, not a bare multiplier. Divide by the
+                        // creature's own reference scale to recover the multiplier before applying it to the
+                        // ragdoll's reference scale, otherwise any creature whose prefab is not unit-scaled
+                        // (lox, troll, ...) gets a ragdoll scaled by its own base size a second time.
+                        float creatureRef = GetSizeReferenceForObject(__instance.gameObject.name).x;
+                        float multiplier = Mathf.Approximately(creatureRef, 0f) ? size.x : size.x / creatureRef;
+                        ragdoll.transform.localScale = GetSizeReferenceForObject(ragdoll.gameObject.name) * multiplier;
                     }
 
                     if (cDetails.Colorization != null) {

@@ -73,11 +73,16 @@ Here is a section of the default example config, lets walk through what everythi
       HealthPerLevel: 0.4            # Each star provides 40% more health (0.4)
       DamagePerLevel: 0.1            # Each star provides 10% more damage (0.1)
       SpeedPerLevel: 0               # Each star does not increase speed (0)
-      SizePerLevel: 0.1              # Each star makes the creature 10% bigger (0.1)
+      SizePerLevel: 0.1              # Each star makes the creature 10% bigger (0.1). Negative values shrink instead (-0.1 is 10% smaller per star)
     damageRecievedModifiers:         # Damage reduction or increases
       Poison: 1.5                    # Everything recieves 50% (1.5) more damage from poison (that includes players)
 ```
 Note: `creaturePerLevelValueModifiers` do not apply to characters. But, `damageRecievedModifiers` DOES.
+
+Note on sizing: per-level size is applied as `Size + (SizePerLevel * stars)`, so a 0 star creature is
+exactly `Size`. `SizePerLevel` may be negative to make creatures shrink with each star. The final
+multiplier is floored at the `MinimumCreatureScale` config value (default `0.1`), so creatures can never
+reach zero size or turn inside-out no matter how negative the value is.
 
 Biome specific configurations can be used to override the default `All` configuration, in this case max level for Ashlands is being set
 to 26 and the distance modifier is being reduced by 50%
@@ -108,7 +113,7 @@ Lets take a look at this creature definition
     creaturePerLevelValueModifiers:     # Per level stat modifiers for this creature, these are multiplied by the creatures level and applied to the total stat value
       HealthPerLevel: 0.3               # Each star provides 30% more health
       DamagePerLevel: 0.05              # Each star provides 5% more damage
-      SizePerLevel: 0.005               # Each star provides 0.5% more size
+      SizePerLevel: 0.005               # Each star provides 0.5% more size (use a negative value to shrink per star)
     requiredModifiers:                  # Modifiers that this creature will always spawn with, regardless of level, chance or modifier limit, but still count towards max modifier count
       Poison: Major                     # Trolls will always spawn with the Poison major modifier, Modifier names can be found in Modifiers.yaml, along with their categories
 ```

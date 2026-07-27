@@ -56,6 +56,8 @@ namespace StarLevelSystem.modules.UI {
         [HarmonyPatch(typeof(Minimap), nameof(Minimap.Update))]
         public static class RefreshIndicator {
             public static void Postfix() {
+                // Reveal self-masked below-fog overlays over newly explored terrain (throttled inside).
+                MinimapOverlayFog.MaybeRefreshForExploration();
                 if (indicatorText == null) { return; }
                 if (Time.time < nextRefresh) { return; }
                 nextRefresh = Time.time + RefreshInterval;

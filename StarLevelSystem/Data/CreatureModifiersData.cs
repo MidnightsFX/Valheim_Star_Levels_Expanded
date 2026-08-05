@@ -51,6 +51,16 @@ namespace StarLevelSystem.Data
             }
         }
 
+        // Live change to a setting that feeds BuildCreatureLocalizableName. Unlike the icon style, the name is
+        // baked into CharacterCacheEntry.CreatureNameLocalizable and snapshotted again onto each hud, so both
+        // caches have to be dropped or the change appears to do nothing until each creature happens to reload.
+        internal static void ModifierNamingChanged(object s, EventArgs e) {
+            CompositeLazyCache.FlushCache();
+            foreach (ZDOID id in modules.UI.UIHudControl.characterExtendedHuds.Keys.ToList()) {
+                modules.UI.UIHudControl.RemoveExtendedHudFromCache(id);
+            }
+        }
+
         public static List<string> NonCombatCreatures = new List<string>() {
             "Deer",
             "Hare",

@@ -22,13 +22,47 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
         }
 
-        // Leaving a world/server: tear down zone state so the next world rebuilds and re-syncs
-        // cleanly instead of reusing stale geometry (static state + coroutines otherwise persist).
+        // Leaving a world/server: tear down zone and ring state so the next world rebuilds and
+        // re-syncs cleanly instead of reusing stale geometry (static state + coroutines otherwise
+        // persist, since TaskRunner is DontDestroyOnLoad).
+        //
+        // Setting MinimapOverlayFog.WorldUnloading here is what stops the overlay rebuilds from being
+        // restarted during teardown: Jotunn's SynchronizationManager restores every synced config
+        // entry to its local value from a ZNet.OnDestroy prefix, raising SettingChanged on our overlay
+        // settings. ZNet.Shutdown runs from Game.Shutdown strictly before ZNet.OnDestroy, so the flag
+        // is always set first. Don't move this to a ZNet.OnDestroy prefix -- Harmony prefix ordering
+        // against Jotunn is not guaranteed.
+        internal static void OnWorldUnload() {
+            MinimapOverlayFog.WorldUnloading = true;
+            ZoneScaleSystem.ResetForWorldChange();
+            DistanceScaleSystem.ResetForWorldChange();
+            ValConfig.ResetServerSyncState();
+        }
+
         [HarmonyPatch(typeof(ZNet), nameof(ZNet.Shutdown))]
-        public static class ZoneWorldUnload {
+        public static class WorldUnloadTeardown {
             [HarmonyPrefix]
-            static void ResetZonesOnLeave() {
-                ZoneScaleSystem.ResetForWorldChange();
+            static void ResetOnLeave() {
+                OnWorldUnload();
+            }
+        }
+
+        // Quit/suspend paths bypass Shutdown entirely.
+        [HarmonyPatch(typeof(ZNet), nameof(ZNet.ShutdownWithoutSave))]
+        public static class WorldUnloadTeardownNoSave {
+            [HarmonyPrefix]
+            static void ResetOnLeaveWithoutSave() {
+                OnWorldUnload();
+            }
+        }
+
+        // Entering a world: clear the teardown flag so overlays may draw again. ZNet.Awake assigns
+        // ZNet.m_instance and runs well before OnVanillaMapDataLoaded triggers the redraw.
+        [HarmonyPatch(typeof(ZNet), nameof(ZNet.Awake))]
+        public static class WorldLoadReset {
+            [HarmonyPostfix]
+            static void ClearUnloadingFlag() {
+                MinimapOverlayFog.WorldUnloading = false;
             }
         }
 

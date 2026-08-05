@@ -172,18 +172,30 @@ namespace StarLevelSystem.modules.Modifiers {
             foreach (string modifierName in remainingNameSegments)
             {
                 // Don't show modifier names for creatures that have a limit number of modifiers based on their level
-                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && nameEntries >= chara.m_level - 1) { break; }
+                if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && nameEntries >= chara.m_level - 1) {
+                    // Only worth reporting when a real modifier is being dropped - every 0-star creature hits
+                    // this on the first iteration with a budget of 0, and most carry only the "None" sentinel.
+                    if (ValConfig.EnableDebugMode.Value && modifierName != NoMods) {
+                        Logger.LogDebug($"Name budget exhausted for {chara.m_name} (level {chara.m_level}, {nameEntries} segment(s) used); dropping '{modifierName}' and any later modifiers from its name.");
+                    }
+                    break;
+                }
                 //Logger.LogDebug($"Setting name segment for: {modifierName}");
                 if (remainingNameSegments.Count <= 0 || nameEntries >= remainingNameSegments.Count) { break; }
-                nameEntries++;
-                if (modifierName == NoMods) { continue; }
+                // The "None" sentinel must be skipped before the counter moves. SetupModifiers,
+                // RunOnceModifierSetup and the hud icon loop all skip it without spending a slot; counting it
+                // here cost a 1-star creature its only slot, so it rendered a modifier icon with no name.
+                if (modifierName == NoMods || modifierName == string.Empty) { continue; }
 
-                ModifierType modType = ModifierType.Major;
-                if (modifiers.ContainsKey(modifierName)) {
-                    modType = modifiers[modifierName];
+                // A persisted modifier with no definition (removed/renamed, or registered through the API on
+                // another peer) must not throw - this runs inside GetAndSetLocalCache, and an exception here
+                // aborts the whole cache build, leaving the creature without a cache entry for the session.
+                if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modifierName, out CreatureModifierDefinition creatureMod) == false || creatureMod == null) {
+                    Logger.LogWarning($"Modifier {modifierName} has no definition, skipping its name segment for {chara.m_name}.");
+                    continue;
                 }
-                CreatureModifierDefinition creatureMod = CreatureModifiersData.ModifierDefinitions[modifierName];
-                if (creatureMod == null) { continue; }
+                nameEntries++;
+
                 if (selectedPrefixes <= ValConfig.LimitCreatureModifierPrefixes.Value && prefixSelectors.Contains(creatureMod.NamingConvention) && creatureMod.NamePrefix != null && creatureMod.NamePrefix.Length > 0)
                 {
                     selectedPrefixes++;

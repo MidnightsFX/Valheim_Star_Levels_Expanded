@@ -1,3 +1,9 @@
+**1.4.1**
+ ---
+ ```
+ - Addresses a network delay that could cause a creature to not gain its modifier name even after gaining the modifier
+ ```
+
 **1.4.0**
  ---
  ```

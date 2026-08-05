@@ -16,6 +16,13 @@ namespace StarLevelSystem.modules.LevelSystem {
         // self-masked below-fog overlays so newly explored areas gain their outlines.
         internal static bool ExplorationChanged = false;
 
+        // Set from ZNet.Shutdown/ShutdownWithoutSave (leaving a world) and cleared on ZNet.Awake
+        // (entering one). The instance/scene checks below cannot detect logout on their own: vanilla
+        // ZNet.Shutdown only calls StopAll, so ZNet.instance and Minimap.instance both stay alive and
+        // the active scene is still "main" until the scene actually unloads a few frames later. This
+        // flag is what distinguishes "in a world" from "leaving one".
+        internal static bool WorldUnloading = false;
+
         private static float nextFogRefresh = 0f;
         private const float FogRefreshInterval = 10f;
 
@@ -24,8 +31,15 @@ namespace StarLevelSystem.modules.LevelSystem {
         // changes (fog toggle, colors, ring center) that fire while the player is in the main menu or
         // on a loading screen don't run against a world/minimap that doesn't exist yet. Once the map is
         // ready the overlays are (re)built from MinimapManager.OnVanillaMapDataLoaded.
+        //
+        // WorldUnloading matters most on logout: Jotunn's SynchronizationManager restores every synced
+        // config entry to its cached local value from a ZNet.OnDestroy prefix, which raises
+        // SettingChanged on our overlay settings while the world is being torn down. Without the flag
+        // those events start an overlay rebuild on the DontDestroyOnLoad TaskRunner, which then keeps
+        // running into the main menu and dereferences a destroyed Minimap.
         internal static bool CanDrawOverlays() {
-            return ZNet.instance != null
+            return !WorldUnloading
+                && ZNet.instance != null
                 && Minimap.instance != null
                 && SceneManager.GetActiveScene().name == "main";
         }

@@ -417,6 +417,7 @@ namespace StarLevelSystem.common {
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
+            LimitCreatureModifiersToCreatureStarLevel.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
             ChanceMajorModifier = BindServerConfig("Modifiers", "ChanceMajorModifier", 0.15f, "The chance that a creature will have a major modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
             ChanceMajorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             ChanceMinorModifier = BindServerConfig("Modifiers", "ChanceMinorModifier", 0.25f, "The chance that a creature will have a minor modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
@@ -427,7 +428,9 @@ namespace StarLevelSystem.common {
             MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
             SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Creatures spawned from the Splitter modifier inherit the level of the parent creature.");
             LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
+            LimitCreatureModifierPrefixes.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
+            MinorModifiersFirstInName.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
             ModifierIconDisplayStyle = BindServerConfig("Modifiers", "ModifierIconDisplayStyle", ModifierDisplayStyle.Stars.ToString(), "Style to display modifiers as on the creature HUD. Icons = detailed modifier icons, Stars = star-shaped modifier icons, None = plain default stars.", new AcceptableValueList<string>(ModifierDisplayStyle.Icons.ToString(), ModifierDisplayStyle.Stars.ToString(), ModifierDisplayStyle.None.ToString()));
             CreatureModifiersData.ParseModifierDisplayStyle();
             ModifierIconDisplayStyle.SettingChanged += CreatureModifiersData.ModifierDisplayStyleChanged;
@@ -465,6 +468,13 @@ namespace StarLevelSystem.common {
 
         internal static void HasServerUpdates() {
             ServerConfigsSynced = true;
+        }
+
+        // Called on leaving a world. Without this the flag stays true for the rest of the process, so
+        // every later join to a dedicated server skips the sync wait loop (see CheckAndDrawMapRings)
+        // and draws from the previous server's values until the real sync lands.
+        internal static void ResetServerSyncState() {
+            ServerConfigsSynced = false;
         }
 
         internal void LoadYamlConfigs()
@@ -597,46 +607,55 @@ namespace StarLevelSystem.common {
             ConfigFileWatcher.Register(nemesisFilePath, UpdateNemesisSettings);
         }
 
+        // Push a changed yaml file out to the peers. The config file watcher is DontDestroyOnLoad and
+        // keeps polling in the main menu, where ZNet.instance is null; and on a client m_peers holds
+        // the server, so only the server is allowed to broadcast config. The local apply in each
+        // handler is deliberately left unguarded so yaml edits still take effect offline.
+        private static void BroadcastConfigFile(CustomRPC rpc, string fullFileName) {
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            rpc.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+        }
+
         private static void UpdateColorSettings(string fullFileName) {
             Logger.LogDebug("Triggering Color Settings update.");
             string filetext = File.ReadAllText(fullFileName);
             Colorization.UpdateYamlConfig(filetext);
-            ColorSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+            BroadcastConfigFile(ColorSettingsRPC, fullFileName);
         }
 
         private static void UpdateLevelSettings(string fullFileName) {
             Logger.LogDebug("Triggering Level Settings update.");
             string filetext = File.ReadAllText(fullFileName);
             LevelSystemData.UpdateYamlConfig(filetext);
-            LevelSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+            BroadcastConfigFile(LevelSettingsRPC, fullFileName);
         }
 
         private static void UpdateLootSettings(string fullFileName) {
             Logger.LogDebug("Triggering Loot Settings update.");
             string filetext = File.ReadAllText(fullFileName);
             LootSystemData.UpdateYamlConfig(filetext);
-            CreatureLootSettingsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+            BroadcastConfigFile(CreatureLootSettingsRPC, fullFileName);
         }
 
         private static void UpdateModifierSettings(string fullFileName) {
             Logger.LogDebug("Triggering Modifiers Settings update.");
             string filetext = File.ReadAllText(fullFileName);
             CreatureModifiersData.UpdateModifierConfig(filetext);
-            ModifiersRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+            BroadcastConfigFile(ModifiersRPC, fullFileName);
         }
 
         private static void UpdateRaidSettings(string fullFileName) {
             Logger.LogDebug("Triggering Raid Settings update.");
             string filetext = File.ReadAllText(fullFileName);
             RaidsData.UpdateYamlConfig(filetext);
-            RaidsRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+            BroadcastConfigFile(RaidsRPC, fullFileName);
         }
 
         private static void UpdateNemesisSettings(string fullFileName) {
             Logger.LogDebug("Triggering Nemesis Settings update.");
             string filetext = File.ReadAllText(fullFileName);
             NemesisSystemData.UpdateYamlConfig(filetext);
-            NemesisRPC.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
+            BroadcastConfigFile(NemesisRPC, fullFileName);
         }
 
         private static void OnMainConfigFileChanged(string _) {

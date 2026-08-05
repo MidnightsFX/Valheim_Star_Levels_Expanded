@@ -120,14 +120,16 @@ namespace StarLevelSystem.Data
             bool isOwner = IsZOwner(character);
             characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, biome, leveloverride, allowRoll: isOwner);
 
-            // Build creature name
-            characterEntry.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(character, characterEntry.CreatureModifiers);
-
             // Update Level and health, for non-zowners, once it has been set.
             if (isOwner == false && characterEntry.Level > 0 && character.m_level != characterEntry.Level) {
                 character.m_level = characterEntry.Level;
                 character.SetupMaxHealth();
             }
+
+            // Build creature name. MUST come after the m_level correction above: the name builder budgets its
+            // segments off chara.m_level, which vanilla defaults to 1 until the rolled level is applied. Built
+            // any earlier the budget is 0 and every modifier is dropped from the name.
+            characterEntry.CreatureNameLocalizable = CreatureModifiers.BuildCreatureLocalizableName(character, characterEntry.CreatureModifiers);
 
             // Set creature Colorization pallete
             //Logger.LogDebug("Selecting creature colorization");

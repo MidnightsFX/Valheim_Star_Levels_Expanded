@@ -29,6 +29,11 @@ namespace StarLevelSystem.modules.UI {
         public class StarLevelHud {
             public bool IsBoss { get; set; }
             public string CreatureNameLocalized { get; set; }
+            // False while CreatureNameLocalized is only the fallback prefab name, because the creature had
+            // no CharacterCacheEntry when the hud was built. The staleness guard in UpdateHudForAllLevels
+            // keeps retrying until this flips, otherwise a hud created inside the setup window latches the
+            // unresolved name forever - the mod list and level it compares against are already correct.
+            public bool NameResolved { get; set; }
             public int Level { get; set; } = 1;
 
             public List<string> DisplayedMods { get; set; } = new List<string>();
@@ -355,7 +360,10 @@ namespace StarLevelSystem.modules.UI {
                 List<string> currentMods = mods.Keys.ToList();
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
                 int levelCheck = ehud.m_character.GetLevel();
-                if (currentMods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelCheck != extended_hud.Level) {
+                // NameResolved is part of this check because the mod list and level can both already match
+                // while the name is still the unresolved fallback - without it the hud goes quiet and keeps
+                // rendering the prefab name next to a modifier icon.
+                if (currentMods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelCheck != extended_hud.Level || extended_hud.NameResolved == false) {
                     // A creature whose level/modifiers have not replicated yet fails this check every frame.
                     // Rebuilding the cache is expensive, so back off between attempts instead of thrashing.
                     if (Time.time < extended_hud.NextResolveAttempt) { return; }
@@ -492,9 +500,23 @@ namespace StarLevelSystem.modules.UI {
                     cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.HudLink.m_character);
                 }
             }
-            if (cce != null) {
-                //Logger.LogDebug($"Updating hud Name for {zdoid} with modifiers {string.Join(", ", mods.Keys)}");
-                extended_hud.CreatureNameLocalized = extended_hud.HudLink.m_character.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, Localization.instance.Localize(cce.CreatureNameLocalizable));
+            // Always resolve a name here. Leaving CreatureNameLocalized null when the cache entry is not
+            // ready yet strands the hud: DisplayedMods and the modifier icons below are written regardless,
+            // so the staleness guard in UpdateHudForAllLevels starts passing on the next frame and assigns
+            // that null straight into m_name.text - a creature showing its modifier icon with a blank name.
+            Character hudChara = extended_hud.HudLink.m_character;
+            if (hudChara != null && hudChara.m_nview != null && hudChara.m_nview.GetZDO() != null) {
+                string nameLocalizable = cce?.CreatureNameLocalizable;
+                extended_hud.NameResolved = nameLocalizable != null;
+                if (nameLocalizable == null) {
+                    // Fall back to the plain prefab name until the cache resolves. NameResolved stays false
+                    // so the staleness guard keeps retrying rather than latching this.
+                    nameLocalizable = hudChara.m_name;
+                    if (ValConfig.EnableDebugMode.Value) {
+                        Logger.LogDebug($"No cache entry for {zdoid} while building its hud name, falling back to '{hudChara.m_name}'. Modifiers: {string.Join(", ", mods.Keys)}");
+                    }
+                }
+                extended_hud.CreatureNameLocalized = hudChara.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, Localization.instance.Localize(nameLocalizable));
                 extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
             }
 
@@ -507,7 +529,13 @@ namespace StarLevelSystem.modules.UI {
                 foreach (KeyValuePair<string, ModifierType> entry in mods) {
                     if (entry.Key == CreatureModifiers.NoMods) { continue; }
                     //Logger.LogDebug($"Checking modifier {entry.Key} of type {entry.Value}");
-                    CreatureModifierDefinition cmd = CreatureModifiersData.ModifierDefinitions[entry.Key];
+                    // A persisted modifier with no definition (removed/renamed modifier, or one another peer
+                    // registered through the API) must not throw out of the transpiled EnemyHud.UpdateHuds -
+                    // that would abort the hud update for every other creature this frame.
+                    if (CreatureModifiersData.ModifierDefinitions.TryGetValue(entry.Key, out CreatureModifierDefinition cmd) == false || cmd == null) {
+                        Logger.LogWarning($"Modifier {entry.Key} has no definition, skipping its hud icon.");
+                        continue;
+                    }
                     if (cmd.StarVisual != null) {
                         if (CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
                             Sprite starSprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];

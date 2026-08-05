@@ -12,12 +12,29 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static Vector3 center = new Vector3(0, 0, 0);
         private static bool buildingMapRings = false;
         private static bool ringAvailable = false;
+        // Handles for the ring coroutines so they can be stopped on world unload (TaskRunner is
+        // DontDestroyOnLoad, so they would otherwise survive the scene change into the main menu and
+        // resume against a destroyed Minimap/overlay texture).
+        private static Coroutine ringCheckCoroutine;
+        private static Coroutine ringBuildCoroutine;
 
         public static void DelayedMinimapSetup() {
-            // Don't try to draw while in the main menu or on a loading screen (no live world/minimap
-            // yet); the rings are drawn from OnVanillaMapDataLoaded once the map is ready.
+            // Don't try to draw while in the main menu, on a loading screen, or while leaving a world
+            // (no live world/minimap); the rings are drawn from OnVanillaMapDataLoaded once ready.
             if (!MinimapOverlayFog.CanDrawOverlays()) { return; }
-            TaskRunner.Run().StartCoroutine(CheckAndDrawMapRings());
+            ringCheckCoroutine = TaskRunner.Run().StartCoroutine(CheckAndDrawMapRings());
+        }
+
+        // Invoked on leaving a world (ZNet.Shutdown). Stops the ring coroutines and clears ring state
+        // so joining another world redraws from scratch instead of reusing the previous world's center
+        // or being blocked by a stale buildingMapRings/ringAvailable flag.
+        internal static void ResetForWorldChange() {
+            Orchestrator runner = TaskRunner.Run();
+            if (ringCheckCoroutine != null) { runner.StopCoroutine(ringCheckCoroutine); ringCheckCoroutine = null; }
+            if (ringBuildCoroutine != null) { runner.StopCoroutine(ringBuildCoroutine); ringBuildCoroutine = null; }
+            buildingMapRings = false;
+            ringAvailable = false;
+            center = Vector3.zero;
         }
 
         private static IEnumerator CheckAndDrawMapRings() {
@@ -37,6 +54,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                     }
                 }
             }
+            // The wait loop above can park here for over two minutes; the player may have logged out
+            // in the meantime, so re-check before touching ZNet/Minimap again.
+            if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
             CreateLevelBonusRingMapOverlays();
             yield break;
         }
@@ -87,7 +107,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             Logger.LogDebug("Creating Level Bonus Rings on Map");
             if (buildingMapRings == false) {
                 buildingMapRings = true;
-                TaskRunner.Run().StartCoroutine(BuildMapRingOverlay());
+                ringBuildCoroutine = TaskRunner.Run().StartCoroutine(BuildMapRingOverlay());
             }
         }
 
@@ -144,8 +164,12 @@ namespace StarLevelSystem.modules.LevelSystem {
             // bonuses or ring colors not ready yet -- can't leave it stuck true and permanently block
             // later redraws, including the above/below-fog toggle.
             try {
+                // Covers the ZNet/Minimap/MinimapManager derefs up to the first yield: this coroutine
+                // can be started from a SettingChanged handler that fires during world teardown. The
+                // draw loop re-checks after each yield.
+                if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
                 // Skip if distances are not defined.
-                if (LevelSystemData.SLE_Level_Settings.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
+                if (LevelSystemData.SLE_Level_Settings?.DistanceLevelBonus == null || LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys.Count <= 0) {
                     yield break;
                 }
                 if (ZNet.instance.IsDedicated()) {
@@ -200,13 +224,16 @@ namespace StarLevelSystem.modules.LevelSystem {
                         updates++;
                         if (updates % 3_000 == 0) {
                             yield return new WaitForEndOfFrame();
+                            // The world can be torn down while we're yielded here (TaskRunner is
+                            // DontDestroyOnLoad, so this coroutine outlives the scene). Bail out
+                            // rather than resuming against a destroyed Minimap/overlay.
+                            if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
                         }
 
                         float t = delta * i;
                         int x = Mathf.RoundToInt(world_x + Mathf.Cos(t) * map_radii);
                         int y = Mathf.RoundToInt(world_y + Mathf.Sin(t) * map_radii);
                         //circle[i] = new Vector2(x, y);
-                        if (ringbonuses == null) { yield break; }
 
                         int index = (y * ringbonuses.TextureSize) + x;
                         // Index must be less than pixels due to zero indexing and greater than zero
@@ -223,7 +250,10 @@ namespace StarLevelSystem.modules.LevelSystem {
                     }
                 }
 
-                if (ringbonuses == null) { yield break; }
+                // OverlayTex is a UnityEngine.Object, so this also catches the case where Jotunn
+                // destroyed the overlay on Minimap.OnDestroy while we were yielded (MapOverlay itself
+                // is a plain managed object and can never become null here).
+                if (!MinimapOverlayFog.CanDrawOverlays() || ringbonuses.OverlayTex == null) { yield break; }
                 ringbonuses.OverlayTex.SetPixels(mainPixels);
                 ringbonuses.OverlayTex.Apply();
                 Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");

@@ -1,3 +1,19 @@
+**1.5.0**
+ ---
+ ```
+ - Adds the Location Reset system! Restores looted overworld locations, dungeons, ores, pickables and vegetation so they can be gathered again. Built for large servers where many players compete for a finite pool of resources. Disabled by default (EnableLocationReset), and every location/vegetation entry is opt-in
+	- Resets run server-side in the background, and ONLY in zones with no players nearby, so players never see a reset happen
+	- Locations are restored to their original position and rotation rather than re-rolled, so buildings never shift or clip
+	- Ore, pickables and vegetation regenerate in their exact original spots, because placement is replayed with the world's own deterministic seed
+	- Dungeon interiors (crypts, caves, mines, citadels) reset along with their entrance
+	- Terrain can be reset around ore and locations to undo mining craters. Boss altars support a TerrainOnly mode that flattens the ground without touching the altar
+	- Player structures, tombstones, wards, portals, beds, player chests and tamed creatures are protected. Protection is configurable per location and per vegetation entry
+	- Timers are in real-world hours and are configured in LocationResetSettings.yaml
+	- Throughput is throttled by a server frame-time budget (LocationResetSweepBudgetMs) that automatically backs off when the server is under load
+	- Adds terminal commands: SLS-loc-reset-status, SLS-loc-reset-dump, SLS-loc-reset-stamp-all, SLS-loc-reset-here, SLS-loc-reset-audit
+	- Automatically disabled when VentureValheim LocationReset is installed, since both would fight over the same objects
+ ```
+
 **1.4.1**
  ---
  ```

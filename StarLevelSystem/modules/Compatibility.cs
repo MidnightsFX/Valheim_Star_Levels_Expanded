@@ -20,6 +20,8 @@ namespace StarLevelSystem.modules
         public static bool IsFGNEnabled = false;
         public static bool IsCustomRaidsEnabled = false;
         public static bool IsJewelcraftingEnabled = false;
+        public static bool IsVentureLocationResetEnabled = false;
+        public static bool IsUpgradeWorldEnabled = false;
 
         // Active only when CustomRaids is installed AND the compat toggle is enabled.
         public static bool CustomRaidsCompatActive => IsCustomRaidsEnabled && ValConfig.EnableCustomRaidsCompat.Value;
@@ -60,6 +62,24 @@ namespace StarLevelSystem.modules
                 if (plugins.Keys.Contains("asharppen.valheim.custom_raids")) {
                     IsCustomRaidsEnabled = true;
                     Logger.LogInfo("Valheim.CustomRaids detected; CustomRaids raids will fire alongside SLS raids while EnableCustomRaidsCompat is enabled.");
+                }
+                if (plugins.Keys.Contains("com.Venture.LocationReset")) {
+                    IsVentureLocationResetEnabled = true;
+                    // Both mods reset the same locations on their own timers and fight over the same
+                    // ZDOs, which can duplicate or destroy loot. Hard-disable ours; the gate lives on
+                    // LocationResetData so a mid-session config edit cannot re-enable it.
+                    Data.LocationResetData.BlockedByModConflict = true;
+                    if (ValConfig.EnableLocationReset.Value) {
+                        Logger.LogWarning("VentureValheim LocationReset detected; SLS Location Reset has been disabled. Remove VentureValheim LocationReset to use SLS Location Reset - running both will fight over the same objects.");
+                    } else {
+                        Logger.LogInfo("VentureValheim LocationReset detected; SLS Location Reset is unavailable while it is installed.");
+                    }
+                }
+                if (plugins.Keys.Contains("upgrade_world")) {
+                    IsUpgradeWorldEnabled = true;
+                    // Manual admin console toolkit with no automatic timer, so it only competes if an
+                    // admin actually runs a command. Informational only.
+                    Logger.LogInfo("Upgrade World detected; its locations_reset / vegetation_reset commands overlap with SLS Location Reset. Avoid running both against the same zones.");
                 }
                 if (plugins.Keys.Contains("org.bepinex.plugins.jewelcrafting")) {
                     IsJewelcraftingEnabled = true;

@@ -6,6 +6,7 @@ using Splatform;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.LocationReset;
 using StarLevelSystem.modules.Loot;
 using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.Sizes;
@@ -28,6 +29,7 @@ namespace StarLevelSystem.common {
         internal const string ModifiersFileName = "Modifiers.yaml";
         internal const string RaidSettingsFileName = "RaidSettings.yaml";
         internal const string NemesisSettingsFileName = "NemesisSettings.yaml";
+        internal const string LocationResetSettingsFileName = "LocationResetSettings.yaml";
         internal const string StarLevelSystem = "StarLevelSystem";
         internal const string ServerRaidSavedData = "ServerRaidSavedData.yaml";
         internal const string SavedData = "SavedData";
@@ -44,6 +46,13 @@ namespace StarLevelSystem.common {
         internal static String zoneDataSavedDataPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ZoneDataFileName);
         internal const string NemesisRemoteStateFileName = "NemesisRemoteState.yaml";
         internal static String nemesisRemoteStateFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisRemoteStateFileName);
+        internal static String locationResetFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LocationResetSettingsFileName);
+        // Per-zone reset stamps + prefab census. World state rather than config: binary, never watched,
+        // never RPC'd, and flushed with the world save.
+        internal const string LocationResetStateFileName = "LocationResetState.dat";
+        internal static String locationResetStatePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, LocationResetStateFileName);
+        internal const string LocationResetCatalogFileName = "LocationResetCatalog.yaml";
+        internal static String locationResetCatalogPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, LocationResetCatalogFileName);
 
         internal static bool ServerConfigsSynced = false;
 
@@ -53,6 +62,7 @@ namespace StarLevelSystem.common {
         private static CustomRPC ModifiersRPC;
         private static CustomRPC RaidsRPC;
         private static CustomRPC NemesisRPC;
+        private static CustomRPC LocationResetRPC;
         internal static CustomRPC ClientSendPlayerPrivateKeysRPC;
         internal static CustomRPC ClientStartRaidRPC;
         internal static CustomRPC RaidCommittedRPC;
@@ -190,6 +200,10 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableNemesisRemoteSpawning;
         public static ConfigEntry<bool> EnableDebugNemesisDetails;
 
+        public static ConfigEntry<bool> EnableLocationReset;
+        public static ConfigEntry<float> LocationResetSweepBudgetMs;
+        public static ConfigEntry<bool> EnableDebugLocationResetDetails;
+
         public static ConfigEntry<bool> EnableZoneScalingBonus;
         public static ConfigEntry<float> ZoneLevelBonusPerLevel;
         public static ConfigEntry<int> ZoneKillsPerLevelUp;
@@ -222,6 +236,7 @@ namespace StarLevelSystem.common {
             ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerReceiveConfigs, OnClientReceiveModifiersConfigs);
             RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerReceiveConfigs, OnClientReceiveRaidConfigs);
             NemesisRPC = NetworkManager.Instance.AddRPC("SLS_NemesisRPC", OnServerReceiveConfigs, OnClientReceiveNemesisConfigs);
+            LocationResetRPC = NetworkManager.Instance.AddRPC("SLS_LocationResetRPC", OnServerReceiveConfigs, OnClientReceiveLocationResetConfigs);
             ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerReceivePlayerPrivateKeys, OnClientReceiveRequestForPrivateKeys);
             ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerReceiveConfigs, OnClientReceiveRaidStart);
             // Owning (raided) client confirms its raid actually started; server then sets the cooldown and broadcasts music.
@@ -252,6 +267,7 @@ namespace StarLevelSystem.common {
             SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
             SynchronizationManager.Instance.AddInitialSynchronization(NemesisRPC, SendNemesisConfigs);
+            SynchronizationManager.Instance.AddInitialSynchronization(LocationResetRPC, SendLocationResetConfigs);
             // Joining clients receive the current set of active remote-boss map pins.
             SynchronizationManager.Instance.AddInitialSynchronization(AddNemesisBossPinRPC, SendNemesisBossPins);
             // Give joining clients the current (non-default) zone levels for their overlay / level bonuses.
@@ -284,6 +300,10 @@ namespace StarLevelSystem.common {
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             EnableDebugRaidDetails = Config.Bind("Client config", "EnableDebugRaidDetails", false,
                 new ConfigDescription("Enables Detailed logging for the Raid system.",
+                null,
+                new ConfigurationManagerAttributes { IsAdvanced = true }));
+            EnableDebugLocationResetDetails = Config.Bind("Client config", "EnableDebugLocationResetDetails", false,
+                new ConfigDescription("Enables Detailed logging for the Location Reset system.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
             ShowMinimapLevelIndicator = Config.Bind("Client config", "ShowMinimapLevelIndicator", true,
@@ -399,6 +419,10 @@ namespace StarLevelSystem.common {
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
             EnableNemesisRemoteSpawning = BindServerConfig("Nemesis", "EnableNemesisRemoteSpawning", false, "Enables ambient, server-driven remote spawning of Nemesis minibosses across the world (a second, finer gate lives in NemesisSettings.yaml under RemoteSpawning.Enabled).");
 
+            EnableLocationReset = BindServerConfig("LocationReset", "EnableLocationReset", false, "Master switch for the background Location Reset sweep, which restores looted locations, dungeons, ores, pickables and vegetation so they can be gathered again. Per-target opt-in lives in LocationResetSettings.yaml. Back up your world before enabling.");
+            EnableLocationReset.SettingChanged += LocationResetControl.OnMasterSwitchChanged;
+            LocationResetSweepBudgetMs = BindServerConfig("LocationReset", "LocationResetSweepBudgetMs", 4f, "Milliseconds of server frame time the reset sweep may consume per frame. This is the main throughput throttle: raise it to restore the world faster, lower it if the server is under strain. 0 uses the value from LocationResetSettings.yaml.", false, 0f, 33f);
+
             EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
             ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
             ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
@@ -487,6 +511,7 @@ namespace StarLevelSystem.common {
             bool foundModifierFile = false;
             bool foundRaidFile = false;
             bool foundNemesisFile = false;
+            bool foundLocationResetFile = false;
 
             foreach (string configFile in presentFiles) {
                 if (configFile.Contains(LevelSettingsFileName))
@@ -526,6 +551,12 @@ namespace StarLevelSystem.common {
                     Logger.LogDebug($"Found nemesis configuration: {configFile}");
                     nemesisFilePath = configFile;
                     foundNemesisFile = true;
+                }
+                if (configFile.Contains(LocationResetSettingsFileName))
+                {
+                    Logger.LogDebug($"Found location reset configuration: {configFile}");
+                    locationResetFilePath = configFile;
+                    foundLocationResetFile = true;
                 }
             }
 
@@ -599,12 +630,39 @@ namespace StarLevelSystem.common {
                 writetext.WriteLine(NemesisSystemData.YamlDefaultConfig());
             }
 
+            if (foundLocationResetFile == false) {
+                Logger.LogDebug("Location Reset config file missing, recreating.");
+                WriteLocationResetDefaultFile();
+            }
+
             ConfigFileWatcher.Register(colorsFilePath, UpdateColorSettings);
             ConfigFileWatcher.Register(levelsFilePath, UpdateLevelSettings);
             ConfigFileWatcher.Register(creatureModifierFilePath, UpdateModifierSettings);
             ConfigFileWatcher.Register(creatureLootFilePath, UpdateLootSettings);
             ConfigFileWatcher.Register(raidsFilePath, UpdateRaidSettings);
             ConfigFileWatcher.Register(nemesisFilePath, UpdateNemesisSettings);
+            ConfigFileWatcher.Register(locationResetFilePath, UpdateLocationResetSettings);
+        }
+
+        // The Location Reset defaults are only genuinely useful once ZoneSystem exists, because the
+        // full location/vegetation list (including entries other mods add) is read from it. Awake runs
+        // long before that, so the first write is a skeleton and LocationResetControl rewrites it with
+        // the populated catalog the first time a world loads. Everything defaults to disabled either way.
+        internal static void WriteLocationResetDefaultFile() {
+            String header = @"#################################################
+# Star Level System Expanded - Location Reset Settings
+#
+# Resets overworld locations, dungeons, vegetation, ores and pickables so they can be
+# looted again. Sweeps run server-side, in the background, only in zones with no players
+# nearby. Every location and vegetation entry defaults to Enabled: false - opt in to the
+# ones you want. Timers are in real-world hours.
+#
+# BACK UP YOUR WORLD before enabling this.
+#################################################
+";
+            using StreamWriter writetext = new StreamWriter(locationResetFilePath);
+            writetext.WriteLine(header);
+            writetext.WriteLine(DataObjects.yamlSerializer.Serialize(LocationResetData.BuildPopulatedDefault()));
         }
 
         // Push a changed yaml file out to the peers. The config file watcher is DontDestroyOnLoad and
@@ -658,6 +716,13 @@ namespace StarLevelSystem.common {
             BroadcastConfigFile(NemesisRPC, fullFileName);
         }
 
+        private static void UpdateLocationResetSettings(string fullFileName) {
+            Logger.LogDebug("Triggering Location Reset Settings update.");
+            string filetext = File.ReadAllText(fullFileName);
+            LocationResetData.UpdateYamlConfig(filetext);
+            BroadcastConfigFile(LocationResetRPC, fullFileName);
+        }
+
         private static void OnMainConfigFileChanged(string _) {
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) {
                 return;
@@ -695,6 +760,10 @@ namespace StarLevelSystem.common {
 
         private static ZPackage SendNemesisConfigs() {
             return SendFileAsZPackage(nemesisFilePath);
+        }
+
+        private static ZPackage SendLocationResetConfigs() {
+            return SendFileAsZPackage(locationResetFilePath);
         }
 
         private static ZPackage SendRequestForPrivateKeys() {
@@ -1004,6 +1073,13 @@ namespace StarLevelSystem.common {
         private static IEnumerator OnClientReceiveRaidConfigs(long sender, ZPackage package) {
             var yaml = package.ReadString();
             RaidsData.UpdateYamlConfig(yaml);
+
+            yield return null;
+        }
+
+        private static IEnumerator OnClientReceiveLocationResetConfigs(long sender, ZPackage package) {
+            var yaml = package.ReadString();
+            LocationResetData.UpdateYamlConfig(yaml);
 
             yield return null;
         }

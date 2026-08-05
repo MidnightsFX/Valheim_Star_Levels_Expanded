@@ -19,6 +19,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             [HarmonyPrefix]
             static void FlushZoneData() {
                 ZoneScaleSystemData.FlushPendingSave();
+                LocationReset.LocationResetState.FlushPendingSave();
             }
         }
 
@@ -36,6 +37,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             MinimapOverlayFog.WorldUnloading = true;
             ZoneScaleSystem.ResetForWorldChange();
             DistanceScaleSystem.ResetForWorldChange();
+            LocationReset.LocationResetControl.OnWorldUnload();
             ValConfig.ResetServerSyncState();
         }
 

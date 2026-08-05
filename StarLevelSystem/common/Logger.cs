@@ -43,6 +43,11 @@ namespace StarLevelSystem {
             StarLevelSystem.Log.LogInfo("[Loot] " + message);
         }
 
+        public static void LogLocationReset(string message) {
+            if (ValConfig.EnableDebugLocationResetDetails.Value == false) { return; }
+            StarLevelSystem.Log.LogInfo("[LocationReset] " + message);
+        }
+
         public static void LogDebug(string message)
         {
             if (Level >= LogLevel.Debug)

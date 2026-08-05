@@ -53,6 +53,9 @@ namespace StarLevelSystem.common
         public static readonly string SLS_NEMESIS_BOSS = "SLS_NEM_BOSS";
         public static readonly string SLS_NEMESIS_PIN = "SLS_NEM_PIN";
         public static readonly string SLS_MOD_CAP = "EffectCap";
+        // Unix seconds of the last Location Reset applied to a location, stored on its surviving
+        // LocationProxy ZDO so the timer outlives the SavedData state file.
+        public static readonly string SLS_LOC_RESET = "SLS_LOC_RESET";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -764,6 +767,140 @@ namespace StarLevelSystem.common
         public class NetworkRaidRequest {
             public SerializableVector3 RaidPostion { get; set; } = Vector3.zero;
             public RaidDefinition Raid { get; set; }
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // Location Reset
+        // ------------------------------------------------------------------------------------------
+
+        // What to do when a protected object is found inside a reset radius.
+        public enum ProtectionAction {
+            // Abort the reset for this target and re-stamp its timer. Safest.
+            Block = 0,
+            // Keep the object, reset everything else around it.
+            Preserve = 1,
+            // Treat the object as ordinary resettable content.
+            Ignore = 2,
+        }
+
+        // Categories of player-owned object the protection scan recognises. Detection runs against
+        // unloaded ZDOs so a rejected zone never has to be loaded.
+        public enum ProtectionCategory {
+            PlayerBuiltPiece = 0,
+            Tombstone = 1,
+            Ward = 2,
+            Portal = 3,
+            Bed = 4,
+            Container = 5,
+            TamedCreature = 6,
+            DroppedItem = 7,
+            PlayerBaseEffect = 8,
+        }
+
+        // How much of a location gets reset.
+        public enum LocationResetMode {
+            // Clear + regenerate the location, then reset terrain if configured.
+            Full = 0,
+            // Only reset terrain in the radius; never touch the location's objects. Boss altars.
+            TerrainOnly = 1,
+        }
+
+        public class LocationResetConfiguration {
+            [DefaultValue(false)]
+            public bool Enabled { get; set; } = false;
+            // Metres from a zone centre within which a player's presence defers the sweep.
+            [DefaultValue(256f)]
+            public float PlayerSafeRadius { get; set; } = 256f;
+            // First time a zone is seen, record its census and stamp it rather than resetting it.
+            // Prevents a world-wide reset the moment the mod is installed.
+            [DefaultValue(true)]
+            public bool StampOnFirstSight { get; set; } = true;
+            [DefaultValue(10f)]
+            public float MaxZoneLoadWaitSeconds { get; set; } = 10f;
+
+            public LocationResetThroughput Throughput { get; set; } = new LocationResetThroughput();
+            public LocationResetDefaults Defaults { get; set; } = new LocationResetDefaults();
+            public LocationResetInPlace InPlaceRefresh { get; set; } = new LocationResetInPlace();
+
+            public Dictionary<string, LocationResetEntry> Locations { get; set; } = new Dictionary<string, LocationResetEntry>();
+            public Dictionary<string, LocationResetEntry> Vegetation { get; set; } = new Dictionary<string, LocationResetEntry>();
+
+            // Extra prefabs treated as protected regardless of category detection.
+            public List<string> ProtectedPrefabs { get; set; } = new List<string>();
+        }
+
+        public class LocationResetThroughput {
+            // Primary throttle. Work is processed until this much frame time is spent, then yields.
+            // Self-tunes to the hardware rather than fixing a zone count.
+            [DefaultValue(4f)]
+            public float SweepBudgetMillisecondsPerFrame { get; set; } = 4f;
+            // Fast lane: pure ZDO refresh, no zone loading.
+            [DefaultValue(200)]
+            public int MaxZonesPerSecondFastLane { get; set; } = 200;
+            // Slow lane: requires poke-loading the zone for a live Heightmap and colliders.
+            [DefaultValue(2)]
+            public int MaxZonesPerSecondSlowLane { get; set; } = 2;
+            // If the server's average frame time exceeds this, halve the budget next tick.
+            [DefaultValue(50f)]
+            public float AdaptiveBackoffFrameMs { get; set; } = 50f;
+            // A true restore returns a sector to its baseline ZDO count. Anything above this
+            // tolerance means the reset is leaking ZDOs; the zone is backed off and reported.
+            [DefaultValue(0)]
+            public int ZdoGrowthTolerance { get; set; } = 0;
+        }
+
+        public class LocationResetDefaults {
+            [DefaultValue(72f)]
+            public float ResetHours { get; set; } = 72f;
+            [DefaultValue(false)]
+            public bool ResetTerrain { get; set; } = false;
+            // 0 = use the location's own m_exteriorRadius.
+            [DefaultValue(0f)]
+            public float TerrainRadius { get; set; } = 0f;
+            public Dictionary<ProtectionCategory, ProtectionAction> Protection { get; set; } = DefaultProtection();
+
+            public static Dictionary<ProtectionCategory, ProtectionAction> DefaultProtection() {
+                return new Dictionary<ProtectionCategory, ProtectionAction>() {
+                    { ProtectionCategory.PlayerBuiltPiece, ProtectionAction.Block },
+                    { ProtectionCategory.Tombstone, ProtectionAction.Block },
+                    { ProtectionCategory.Ward, ProtectionAction.Block },
+                    { ProtectionCategory.Portal, ProtectionAction.Block },
+                    { ProtectionCategory.Bed, ProtectionAction.Block },
+                    { ProtectionCategory.Container, ProtectionAction.Block },
+                    { ProtectionCategory.TamedCreature, ProtectionAction.Block },
+                    { ProtectionCategory.DroppedItem, ProtectionAction.Preserve },
+                    { ProtectionCategory.PlayerBaseEffect, ProtectionAction.Block },
+                };
+            }
+        }
+
+        // Tier 1: in-place ZDO state refresh. Never destroys anything and never loads a zone.
+        public class LocationResetInPlace {
+            [DefaultValue(true)]
+            public bool Pickables { get; set; } = true;
+            [DefaultValue(true)]
+            public bool MineRocks { get; set; } = true;
+            // Re-roll a container's default loot by clearing addedDefaultItems. Only ever applied to
+            // containers with no creator. Off by default: it is the one refresh that grants new items.
+            [DefaultValue(false)]
+            public bool ContainerDefaultLoot { get; set; } = false;
+        }
+
+        // One configurable location or vegetation target. Null-valued members fall back to Defaults.
+        public class LocationResetEntry {
+            [DefaultValue(false)]
+            public bool Enabled { get; set; } = false;
+            // Hours of real time between resets. Null = use Defaults.ResetHours.
+            public float? ResetHours { get; set; }
+            [DefaultValue(LocationResetMode.Full)]
+            public LocationResetMode Mode { get; set; } = LocationResetMode.Full;
+            public bool? ResetTerrain { get; set; }
+            public float? TerrainRadius { get; set; }
+            // Locations only: also clear and regenerate the dungeon interior (objects above y=4000).
+            [DefaultValue(true)]
+            public bool ResetInterior { get; set; } = true;
+            // Overrides for individual protection categories; unset categories use Defaults.Protection.
+            public Dictionary<ProtectionCategory, ProtectionAction> Protection { get; set; }
         }
 
         // Sent server -> a client so that client instantiates and owns the dormant Nemesis remote-boss

@@ -504,6 +504,45 @@ These modifiers are attainable by most creatures and are typically less directly
 |  ResistPoison|      Reduces damage taken from Poison                                       |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/PoisonRes.png?raw=true" width="64" height="64">     |
 |  ResistSpirit|      Reduces damage taken from Spirit                                       |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/SpiritRes.png?raw=true" width="64" height="64">     |
 
+### Location Reset (LocationResetSettings.yaml)
+> **Back up your world before enabling this.** Location Reset destroys and recreates world objects.
+
+On a busy server the world is a finite pool of loot. Crypts, camps, ore and pickables get consumed
+once and never come back, so late joiners and less-active players are permanently locked out of
+content the early players already stripped. Location Reset brings that content back on a timer.
+
+**It is disabled by default, and every location and vegetation entry is opt-in.** Turn on
+`EnableLocationReset`, then set `Enabled: true` on the specific things you want to come back.
+
+How it works:
+- **Resets happen in the background, only in zones with no players nearby.** Nobody ever watches a
+  location pop out and back in, which is what causes the lag spikes and item duplication other
+  reset mods warn about.
+- **Locations are restored, not re-rolled.** The original position and rotation are kept, so
+  buildings never rotate, shift or clip into the terrain after a reset.
+- **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
+  replayed using the world's own generation seed. Anything still standing is left alone rather than
+  duplicated.
+- **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels.
+- **Terrain can be reset** around ore to undo mining craters. Boss altars support `Mode: TerrainOnly`,
+  which flattens the ground around them without touching the altar itself.
+- **Your stuff is safe.** Player-built structures, tombstones, wards, portals, beds, player-placed
+  chests and tamed creatures all block a reset. Protection is configurable per entry, so you can
+  decide (for example) that a stray dropped item is preserved rather than blocking the whole zone.
+- `StartTemple` can never be reset. Boss altars, `BogWitch_Camp`, `Hildir_camp` and
+  `Vendor_BlackForest` ship disabled.
+
+Timers are in **real-world hours** (`ResetHours`), which stays predictable on a server that runs
+24/7. Throughput is controlled by `LocationResetSweepBudgetMs` — the milliseconds of server frame
+time the sweep may use per frame. Raise it to restore the world faster; it automatically backs off
+when the server is under load. Use `SLS-loc-reset-status` to see the projected time for a full pass.
+
+After installing on an already-explored world, run `SLS-loc-reset-stamp-all` once so every zone's
+timer starts from today instead of everything becoming due at once.
+
+Not compatible with VentureValheim's LocationReset — SLS disables its own Location Reset
+automatically if that mod is present, since both would fight over the same objects.
+
 ### Localization
 Localization is available for everything in the mod. I accept community translations! If you would like to contribute localizations or improve them please reach out on discord.
 
@@ -514,6 +553,13 @@ Star Level Systems provides a number of terminal commands for debugging and test
 - `sls-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures.
 - `sls-give-modifier [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
 - `sls-dump-loottables` - provides dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
+
+Location Reset commands (server side):
+- `SLS-loc-reset-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
+- `SLS-loc-reset-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
+- `SLS-loc-reset-stamp-all` - stamps every generated zone as reset right now. Run this once after installing on an existing world
+- `SLS-loc-reset-here [range:64]` - immediately resets the zones around you, ignoring timers. Player structures are still protected
+- `SLS-loc-reset-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
 
 ### API Usage (WIP)
 Star Level Systems provides a public API for other mods to interact with.
@@ -545,6 +591,8 @@ Once you are ready to install mods, they must be unzipped first and go into the 
 
 ## Compatibility
 - This mod is incompatible with Creature Level and Loot Control (they do the same things)
+- SLS Location Reset is automatically disabled if VentureValheim's LocationReset is installed, since both reset the same objects on their own timers. The rest of Star Level System works normally
+- Upgrade World can be used alongside SLS, but avoid running its `locations_reset` / `vegetation_reset` commands against zones SLS Location Reset manages
 
 Compatibility is being worked on for the following mods:
 - CarryMeMaster

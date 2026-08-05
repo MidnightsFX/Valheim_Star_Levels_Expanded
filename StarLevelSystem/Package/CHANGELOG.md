@@ -12,6 +12,12 @@
 	- Throughput is throttled by a server frame-time budget (LocationResetSweepBudgetMs) that automatically backs off when the server is under load
 	- Adds terminal commands: SLS-loc-reset-status, SLS-loc-reset-dump, SLS-loc-reset-stamp-all, SLS-loc-reset-here, SLS-loc-reset-audit
 	- Automatically disabled when VentureValheim LocationReset is installed, since both would fight over the same objects
+```
+
+**1.4.2**
+ ---
+ ```
+ - Updates the required Jotunn version
  ```
 
 **1.4.1**

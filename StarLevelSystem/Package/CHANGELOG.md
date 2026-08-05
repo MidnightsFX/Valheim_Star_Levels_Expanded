@@ -1,3 +1,9 @@
+**1.4.2**
+ ---
+ ```
+ - Updates the required Jotunn version
+ ```
+
 **1.4.1**
  ---
  ```

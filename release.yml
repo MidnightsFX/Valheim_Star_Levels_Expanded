@@ -1,0 +1,20 @@
+# Release configuration for mod-release-tools.
+# See mod-release-tools/SETUP.md for the full schema.
+
+project_dir:   StarLevelSystem
+assembly:      StarLevelSystem
+plugin_source: StarLevelSystem/StarLevelSystem.cs
+package_dir:   StarLevelSystem/Package
+manifest:      StarLevelSystem/Package/manifest.json
+changelog:     StarLevelSystem/Package/CHANGELOG.md
+csproj:        StarLevelSystem/StarLevelSystem.csproj
+
+# Maps a csproj PackageReference name -> the Thunderstore dependency prefix.
+# Anything not listed here is reported as skipped rather than compared.
+dependency_map:
+  JotunnLib:  ValheimModding-Jotunn
+  YamlDotNet: ValheimModding-YamlDotNet
+
+tag_prefix:    v
+remote:        origin
+artifact_name: "{assembly}-{version}.zip"

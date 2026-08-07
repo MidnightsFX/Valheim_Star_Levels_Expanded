@@ -170,8 +170,36 @@
     <CallTarget Targets="CopyToUnity" Condition="Exists('$(UNITY_FOLDER)')" />
   </Target>
 
-  <Target Name="JotunnPostBuildTaskWin" AfterTargets="Build" Condition=" '$(OS)' == 'Windows_NT' ">
-    <Exec Command="powershell.exe -ExecutionPolicy RemoteSigned -File &quot;$(SolutionDir)publish.ps1&quot; -Target &quot;$(ConfigurationName)&quot; -TargetPath &quot;$(TargetDir.TrimEnd('\'))&quot; -TargetAssembly &quot;$(TargetFileName)&quot; -ValheimPath &quot;$(VALHEIM_INSTALL.TrimEnd('\'))&quot; -DeployPath &quot;$(MOD_DEPLOYPATH.TrimEnd('\'))&quot; -ProjectPath &quot;$(ProjectDir.TrimEnd('\'))&quot; " />
+  <!-- Normalized, native, with a trailing separator. Deliberately not
+       $(SolutionDir): that is literally "*Undefined*" when the .csproj is built
+       directly rather than through the .sln. -->
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../'))</RepoRoot>
+    <ReleaseTool>$(RepoRoot)mod-release-tools/prepare_release.rb</ReleaseTool>
+  </PropertyGroup>
+
+  <!-- Release gate: validate the version story before anything is compiled. Exec
+       fails the build on a nonzero exit, so a bad version stops the build here. -->
+  <Target Name="ReleaseChecks" BeforeTargets="Build" Condition=" '$(Configuration)' == 'Release' ">
+    <Exec Command="ruby &quot;$(ReleaseTool)&quot; --check --root &quot;$(RepoRoot).&quot;" />
+  </Target>
+
+  <Target Name="ReleasePackage" AfterTargets="Build" Condition=" '$(Configuration)' == 'Release' ">
+    <Exec Command="ruby &quot;$(ReleaseTool)&quot; --package --root &quot;$(RepoRoot).&quot;" />
+  </Target>
+
+  <!-- Debug only: Release builds with DebugType=pdbonly, so there is no full pdb
+       to convert and the mdb only matters for in-game Mono debugging. -->
+  <Target Name="GenerateMdb" AfterTargets="Build" Condition=" '$(OS)' == 'Windows_NT' AND '$(Configuration)' == 'Debug' AND Exists('$(TargetDir)$(TargetName).pdb') ">
+    <Exec Command="&quot;$(RepoRoot)libraries\Debug\pdb2mdb.exe&quot; &quot;$(TargetDir)$(TargetFileName)&quot;" />
+  </Target>
+
+  <!-- MSBuild Copy rather than a shell, so one target covers Linux and Windows.
+       No-ops unless VALHEIM_INSTALL is set (it comes from Environment.props). -->
+  <Target Name="DeployDebug" AfterTargets="GenerateMdb" Condition=" '$(Configuration)' == 'Debug' AND '$(VALHEIM_INSTALL)' != '' ">
+    <Copy SourceFiles="$(TargetDir)$(TargetFileName)" DestinationFolder="$(VALHEIM_INSTALL)/BepInEx/plugins/$(TargetName)/" />
+    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(VALHEIM_INSTALL)/BepInEx/plugins/$(TargetName)/" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    <Copy SourceFiles="$(TargetDir)$(TargetFileName).mdb" DestinationFolder="$(VALHEIM_INSTALL)/BepInEx/plugins/$(TargetName)/" Condition="Exists('$(TargetDir)$(TargetFileName).mdb')" />
   </Target>
 
   <Target Name="CopyToModManagers" AfterTargets="Build">

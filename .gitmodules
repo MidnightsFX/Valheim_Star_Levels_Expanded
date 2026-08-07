@@ -1,0 +1,3 @@
+[submodule "mod-release-tools"]
+	path = mod-release-tools
+	url = git@github.com:MidnightsFX/Valheim-tools.git

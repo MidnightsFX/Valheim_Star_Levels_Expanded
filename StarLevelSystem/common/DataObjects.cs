@@ -15,6 +15,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Policy;
 using System.Text;
 using UnityEngine;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using static StarLevelSystem.Data.CreatureModifiersData;
@@ -24,8 +25,11 @@ namespace StarLevelSystem.common
     public class DataObjects
     {
 
-        public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().Build();
-        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).Build();
+        // ProtectionRuleYamlConverter is registered on both so a protection entry can be written and
+        // read as either a bare action scalar or a full mapping; it only claims ProtectionRule, so no
+        // other config type is affected.
+        public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
+        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
 
         //public static IDeserializer yamlDeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlSerializerJsonCompat = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).JsonCompatible().Build();
@@ -805,6 +809,154 @@ namespace StarLevelSystem.common
             TerrainOnly = 1,
         }
 
+        // What one protection category does, plus the prefabs exempt from it.
+        //
+        // Serialized in two interchangeable shapes (see ProtectionRuleYamlConverter):
+        //
+        //   PlayerBuiltPiece: Block              # shorthand, the only shape before Ignored existed
+        //
+        //   PlayerBuiltPiece:                    # expanded
+        //     Action: Block
+        //     Ignored:
+        //     - fire_pit
+        //
+        // The shorthand is what every existing config on disk contains, so it has to keep working.
+        public class ProtectionRule {
+            [DefaultValue(ProtectionAction.Block)]
+            public ProtectionAction Action { get; set; } = ProtectionAction.Block;
+            // Prefabs exempt from THIS category: they neither block a chunk from resetting nor survive
+            // a regeneration. The exemption is per-category, so listing a prefab under PlayerBuiltPiece
+            // cannot accidentally make it ignorable as a Tombstone.
+            public List<string> Ignored { get; set; }
+
+            public ProtectionRule() { }
+            public ProtectionRule(ProtectionAction action) { Action = action; }
+
+            // The protection scan sees prefab hashes, not names, and runs against every ZDO in every
+            // candidate chunk, so the name list is resolved to hashes once per rule object. A config
+            // reload builds fresh rules, so this never goes stale.
+            private HashSet<int> ignoredHashes;
+
+            internal bool IgnoresHash(int prefabHash) {
+                if (Ignored == null || Ignored.Count == 0) { return false; }
+                if (ignoredHashes == null) {
+                    ignoredHashes = new HashSet<int>();
+                    for (int i = 0; i < Ignored.Count; i++) {
+                        if (string.IsNullOrWhiteSpace(Ignored[i])) { continue; }
+                        ignoredHashes.Add(Ignored[i].Trim().GetStableHashCode());
+                    }
+                }
+                return ignoredHashes.Contains(prefabHash);
+            }
+        }
+
+        // Lets a ProtectionRule be written and read as either a bare action scalar or a full mapping.
+        // Without this, adding Ignored would be a breaking schema change: the deserializer has no
+        // IgnoreUnmatchedProperties, so every existing `PlayerBuiltPiece: Block` would throw and the
+        // whole file would be rejected.
+        public class ProtectionRuleYamlConverter : YamlDotNet.Serialization.IYamlTypeConverter {
+            public bool Accepts(Type type) { return type == typeof(ProtectionRule); }
+
+            public object ReadYaml(YamlDotNet.Core.IParser parser, Type type, ObjectDeserializer rootDeserializer) {
+                // Shorthand: PlayerBuiltPiece: Block
+                if (parser.Accept<YamlDotNet.Core.Events.Scalar>(out YamlDotNet.Core.Events.Scalar scalar)) {
+                    parser.MoveNext();
+                    ProtectionAction parsed = ProtectionAction.Block;
+                    if (Enum.TryParse(scalar.Value, true, out ProtectionAction fromScalar)) { parsed = fromScalar; }
+                    return new ProtectionRule(parsed);
+                }
+
+                ProtectionRule rule = new ProtectionRule();
+                parser.Consume<YamlDotNet.Core.Events.MappingStart>();
+                while (parser.TryConsume<YamlDotNet.Core.Events.Scalar>(out YamlDotNet.Core.Events.Scalar key)) {
+                    if (string.Equals(key.Value, "Action", StringComparison.OrdinalIgnoreCase)) {
+                        YamlDotNet.Core.Events.Scalar value = parser.Consume<YamlDotNet.Core.Events.Scalar>();
+                        if (Enum.TryParse(value.Value, true, out ProtectionAction action)) { rule.Action = action; }
+                        continue;
+                    }
+                    if (string.Equals(key.Value, "Ignored", StringComparison.OrdinalIgnoreCase)) {
+                        rule.Ignored = new List<string>();
+                        parser.Consume<YamlDotNet.Core.Events.SequenceStart>();
+                        while (parser.TryConsume<YamlDotNet.Core.Events.Scalar>(out YamlDotNet.Core.Events.Scalar item)) {
+                            if (string.IsNullOrWhiteSpace(item.Value) == false) { rule.Ignored.Add(item.Value.Trim()); }
+                        }
+                        parser.Consume<YamlDotNet.Core.Events.SequenceEnd>();
+                        continue;
+                    }
+                    // Unknown key: skip whatever it holds rather than throwing, so a typo costs one
+                    // setting instead of the entire config file.
+                    parser.SkipThisAndNestedEvents();
+                }
+                parser.Consume<YamlDotNet.Core.Events.MappingEnd>();
+                return rule;
+            }
+
+            public void WriteYaml(YamlDotNet.Core.IEmitter emitter, object value, Type type, ObjectSerializer serializer) {
+                ProtectionRule rule = value as ProtectionRule ?? new ProtectionRule();
+                // Collapse back to the shorthand when there is nothing extra to say, so generated files
+                // stay as readable as they were before this existed.
+                if (rule.Ignored == null || rule.Ignored.Count == 0) {
+                    emitter.Emit(new YamlDotNet.Core.Events.Scalar(rule.Action.ToString()));
+                    return;
+                }
+                emitter.Emit(new YamlDotNet.Core.Events.MappingStart());
+                emitter.Emit(new YamlDotNet.Core.Events.Scalar("Action"));
+                emitter.Emit(new YamlDotNet.Core.Events.Scalar(rule.Action.ToString()));
+                emitter.Emit(new YamlDotNet.Core.Events.Scalar("Ignored"));
+                emitter.Emit(new YamlDotNet.Core.Events.SequenceStart(null, null, false, YamlDotNet.Core.Events.SequenceStyle.Block));
+                for (int i = 0; i < rule.Ignored.Count; i++) {
+                    emitter.Emit(new YamlDotNet.Core.Events.Scalar(rule.Ignored[i]));
+                }
+                emitter.Emit(new YamlDotNet.Core.Events.SequenceEnd());
+                emitter.Emit(new YamlDotNet.Core.Events.MappingEnd());
+            }
+        }
+
+        // A named set of reset targets that share settings.
+        //
+        // A group both ENABLES its members and gives them their timers, which is the whole point: the
+        // generated config carries one key per prefab in the world (300+ of them, in registration
+        // order, all disabled), so "all ore on a 48h timer" would otherwise mean hunting down eight
+        // scattered keys and editing each. Null fields fall through to Defaults exactly as a per-entry
+        // value does, and an explicit per-entry value still wins over the group.
+        public class LocationResetGroup {
+            // Nullable on purpose. A plain bool with [DefaultValue(true)] would be OMITTED from the
+            // generated file whenever it is true, hiding the switch from anyone who never reads the
+            // docs; a plain bool without the attribute would omit `false` instead and silently
+            // re-enable a disabled group on the next rewrite. Nullable serializes both states, and
+            // absent still means enabled.
+            public bool? Enabled { get; set; } = true;
+            public float? ResetHours { get; set; }
+            public bool? ResetTerrain { get; set; }
+            public float? TerrainRadius { get; set; }
+            public float? ExtraTerrainRadius { get; set; }
+            public Dictionary<ProtectionCategory, ProtectionRule> Protection { get; set; }
+
+            // Optional distance scope, in metres from the same centre DistanceBands measure from.
+            // MaxDistance 0 = no outer limit. A scoped group applies only to chunks inside the range;
+            // outside it, its members fall through to whatever unscoped group covers them, so
+            // "flint every 6h within 3000m" does not stop flint resetting everywhere else.
+            public float? MinDistance { get; set; }
+            public float? MaxDistance { get; set; }
+
+            // Prefab names, or a category token ($Mineable / $Pickable) that expands to every
+            // configured entry carrying that component. Names that match nothing are warned about at
+            // config load, never fatal.
+            public List<string> Members { get; set; } = new List<string>();
+        }
+
+        // One concentric band measured from the reset centre. Outer = 0 means "no outer limit", the
+        // same 0-as-sentinel convention LocationResetEntry.TerrainRadius already uses.
+        public class LocationResetBand {
+            [DefaultValue(0f)]
+            public float Inner { get; set; } = 0f;
+            [DefaultValue(0f)]
+            public float Outer { get; set; } = 0f;
+            // Scales every reset timer inside this band. 0 excludes the band from the sweep entirely.
+            [DefaultValue(1f)]
+            public float Multiplier { get; set; } = 1f;
+        }
+
         public class LocationResetConfiguration {
             [DefaultValue(false)]
             public bool Enabled { get; set; } = false;
@@ -827,6 +979,20 @@ namespace StarLevelSystem.common
 
             // Extra prefabs treated as protected regardless of category detection.
             public List<string> ProtectedPrefabs { get; set; } = new List<string>();
+
+            // Named groups of targets that share settings, so a whole set can be enabled and timed in
+            // one block instead of editing hundreds of individual entries.
+            public Dictionary<string, LocationResetGroup> ResetGroups { get; set; } = new Dictionary<string, LocationResetGroup>();
+
+            // Per-biome rate multiplier applied on top of each target's own ResetHours. Biome.All is
+            // the fallback for biomes not listed, matching the CreatureLevelSettings.BiomeConfiguration
+            // convention. 0 excludes a biome from the sweep entirely.
+            public Dictionary<Heightmap.Biome, float> BiomeRates { get; set; } = new Dictionary<Heightmap.Biome, float>();
+
+            // Concentric bands measured from the reset centre, evaluated in order; the first band
+            // containing a chunk wins. A chunk matching no band is unaffected (rate 1.0), so a partial
+            // list never accidentally disables the rest of the world.
+            public List<LocationResetBand> DistanceBands { get; set; } = new List<LocationResetBand>();
         }
 
         public class LocationResetThroughput {
@@ -857,19 +1023,28 @@ namespace StarLevelSystem.common
             // 0 = use the location's own m_exteriorRadius.
             [DefaultValue(0f)]
             public float TerrainRadius { get; set; } = 0f;
-            public Dictionary<ProtectionCategory, ProtectionAction> Protection { get; set; } = DefaultProtection();
+            // Metres of terrain reset BEYOND the radius above, for the ramps and moats players dig
+            // around the OUTSIDE of a dungeon. Additive, and clamped at reset time.
+            [DefaultValue(0f)]
+            public float ExtraTerrainRadius { get; set; } = 0f;
+            public Dictionary<ProtectionCategory, ProtectionRule> Protection { get; set; } = DefaultProtection();
 
-            public static Dictionary<ProtectionCategory, ProtectionAction> DefaultProtection() {
-                return new Dictionary<ProtectionCategory, ProtectionAction>() {
-                    { ProtectionCategory.PlayerBuiltPiece, ProtectionAction.Block },
-                    { ProtectionCategory.Tombstone, ProtectionAction.Block },
-                    { ProtectionCategory.Ward, ProtectionAction.Block },
-                    { ProtectionCategory.Portal, ProtectionAction.Block },
-                    { ProtectionCategory.Bed, ProtectionAction.Block },
-                    { ProtectionCategory.Container, ProtectionAction.Block },
-                    { ProtectionCategory.TamedCreature, ProtectionAction.Block },
-                    { ProtectionCategory.DroppedItem, ProtectionAction.Preserve },
-                    { ProtectionCategory.PlayerBaseEffect, ProtectionAction.Block },
+            public static Dictionary<ProtectionCategory, ProtectionRule> DefaultProtection() {
+                return new Dictionary<ProtectionCategory, ProtectionRule>() {
+                    // fire_pit ships ignored: abandoned campfires are the single most common reason a
+                    // chunk never resets. The protection scan covers a chunk AND its 8 neighbours, so
+                    // one forgotten campfire can freeze a crypt three chunks away indefinitely.
+                    { ProtectionCategory.PlayerBuiltPiece, new ProtectionRule(ProtectionAction.Block) {
+                        Ignored = new List<string>() { "fire_pit" },
+                    } },
+                    { ProtectionCategory.Tombstone, new ProtectionRule(ProtectionAction.Block) },
+                    { ProtectionCategory.Ward, new ProtectionRule(ProtectionAction.Block) },
+                    { ProtectionCategory.Portal, new ProtectionRule(ProtectionAction.Block) },
+                    { ProtectionCategory.Bed, new ProtectionRule(ProtectionAction.Block) },
+                    { ProtectionCategory.Container, new ProtectionRule(ProtectionAction.Block) },
+                    { ProtectionCategory.TamedCreature, new ProtectionRule(ProtectionAction.Block) },
+                    { ProtectionCategory.DroppedItem, new ProtectionRule(ProtectionAction.Preserve) },
+                    { ProtectionCategory.PlayerBaseEffect, new ProtectionRule(ProtectionAction.Block) },
                 };
             }
         }
@@ -896,11 +1071,14 @@ namespace StarLevelSystem.common
             public LocationResetMode Mode { get; set; } = LocationResetMode.Full;
             public bool? ResetTerrain { get; set; }
             public float? TerrainRadius { get; set; }
+            // Locations only: metres of terrain reset beyond the location's own radius. Null = use
+            // Defaults.ExtraTerrainRadius.
+            public float? ExtraTerrainRadius { get; set; }
             // Locations only: also clear and regenerate the dungeon interior (objects above y=4000).
             [DefaultValue(true)]
             public bool ResetInterior { get; set; } = true;
             // Overrides for individual protection categories; unset categories use Defaults.Protection.
-            public Dictionary<ProtectionCategory, ProtectionAction> Protection { get; set; }
+            public Dictionary<ProtectionCategory, ProtectionRule> Protection { get; set; }
         }
 
         // Sent server -> a client so that client instantiates and owns the dormant Nemesis remote-boss

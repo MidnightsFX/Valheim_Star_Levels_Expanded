@@ -1,6 +1,7 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -40,11 +41,11 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static void OnMasterSwitchChanged(object sender, EventArgs e) {
             if (LocationResetData.BlockedByModConflict) {
                 if (ValConfig.EnableLocationReset.Value) {
-                    Logger.LogWarning("[LocationReset] Location Reset cannot be enabled while a conflicting reset mod is installed. See the earlier compatibility warning.");
+                    Logger.LogLocationResetWarning("Location Reset cannot be enabled while a conflicting reset mod is installed. See the earlier compatibility warning.");
                 }
                 return;
             }
-            Logger.LogInfo($"[LocationReset] Location Reset master switch set to {ValConfig.EnableLocationReset.Value}.");
+            Logger.LogLocationResetAlways($"Location Reset master switch set to {ValConfig.EnableLocationReset.Value}.");
         }
 
         // ZoneSystem.Start on the server: the first point where the world name and the full
@@ -57,7 +58,15 @@ namespace StarLevelSystem.modules.LocationReset {
             }
 
             EnsureConfigCatalogPopulated();
+            // Rebuild again now that ZNetScene exists. The Awake-time pass could not expand $Mineable
+            // or $Pickable, because those resolve from the component-derived prefab sets and there
+            // were no prefabs yet.
+            LocationResetData.Rebuild();
             LocationResetState.Load();
+            // Distance bands measure from here. Resolved server-side, before any chunk is evaluated,
+            // so the geometry cache is never built against a stale origin.
+            modules.LevelSystem.DistanceScaleSystem.TryResolveCenterFromWorld();
+            ZoneRates.ResetCache();
             Ready = true;
 
             if (LocationResetData.BlockedByModConflict) {
@@ -78,10 +87,25 @@ namespace StarLevelSystem.modules.LocationReset {
             try {
                 LocationResetConfiguration current = LocationResetData.SLE_LocationReset_Settings;
                 if (current == null) { return; }
+                if (ZoneSystem.instance == null) { return; }
+
+                // Groups are backfilled independently of the catalogue, so a server that has been
+                // running since before groups existed picks them up too. They arrive ENABLED, which
+                // is only safe because both master switches still gate the sweep -- so say so loudly
+                // rather than letting an admin discover new reset targets in the world.
+                if (current.ResetGroups == null || current.ResetGroups.Count == 0) {
+                    current.ResetGroups = LocationResetData.DefaultResetGroups();
+                    foreach (KeyValuePair<string, LocationResetGroup> kvp in current.ResetGroups) {
+                        Logger.LogLocationResetWarning($"Added reset group '{kvp.Key}' ({kvp.Value.ResetHours ?? 0f:0.#}h, " +
+                            $"{kvp.Value.Members.Count} members, enabled). It does nothing until EnableLocationReset is on.");
+                    }
+                    File.WriteAllText(ValConfig.locationResetFilePath, DataObjects.yamlSerializer.Serialize(current));
+                    LocationResetData.Rebuild();
+                }
+
                 bool hasLocations = current.Locations != null && current.Locations.Count > 0;
                 bool hasVegetation = current.Vegetation != null && current.Vegetation.Count > 0;
                 if (hasLocations || hasVegetation) { return; }
-                if (ZoneSystem.instance == null) { return; }
 
                 LocationResetConfiguration catalog = LocationResetData.BuildPopulatedDefault();
                 if (catalog.Locations.Count == 0 && catalog.Vegetation.Count == 0) { return; }
@@ -89,18 +113,21 @@ namespace StarLevelSystem.modules.LocationReset {
                 current.Locations = catalog.Locations;
                 current.Vegetation = catalog.Vegetation;
 
-                Logger.LogInfo($"[LocationReset] Populating LocationResetSettings.yaml with this world's " +
+                Logger.LogLocationResetAlways($"Populating LocationResetSettings.yaml with this world's " +
                     $"{catalog.Locations.Count} locations and {catalog.Vegetation.Count} vegetation entries (all disabled by default).");
                 File.WriteAllText(ValConfig.locationResetFilePath, DataObjects.yamlSerializer.Serialize(current));
                 LocationResetData.Rebuild();
             } catch (Exception e) {
-                Logger.LogWarning($"[LocationReset] Could not populate the default config catalogue: {e.Message}");
+                Logger.LogLocationResetWarning($"Could not populate the default config catalogue: {e.Message}");
             }
         }
 
         internal static void OnWorldUnload() {
             Ready = false;
+            // Flush before the state goes away so a shutdown never loses the last tick's chunk records.
+            LocationResetLog.Clear();
             LocationResetState.ResetState();
+            ZoneRates.ResetCache();
             // The scene is going away; just forget the bookkeeping rather than trying to release
             // zones out of a world that is already tearing down.
             ZoneLoader.Clear();
@@ -147,7 +174,93 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
             }
             sb.AppendLine($"Last action        : {LocationResetManager.LastAction}");
+            AppendTargetingReport(sb);
             return sb.ToString();
+        }
+
+        // Makes "why is the Meadows never resetting" and "what is it allowed to delete" answerable
+        // without opening the yaml.
+        private static void AppendTargetingReport(System.Text.StringBuilder sb) {
+            LocationResetConfiguration cfg = LocationResetData.SLE_LocationReset_Settings;
+            if (cfg == null) { return; }
+
+            sb.AppendLine("--- targeting ---");
+            Vector3 center = modules.LevelSystem.DistanceScaleSystem.center;
+            sb.AppendLine($"Distance centre    : x={center.x:0} z={center.z:0}" +
+                (ValConfig.DistanceBonusIsFromStarterTemple.Value ? " (starter temple)" : " (world origin)"));
+            sb.AppendLine($"Chunk geo cached   : {ZoneRates.CachedChunkCount}");
+
+            if (cfg.BiomeRates != null && cfg.BiomeRates.Count > 0) {
+                List<string> adjusted = new List<string>();
+                foreach (KeyValuePair<Heightmap.Biome, float> kvp in cfg.BiomeRates) {
+                    // Only the ones actually doing something; a full list of 1.0s is noise.
+                    if (Mathf.Approximately(kvp.Value, 1f)) { continue; }
+                    adjusted.Add(kvp.Value <= 0f ? $"{kvp.Key}=excluded" : $"{kvp.Key}=x{kvp.Value:0.##}");
+                }
+                sb.AppendLine($"Biome rates        : {(adjusted.Count == 0 ? "all 1.0" : string.Join(", ", adjusted))}");
+            } else {
+                sb.AppendLine("Biome rates        : all 1.0");
+            }
+
+            if (cfg.DistanceBands != null && cfg.DistanceBands.Count > 0) {
+                foreach (LocationResetBand band in cfg.DistanceBands) {
+                    if (band == null) { continue; }
+                    string outer = band.Outer > 0f ? $"{band.Outer:0}m" : "unbounded";
+                    string rate = band.Multiplier <= 0f ? "excluded" : $"x{band.Multiplier:0.##}";
+                    sb.AppendLine($"Band               : {band.Inner:0}m-{outer} {rate}");
+                }
+            } else {
+                sb.AppendLine("Distance bands     : none");
+            }
+
+            if (cfg.ResetGroups != null && cfg.ResetGroups.Count > 0) {
+                sb.AppendLine("--- reset groups ---");
+                foreach (KeyValuePair<string, LocationResetGroup> kvp in cfg.ResetGroups) {
+                    LocationResetGroup group = kvp.Value;
+                    if (group == null) { continue; }
+                    // matched/total is the number that matters: a shortfall means a member name no
+                    // longer exists in this world, which is how a game update silently breaks a
+                    // curated list.
+                    int matched = CountMatchedMembers(group);
+                    int total = group.Members != null ? group.Members.Count : 0;
+                    string scope = "";
+                    if (group.MinDistance.GetValueOrDefault() > 0f || group.MaxDistance.GetValueOrDefault() > 0f) {
+                        string outer = group.MaxDistance.GetValueOrDefault() > 0f ? $"{group.MaxDistance.Value:0}m" : "unbounded";
+                        scope = $", {group.MinDistance.GetValueOrDefault():0}m-{outer}";
+                    }
+                    string hours = group.ResetHours.HasValue ? $"{group.ResetHours.Value:0.#}h" : "default";
+                    sb.AppendLine($"  {kvp.Key,-16} {(group.Enabled.GetValueOrDefault(true) ? "on " : "off")} {hours}{scope}, matched {matched}/{total}");
+                }
+            }
+
+            if (cfg.Defaults?.Protection != null) {
+                List<string> ignored = new List<string>();
+                foreach (KeyValuePair<ProtectionCategory, ProtectionRule> kvp in cfg.Defaults.Protection) {
+                    if (kvp.Value?.Ignored == null || kvp.Value.Ignored.Count == 0) { continue; }
+                    ignored.Add($"{kvp.Key}: {string.Join(", ", kvp.Value.Ignored)}");
+                }
+                sb.AppendLine($"Ignored prefabs    : {(ignored.Count == 0 ? "none" : string.Join(" | ", ignored))}");
+            }
+        }
+
+        // How many of a group's members actually resolve to something this world has. Category tokens
+        // count as however many entries they expanded to.
+        private static int CountMatchedMembers(LocationResetGroup group) {
+            if (group.Members == null) { return 0; }
+            int matched = 0;
+            foreach (string member in group.Members) {
+                if (string.IsNullOrWhiteSpace(member)) { continue; }
+                string trimmed = member.Trim();
+                if (trimmed.StartsWith("$", StringComparison.Ordinal)) {
+                    matched += LocationResetData.CountCategoryMembers(trimmed);
+                    continue;
+                }
+                int hash = trimmed.GetStableHashCode();
+                if (LocationResetData.LocationsByHash.ContainsKey(hash) || LocationResetData.VegetationByPrefabHash.ContainsKey(hash)) {
+                    matched++;
+                }
+            }
+            return matched;
         }
 
         private static int CountEnabled(System.Collections.Generic.Dictionary<int, LocationResetData.ResolvedResetEntry> map) {
@@ -161,49 +274,101 @@ namespace StarLevelSystem.modules.LocationReset {
         // Force an immediate reset of the zones around a point, ignoring timers and the
         // player-proximity rule (but never the protection scan). Admin escape hatch and the main way
         // to test a configuration without waiting hours.
-        internal static void ForceResetAround(Vector3 center, float radius) {
-            if (Ready == false) {
-                Logger.LogInfo("[LocationReset] Not ready: no world loaded, or this is not the server.");
+        internal static void ForceResetAround(Vector3 center, float radius, Terminal context) {
+            // Two mods resetting the same objects on their own timers corrupts both. The background
+            // sweep already refuses through SweepAllowed; the manual path has to refuse too.
+            if (LocationResetData.BlockedByModConflict) {
+                Announce(context, "Refusing: a conflicting reset mod (VentureValheim LocationReset) is installed.");
                 return;
             }
-            TaskRunner.Run().StartCoroutine(ForceResetRoutine(center, radius));
+            if (Ready == false) {
+                Announce(context, "Not ready: no world loaded, or this is not the server.");
+                return;
+            }
+            if (ValConfig.EnableLocationReset.Value == false) {
+                // Still allowed: this is the escape hatch admins use to test a configuration without
+                // switching the sweep on for the whole server.
+                Announce(context, "Note: EnableLocationReset is off, so the background sweep will not follow up on these chunks.");
+            }
+            TaskRunner.Run().StartCoroutine(ForceResetRoutine(center, radius, context));
         }
 
-        private static System.Collections.IEnumerator ForceResetRoutine(Vector3 center, float radius) {
+        private static System.Collections.IEnumerator ForceResetRoutine(Vector3 center, float radius, Terminal context) {
             LocationResetConfigSnapshot cfg = LocationResetConfigSnapshot.Capture();
             Vector2i centerZone = ZoneSystem.GetZone(center);
             int span = Mathf.Max(0, Mathf.CeilToInt(radius / 64f));
             int done = 0;
             int blocked = 0;
+            int ungenerated = 0;
+            int adopted = 0;
+            string source = $"SLS-loc-reset-here r={radius:0}";
 
             for (int dx = -span; dx <= span; dx++) {
                 for (int dy = -span; dy <= span; dy++) {
                     Vector2i zone = new Vector2i(centerZone.x + dx, centerZone.y + dy);
-                    if (ZoneSystem.instance.IsZoneGenerated(zone) == false) { continue; }
+                    ZoneResetReport report = ZoneResetReport.For(zone, true);
+                    // Force means force: biome and band rates scale timers, and force already bypasses
+                    // every timer, so the rate stays at 1 here. The description is still recorded so an
+                    // admin testing a config can see a chunk the background sweep would never reach.
+                    report.RateMultiplier = 1f;
+                    report.RateDescription = ZoneRates.MultiplierFor(zone, cfg) <= ZoneRates.Excluded
+                        ? ZoneRates.Describe(zone, cfg) + ", forced anyway"
+                        : ZoneRates.Describe(zone, cfg);
+
+                    if (ZoneSystem.instance.IsZoneGenerated(zone) == false) {
+                        ungenerated++;
+                        report.SkipReason = "never generated";
+                        Announce(context, report, source);
+                        continue;
+                    }
 
                     ZoneProtectionScan.ProtectionResult protection = ZoneProtectionScan.ScanZone(zone, null, true);
                     if (protection.Blocked) {
                         blocked++;
-                        Logger.LogInfo($"[LocationReset] Zone {zone.x},{zone.y} skipped: protected by {protection.BlockingCategory}.");
+                        report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
+                        Announce(context, report, source);
                         continue;
                     }
 
-                    ResetTargets.RefreshZoneInPlace(zone, cfg);
                     // force: an admin asking for a reset now means now, so per-target timers and the
-                    // first-sight grace period are both bypassed. Protection is not.
+                    // first-sight grace period are bypassed in BOTH the in-place refresh and the
+                    // regeneration tiers, and a zone that is already loaded is worked on in place
+                    // rather than skipped. Protection is never bypassed.
+                    ResetTargets.RefreshZoneInPlace(zone, cfg, true, report);
                     bool ok = false;
-                    yield return ResetTargets.RegenerateZone(zone, cfg, protection, true, (r) => { ok = r; });
+                    yield return ResetTargets.RegenerateZone(zone, cfg, protection, true, report, (r) => { ok = r; });
                     if (ok) {
                         LocationResetState.StampZone(zone);
                         ZoneProtectionScan.RecordBaseline(zone);
                         done++;
+                        if (report.ZoneAdopted) { adopted++; }
                     }
+                    Announce(context, report, source);
                     yield return null;
                 }
             }
 
             LocationResetState.Save();
-            Logger.LogInfo($"[LocationReset] Forced reset complete: {done} zones reset, {blocked} skipped as protected.");
+            Announce(context, $"Forced reset complete: {done} chunks reset ({adopted} adopted while loaded), " +
+                $"{blocked} skipped as protected, {ungenerated} never generated.");
+            LocationResetLog.Note($"Forced reset around x={center.x:0} z={center.z:0} r={radius:0}: {done} reset, " +
+                $"{adopted} adopted, {blocked} protected, {ungenerated} ungenerated.", source);
+            LocationResetLog.Flush();
+        }
+
+        // A manual command reports unconditionally: to the chunk log, to the BepInEx log, and to
+        // whichever terminal the admin typed into. Only the per-entry detail block stays behind the
+        // EnableDebugLocationResetDetails flag, via ToRecord.
+        private static void Announce(Terminal context, ZoneResetReport report, string source) {
+            string record = report.ToRecord();
+            LocationResetLog.Record(record, source);
+            Logger.LogLocationResetAlways(record);
+            context?.AddString(record);
+        }
+
+        private static void Announce(Terminal context, string message) {
+            Logger.LogLocationResetAlways(message);
+            context?.AddString(message);
         }
 
         // Baseline an already-explored world so timers start now rather than firing everywhere at

@@ -36,6 +36,10 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static readonly Dictionary<int, float> MineRockBaseHealth = new Dictionary<int, float>();
         // Used to locate a sky dungeon's interior so it can be cleared along with the entrance.
         internal static readonly HashSet<int> DungeonGeneratorHashes = new HashSet<int>();
+        // Player terraforming ops that persist as their own ZDOs. They have to be instantiated before
+        // a terrain reset can see them, because TerrainModifier.GetAllInstances only reports live
+        // components -- see ZoneLoader.CreateTerrainObjects.
+        internal static readonly HashSet<int> TerrainModifierHashes = new HashSet<int>();
 
         private static bool prefabSetsBuilt = false;
 
@@ -50,9 +54,11 @@ namespace StarLevelSystem.modules.LocationReset {
         internal class ProtectionResult {
             // At least one object mapped to a Block action; the zone must not be touched.
             internal bool Blocked;
-            // What blocked it, for logging.
+            // What blocked it, and where, so an admin can walk to the structure that is holding a
+            // chunk back rather than guessing which of their builds is in range.
             internal ProtectionCategory BlockingCategory;
             internal int BlockingPrefabHash;
+            internal Vector3 BlockingPosition;
             // ZDOs that must survive a reset but do not block it (Preserve).
             internal readonly HashSet<ZDOID> Preserved = new HashSet<ZDOID>();
         }
@@ -74,6 +80,7 @@ namespace StarLevelSystem.modules.LocationReset {
             MineRockAreaCounts.Clear();
             MineRockBaseHealth.Clear();
             DungeonGeneratorHashes.Clear();
+            TerrainModifierHashes.Clear();
 
             foreach (GameObject prefab in ZNetScene.instance.m_prefabs) {
                 if (prefab == null) { continue; }
@@ -90,6 +97,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (prefab.GetComponent<Pickable>() != null) { PickableHashes.Add(hash); }
                 if (prefab.GetComponent<MineRock5>() != null) { MineRock5Hashes.Add(hash); }
                 if (prefab.GetComponent<DungeonGenerator>() != null) { DungeonGeneratorHashes.Add(hash); }
+                if (prefab.GetComponent<TerrainModifier>() != null) { TerrainModifierHashes.Add(hash); }
                 MineRock mineRock = prefab.GetComponent<MineRock>();
                 if (mineRock != null && mineRock.m_hitAreas != null) {
                     MineRockAreaCounts[hash] = mineRock.m_hitAreas.Length;
@@ -112,12 +120,14 @@ namespace StarLevelSystem.modules.LocationReset {
             category = ProtectionCategory.PlayerBuiltPiece;
             int prefab = zdo.m_prefab;
 
-            // Anything the admin listed explicitly is treated as a player-built piece.
-            if (LocationResetData.ExtraProtectedPrefabHashes.Contains(prefab)) { return true; }
-
             // Tombstones are unconditional: a player's dropped gear is in there regardless of who
-            // "created" it.
+            // "created" it. Checked FIRST so no ignore list can ever expose one -- this is why the
+            // ignore list needs no separate "never ignorable" blocklist.
             if (tombstoneHashes.Contains(prefab)) { category = ProtectionCategory.Tombstone; return true; }
+
+            // Anything the admin listed explicitly is treated as a player-built piece. Ahead of the
+            // ignore check below, so a prefab in both lists fails closed and keeps protecting.
+            if (LocationResetData.ExtraProtectedPrefabHashes.Contains(prefab)) { return true; }
 
             long creator = zdo.GetLong(ZDOVars.s_creator, 0L);
 
@@ -166,6 +176,11 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (zdo == null || zdo.IsValid() == false) { continue; }
                 if (TryClassify(zdo, out ProtectionCategory category) == false) { continue; }
 
+                // Ignored for this category: ordinary resettable content. Applied after classification
+                // so an exemption is scoped to the category it was written under -- listing a prefab
+                // under PlayerBuiltPiece cannot make it ignorable as a Tombstone.
+                if (IsIgnored(entry, category, zdo.m_prefab)) { continue; }
+
                 ProtectionAction action = entry != null
                     ? entry.ActionFor(category)
                     : DefaultActionFor(category);
@@ -174,6 +189,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     result.Blocked = true;
                     result.BlockingCategory = category;
                     result.BlockingPrefabHash = zdo.m_prefab;
+                    result.BlockingPosition = zdo.GetPosition();
                     zdoBuffer.Clear();
                     return true;
                 }
@@ -186,10 +202,29 @@ namespace StarLevelSystem.modules.LocationReset {
             return false;
         }
 
+        // "protected by PlayerBuiltPiece 'wood_floor' at x=-742 z=2251". Only ever called for a chunk
+        // that is actually being reported, so resolving the prefab here costs nothing on the hot path.
+        internal static string DescribeBlock(ProtectionResult result) {
+            if (result == null || result.Blocked == false) { return "not blocked"; }
+            string prefab = result.BlockingPrefabHash.ToString();
+            if (ZNetScene.instance != null) {
+                GameObject go = ZNetScene.instance.GetPrefab(result.BlockingPrefabHash);
+                if (go != null) { prefab = go.name; }
+            }
+            return $"protected by {result.BlockingCategory} '{prefab}' at x={result.BlockingPosition.x:0} z={result.BlockingPosition.z:0}";
+        }
+
+        // The zone-wide scan runs before any specific location entry is known (ScanZone is called with
+        // a null entry), so the default rules are what actually decide whether a chunk is blocked.
+        internal static bool IsIgnored(LocationResetData.ResolvedResetEntry entry, ProtectionCategory category, int prefabHash) {
+            if (entry != null) { return entry.Ignores(category, prefabHash); }
+            return LocationResetData.DefaultIgnores(category, prefabHash);
+        }
+
         private static ProtectionAction DefaultActionFor(ProtectionCategory category) {
-            Dictionary<ProtectionCategory, ProtectionAction> defaults =
+            Dictionary<ProtectionCategory, ProtectionRule> defaults =
                 LocationResetData.SLE_LocationReset_Settings?.Defaults?.Protection;
-            if (defaults != null && defaults.TryGetValue(category, out ProtectionAction action)) { return action; }
+            if (defaults != null && defaults.TryGetValue(category, out ProtectionRule rule) && rule != null) { return rule.Action; }
             return ProtectionAction.Block;
         }
 

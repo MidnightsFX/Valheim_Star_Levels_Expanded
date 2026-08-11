@@ -48,6 +48,20 @@ namespace StarLevelSystem {
             StarLevelSystem.Log.LogInfo("[LocationReset] " + message);
         }
 
+        // Location Reset output that must not be suppressed by the detail flag: lifecycle events, the
+        // results of an explicitly-invoked admin command, and anything that went wrong.
+        public static void LogLocationResetAlways(string message) {
+            StarLevelSystem.Log.LogInfo("[LocationReset] " + message);
+        }
+
+        public static void LogLocationResetWarning(string message) {
+            StarLevelSystem.Log.LogWarning("[LocationReset] " + message);
+        }
+
+        public static void LogLocationResetError(string message) {
+            StarLevelSystem.Log.LogError("[LocationReset] " + message);
+        }
+
         public static void LogDebug(string message)
         {
             if (Level >= LogLevel.Debug)

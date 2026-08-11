@@ -36,39 +36,46 @@ namespace StarLevelSystem.common
         }
 
         // Shared radius parser for the Location Reset commands.
-        private static float ParseRadiusArg(string[] args, float fallback, float max) {
+        private static float ParseRadiusArg(string[] args, float fallback, float max, Terminal context) {
             if (args.Length == 0) { return fallback; }
             if (float.TryParse(args[0], out float parsed) == false) {
-                Logger.LogInfo($"Radius must be a number; using {fallback}.");
+                Echo(context, $"Radius must be a number; using {fallback}.");
                 return fallback;
             }
             return Mathf.Clamp(parsed, 0f, max);
+        }
+
+        // The Location Reset commands used to write only to the BepInEx log, so an admin running them
+        // from the in-game console saw nothing at all. Everything they say now goes to both.
+        private static void Echo(Terminal context, string message) {
+            Logger.LogInfo(message);
+            context?.AddString(message);
         }
 
         internal class LocationResetStatus : ConsoleCommand {
             public override string Name => "SLS-loc-reset-status";
             public override string Help => "Reports Location Reset sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift.";
 
-            public override void Run(string[] args) {
-                if (RequireLocationResetServer() == false) { return; }
-                Logger.LogInfo(modules.LocationReset.LocationResetControl.BuildStatusReport());
+            public override void Run(string[] args, Terminal context) {
+                if (RequireLocationResetServer(context) == false) { return; }
+                Echo(context, modules.LocationReset.LocationResetControl.BuildStatusReport());
             }
         }
 
         internal class LocationResetHere : ConsoleCommand {
             public override string Name => "SLS-loc-reset-here";
-            public override string Help => "Format: [optional: radius] Immediately resets the zones around you, ignoring reset timers. Player structures are still protected. eg: SLS-loc-reset-here 128";
+            public override string Help => "Format: [optional: radius] Immediately resets the chunks around you, ignoring every reset timer, including the chunks currently loaded around you. Player structures are still protected. eg: SLS-loc-reset-here 128";
             public override bool IsCheat => true;
 
-            public override void Run(string[] args) {
-                if (RequireLocationResetServer() == false) { return; }
+            public override void Run(string[] args, Terminal context) {
+                if (RequireLocationResetServer(context) == false) { return; }
                 if (Player.m_localPlayer == null) {
-                    Logger.LogInfo("This command needs a local player; use SLS-loc-reset-stamp-all on a headless server instead.");
+                    Echo(context, "This command needs a local player; use SLS-loc-reset-stamp-all on a headless server instead.");
                     return;
                 }
-                float radius = ParseRadiusArg(args, 64f, 512f);
-                Logger.LogInfo($"Forcing a Location Reset within {radius}m. This ignores timers but still respects player-structure protection.");
-                modules.LocationReset.LocationResetControl.ForceResetAround(Player.m_localPlayer.transform.position, radius);
+                float radius = ParseRadiusArg(args, 64f, 512f, context);
+                Echo(context, $"Forcing a Location Reset within {radius}m. This ignores all timers but still respects player-structure protection.");
+                modules.LocationReset.LocationResetControl.ForceResetAround(Player.m_localPlayer.transform.position, radius, context);
             }
         }
 
@@ -77,31 +84,31 @@ namespace StarLevelSystem.common
             public override string Help => "Format: [optional: radius] [optional: fix] Scans for duplicate world objects and surplus terrain compilers. Reports only unless 'fix' is passed. eg: SLS-loc-reset-audit 256 fix";
             public override bool IsCheat => true;
 
-            public override void Run(string[] args) {
-                if (RequireLocationResetServer() == false) { return; }
+            public override void Run(string[] args, Terminal context) {
+                if (RequireLocationResetServer(context) == false) { return; }
                 if (Player.m_localPlayer == null) {
-                    Logger.LogInfo("This command needs a local player to pick a centre point.");
+                    Echo(context, "This command needs a local player to pick a centre point.");
                     return;
                 }
-                float radius = ParseRadiusArg(args, 256f, 2048f);
+                float radius = ParseRadiusArg(args, 256f, 2048f, context);
                 bool fix = args.Any(a => string.Equals(a, "fix", StringComparison.OrdinalIgnoreCase));
                 var report = modules.LocationReset.ZdoAudit.Run(Player.m_localPlayer.transform.position, radius, fix);
-                Logger.LogInfo(report.ToString());
+                Echo(context, report.ToString());
                 if (fix == false && (report.DuplicatesFound > 0 || report.ExtraTerrainCompilers > 0)) {
-                    Logger.LogInfo("Re-run with 'fix' to remove them, e.g. SLS-loc-reset-audit " + radius + " fix");
+                    Echo(context, "Re-run with 'fix' to remove them, e.g. SLS-loc-reset-audit " + radius + " fix");
                 }
             }
         }
 
         // Server-side gate shared by the Location Reset commands. They all mutate world state or read
         // server-only data, so a client can never run them locally.
-        private static bool RequireLocationResetServer() {
+        private static bool RequireLocationResetServer(Terminal context) {
             if (ZNet.instance == null) {
-                Logger.LogInfo("You must be in a world to use the Location Reset commands.");
+                Echo(context, "You must be in a world to use the Location Reset commands.");
                 return false;
             }
             if (ZNet.instance.IsServer() == false) {
-                Logger.LogInfo("Location Reset is server-authoritative; run this on the server console.");
+                Echo(context, "Location Reset is server-authoritative; run this on the server console.");
                 return false;
             }
             return true;
@@ -112,10 +119,10 @@ namespace StarLevelSystem.common
             public override string Help => "Writes every location and vegetation entry this world knows about (including ones added by other mods) to SavedData/LocationResetCatalog.yaml, for use when configuring LocationResetSettings.yaml.";
             public override bool IsCheat => true;
 
-            public override void Run(string[] args) {
-                if (RequireLocationResetServer() == false) { return; }
+            public override void Run(string[] args, Terminal context) {
+                if (RequireLocationResetServer(context) == false) { return; }
                 if (ZoneSystem.instance == null) {
-                    Logger.LogInfo("ZoneSystem is not ready yet.");
+                    Echo(context, "ZoneSystem is not ready yet.");
                     return;
                 }
                 try {
@@ -131,9 +138,9 @@ namespace StarLevelSystem.common
 ";
                     File.WriteAllText(ValConfig.locationResetCatalogPath,
                         header + System.Environment.NewLine + DataObjects.yamlSerializer.Serialize(catalog));
-                    Logger.LogInfo($"Wrote {catalog.Locations.Count} locations and {catalog.Vegetation.Count} vegetation entries to {ValConfig.locationResetCatalogPath}");
+                    Echo(context, $"Wrote {catalog.Locations.Count} locations and {catalog.Vegetation.Count} vegetation entries to {ValConfig.locationResetCatalogPath}");
                 } catch (Exception e) {
-                    Logger.LogWarning($"Failed to write the Location Reset catalog: {e.Message}");
+                    Echo(context, $"Failed to write the Location Reset catalog: {e.Message}");
                 }
             }
         }
@@ -143,10 +150,10 @@ namespace StarLevelSystem.common
             public override string Help => "Stamps every generated zone as reset right now and records its prefab census. Use this once after installing so an already-explored world starts its reset timers from today instead of resetting everything at once.";
             public override bool IsCheat => true;
 
-            public override void Run(string[] args) {
-                if (RequireLocationResetServer() == false) { return; }
+            public override void Run(string[] args, Terminal context) {
+                if (RequireLocationResetServer(context) == false) { return; }
                 int stamped = modules.LocationReset.LocationResetControl.StampAllGeneratedZones();
-                Logger.LogInfo($"Stamped {stamped} generated zones. Reset timers now run from this moment.");
+                Echo(context, $"Stamped {stamped} generated zones. Reset timers now run from this moment.");
             }
         }
 

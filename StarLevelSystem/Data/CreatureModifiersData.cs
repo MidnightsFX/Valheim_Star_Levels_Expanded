@@ -836,7 +836,10 @@ namespace StarLevelSystem.Data
 
 
         internal static void Init() {
-            UpdateModifierConfig(File.ReadAllText(ValConfig.creatureModifierFilePath));
+            try {
+                UpdateModifierConfig(File.ReadAllText(ValConfig.creatureModifierFilePath));
+            }
+            catch (Exception e) { Logger.LogWarning($"There was an error updating the Creature Modifier values, defaults will be used. Exception: {e}"); }
         }
     }
 }

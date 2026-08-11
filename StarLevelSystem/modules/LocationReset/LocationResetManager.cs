@@ -69,6 +69,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 yield return RunSweep();
             } finally {
                 sweepRunning = false;
+                // One file append per tick rather than one per chunk.
+                LocationResetLog.Flush();
             }
         }
 
@@ -139,83 +141,119 @@ namespace StarLevelSystem.modules.LocationReset {
         // times per lap, so it must stay allocation-free, must not touch ZDOMan, and must not
         // re-read the wall clock (Now is captured once per tick).
         private ZoneWork EvaluateZone(Vector2i zone, LocationResetConfigSnapshot cfg) {
+            // Rate lookup first: an excluded biome or band costs one dictionary hit per lap and
+            // nothing else, which is the throughput win of narrowing the sweep to the areas that
+            // actually get depleted.
+            float rate = ZoneRates.MultiplierFor(zone, cfg);
+            if (rate <= ZoneRates.Excluded) { return ZoneWork.None; }
+
             if (LocationResetState.TryGetZone(zone, out LocationResetState.ZoneRecord record) == false) {
                 return cfg.StampOnFirstSight ? ZoneWork.FirstSight : ZoneWork.Due;
             }
             long elapsed = cfg.Now - record.ZoneStamp;
-            if (elapsed < cfg.MinIntervalSeconds) { return ZoneWork.None; }
+            // Scaling the global floor rather than leaving it fixed is what makes the rates real: a
+            // biome at 0.25 has to clear a quarter of the floor to be considered, or it would sit
+            // behind the unscaled gate and never come due early.
+            if (elapsed < ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, rate)) { return ZoneWork.None; }
             return ZoneWork.Due;
         }
 
         private IEnumerator ProcessZone(Vector2i zone, LocationResetConfigSnapshot cfg, ZoneWork work, bool allowSlow, System.Action<bool> onSlowUsed) {
+            // First sight is pure bookkeeping and fires once for every zone in the world, so it is
+            // deliberately kept out of the chunk log; a fresh world would otherwise write ~84k records
+            // that say nothing was reset.
             if (work == ZoneWork.FirstSight) {
                 LocationResetState.StampZone(zone);
                 ZoneProtectionScan.RecordBaseline(zone);
                 FirstSightZones++;
                 LastAction = $"stamped new zone {zone.x},{zone.y}";
+                Logger.LogLocationReset($"Zone {zone.x},{zone.y}: first sight, baseline recorded, no reset.");
                 yield break;
             }
 
-            // Never reset a zone somebody is standing in or near. Also covers the case where the
-            // zone is already loaded because a player is there.
-            if (PlayersNearby(zone, cfg.PlayerSafeRadius) || ZoneSystem.instance.IsZoneLoaded(zone)) {
-                LocationResetState.BackoffZone(zone, 300f);
-                yield break;
-            }
+            ZoneResetReport report = ZoneResetReport.For(zone, false);
+            report.RateMultiplier = ZoneRates.MultiplierFor(zone, cfg);
+            report.RateDescription = ZoneRates.Describe(zone, cfg);
+            // finally rather than an emit at each exit: every path through this method produces a
+            // record, including the ones that decide to do nothing.
+            try {
+                // Never reset a zone somebody is standing in or near. Also covers the case where the
+                // zone is already loaded because a player is there.
+                if (PlayersNearby(zone, cfg.PlayerSafeRadius) || ZoneSystem.instance.IsZoneLoaded(zone)) {
+                    LocationResetState.BackoffZone(zone, 300f);
+                    report.SkipReason = $"player within {cfg.PlayerSafeRadius:0}m, or the zone is loaded";
+                    yield break;
+                }
 
-            // Zone-wide protection sweep. A blocked zone is stamped forward so it is not retried
-            // every cycle; a base built over a crypt simply keeps it.
-            ZoneProtectionScan.ProtectionResult protection = ZoneProtectionScan.ScanZone(zone, null, true);
-            if (protection.Blocked) {
-                BlockedZones++;
-                LocationResetState.BackoffZone(zone, cfg.MinIntervalSeconds);
-                LastAction = $"zone {zone.x},{zone.y} blocked by {protection.BlockingCategory}";
-                yield break;
-            }
+                // Zone-wide protection sweep. A blocked zone is stamped forward so it is not retried
+                // every cycle; a base built over a crypt simply keeps it.
+                ZoneProtectionScan.ProtectionResult protection = ZoneProtectionScan.ScanZone(zone, null, true);
+                if (protection.Blocked) {
+                    BlockedZones++;
+                    LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
+                    report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
+                    yield break;
+                }
 
-            // ---- Fast lane: pure ZDO refresh, no loading ----
-            FastLaneZones++;
-            ResetTargets.RefreshZoneInPlace(zone, cfg);
+                // ---- Fast lane: pure ZDO refresh, no loading ----
+                FastLaneZones++;
+                ResetTargets.RefreshZoneInPlace(zone, cfg, false, report);
 
-            // ---- Slow lane: only if the census says something was destroyed here ----
-            bool needsSlow = allowSlow && NeedsRegeneration(zone);
-            if (needsSlow == false) {
+                // ---- Slow lane: only if the census says something was destroyed here ----
+                bool needsSlow = allowSlow && NeedsRegeneration(zone, report.RateMultiplier);
+                if (needsSlow == false) {
+                    LocationResetState.StampZone(zone);
+                    onSlowUsed?.Invoke(false);
+                    report.Detail(allowSlow
+                        ? "no regeneration needed - nothing tracked is missing and no location is due"
+                        : "regeneration skipped - slow lane budget spent for this tick");
+                    yield break;
+                }
+
+                SlowLaneZones++;
+                onSlowUsed?.Invoke(true);
+                bool succeeded = false;
+                yield return ResetTargets.RegenerateZone(zone, cfg, protection, false, report, (ok) => { succeeded = ok; });
+
+                if (succeeded == false) {
+                    // RegenerateZone has already applied the appropriate backoff. Stamping here would
+                    // overwrite it, so just leave the zone alone.
+                    report.SkipReason = report.SkipReason ?? "reset did not complete, backed off";
+                    yield break;
+                }
+
                 LocationResetState.StampZone(zone);
-                onSlowUsed?.Invoke(false);
-                yield break;
+                ZoneProtectionScan.RecordBaseline(zone);
+            } finally {
+                EmitZoneReport(report);
             }
+        }
 
-            SlowLaneZones++;
-            onSlowUsed?.Invoke(true);
-            bool succeeded = false;
-            yield return ResetTargets.RegenerateZone(zone, cfg, protection, false, (ok) => { succeeded = ok; });
-
-            if (succeeded == false) {
-                // RegenerateZone has already applied the appropriate backoff. Stamping here would
-                // overwrite it, so just leave the zone alone.
-                LastAction = $"zone {zone.x},{zone.y} reset did not complete, backed off";
-                yield break;
-            }
-
-            LocationResetState.StampZone(zone);
-            ZoneProtectionScan.RecordBaseline(zone);
-            LastAction = $"reset zone {zone.x},{zone.y}";
+        // One record per worked chunk: to the dedicated Location Reset log always, and to the BepInEx
+        // log only when the detail flag is on, since the sweep runs continuously.
+        private static void EmitZoneReport(ZoneResetReport report) {
+            string record = report.ToRecord();
+            LocationResetLog.Record(record, "sweep");
+            Logger.LogLocationReset(record);
+            LastAction = report.ToSummaryLine();
         }
 
         // Does this zone need the expensive poke-load path? Either a due location lives here, or a
         // tracked prefab's live count has fallen below its recorded baseline. This is the gate that
         // keeps the majority of a world out of the expensive path.
-        private bool NeedsRegeneration(Vector2i zone) {
-            if (NeedsLocationReset(zone)) { return true; }
+        private bool NeedsRegeneration(Vector2i zone, float rate) {
+            if (NeedsLocationReset(zone, rate)) { return true; }
             if (LocationResetData.VegetationByPrefabHash.Count == 0) { return false; }
             Dictionary<int, ushort> live = ZoneProtectionScan.CensusZone(zone);
 
+            float distance = ZoneRates.DistanceFor(zone);
             foreach (KeyValuePair<int, LocationResetData.ResolvedResetEntry> tracked in LocationResetData.VegetationByPrefabHash) {
-                if (tracked.Value.Enabled == false) { continue; }
+                LocationResetData.ResolvedResetEntry entry = tracked.Value.ForDistance(distance);
+                if (entry.Enabled == false) { continue; }
                 if (LocationResetState.TryGetEntry(zone, tracked.Key, out LocationResetState.EntryRecord record) == false) { continue; }
                 if (record.Baseline == 0) { continue; }
                 long elapsed = LocationResetState.Now - record.Stamp;
-                if (elapsed < tracked.Value.ResetSeconds) { continue; }
+                if (elapsed < ZoneRates.ScaleSeconds(entry.ResetSeconds, rate)) { continue; }
 
                 live.TryGetValue(tracked.Key, out ushort present);
                 if (present < record.Baseline) { return true; }
@@ -226,11 +264,12 @@ namespace StarLevelSystem.modules.LocationReset {
         // Locations have no census -- a looted crypt still contains all its objects, they are just
         // empty. Their timer lives on the surviving LocationProxy ZDO instead, which is readable
         // without loading the zone.
-        private bool NeedsLocationReset(Vector2i zone) {
+        private bool NeedsLocationReset(Vector2i zone, float rate) {
             if (LocationResetData.LocationsByHash.Count == 0) { return false; }
             if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return false; }
             if (instance.m_location == null) { return false; }
             if (LocationResetData.TryGetLocationEntry(instance.m_location.Hash, out LocationResetData.ResolvedResetEntry entry) == false) { return false; }
+            entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
             if (entry.Enabled == false) { return false; }
 
             ZDO proxy = ResetTargets.FindLocationProxy(zone, instance.m_location.Hash);
@@ -240,7 +279,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // Never stamped: the first pass stamps it and the next one resets it, so a fresh install
             // never wipes every location at once.
             if (lastReset == 0) { return true; }
-            return LocationResetState.Now - lastReset >= entry.ResetSeconds;
+            return LocationResetState.Now - lastReset >= ZoneRates.ScaleSeconds(entry.ResetSeconds, rate);
         }
 
         private static bool PlayersNearby(Vector2i zone, float radius) {
@@ -278,6 +317,13 @@ namespace StarLevelSystem.modules.LocationReset {
         internal bool RefreshPickables;
         internal bool RefreshMineRocks;
         internal bool RefreshContainerLoot;
+        // Rate targeting, captured by reference. Snapshotting them keeps a mid-sweep yaml reload from
+        // resetting one chunk under two different rates.
+        internal Dictionary<Heightmap.Biome, float> BiomeRates;
+        internal List<LocationResetBand> DistanceBands;
+        // False when every configured rate is 1.0, letting the per-chunk lookup skip its work
+        // entirely. Computed here rather than per chunk because Capture runs once per tick.
+        internal bool RatesActive;
 
         internal static LocationResetConfigSnapshot Capture() {
             LocationResetConfiguration cfg = LocationResetData.SLE_LocationReset_Settings;
@@ -296,6 +342,9 @@ namespace StarLevelSystem.modules.LocationReset {
             snap.RefreshPickables = cfg.InPlaceRefresh.Pickables;
             snap.RefreshMineRocks = cfg.InPlaceRefresh.MineRocks;
             snap.RefreshContainerLoot = cfg.InPlaceRefresh.ContainerDefaultLoot;
+            snap.BiomeRates = cfg.BiomeRates;
+            snap.DistanceBands = cfg.DistanceBands;
+            snap.RatesActive = AnyRateActive(cfg);
 
             bool anyLocation = false;
             foreach (KeyValuePair<int, LocationResetData.ResolvedResetEntry> kvp in LocationResetData.LocationsByHash) {
@@ -316,6 +365,22 @@ namespace StarLevelSystem.modules.LocationReset {
             if (snap.MinIntervalSeconds <= 0) { snap.MinIntervalSeconds = 3600; }
 
             return snap;
+        }
+
+        // A config that lists every biome at 1.0 -- which is exactly what the generated default file
+        // contains -- is targeting nothing, and should cost nothing.
+        private static bool AnyRateActive(LocationResetConfiguration cfg) {
+            if (cfg.BiomeRates != null) {
+                foreach (KeyValuePair<Heightmap.Biome, float> kvp in cfg.BiomeRates) {
+                    if (Mathf.Approximately(kvp.Value, 1f) == false) { return true; }
+                }
+            }
+            if (cfg.DistanceBands != null) {
+                foreach (LocationResetBand band in cfg.DistanceBands) {
+                    if (band != null && Mathf.Approximately(band.Multiplier, 1f) == false) { return true; }
+                }
+            }
+            return false;
         }
     }
 }

@@ -130,13 +130,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 string worldName = pkg.ReadString();
                 int version = pkg.ReadInt();
                 if (version != FileVersion) {
-                    Logger.LogInfo($"[LocationReset] State file version {version} does not match {FileVersion}; starting fresh.");
+                    Logger.LogLocationResetAlways($"State file version {version} does not match {FileVersion}; starting fresh.");
                     return false;
                 }
 
                 string currentWorld = ZNet.instance?.GetWorldName() ?? "";
                 if (string.IsNullOrEmpty(worldName) == false && string.IsNullOrEmpty(currentWorld) == false && worldName != currentWorld) {
-                    Logger.LogInfo($"[LocationReset] State is for a different world ({worldName} vs {currentWorld}); starting fresh.");
+                    Logger.LogLocationResetAlways($"State is for a different world ({worldName} vs {currentWorld}); starting fresh.");
                     return false;
                 }
 
@@ -157,10 +157,10 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 loadedWorld = currentWorld;
                 dirty = false;
-                Logger.LogInfo($"[LocationReset] Loaded reset state for {zones.Count} zones.");
+                Logger.LogLocationResetAlways($"Loaded reset state for {zones.Count} zones.");
                 return true;
             } catch (Exception e) {
-                Logger.LogWarning($"[LocationReset] Failed to load reset state, starting fresh: {e.Message}");
+                Logger.LogLocationResetWarning($"Failed to load reset state, starting fresh: {e.Message}");
                 ResetState();
                 return false;
             }
@@ -197,7 +197,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 File.WriteAllBytes(ValConfig.locationResetStatePath, pkg.GetArray());
                 dirty = false;
             } catch (Exception e) {
-                Logger.LogWarning($"[LocationReset] Failed to save reset state: {e.Message}");
+                Logger.LogLocationResetWarning($"Failed to save reset state: {e.Message}");
             }
         }
 

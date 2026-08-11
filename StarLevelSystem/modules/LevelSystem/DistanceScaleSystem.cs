@@ -121,17 +121,44 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static void SetRingCenter() {
-            if (ValConfig.DistanceBonusIsFromStarterTemple.Value) {
-                GameObject startTemple = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name == "StartTemple").FirstOrDefault();
-                if (startTemple != null) {
-                    center = startTemple.transform.position;
-                } else {
-                    Logger.LogWarning("Unable to find starter temple, bonus rings will use world center. (0,0,0)");
-                    center = new Vector3(0, 0, 0);
-                }
+            if (ValConfig.DistanceBonusIsFromStarterTemple.Value == false) {
+                center = new Vector3(0, 0, 0);
+                return;
+            }
+            // Prefer the world-data lookup: it needs no instantiated objects and therefore works on a
+            // dedicated server, where the Resources scan below always came up empty.
+            if (TryResolveCenterFromWorld()) { return; }
+
+            GameObject startTemple = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name == "StartTemple").FirstOrDefault();
+            if (startTemple != null) {
+                center = startTemple.transform.position;
             } else {
+                Logger.LogWarning("Unable to find starter temple, bonus rings will use world center. (0,0,0)");
                 center = new Vector3(0, 0, 0);
             }
+        }
+
+        // Resolve the temple from ZoneSystem's location table rather than from instantiated objects.
+        //
+        // m_locationInstances comes from world generation / the save file, so the temple's position is
+        // known with no zone loaded and no GameObject alive. That matters because SetRingCenter is
+        // otherwise only reachable from the map-ring paths, which bail on a headless server via
+        // CanDrawOverlays -- leaving `center` stuck at the origin there and DistanceBonusIsFromStarterTemple
+        // silently doing nothing. FindClosestLocation rather than GetLocationIcon: the latter also
+        // requires the location to carry a map icon.
+        //
+        // Returns false when the world is not ready yet, leaving center untouched so a caller can retry.
+        internal static bool TryResolveCenterFromWorld() {
+            if (ValConfig.DistanceBonusIsFromStarterTemple.Value == false) {
+                center = new Vector3(0, 0, 0);
+                return true;
+            }
+            if (ZoneSystem.instance == null) { return false; }
+            if (ZoneSystem.instance.FindClosestLocation("StartTemple", Vector3.zero, out ZoneSystem.LocationInstance closest)) {
+                center = closest.m_position;
+                return true;
+            }
+            return false;
         }
 
         public static void UpdateMapColorSettingsOnChange(object s, EventArgs e) {

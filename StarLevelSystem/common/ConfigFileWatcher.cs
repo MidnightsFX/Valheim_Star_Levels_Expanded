@@ -48,7 +48,21 @@ namespace StarLevelSystem.common {
             Logger.LogDebug($"ConfigFileWatcher watching {fullPath}");
         }
 
-
+        // Re-seed a watched file's stamp after we rewrite it ourselves, so our own write is not seen as an
+        // external change on the next poll. No-op for paths that are not (yet) watched.
+        internal static void RefreshStamp(string fullPath) {
+            if (WatchedFiles.TryGetValue(fullPath, out var entry)) {
+                try {
+                    var info = new FileInfo(fullPath);
+                    entry.LastWriteUTC = info.LastWriteTimeUtc;
+                    entry.FileLength = info.Length;
+                } catch {
+                    // File gone or inaccessible after our write; reset so the next poll skips it.
+                    entry.LastWriteUTC = DateTime.MinValue;
+                    entry.FileLength = 0;
+                }
+            }
+        }
 
         internal class ConfigFileWatcherBehaviour : MonoBehaviour {
             private float nextPollTime;

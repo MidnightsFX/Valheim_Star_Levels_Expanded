@@ -540,6 +540,107 @@ when the server is under load. Use `SLS-loc-reset-status` to see the projected t
 After installing on an already-explored world, run `SLS-loc-reset-stamp-all` once so every zone's
 timer starts from today instead of everything becoming due at once.
 
+**Reset groups.** The generated config carries one entry per prefab in the world — over 300 of them,
+in registration order, all disabled — so tuning "all ore" one key at a time is impractical. A group
+configures and **enables** a whole set in one block:
+
+```yaml
+ResetGroups:
+  Ores:
+    Enabled: true
+    ResetHours: 48
+    ResetTerrain: true
+    Members: [rock4_copper, MineRock_Tin, silvervein, rock3_silver, mudpile_beacon]
+```
+
+Values resolve as **entry → group → Defaults**, so a per-prefab `ResetHours` still wins over its
+group. A group turns its members on; to exclude one, drop it from `Members`. If two groups claim the
+same prefab the shorter interval wins and the other is named in a warning.
+
+A member can also be a category token — `$Mineable` or `$Pickable` — which expands to every
+configured entry carrying that component, and so picks up modded ore and pickables automatically.
+Note that berry bushes are *not* `Pickable_*` prefabs, which is why the shipped config lists them
+separately. Prefab names are irregular enough that this matters: copper is `rock4_copper` while
+`rock4_forest` is worthless scenery, and silver is both `rock3_silver` and `silvervein`.
+
+A group can be limited to a ring around spawn with `MinDistance` / `MaxDistance` (`MaxDistance: 0`
+means no outer limit). A scoped group applies only inside its range; outside it, its members fall
+back to whatever unscoped group covers them — so `FlintNearSpawn` at 6h within 3000m leaves flint on
+the normal foraging timer everywhere else.
+
+The mod ships working groups (`Ores`, `Berries`, `Foraging`, `FlintNearSpawn`, `Leviathans`,
+`QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature is usable
+without editing anything. Nothing resets until `EnableLocationReset` and the YAML `Enabled` are both
+turned on. `SLS-loc-reset-status` lists every group with a `matched/total` member count — a shortfall
+means a prefab name no longer exists in your game version.
+
+**Focusing resets where they are needed.** Depletion is not uniform — it concentrates in the
+biomes and near the spawn areas your players actually work. Two multipliers stack on top of each
+entry's own `ResetHours`, so `effective hours = ResetHours × biome rate × band rate`, and both
+default to `1.0`:
+
+```yaml
+BiomeRates:
+  Meadows: 0.5          # everything in the Meadows returns twice as fast
+  Mistlands: 2.0        # ...and half as fast out in the Mistlands
+DistanceBands:
+- Inner: 0              # metres from spawn
+  Outer: 3000
+  Multiplier: 0.5       # the hub recovers twice as fast
+```
+
+A rate of `0` **excludes** that biome or band from resets entirely — it does not mean "instantly" —
+which is also the cheap way to say "only reset near spawn". `Outer: 0` means no outer limit, and a
+chunk matching no band is left at `1.0`, so a partial band list never disables the rest of the
+world. Distance is measured from the same point as the distance level-scaling rings; see
+`DistanceBonusIsFromStarterTemple`.
+
+**Ignoring trivial player clutter.** One abandoned campfire otherwise freezes a chunk forever: any
+player-built piece blocks a reset, and the protection scan covers a chunk *and its 8 neighbours*.
+Worse, a campfire sitting on an ore spawn stops that node coming back even when the chunk does
+reset, because vanilla will not place vegetation into a collider. Each protection category can list
+prefabs exempt from it:
+
+```yaml
+Protection:
+  PlayerBuiltPiece:
+    Action: Block
+    Ignored:
+    - fire_pit
+```
+
+> ⚠️ An ignored prefab neither blocks a reset **nor survives one — it is deleted.** `fire_pit` ships
+> ignored for the reasons above; add to the list sparingly. Tombstones can never be ignored, and
+> anything in `ProtectedPrefabs` wins over an ignore. Every deletion is recorded in the chunk log.
+
+**Resetting terrain around a location.** Players dig approach ramps and moats just *outside* a
+dungeon's footprint, where the normal terrain reset does not reach. `ExtraTerrainRadius` on a
+location entry adds metres beyond the location's own radius (clamped to 64m, which is as far as the
+protection scan actually checks for player property):
+
+```yaml
+Locations:
+  Crypt2:
+    Enabled: true
+    ResetTerrain: true
+    ExtraTerrainRadius: 24
+```
+
+**Seeing what it did.** Every chunk the system works on gets a record in
+`SavedData/LocationResetLog.log` — its zone coordinates, world position and biome, and what was and
+was not reset inside it, including the reason anything was skipped:
+
+```
+Zone -12,34 @ x=-768 z=2176 (BlackForest) reset: refreshed pickables 14, minerock 3 | location 'Crypt2' rebuilt (cleared 214, spawned 218) | ZDO 402->405
+Zone -12,35 @ x=-768 z=2240 (Meadows) skipped: protected by PlayerBuiltPiece 'wood_floor' at x=-742 z=2251
+Zone -12,36 @ x=-768 z=2304 (Meadows) nothing reset: location 'FireHole' not due, 3 vegetation entries not due
+```
+
+Turn this off with `EnableLocationResetLog`. `EnableDebugLocationResetDetails` additionally copies
+the background sweep's chunk lines into the BepInEx log and expands every record with a per-entry
+breakdown of what was skipped and why. Both are client-side settings, so on a dedicated server they
+are configured on the server itself.
+
 Not compatible with VentureValheim's LocationReset — SLS disables its own Location Reset
 automatically if that mod is present, since both would fight over the same objects.
 
@@ -558,7 +659,7 @@ Location Reset commands (server side):
 - `SLS-loc-reset-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
 - `SLS-loc-reset-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
 - `SLS-loc-reset-stamp-all` - stamps every generated zone as reset right now. Run this once after installing on an existing world
-- `SLS-loc-reset-here [range:64]` - immediately resets the zones around you, ignoring timers. Player structures are still protected
+- `SLS-loc-reset-here [range:64]` - immediately resets the chunks around you, ignoring every timer, including the chunks currently loaded around you. Reports each chunk it touched to the console. Player structures are still protected
 - `SLS-loc-reset-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
 
 ### API Usage (WIP)

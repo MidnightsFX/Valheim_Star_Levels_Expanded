@@ -1,0 +1,832 @@
+using StarLevelSystem.common;
+using StarLevelSystem.Data;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using static StarLevelSystem.common.DataObjects;
+
+namespace StarLevelSystem.modules.LocationReset {
+    // The three reset tiers.
+    //
+    //  Tier 1 (RefreshZoneInPlace) mutates surviving ZDOs and never loads a zone or destroys
+    //         anything, so it can never touch player property.
+    //  Tier 2 (vegetation) and Tier 3 (locations) run inside RegenerateZone, which poke-loads the
+    //         zone because PlaceVegetation and SpawnLocation need a live Heightmap and colliders.
+    internal static class ResetTargets {
+
+        private static readonly List<ZDO> zdoBuffer = new List<ZDO>();
+
+        // -----------------------------------------------------------------------------------
+        // Tier 1 - in-place ZDO refresh
+        // -----------------------------------------------------------------------------------
+        //
+        // Everything here is a ZDO write that vanilla's own Awake path picks up the next time the
+        // object loads. No zone is loaded, nothing is destroyed and nothing is created, so this
+        // cannot duplicate items or damage a build. It is also where most of the throughput comes
+        // from: harvested-but-still-present content is the common case on a busy server.
+        internal static void RefreshZoneInPlace(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+            if (ZDOMan.instance == null) { return; }
+            if (cfg.RefreshPickables == false && cfg.RefreshMineRocks == false && cfg.RefreshContainerLoot == false) { return; }
+
+            zdoBuffer.Clear();
+            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+
+            for (int i = 0; i < zdoBuffer.Count; i++) {
+                ZDO zdo = zdoBuffer[i];
+                if (zdo == null || zdo.IsValid() == false) { continue; }
+                int prefab = zdo.m_prefab;
+
+                if (cfg.RefreshPickables && ZoneProtectionScan.PickableHashes.Contains(prefab)) {
+                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.PickablesNotDue++; continue; }
+                    if (RefreshPickable(zdo)) { report.PickablesRefreshed++; }
+                    continue;
+                }
+                if (cfg.RefreshMineRocks && ZoneProtectionScan.MineRock5Hashes.Contains(prefab)) {
+                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.MineRocksNotDue++; continue; }
+                    if (RefreshMineRock5(zdo)) { report.MineRocksRefreshed++; }
+                    continue;
+                }
+                if (cfg.RefreshMineRocks && ZoneProtectionScan.MineRockAreaCounts.ContainsKey(prefab)) {
+                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.MineRocksNotDue++; continue; }
+                    if (RefreshMineRock(zdo, prefab)) { report.MineRocksRefreshed++; }
+                    continue;
+                }
+                if (cfg.RefreshContainerLoot && ZoneProtectionScan.containerHashes.Contains(prefab)) {
+                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.ContainersNotDue++; continue; }
+                    if (RefreshContainerLoot(zdo)) { report.ContainersRefreshed++; }
+                }
+            }
+
+            zdoBuffer.Clear();
+        }
+
+        // A prefab with its own Vegetation config entry uses that entry's timer and opt-in flag;
+        // anything else falls back to the global default interval measured from the zone stamp.
+        //
+        // force skips the timers entirely. An admin asking for a reset now means now, and without this
+        // SLS-loc-reset-here would still silently honour every per-prefab timestamp.
+        private static bool DueForRefresh(Vector2i zone, int prefabHash, LocationResetConfigSnapshot cfg, bool force, float rate) {
+            if (force) { return true; }
+            if (LocationResetData.TryGetVegetationEntry(prefabHash, out LocationResetData.ResolvedResetEntry entry)) {
+                // A distance-scoped group can override the timer for this chunk only.
+                entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
+                if (entry.Enabled == false) { return false; }
+                if (LocationResetState.TryGetEntry(zone, prefabHash, out LocationResetState.EntryRecord record) && record.Stamp > 0) {
+                    return LocationResetState.Now - record.Stamp >= ZoneRates.ScaleSeconds(entry.ResetSeconds, rate);
+                }
+                return true;
+            }
+            if (LocationResetState.TryGetZone(zone, out LocationResetState.ZoneRecord zoneRecord) == false) { return false; }
+            return LocationResetState.Now - zoneRecord.ZoneStamp >= ZoneRates.ScaleSeconds(cfg.DefaultIntervalSeconds, rate);
+        }
+
+        // Pickables that hid instead of despawning keep their ZDO with picked=true. Clearing it is a
+        // complete restore: Pickable.Awake reads both keys and re-enables m_hideWhenPicked itself.
+        // Pickables with no m_hideWhenPicked destroy their ZDO on pick, so they are never seen here
+        // and are handled by Tier 2 instead.
+        private static bool RefreshPickable(ZDO zdo) {
+            if (zdo.GetBool(ZDOVars.s_picked, false) == false) { return false; }
+            TakeOwnership(zdo);
+            zdo.Set(ZDOVars.s_picked, false);
+            zdo.Set(ZDOVars.s_pickedTime, 0L);
+            return true;
+        }
+
+        // MineRock5 packs every hit area's health into one base64 string. LoadHealth only applies it
+        // when the string is non-empty, so blanking it restores each area to its prefab default.
+        private static bool RefreshMineRock5(ZDO zdo) {
+            string health = zdo.GetString(ZDOVars.s_health, "");
+            if (string.IsNullOrEmpty(health)) { return false; }
+            TakeOwnership(zdo);
+            zdo.Set(ZDOVars.s_health, "");
+            return true;
+        }
+
+        // Old-style MineRock keeps one float per hit area. Write explicit full health rather than
+        // removing the keys, because ZDO.RemoveFloat does not bump the data revision.
+        private static bool RefreshMineRock(ZDO zdo, int prefabHash) {
+            if (ZoneProtectionScan.MineRockAreaCounts.TryGetValue(prefabHash, out int areas) == false) { return false; }
+            ZoneProtectionScan.MineRockBaseHealth.TryGetValue(prefabHash, out float baseHealth);
+            if (baseHealth <= 0f) { return false; }
+
+            float fullHealth = baseHealth;
+            if (Game.instance != null) {
+                fullHealth += Game.m_worldLevel * baseHealth * Game.instance.m_worldLevelMineHPMultiplier;
+            }
+
+            bool changed = false;
+            for (int area = 0; area < areas; area++) {
+                string key = "Health" + area.ToString();
+                if (zdo.GetFloat(key, fullHealth) >= fullHealth) { continue; }
+                if (changed == false) { TakeOwnership(zdo); changed = true; }
+                zdo.Set(key, fullHealth);
+            }
+            return changed;
+        }
+
+        // Re-roll a container's default loot. Only ever applied to containers with no creator, so a
+        // player's chest is never touched even if the category action was relaxed.
+        private static bool RefreshContainerLoot(ZDO zdo) {
+            if (zdo.GetLong(ZDOVars.s_creator, 0L) != 0L) { return false; }
+            if (zdo.GetBool(ZDOVars.s_addedDefaultItems, false) == false) { return false; }
+            TakeOwnership(zdo);
+            zdo.Set(ZDOVars.s_addedDefaultItems, false);
+            return true;
+        }
+
+        // Vanilla gates replication on ownership, so a write from a non-owner is a local-only edit
+        // another peer will overwrite. Claim the ZDO first.
+        internal static void TakeOwnership(ZDO zdo) {
+            if (zdo.IsOwner()) { return; }
+            zdo.SetOwner(ZDOMan.GetSessionID());
+        }
+
+        // -----------------------------------------------------------------------------------
+        // Tiers 3 and 2 - regeneration (requires a loaded zone)
+        // -----------------------------------------------------------------------------------
+
+        // onComplete reports whether the regeneration finished cleanly. A failure must NOT be
+        // stamped as done: the clear and the respawn are one operation, and abandoning it in the
+        // middle would leave the location permanently empty.
+        internal static IEnumerator RegenerateZone(Vector2i zone, LocationResetConfigSnapshot cfg,
+                                                   ZoneProtectionScan.ProtectionResult protection,
+                                                   bool force, ZoneResetReport report, System.Action<bool> onComplete) {
+            if (ZoneSystem.instance == null || ZDOMan.instance == null) { onComplete?.Invoke(false); yield break; }
+
+            int zdosBefore = ZoneProtectionScan.SectorZdoCount(zone);
+
+            bool loaded = false;
+            yield return ZoneLoader.Load(zone, cfg.MaxZoneLoadWaitSeconds, force, (ok) => { loaded = ok; });
+            if (loaded == false) {
+                report.SkipReason = report.SkipReason ?? "zone did not finish loading in time";
+                onComplete?.Invoke(false);
+                yield break;
+            }
+            // Load only registers zones it actually poked, so a zone that came back loaded without being
+            // registered is one we adopted while it was already live.
+            report.ZoneAdopted = ZoneLoader.WasManuallyLoaded(zone) == false;
+
+            // A location configured with ExtraTerrainRadius can reach past its own chunk, and terrain
+            // only resets where a heightmap is live, so those neighbours have to come up too. Loading
+            // is hoisted here because the regeneration tiers below are synchronous and cannot yield.
+            List<Vector2i> extraZones = ExtraTerrainZones(zone);
+            if (extraZones != null) {
+                for (int i = 0; i < extraZones.Count; i++) {
+                    yield return ZoneLoader.Load(extraZones[i], cfg.MaxZoneLoadWaitSeconds, force, null);
+                    // Loading a neighbour can span several frames, and a poked zone with no live
+                    // instances is reaped after 4s. Keep the one we already have.
+                    ZoneLoader.KeepAlive(zone);
+                }
+            }
+
+            // The location prefab must be fully loaded BEFORE the synchronous section. In Full mode the
+            // LocationProxy client-spawns the prefab immediately, but LocationProxy.SpawnLocation bails
+            // and retries next frame when ShouldDelayProxyLocationSpawning is true -- driven by an
+            // async asset load that is typically incomplete the first time a given location type is
+            // reset. A deferral means the terrain shaping misses SnapToGround.SnappAll entirely, which
+            // is precisely the floating-contents bug. Waiting has to happen here; RegenerateLocation
+            // cannot yield.
+            yield return WaitForLocationPrefab(zone, cfg.MaxZoneLoadWaitSeconds);
+
+            bool succeeded = true;
+            try {
+                // Vanilla's own ordering: locations first so vegetation sees the fresh clear areas.
+                RegenerateLocation(zone, cfg, force, report);
+                RegenerateVegetation(zone, cfg, force, report);
+            } catch (System.Exception e) {
+                succeeded = false;
+                Logger.LogLocationResetError($"Reset of zone {zone.x},{zone.y} failed and will be retried: {e}");
+            } finally {
+                // Release is a no-op for chunks this class did not load, so a neighbour that was
+                // already live (a player standing in it) is never torn down.
+                if (extraZones != null) {
+                    for (int i = 0; i < extraZones.Count; i++) { ZoneLoader.Release(extraZones[i]); }
+                }
+                ZoneLoader.Release(zone);
+            }
+
+            // Balanced accounting. A faithful restore returns the sector to its original ZDO count;
+            // sustained growth is how a reset system silently bloats a world save over months.
+            int zdosAfter = ZoneProtectionScan.SectorZdoCount(zone);
+            int growth = zdosAfter - zdosBefore;
+            report.ZdoBefore = zdosBefore;
+            report.ZdoAfter = zdosAfter;
+            report.ZdoCounted = true;
+
+            // An adopted zone is live: creatures spawn, players drop things, and items despawn between
+            // the two samples. That noise is not our drift, so it neither counts towards the global
+            // total nor trips the bloat guard below.
+            if (growth != 0 && report.ZoneAdopted == false) { LocationResetManager.ZdoGrowthTotal += growth; }
+
+            if (succeeded == false) {
+                // Clear and respawn are one operation. Retry soon rather than leaving a location
+                // cleared but not rebuilt.
+                LocationResetState.BackoffZone(zone, 60f);
+            } else if (report.ZoneAdopted == false && growth > cfg.ZdoGrowthTolerance) {
+                succeeded = false;
+                Logger.LogLocationResetError($"Zone {zone.x},{zone.y} gained {growth} ZDOs during a reset " +
+                    $"(before {zdosBefore}, after {zdosAfter}). Backing this zone off for a day to avoid world bloat.");
+                LocationResetState.BackoffZone(zone, 86400f);
+            }
+
+            // Reported last so this method owns every backoff decision; the caller only stamps the
+            // zone as done when we report success, and never overwrites a backoff we just applied.
+            onComplete?.Invoke(succeeded);
+        }
+
+        // -----------------------------------------------------------------------------------
+        // Tier 3 - location reset
+        // -----------------------------------------------------------------------------------
+        //
+        // Vanilla PlaceLocations rolls a location's rotation from the LIVE Random state before it
+        // seeds anything, so replaying it gives a different orientation every time -- which is why
+        // Upgrade World's resets visibly rotate buildings. We bypass PlaceLocations entirely:
+        // capture the existing LocationProxy's transform, clear, then call SpawnLocation directly
+        // with that exact position and rotation. The result is a restore rather than a re-roll.
+        //
+        // SpawnLocation also re-runs DungeonGenerator.Generate internally, and Generate seeds
+        // Random.InitState(seed) before laying out rooms, so interiors come back deterministically
+        // too. (Radial camps still vary slightly: their wall placement collision-tests against live
+        // colliders, which differ between runs.)
+        private static void RegenerateLocation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+            ZoneSystem zs = ZoneSystem.instance;
+            if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
+            if (instance.m_location == null) { return; }
+
+            int locationHash = instance.m_location.Hash;
+            string locationName = instance.m_location.m_prefabName;
+            if (LocationResetData.TryGetLocationEntry(locationHash, out LocationResetData.ResolvedResetEntry entry) == false) {
+                report.Detail($"location '{locationName}' is not in the reset configuration");
+                return;
+            }
+            entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
+            report.GroupName = entry.GroupName;
+            if (entry.Enabled == false) {
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Disabled);
+                return;
+            }
+            // Hard-blocked locations are never resettable, no matter the config or a force command.
+            if (LocationResetData.HardBlockedLocations.Contains(entry.Name)) {
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.HardBlocked);
+                return;
+            }
+
+            ZDO proxy = FindLocationProxy(zone, locationHash);
+            if (proxy == null) {
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.NoProxy);
+                return;
+            }
+
+            if (force == false) {
+                // Per-location timer rides on the proxy ZDO so it survives even if the state file is lost.
+                long lastReset = proxy.GetLong(DataObjects.SLS_LOC_RESET, 0L);
+                float dueSeconds = ZoneRates.ScaleSeconds(entry.ResetSeconds, report.RateMultiplier);
+                if (lastReset > 0 && LocationResetState.Now - lastReset < dueSeconds) {
+                    report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.NotDue);
+                    if (report.Verbose) {
+                        float elapsedHours = (LocationResetState.Now - lastReset) / 3600f;
+                        report.Detail($"location '{entry.Name}' not due ({elapsedHours:0.#}h of {dueSeconds / 3600f:0.#}h elapsed)");
+                    }
+                    return;
+                }
+                if (lastReset == 0) {
+                    // First sight of this location: stamp it and let the next cycle do the work, so
+                    // installing the mod never resets everything at once.
+                    TakeOwnership(proxy);
+                    proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+                    report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.FirstSightStamped);
+                    return;
+                }
+            }
+
+            Vector3 position = proxy.GetPosition();
+            Quaternion rotation = proxy.GetRotation();
+            float exteriorRadius = instance.m_location.m_exteriorRadius;
+            float terrainRadius = TerrainRadiusFor(entry, exteriorRadius);
+            report.TerrainRadius = terrainRadius;
+
+            // Boss altars and similar: undo the crater players dug, leave the location itself alone.
+            if (entry.Mode == LocationResetMode.TerrainOnly) {
+                int undone = ResetTerrainLive(zone, position, terrainRadius);
+                TakeOwnership(proxy);
+                proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.TerrainOnly);
+                report.LocationCleared = undone;
+                return;
+            }
+
+            ZDOID oldProxyId = proxy.m_uid;
+            int cleared = ClearLocation(zone, position, exteriorRadius, instance.m_location, entry);
+            if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, position, terrainRadius); }
+
+            int seed = WorldGenerator.instance.GetSeed() + (zone.x * 4271) + (zone.y * 9187);
+
+            // SpawnMode.Full, NOT Ghost. Ghost mode instantiates only the location's ZNetView-bearing
+            // children, so a prefab whose terrain shaping lives on non-networked TerrainModifier
+            // children -- a tarpit's depression, for one -- never carves its hole. SpawnLocation then
+            // unconditionally runs SnapToGround.SnappAll(), which snaps children to the UN-shaped
+            // ground and writes that height straight into their persistent ZDOs. The pit reappears
+            // later when a client spawns the real prefab, and its contents are left hanging in the air.
+            //
+            // Full mode is what world generation itself uses: it creates the child ZDOs, then a
+            // LocationProxy with spawnNow=true, whose inner Client-mode spawn brings the whole prefab
+            // up so the terrain modifiers poke the heightmap BEFORE that inner call's own SnappAll
+            // flushes and snaps. Faithful restore rather than a workaround.
+            //
+            // The trade is that these are real objects, not ghosts, so we own their teardown.
+            HashSet<ZDO> before = SnapshotInstances();
+            try {
+                instance.m_location.m_prefab.Load();
+                zs.SpawnLocation(instance.m_location, seed, position, rotation, ZoneSystem.SpawnMode.Full, null);
+            } finally {
+                // Nothing here should be ghost-initing, but the flag is a global static and a throw
+                // inside vanilla would otherwise turn every subsequent spawn in the game into a ghost.
+                ZNetView.FinishGhostInit();
+                report.LocationSpawned = DestroyNewInstances(before);
+                instance.m_location.m_prefab.Release();
+            }
+
+            // SpawnLocation always creates its own LocationProxy, and ClearLocation deliberately
+            // preserves the existing one (IsStructural), so without this every reset would leave two
+            // proxies behind -- each of which client-spawns a full copy of the location. Carry the
+            // timestamp onto the new one and retire the old, and only now that the spawn has
+            // succeeded: failing with the old proxy still in place leaves the location identifiable
+            // and retryable rather than invisible.
+            ZDO newProxy = FindLocationProxy(zone, locationHash, oldProxyId);
+            if (newProxy != null) {
+                TakeOwnership(newProxy);
+                newProxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+                DestroyZdo(proxy);
+            } else {
+                // No replacement appeared; keep the original as the timestamp carrier.
+                Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y}: '{entry.Name}' respawned without a new " +
+                    $"LocationProxy; keeping the existing one.");
+                TakeOwnership(proxy);
+                proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+            }
+
+            report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Rebuilt);
+            report.LocationCleared = cleared;
+        }
+
+        // ZDOs that currently have a live GameObject. Used to bracket a Full-mode spawn so exactly the
+        // objects it created can be torn down again -- a location's children routinely land in
+        // neighbouring sectors that ZoneLoader.Release never visits, and blanket-releasing those would
+        // risk destroying live instances around a player in an adopted chunk.
+        private static HashSet<ZDO> SnapshotInstances() {
+            HashSet<ZDO> snapshot = new HashSet<ZDO>();
+            if (ZNetScene.instance == null) { return snapshot; }
+            foreach (KeyValuePair<ZDO, ZNetView> kvp in ZNetScene.instance.m_instances) {
+                snapshot.Add(kvp.Key);
+            }
+            return snapshot;
+        }
+
+        // Destroy the GameObjects created since the snapshot, keeping their ZDOs. Returns the count,
+        // which is what the location actually respawned.
+        private static int DestroyNewInstances(HashSet<ZDO> before) {
+            if (ZNetScene.instance == null) { return 0; }
+
+            List<ZNetView> fresh = new List<ZNetView>();
+            foreach (KeyValuePair<ZDO, ZNetView> kvp in ZNetScene.instance.m_instances) {
+                if (before.Contains(kvp.Key)) { continue; }
+                if (kvp.Value != null) { fresh.Add(kvp.Value); }
+            }
+
+            for (int i = 0; i < fresh.Count; i++) {
+                ZNetView view = fresh[i];
+                ZDO zdo = view.GetZDO();
+                // Vanilla's unload sequence: detach so the ZDO (and the position SnappAll just wrote
+                // into it) survives, then destroy the GameObject. The LocationProxy parents its
+                // client-spawned prefab tree, so that whole tree goes with it.
+                view.ResetZDO();
+                Object.Destroy(view.gameObject);
+                if (zdo != null) { ZNetScene.instance.m_instances.Remove(zdo); }
+            }
+            return fresh.Count;
+        }
+
+        // Poll vanilla's own readiness gate for this chunk's location prefab. PokeCanSpawnLocation both
+        // reports readiness and registers the load request, so calling it repeatedly is what drives the
+        // load to completion. No-op for chunks with no configured location.
+        private static IEnumerator WaitForLocationPrefab(Vector2i zone, float maxWaitSeconds) {
+            ZoneSystem zs = ZoneSystem.instance;
+            if (zs == null) { yield break; }
+            if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { yield break; }
+            if (instance.m_location == null) { yield break; }
+            if (LocationResetData.TryGetLocationEntry(instance.m_location.Hash, out LocationResetData.ResolvedResetEntry entry) == false) { yield break; }
+            if (entry.Enabled == false) { yield break; }
+
+            float deadline = Time.realtimeSinceStartup + Mathf.Max(1f, maxWaitSeconds);
+            while (Time.realtimeSinceStartup < deadline) {
+                if (zs.PokeCanSpawnLocation(instance.m_location, true)) { yield break; }
+                // This wait can outlast the 4s TTL on a poked zone that has no live instances yet.
+                ZoneLoader.KeepAlive(zone);
+                yield return null;
+            }
+            // Fall through on timeout: the reset still runs, and a deferred proxy spawn is a cosmetic
+            // placement problem rather than a reason to abandon a half-cleared location.
+            Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y}: location prefab '{instance.m_location.m_prefabName}' " +
+                $"did not finish loading within {maxWaitSeconds}s; its contents may be placed against unshaped terrain.");
+        }
+
+        // Every terrain reset has to run against LIVE TerrainComp/TerrainModifier components, which do
+        // not exist in a chunk we merely poke-loaded (see ZoneLoader.CreateTerrainObjects). This is the
+        // only sanctioned way to call TerrainResetter from the sweep. Synchronous by design: yielding
+        // between create and destroy would let ZNetScene's 30Hz reaper tear the objects out from under
+        // us mid-reset.
+        private static int ResetTerrainLive(Vector2i zone, Vector3 position, float radius) {
+            List<Vector2i> zones = TerrainZonesFor(zone);
+            for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
+
+            List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
+            try {
+                return TerrainResetter.Reset(position, radius);
+            } finally {
+                ZoneLoader.DestroyTerrainObjects(terrainObjects);
+            }
+        }
+
+        // The chunk itself plus any neighbour an extra terrain radius reaches into.
+        private static List<Vector2i> TerrainZonesFor(Vector2i zone) {
+            List<Vector2i> zones = new List<Vector2i>() { zone };
+            List<Vector2i> extra = ExtraTerrainZones(zone);
+            if (extra != null) { zones.AddRange(extra); }
+            return zones;
+        }
+
+        // Base radius plus the configured extra, clamped.
+        //
+        // The clamp is not arbitrary: ScanZone covers the chunk and its 8 neighbours (+/-96m from the
+        // chunk centre) and a location sits within 32m of that centre, so 64m is the furthest reach
+        // the protection scan provably checked for player property. Past it we would be flattening
+        // ground nobody looked at.
+        private static float TerrainRadiusFor(LocationResetData.ResolvedResetEntry entry, float exteriorRadius) {
+            float baseRadius = entry.TerrainRadius > 0f ? entry.TerrainRadius : exteriorRadius;
+            float extra = Mathf.Clamp(entry.ExtraTerrainRadius, 0f, LocationResetData.MaxExtraTerrainRadius);
+            return baseRadius + extra;
+        }
+
+        // Chunks a location's terrain reset reaches into beyond its own, so RegenerateZone can
+        // poke-load them first. TerrainResetter only touches heightmaps that are actually loaded
+        // (Heightmap.FindHeightmap and TerrainComp.FindTerrainCompiler both need live components), so
+        // without this an extra radius that crosses a chunk boundary silently does nothing on the far
+        // side. Empty in the common case, since ExtraTerrainRadius defaults to 0.
+        internal static List<Vector2i> ExtraTerrainZones(Vector2i zone) {
+            List<Vector2i> extra = null;
+            if (ZoneSystem.instance == null) { return null; }
+            if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return null; }
+            if (instance.m_location == null) { return null; }
+            if (LocationResetData.TryGetLocationEntry(instance.m_location.Hash, out LocationResetData.ResolvedResetEntry entry) == false) { return null; }
+            if (entry.Enabled == false) { return null; }
+            // TerrainOnly always resets terrain; every other mode only does so when asked.
+            if (entry.Mode != LocationResetMode.TerrainOnly && entry.ResetTerrain == false) { return null; }
+            if (entry.ExtraTerrainRadius <= 0f) { return null; }
+
+            float radius = TerrainRadiusFor(entry, instance.m_location.m_exteriorRadius);
+            Vector3 position = instance.m_position;
+            Vector2i min = ZoneSystem.GetZone(new Vector3(position.x - radius, 0f, position.z - radius));
+            Vector2i max = ZoneSystem.GetZone(new Vector3(position.x + radius, 0f, position.z + radius));
+
+            for (int x = min.x; x <= max.x; x++) {
+                for (int y = min.y; y <= max.y; y++) {
+                    if (x == zone.x && y == zone.y) { continue; }
+                    if (extra == null) { extra = new List<Vector2i>(); }
+                    extra.Add(new Vector2i(x, y));
+                }
+            }
+            return extra;
+        }
+
+        internal static ZDO FindLocationProxy(Vector2i zone, int locationHash) {
+            return FindLocationProxy(zone, locationHash, ZDOID.None);
+        }
+
+        // exclude lets the caller skip a known proxy, which is how the freshly-spawned one is picked
+        // out from the one being retired.
+        internal static ZDO FindLocationProxy(Vector2i zone, int locationHash, ZDOID exclude) {
+            zdoBuffer.Clear();
+            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZDO found = null;
+            for (int i = 0; i < zdoBuffer.Count; i++) {
+                ZDO zdo = zdoBuffer[i];
+                if (zdo == null || zdo.IsValid() == false) { continue; }
+                if (zdo.m_prefab != ZoneProtectionScan.LocationProxyHash) { continue; }
+                if (zdo.GetInt(ZDOVars.s_location, 0) != locationHash) { continue; }
+                if (exclude != ZDOID.None && zdo.m_uid == exclude) { continue; }
+                found = zdo;
+                break;
+            }
+            zdoBuffer.Clear();
+            return found;
+        }
+
+        // Destroy the location's contents so SpawnLocation can lay them down fresh.
+        //
+        // The exterior scan covers the zone AND its 8 neighbours, because a location's radius
+        // routinely crosses a zone boundary -- Upgrade World's single-sector scan is a documented
+        // source of leftover objects on the far side of the line.
+        //
+        // The interior of a sky dungeon lives at y > 4000. It is cleared too when configured, since
+        // SpawnLocation regenerates it via DungeonGenerator.Generate and would otherwise duplicate it.
+        private static int ClearLocation(Vector2i zone, Vector3 center, float exteriorRadius,
+                                         ZoneSystem.ZoneLocation location, LocationResetData.ResolvedResetEntry entry) {
+            // Whether this location has an interior is decided by what is actually in the world: a
+            // DungeonGenerator parked above the sky threshold. ZoneLocation carries m_interiorRadius
+            // but not m_hasInterior (that lives on the Location component, which would mean loading
+            // the asset), and this also covers locations whose interior sits somewhere unexpected.
+            Vector3 interiorCenter = Vector3.zero;
+            bool clearInterior = entry.ResetInterior && TryFindInteriorCenter(zone, out interiorCenter);
+            float interiorRadius = location.m_interiorRadius > 0f ? location.m_interiorRadius : exteriorRadius;
+
+            List<ZDO> doomed = new List<ZDO>();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    CollectClearable(new Vector2i(zone.x + dx, zone.y + dy), center, exteriorRadius,
+                        clearInterior, interiorCenter, interiorRadius, entry, doomed);
+                }
+            }
+
+            for (int i = 0; i < doomed.Count; i++) { DestroyZdo(doomed[i]); }
+            return doomed.Count;
+        }
+
+        // Sky interiors sit directly above their entrance for vanilla locations, but a location using
+        // a custom interior transform can place it elsewhere. Locating the live DungeonGenerator
+        // handles both, and its absence is a reliable "this location has no interior".
+        private static bool TryFindInteriorCenter(Vector2i zone, out Vector3 center) {
+            center = Vector3.zero;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (ZoneProtectionScan.DungeonGeneratorHashes.Contains(zdo.m_prefab) == false) { continue; }
+                        Vector3 pos = zdo.GetPosition();
+                        if (pos.y <= SkyThreshold) { continue; }
+                        center = pos;
+                        zdoBuffer.Clear();
+                        return true;
+                    }
+                    zdoBuffer.Clear();
+                }
+            }
+            return false;
+        }
+
+        // Vanilla parks dungeon interiors several thousand metres up; 4000 is the same cut-off both
+        // reference mods use to tell interior from exterior.
+        private const float SkyThreshold = 4000f;
+
+        private static void CollectClearable(Vector2i sector, Vector3 center, float exteriorRadius,
+                                             bool clearInterior, Vector3 interiorCenter, float interiorRadius,
+                                             LocationResetData.ResolvedResetEntry entry, List<ZDO> doomed) {
+            zdoBuffer.Clear();
+            ZDOMan.instance.FindObjects(sector, zdoBuffer);
+
+            for (int i = 0; i < zdoBuffer.Count; i++) {
+                ZDO zdo = zdoBuffer[i];
+                if (zdo == null || zdo.IsValid() == false) { continue; }
+                if (IsStructural(zdo) || IsPlayer(zdo)) { continue; }
+
+                Vector3 pos = zdo.GetPosition();
+                bool inSky = pos.y > SkyThreshold;
+
+                if (inSky) {
+                    if (clearInterior == false) { continue; }
+                    if (Utils.DistanceXZ(pos, interiorCenter) > interiorRadius) { continue; }
+                } else {
+                    if (Utils.DistanceXZ(pos, center) > exteriorRadius) { continue; }
+                }
+
+                // Anything the protection policy marked Preserve stays; Block never reaches here
+                // because a blocking hit aborts the whole zone before it is loaded.
+                if (ShouldPreserve(zdo, entry)) { continue; }
+
+                doomed.Add(zdo);
+            }
+
+            zdoBuffer.Clear();
+        }
+
+        // The zone controller and terrain compiler ARE the zone, and the location proxy is the
+        // identity and timestamp carrier for the location we are resetting.
+        private static bool IsStructural(ZDO zdo) {
+            return zdo.m_prefab == ZoneProtectionScan.ZoneCtrlHash
+                || zdo.m_prefab == ZoneProtectionScan.TerrainCompilerHash
+                || zdo.m_prefab == ZoneProtectionScan.LocationProxyHash;
+        }
+
+        private static bool IsPlayer(ZDO zdo) {
+            if (Player.m_localPlayer != null && Player.m_localPlayer.GetZDOID() == zdo.m_uid) { return true; }
+            if (ZNet.instance == null || ZNet.instance.m_peers == null) { return false; }
+            for (int i = 0; i < ZNet.instance.m_peers.Count; i++) {
+                if (ZNet.instance.m_peers[i].m_characterID == zdo.m_uid) { return true; }
+            }
+            return false;
+        }
+
+        private static bool ShouldPreserve(ZDO zdo, LocationResetData.ResolvedResetEntry entry) {
+            if (LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)) { return true; }
+            if (entry == null) { return false; }
+            // Player-built content inside a location that the admin chose to reset around.
+            if (zdo.GetLong(ZDOVars.s_creator, 0L) != 0L) {
+                // Exempt from the piece category: the whole point of an ignore list is that these do
+                // not survive a regeneration, so they fall through to the clear like vanilla content.
+                if (entry.Ignores(ProtectionCategory.PlayerBuiltPiece, zdo.m_prefab)) { return false; }
+                return entry.ActionFor(ProtectionCategory.PlayerBuiltPiece) != ProtectionAction.Ignore;
+            }
+            return false;
+        }
+
+        // Seizing ownership first is what makes the delete network-authoritative. Vanilla's
+        // ZNetScene.Destroy only tears down the ZDO when the caller owns it; without this the object
+        // merely despawns locally and another peer re-broadcasts it.
+        private static void DestroyZdo(ZDO zdo) {
+            if (zdo == null || zdo.IsValid() == false) { return; }
+            TakeOwnership(zdo);
+            if (ZNetScene.instance != null && ZNetScene.instance.m_instances.TryGetValue(zdo, out ZNetView view) && view != null) {
+                ZNetScene.instance.Destroy(view.gameObject);
+                return;
+            }
+            ZDOMan.instance.DestroyZDO(zdo);
+        }
+
+        // Tier 2. Re-runs vanilla PlaceVegetation with only the due prefabs enabled.
+        //
+        // PlaceVegetation seeds each entry with
+        //   worldSeed + zoneX*4271 + zoneY*9187 + prefabName.GetStableHashCode()
+        // so replaying it for one prefab in one zone reproduces that prefab's ORIGINAL positions,
+        // rotations and scales exactly. Surviving nodes still have colliders, so vanilla's IsBlocked
+        // raycast skips their spots and nothing is duplicated -- which is also why surviving
+        // instances must NOT be pre-deleted.
+        private static void RegenerateVegetation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+            ZoneSystem zs = ZoneSystem.instance;
+            if (zs.m_vegetation == null || zs.m_vegetation.Count == 0) { return; }
+            if (zs.m_zones.TryGetValue(zone, out ZoneSystem.ZoneData zoneData) == false || zoneData?.m_root == null) { return; }
+
+            Heightmap heightmap = zoneData.m_root.GetComponentInChildren<Heightmap>();
+            if (heightmap == null) { return; }
+
+            List<ZoneSystem.ZoneVegetation> due = SelectDueVegetation(zone, force, report, out List<int> dueHashes);
+            if (due.Count == 0) { return; }
+
+            // Clear ignored pieces before placing anything. PlaceVegetation's block check treats any
+            // live collider as an obstruction, so a campfire parked on an ore spawn silently stops
+            // that node from ever returning -- the chunk resets, the node does not. Deliberately only
+            // runs when something is actually about to regenerate here.
+            report.IgnoredPiecesCleared += SweepIgnoredPieces(zone);
+
+            List<ZoneSystem.ZoneVegetation> original = zs.m_vegetation;
+            List<GameObject> ghosts = new List<GameObject>();
+            Vector3 zonePos = ZoneSystem.GetZonePos(zone);
+
+            try {
+                zs.m_vegetation = due;
+                zs.m_tempClearAreas.Clear();
+                AddLocationClearArea(zone, zs.m_tempClearAreas);
+
+                // Ghost mode creates the ZDOs but leaves the GameObjects unregistered, which is how
+                // vanilla pre-generates zones. The objects are throwaway; the ZDOs are the result.
+                zs.PlaceVegetation(zone, zonePos, zoneData.m_root.transform, heightmap,
+                    zs.m_tempClearAreas, ZoneSystem.SpawnMode.Ghost, ghosts);
+            } finally {
+                // Restoring the shared vegetation list is not optional: leaving the filtered list in
+                // place would break normal world generation for the rest of the session.
+                zs.m_vegetation = original;
+                zs.m_tempClearAreas.Clear();
+                // Destroy in finally so a throw mid-loop cannot leak orphan GameObjects holding
+                // live ZDOs.
+                for (int i = 0; i < ghosts.Count; i++) {
+                    if (ghosts[i] != null) { Object.Destroy(ghosts[i]); }
+                }
+            }
+
+            if (ghosts.Count > 0) {
+                report.VegetationObjects += ghosts.Count;
+                report.VegetationEntriesReset += due.Count;
+                ApplyVegetationTerrainReset(zone, dueHashes, ghosts, report);
+            }
+
+            for (int i = 0; i < dueHashes.Count; i++) {
+                LocationResetState.StampEntry(zone, dueHashes[i], 0);
+            }
+        }
+
+        // Destroy every ignored prefab in a chunk's own sector. Ignored prefabs are by definition not
+        // player property worth keeping, and leaving them standing defeats the regeneration.
+        private static int SweepIgnoredPieces(Vector2i zone) {
+            if (ZDOMan.instance == null) { return 0; }
+
+            zdoBuffer.Clear();
+            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+
+            // Collected first, destroyed after: DestroyZdo mutates ZDOMan's sector index, so deleting
+            // while iterating the buffer it just filled would skip entries.
+            List<ZDO> doomed = null;
+            for (int i = 0; i < zdoBuffer.Count; i++) {
+                ZDO zdo = zdoBuffer[i];
+                if (zdo == null || zdo.IsValid() == false) { continue; }
+                // An explicitly protected prefab still wins, matching the fail-closed rule in TryClassify.
+                if (LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)) { continue; }
+                if (LocationResetData.AnyCategoryIgnores(zdo.m_prefab) == false) { continue; }
+                if (doomed == null) { doomed = new List<ZDO>(); }
+                doomed.Add(zdo);
+            }
+            zdoBuffer.Clear();
+
+            if (doomed == null) { return 0; }
+            for (int i = 0; i < doomed.Count; i++) { DestroyZdo(doomed[i]); }
+            return doomed.Count;
+        }
+
+        // Clone the vegetation list with only the due entries enabled. Cloning matters because
+        // PlaceVegetation reads m_enable off the shared entries; mutating the originals in place
+        // would corrupt world generation.
+        private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2i zone, bool force, ZoneResetReport report, out List<int> dueHashes) {
+            List<ZoneSystem.ZoneVegetation> due = new List<ZoneSystem.ZoneVegetation>();
+            dueHashes = new List<int>();
+
+            foreach (ZoneSystem.ZoneVegetation veg in ZoneSystem.instance.m_vegetation) {
+                if (veg?.m_prefab == null) { continue; }
+                int hash = veg.m_prefab.name.GetStableHashCode();
+                if (LocationResetData.TryGetVegetationEntry(hash, out LocationResetData.ResolvedResetEntry entry) == false) { continue; }
+                entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
+                if (entry.Enabled == false) { continue; }
+
+                if (force == false && LocationResetState.TryGetEntry(zone, hash, out LocationResetState.EntryRecord record)) {
+                    float dueSeconds = ZoneRates.ScaleSeconds(entry.ResetSeconds, report.RateMultiplier);
+                    if (record.Stamp > 0 && LocationResetState.Now - record.Stamp < dueSeconds) {
+                        report.VegetationEntriesSkipped++;
+                        if (report.Verbose) {
+                            float elapsedHours = (LocationResetState.Now - record.Stamp) / 3600f;
+                            report.Detail($"vegetation '{entry.Name}' skipped - not due ({elapsedHours:0.#}h of {dueSeconds / 3600f:0.#}h elapsed)");
+                        }
+                        continue;
+                    }
+                    // Nothing missing here, nothing to regenerate.
+                    if (record.Baseline == 0) {
+                        report.VegetationEntriesSkipped++;
+                        report.Detail($"vegetation '{entry.Name}' skipped - nothing missing (baseline 0)");
+                        continue;
+                    }
+                }
+
+                ZoneSystem.ZoneVegetation clone = veg.Clone();
+                clone.m_enable = true;
+                // Without the block check vanilla would happily stack a fresh copy on top of the
+                // surviving one every single reset. Force it on rather than growing the world.
+                if (clone.m_blockCheck == false) {
+                    Logger.LogLocationReset($"Vegetation '{veg.m_prefab.name}' has no block check; forcing it on to prevent duplicate placement.");
+                    clone.m_blockCheck = true;
+                }
+                due.Add(clone);
+                dueHashes.Add(hash);
+            }
+
+            return due;
+        }
+
+        // Mining leaves a crater. For entries configured with ResetTerrain, flatten it back around
+        // each regenerated node.
+        private static void ApplyVegetationTerrainReset(Vector2i zone, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
+            bool anyTerrain = false;
+            for (int i = 0; i < dueHashes.Count; i++) {
+                if (LocationResetData.TryGetVegetationEntry(dueHashes[i], out LocationResetData.ResolvedResetEntry entry) && entry.ResetTerrain) {
+                    anyTerrain = true;
+                    break;
+                }
+            }
+            if (anyTerrain == false) { return; }
+
+            // One create/destroy around the whole loop rather than per node: the terrain objects are
+            // the same for every crater in this chunk, and the bracket has to stay yield-free anyway.
+            List<Vector2i> zones = TerrainZonesFor(zone);
+            for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
+            List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
+            try {
+                for (int i = 0; i < ghosts.Count; i++) {
+                    GameObject ghost = ghosts[i];
+                    if (ghost == null) { continue; }
+                    int hash = Utils.GetPrefabName(ghost).GetStableHashCode();
+                    if (LocationResetData.TryGetVegetationEntry(hash, out LocationResetData.ResolvedResetEntry entry) == false) { continue; }
+                    if (entry.ResetTerrain == false) { continue; }
+                    float radius = entry.TerrainRadius > 0f ? entry.TerrainRadius : 8f;
+                    report.TerrainModificationsUndone += TerrainResetter.Reset(ghost.transform.position, radius);
+                }
+            } finally {
+                ZoneLoader.DestroyTerrainObjects(terrainObjects);
+            }
+        }
+
+        // Vegetation must not spawn inside a location footprint. Vanilla builds these clear areas
+        // during PlaceLocations; since we are calling PlaceVegetation on its own, rebuild them.
+        private static void AddLocationClearArea(Vector2i zone, List<ZoneSystem.ClearArea> clearAreas) {
+            if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
+            if (instance.m_location == null || instance.m_location.m_clearArea == false) { return; }
+            clearAreas.Add(new ZoneSystem.ClearArea(instance.m_position, instance.m_location.m_exteriorRadius));
+        }
+    }
+}

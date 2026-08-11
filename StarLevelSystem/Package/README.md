@@ -34,6 +34,8 @@ Features:
 	- level up the FISH!
 	- level scaled BIRDS
 	- level scaled TREES
+- Configurable location, dungeon, terrain and ore resets to passively regenerate the world around you
+    - Supports mod locations, resources, and pickables
 
 
 Got a bug to report or just want to chat about the mod? Drop by the discord or github.
@@ -504,6 +506,146 @@ These modifiers are attainable by most creatures and are typically less directly
 |  ResistPoison|      Reduces damage taken from Poison                                       |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/PoisonRes.png?raw=true" width="64" height="64">     |
 |  ResistSpirit|      Reduces damage taken from Spirit                                       |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/SpiritRes.png?raw=true" width="64" height="64">     |
 
+### Location Reset (LocationResetSettings.yaml)
+> **Back up your world before enabling this.** Location Reset destroys and recreates world objects.
+
+On a busy server the world is a finite pool of loot. Crypts, camps, ore and pickables get consumed
+once and never come back, so late joiners and less-active players are permanently locked out of
+content the early players already stripped. Location Reset brings that content back on a timer.
+
+**It is disabled by default, and every location and vegetation entry is opt-in.** Turn on
+`EnableLocationReset`, then set `Enabled: true` on the specific things you want to come back.
+
+How it works:
+- **Resets happen in the background, only in zones with no players nearby.** Nobody ever watches a
+  location pop out and back in, which is what causes the lag spikes and item duplication other
+  reset mods warn about.
+- **Locations are restored, not re-rolled.** The original position and rotation are kept, so
+  buildings never rotate, shift or clip into the terrain after a reset.
+- **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
+  replayed using the world's own generation seed. Anything still standing is left alone rather than
+  duplicated.
+- **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels.
+- **Terrain can be reset** around ore to undo mining craters. Boss altars support `Mode: TerrainOnly`,
+  which flattens the ground around them without touching the altar itself.
+- **Your stuff is safe.** Player-built structures, tombstones, wards, portals, beds, player-placed
+  chests and tamed creatures all block a reset. Protection is configurable per entry, so you can
+  decide (for example) that a stray dropped item is preserved rather than blocking the whole zone.
+- `StartTemple` can never be reset. Boss altars, `BogWitch_Camp`, `Hildir_camp` and
+  `Vendor_BlackForest` ship disabled.
+
+Timers are in **real-world hours** (`ResetHours`), which stays predictable on a server that runs
+24/7. Throughput is controlled by `LocationResetSweepBudgetMs` — the milliseconds of server frame
+time the sweep may use per frame. Raise it to restore the world faster; it automatically backs off
+when the server is under load. Use `SLS-loc-reset-status` to see the projected time for a full pass.
+
+After installing on an already-explored world, run `SLS-loc-reset-stamp-all` once so every zone's
+timer starts from today instead of everything becoming due at once.
+
+**Reset groups.** The generated config carries one entry per prefab in the world — over 300 of them,
+in registration order, all disabled — so tuning "all ore" one key at a time is impractical. A group
+configures and **enables** a whole set in one block:
+
+```yaml
+ResetGroups:
+  Ores:
+    Enabled: true
+    ResetHours: 48
+    ResetTerrain: true
+    Members: [rock4_copper, MineRock_Tin, silvervein, rock3_silver, mudpile_beacon]
+```
+
+Values resolve as **entry → group → Defaults**, so a per-prefab `ResetHours` still wins over its
+group. A group turns its members on; to exclude one, drop it from `Members`. If two groups claim the
+same prefab the shorter interval wins and the other is named in a warning.
+
+A member can also be a category token — `$Mineable` or `$Pickable` — which expands to every
+configured entry carrying that component, and so picks up modded ore and pickables automatically.
+Note that berry bushes are *not* `Pickable_*` prefabs, which is why the shipped config lists them
+separately. Prefab names are irregular enough that this matters: copper is `rock4_copper` while
+`rock4_forest` is worthless scenery, and silver is both `rock3_silver` and `silvervein`.
+
+A group can be limited to a ring around spawn with `MinDistance` / `MaxDistance` (`MaxDistance: 0`
+means no outer limit). A scoped group applies only inside its range; outside it, its members fall
+back to whatever unscoped group covers them — so `FlintNearSpawn` at 6h within 3000m leaves flint on
+the normal foraging timer everywhere else.
+
+The mod ships working groups (`Ores`, `Berries`, `Foraging`, `FlintNearSpawn`, `Leviathans`,
+`QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature is usable
+without editing anything. Nothing resets until `EnableLocationReset` and the YAML `Enabled` are both
+turned on. `SLS-loc-reset-status` lists every group with a `matched/total` member count — a shortfall
+means a prefab name no longer exists in your game version.
+
+**Focusing resets where they are needed.** Depletion is not uniform — it concentrates in the
+biomes and near the spawn areas your players actually work. Two multipliers stack on top of each
+entry's own `ResetHours`, so `effective hours = ResetHours × biome rate × band rate`, and both
+default to `1.0`:
+
+```yaml
+BiomeRates:
+  Meadows: 0.5          # everything in the Meadows returns twice as fast
+  Mistlands: 2.0        # ...and half as fast out in the Mistlands
+DistanceBands:
+- Inner: 0              # metres from spawn
+  Outer: 3000
+  Multiplier: 0.5       # the hub recovers twice as fast
+```
+
+A rate of `0` **excludes** that biome or band from resets entirely — it does not mean "instantly" —
+which is also the cheap way to say "only reset near spawn". `Outer: 0` means no outer limit, and a
+chunk matching no band is left at `1.0`, so a partial band list never disables the rest of the
+world. Distance is measured from the same point as the distance level-scaling rings; see
+`DistanceBonusIsFromStarterTemple`.
+
+**Ignoring trivial player clutter.** One abandoned campfire otherwise freezes a chunk forever: any
+player-built piece blocks a reset, and the protection scan covers a chunk *and its 8 neighbours*.
+Worse, a campfire sitting on an ore spawn stops that node coming back even when the chunk does
+reset, because vanilla will not place vegetation into a collider. Each protection category can list
+prefabs exempt from it:
+
+```yaml
+Protection:
+  PlayerBuiltPiece:
+    Action: Block
+    Ignored:
+    - fire_pit
+```
+
+> ⚠️ An ignored prefab neither blocks a reset **nor survives one — it is deleted.** `fire_pit` ships
+> ignored for the reasons above; add to the list sparingly. Tombstones can never be ignored, and
+> anything in `ProtectedPrefabs` wins over an ignore. Every deletion is recorded in the chunk log.
+
+**Resetting terrain around a location.** Players dig approach ramps and moats just *outside* a
+dungeon's footprint, where the normal terrain reset does not reach. `ExtraTerrainRadius` on a
+location entry adds metres beyond the location's own radius (clamped to 64m, which is as far as the
+protection scan actually checks for player property):
+
+```yaml
+Locations:
+  Crypt2:
+    Enabled: true
+    ResetTerrain: true
+    ExtraTerrainRadius: 24
+```
+
+**Seeing what it did.** Every chunk the system works on gets a record in
+`SavedData/LocationResetLog.log` — its zone coordinates, world position and biome, and what was and
+was not reset inside it, including the reason anything was skipped:
+
+```
+Zone -12,34 @ x=-768 z=2176 (BlackForest) reset: refreshed pickables 14, minerock 3 | location 'Crypt2' rebuilt (cleared 214, spawned 218) | ZDO 402->405
+Zone -12,35 @ x=-768 z=2240 (Meadows) skipped: protected by PlayerBuiltPiece 'wood_floor' at x=-742 z=2251
+Zone -12,36 @ x=-768 z=2304 (Meadows) nothing reset: location 'FireHole' not due, 3 vegetation entries not due
+```
+
+Turn this off with `EnableLocationResetLog`. `EnableDebugLocationResetDetails` additionally copies
+the background sweep's chunk lines into the BepInEx log and expands every record with a per-entry
+breakdown of what was skipped and why. Both are client-side settings, so on a dedicated server they
+are configured on the server itself.
+
+Not compatible with VentureValheim's LocationReset — SLS disables its own Location Reset
+automatically if that mod is present, since both would fight over the same objects.
+
 ### Localization
 Localization is available for everything in the mod. I accept community translations! If you would like to contribute localizations or improve them please reach out on discord.
 
@@ -514,6 +656,13 @@ Star Level Systems provides a number of terminal commands for debugging and test
 - `sls-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures.
 - `sls-give-modifier [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
 - `sls-dump-loottables` - provides dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
+
+Location Reset commands (server side):
+- `SLS-loc-reset-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
+- `SLS-loc-reset-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
+- `SLS-loc-reset-stamp-all` - stamps every generated zone as reset right now. Run this once after installing on an existing world
+- `SLS-loc-reset-here [range:64]` - immediately resets the chunks around you, ignoring every timer, including the chunks currently loaded around you. Reports each chunk it touched to the console. Player structures are still protected
+- `SLS-loc-reset-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
 
 ### API Usage (WIP)
 Star Level Systems provides a public API for other mods to interact with.
@@ -545,6 +694,8 @@ Once you are ready to install mods, they must be unzipped first and go into the 
 
 ## Compatibility
 - This mod is incompatible with Creature Level and Loot Control (they do the same things)
+- SLS Location Reset is automatically disabled if VentureValheim's LocationReset is installed, since both reset the same objects on their own timers. The rest of Star Level System works normally
+- Upgrade World can be used alongside SLS, but avoid running its `locations_reset` / `vegetation_reset` commands against zones SLS Location Reset manages
 
 Compatibility is being worked on for the following mods:
 - CarryMeMaster
@@ -560,6 +711,6 @@ I welcome pull requests, fixes, and improvements.
 This mod is still in active development and is not considered complete yet.
 
 Planned Features
-- Refinement to the existing modifers
+- Refinement to the existing modifiers
 - New modifiers!
 - Generic and biome specific loot multipliers

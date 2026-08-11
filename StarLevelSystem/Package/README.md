@@ -34,6 +34,8 @@ Features:
 	- level up the FISH!
 	- level scaled BIRDS
 	- level scaled TREES
+- Configurable location, dungeon, terrain and ore resets to passively regenerate the world around you
+    - Supports mod locations, resources, and pickables
 
 
 Got a bug to report or just want to chat about the mod? Drop by the discord or github.
@@ -709,6 +711,6 @@ I welcome pull requests, fixes, and improvements.
 This mod is still in active development and is not considered complete yet.
 
 Planned Features
-- Refinement to the existing modifers
+- Refinement to the existing modifiers
 - New modifiers!
 - Generic and biome specific loot multipliers

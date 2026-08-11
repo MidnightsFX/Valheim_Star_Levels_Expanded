@@ -653,10 +653,10 @@ namespace StarLevelSystem.Data {
                 { "AshlandRuins", new LocationResetGroup() {
                     ResetHours = 72f,
                     Members = new List<string>() {
-                        "FortressRuins", "AshlandRuins", "CharredTowerRuins1_dvergr",
+                        "FortressRuins", "CharredTowerRuins1_dvergr",
                         "CharredRuins1", "CharredRuins4", "FortressRuins",
                         "CharredTowerRuins1", "CharredTowerRuins2", "CharredTowerRuins3",
-                        "SulfurArch", "CharredRuins2", "CharredRuins3", "CharredRuins4", "VoltureNest"
+                        "SulfurArch", "CharredRuins2", "CharredRuins3", "VoltureNest"
                     },
                 } },
             };

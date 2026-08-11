@@ -40,7 +40,14 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static long ZonesExamined = 0;
         internal static long FastLaneZones = 0;
         internal static long SlowLaneZones = 0;
-        internal static long BlockedZones = 0;
+        // Blocked by a player-built structure. Named for what it counts: it was BlockedZones and was
+        // reported as "Blocked by players", which it never was.
+        internal static long ProtectionBlockedZones = 0;
+        // Blocked by a player standing nearby, or by the zone already being loaded.
+        internal static long PlayerBlockedZones = 0;
+        // Transient blocks that got a short retry, and the ones that used the budget up.
+        internal static long RetriedZones = 0;
+        internal static long RetriesExhaustedZones = 0;
         internal static long FirstSightZones = 0;
         internal static long ZdoGrowthTotal = 0;
         internal static double SweepStartedAt = 0d;
@@ -150,6 +157,14 @@ namespace StarLevelSystem.modules.LocationReset {
             if (LocationResetState.TryGetZone(zone, out LocationResetState.ZoneRecord record) == false) {
                 return cfg.StampOnFirstSight ? ZoneWork.FirstSight : ZoneWork.Due;
             }
+
+            // A pending retry replaces the interval floor rather than stacking with it. This is the
+            // one case where a zone is deliberately due SOONER than MinIntervalSeconds: it was
+            // blocked by something transient and we want another look in minutes, not a full cycle.
+            if (record.RetryAt > 0L) {
+                return cfg.Now >= record.RetryAt ? ZoneWork.Due : ZoneWork.None;
+            }
+
             long elapsed = cfg.Now - record.ZoneStamp;
             // Scaling the global floor rather than leaving it fixed is what makes the rates real: a
             // biome at 0.25 has to clear a quarter of the floor to be considered, or it would sit
@@ -179,17 +194,34 @@ namespace StarLevelSystem.modules.LocationReset {
             try {
                 // Never reset a zone somebody is standing in or near. Also covers the case where the
                 // zone is already loaded because a player is there.
-                if (PlayersNearby(zone, cfg.PlayerSafeRadius) || ZoneSystem.instance.IsZoneLoaded(zone)) {
-                    LocationResetState.BackoffZone(zone, 300f);
-                    report.SkipReason = $"player within {cfg.PlayerSafeRadius:0}m, or the zone is loaded";
+                //
+                // This block is transient by nature -- somebody walking past a chunk should not cost
+                // it a whole cycle -- so it gets a couple of short retries before being written off.
+                bool playerNear = PlayersNearby(zone, cfg.PlayerSafeRadius);
+                if (playerNear || ZoneSystem.instance.IsZoneLoaded(zone)) {
+                    PlayerBlockedZones++;
+                    // Reported separately: "somebody is standing here" and "this chunk happens to be
+                    // loaded" have very different causes and used to share one message.
+                    string why = playerNear ? $"player within {cfg.PlayerSafeRadius:0}m" : "zone is already loaded";
+                    if (LocationResetState.TryScheduleRetry(zone, out int attempt, out float delay)) {
+                        RetriedZones++;
+                        report.SkipReason = $"{why}; retry {attempt}/{LocationResetState.MaxTransientRetries} in {delay / 60f:0.#} min";
+                    } else {
+                        RetriesExhaustedZones++;
+                        // Clears the retry state as well, so the next cycle starts with a full budget.
+                        LocationResetState.BackoffZone(zone, 300f);
+                        report.SkipReason = $"{why}; {LocationResetState.MaxTransientRetries} retries spent, deferred to the next cycle";
+                    }
                     yield break;
                 }
 
                 // Zone-wide protection sweep. A blocked zone is stamped forward so it is not retried
-                // every cycle; a base built over a crypt simply keeps it.
+                // every cycle; a base built over a crypt simply keeps it. No short retry here on
+                // purpose: a structure is not going to move in fifteen minutes, and this scan is the
+                // expensive part of a tick.
                 ZoneProtectionScan.ProtectionResult protection = ZoneProtectionScan.ScanZone(zone, null, true);
                 if (protection.Blocked) {
-                    BlockedZones++;
+                    ProtectionBlockedZones++;
                     LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
                     report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
                     yield break;
@@ -216,9 +248,10 @@ namespace StarLevelSystem.modules.LocationReset {
                 yield return ResetTargets.RegenerateZone(zone, cfg, protection, false, report, (ok) => { succeeded = ok; });
 
                 if (succeeded == false) {
-                    // RegenerateZone has already applied the appropriate backoff. Stamping here would
-                    // overwrite it, so just leave the zone alone.
-                    report.SkipReason = report.SkipReason ?? "reset did not complete, backed off";
+                    // RegenerateZone owns the deferral decision on every one of its failure paths --
+                    // a short retry for a load timeout, a backoff for anything else. Stamping here
+                    // would overwrite whichever it chose, so leave the zone alone.
+                    report.SkipReason = report.SkipReason ?? "reset did not complete";
                     yield break;
                 }
 
@@ -252,8 +285,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (entry.Enabled == false) { continue; }
                 if (LocationResetState.TryGetEntry(zone, tracked.Key, out LocationResetState.EntryRecord record) == false) { continue; }
                 if (record.Baseline == 0) { continue; }
-                long elapsed = LocationResetState.Now - record.Stamp;
-                if (elapsed < ZoneRates.ScaleSeconds(entry.ResetSeconds, rate)) { continue; }
+                if (entry.IsDue(record.Stamp, LocationResetState.Now, rate) == false) { continue; }
 
                 live.TryGetValue(tracked.Key, out ushort present);
                 if (present < record.Baseline) { return true; }
@@ -279,7 +311,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // Never stamped: the first pass stamps it and the next one resets it, so a fresh install
             // never wipes every location at once.
             if (lastReset == 0) { return true; }
-            return LocationResetState.Now - lastReset >= ZoneRates.ScaleSeconds(entry.ResetSeconds, rate);
+            return entry.IsDue(lastReset, LocationResetState.Now, rate);
         }
 
         private static bool PlayersNearby(Vector2i zone, float radius) {
@@ -310,6 +342,9 @@ namespace StarLevelSystem.modules.LocationReset {
         internal float MaxZoneLoadWaitSeconds;
         internal long MinIntervalSeconds;
         internal long DefaultIntervalSeconds;
+        // Set when Defaults carries a ResetSchedule instead of ResetHours. Only the fallback path in
+        // DueForRefresh needs it; every configured target resolves its own schedule.
+        internal CronSchedule DefaultSchedule;
         internal int MaxZonesPerSecondFastLane;
         internal int MaxZonesPerSecondSlowLane;
         internal float AdaptiveBackoffFrameMs;
@@ -335,13 +370,18 @@ namespace StarLevelSystem.modules.LocationReset {
             snap.MaxZoneLoadWaitSeconds = cfg.MaxZoneLoadWaitSeconds;
             snap.MinIntervalSeconds = (long)LocationResetData.MinEnabledIntervalSeconds;
             snap.DefaultIntervalSeconds = (long)(cfg.Defaults.ResetHours * 3600f);
-            snap.MaxZonesPerSecondFastLane = cfg.Throughput.MaxZonesPerSecondFastLane;
-            snap.MaxZonesPerSecondSlowLane = cfg.Throughput.MaxZonesPerSecondSlowLane;
-            snap.AdaptiveBackoffFrameMs = cfg.Throughput.AdaptiveBackoffFrameMs;
-            snap.ZdoGrowthTolerance = cfg.Throughput.ZdoGrowthTolerance;
-            snap.RefreshPickables = cfg.InPlaceRefresh.Pickables;
-            snap.RefreshMineRocks = cfg.InPlaceRefresh.MineRocks;
-            snap.RefreshContainerLoot = cfg.InPlaceRefresh.ContainerDefaultLoot;
+            snap.DefaultSchedule = LocationResetData.DefaultSchedule;
+            // Both sections are omitted from the generated config, so read them through the
+            // accessors rather than off cfg -- they are null on any file that never mentioned them.
+            LocationResetThroughput throughput = LocationResetData.Throughput;
+            LocationResetInPlace inPlace = LocationResetData.InPlaceRefresh;
+            snap.MaxZonesPerSecondFastLane = throughput.MaxZonesPerSecondFastLane;
+            snap.MaxZonesPerSecondSlowLane = throughput.MaxZonesPerSecondSlowLane;
+            snap.AdaptiveBackoffFrameMs = throughput.AdaptiveBackoffFrameMs;
+            snap.ZdoGrowthTolerance = throughput.ZdoGrowthTolerance;
+            snap.RefreshPickables = inPlace.Pickables;
+            snap.RefreshMineRocks = inPlace.MineRocks;
+            snap.RefreshContainerLoot = inPlace.ContainerDefaultLoot;
             snap.BiomeRates = cfg.BiomeRates;
             snap.DistanceBands = cfg.DistanceBands;
             snap.RatesActive = AnyRateActive(cfg);
@@ -361,6 +401,9 @@ namespace StarLevelSystem.modules.LocationReset {
             // With no per-entry timers enabled the minimum collapses to zero, which would make every
             // zone permanently due and spin the cursor over the whole world every tick. Fall back to
             // the default interval so an in-place-refresh-only setup still paces itself.
+            if (snap.MinIntervalSeconds <= 0 && snap.DefaultSchedule != null) {
+                snap.MinIntervalSeconds = snap.DefaultSchedule.MinGapSeconds;
+            }
             if (snap.MinIntervalSeconds <= 0) { snap.MinIntervalSeconds = snap.DefaultIntervalSeconds; }
             if (snap.MinIntervalSeconds <= 0) { snap.MinIntervalSeconds = 3600; }
 

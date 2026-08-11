@@ -191,6 +191,10 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void OnDestroy() {
+            // Only the server owns this registry. A client leaving a world would otherwise overwrite its own
+            // ServerRaidSavedData.yaml with whatever it happened to hold (often null, since Setup deserializes
+            // an empty string on a client into null).
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
             RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
         }
     }

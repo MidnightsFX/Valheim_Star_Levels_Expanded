@@ -431,7 +431,8 @@ namespace StarLevelSystem.common {
             RockLootDropsStacked = BindServerConfig("LootSystem", "RockLootDropsStacked", true, "When enabled, rock drops will be automatically stacked before dropping (significantly more performant).");
             MiscLootDropsStacked = BindServerConfig("LootSystem", "MiscLootDropsStacked", true, "When enabled, misc (such as small destructible skeletons etc) drops will be automatically stacked before dropping (significantly more performant).");
 
-            UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled.");
+            UseVanillaRaidConfiguration = BindServerConfig("Raids", "UseVanillaRaidConfiguration", false, "Reverts to use vanilla raid configuration when enabled. Server authoritative: on a dedicated or player hosted server the server's value is synced to every client, so editing this in a client's own config file has no effect.");
+            UseVanillaRaidConfiguration.SettingChanged += RaidControl.OnVanillaRaidModeChanged;
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
             MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server will check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
@@ -627,15 +628,14 @@ namespace StarLevelSystem.common {
 #
 # Resets overworld locations, dungeons, vegetation, ores and pickables so they can be
 # looted again. Sweeps run server-side, in the background, only in zones with no players
-# nearby. Every location and vegetation entry defaults to Enabled: false - opt in to the
-# ones you want. Timers are in real-world hours.
+# nearby. Timers are in real-world hours. NOTHING resets until both the EnableLocationReset
+# BepInEx setting and the Enabled flag below are turned on.
 #
 # BACK UP YOUR WORLD before enabling this.
 #
-# --- Reset groups ---
-# The Locations and Vegetation sections below carry one entry per prefab in the world - 300+ of
-# them - so tuning a whole category one key at a time is impractical. A group configures AND
-# enables a whole set in one block:
+# --- Reset groups: start here ---
+# ResetGroups is where the work happens. A group both ENABLES a set of targets and gives them
+# their settings, in one block:
 #
 #   ResetGroups:
 #     Ores:
@@ -644,17 +644,63 @@ namespace StarLevelSystem.common {
 #       ResetTerrain: true
 #       Members: [rock4_copper, MineRock_Tin, silvervein, rock3_silver, mudpile_beacon]
 #
-# Values resolve entry -> group -> Defaults, so a per-prefab ResetHours still beats its group. A
-# group turns its members on; to exclude one, remove it from Members. If two groups claim the same
-# prefab the shorter interval wins and the other is named in a warning.
+# Groups stand on their own - a member needs no entry anywhere else in this file. To turn a whole
+# category off, set its Enabled: false; to drop one target, remove it from Members. If two groups
+# claim the same prefab the shorter interval wins and the other is named in a warning. A member
+# name this world has nothing for is warned about at load, never fatal.
 #
-# A member can also be a category token, $Mineable or $Pickable, which expands to every configured
-# entry carrying that component and so covers modded content too. Berry bushes are NOT Pickable_*
-# prefabs, which is why they are listed separately below.
+# A member can also be a category token, $Mineable or $Pickable, which expands to everything this
+# world PLACES carrying that component, and so covers modded content too. Unlike a named member a
+# token stops there: one-off pickups that only exist inside dungeons are not swept up by it, so
+# name those explicitly if you want them. Berry bushes are NOT Pickable_* prefabs, which is why
+# they are listed separately below.
 #
 # MinDistance / MaxDistance limit a group to a ring around spawn (MaxDistance 0 = no outer limit).
 # A scoped group applies only inside its range; outside it, its members fall back to whatever
 # unscoped group covers them.
+#
+# --- Locations and Vegetation: overrides only ---
+# Both ship EMPTY and can usually stay that way. Add a key only to override one target, or to
+# enable something no group covers. Values resolve entry -> group -> Defaults, so a per-prefab
+# setting always beats its group:
+#
+#   Locations:
+#     Eikthyrnir:
+#       ResetHours: 12      # BossAltars still enables it; this just retimes it
+#
+# For the full list of names this world can reset - including everything other mods add - run
+# the console command SLS-loc-reset-dump. It writes SavedData/LocationResetCatalog.yaml as a
+# reference; that file is a dump, not a config, and editing it does nothing.
+#
+# --- Scheduling: ResetHours or ResetSchedule ---
+# ResetHours is elapsed time since a target last reset, so a 24h timer drifts a little later
+# every cycle. ResetSchedule is a cron expression instead, for a fixed time of day:
+#
+#   ResetGroups:
+#     Ores:
+#       ResetSchedule: 0 3 * * *      # 03:00 every day
+#     Foraging:
+#       ResetSchedule: '*/30 * * * *' # every 30 minutes (quote anything starting with *)
+#
+# Fields are: minute hour day-of-month month day-of-week, with * , - and */n. Day-of-week is
+# 0-6 (0 = Sunday) or SUN-SAT; months are 1-12 or JAN-DEC. The macros @hourly, @daily,
+# @midnight, @weekly, @monthly and @yearly also work.
+#
+# Times are the SERVER'S LOCAL TIME, not UTC or in-game time. On the day the clocks go
+# forward, a schedule inside the skipped hour runs as soon as the hour ends; on the day they
+# go back it still runs once.
+#
+# Two gotchas worth knowing:
+#   - If BOTH day-of-month and day-of-week are restricted, a day matching EITHER one fires.
+#     0 0 1 * MON is the 1st of the month AND every Monday, not only Mondays that land on the
+#     1st. Every cron behaves this way.
+#   - BiomeRates and DistanceBands do NOT scale a cron schedule - there is no sensible way to
+#     halve 'every Tuesday at 3am'. A rate of 0 still excludes the chunk entirely.
+#
+# ResetHours and ResetSchedule resolve as one unit, entry -> group -> Defaults: the first
+# level that sets either one owns the timing, so a per-prefab ResetHours still overrides its
+# group's ResetSchedule. Where a single level sets both, the schedule wins and it is logged.
+# An invalid expression is logged and that target falls back to ResetHours.
 #
 # --- Targeting resets: BiomeRates and DistanceBands ---
 # Both are multipliers applied on top of each entry's own ResetHours, so 1.0 changes
@@ -691,9 +737,29 @@ namespace StarLevelSystem.common {
 # Per location: metres of terrain reset BEYOND the location's own radius, for the ramps and
 # moats players dig around the outside. Clamped to 64m, which is as far as the protection
 # scan actually checks for player property.
+#
+# --- Advanced sections, omitted while unused ---
+# These four are left out of the generated file because their defaults are right for almost
+# every server. Add the section by hand to use one; anything you leave out keeps its default.
+#
+#   ProtectedPrefabs: [portal_wood]   # always block a reset, whatever category detection says
+#
+#   DistanceBands: []                 # see the section above
+#
+#   InPlaceRefresh:                   # tier 1: refresh ZDO state without loading the zone
+#     Pickables: true                 # regrow picked berries, mushrooms, flint
+#     MineRocks: true                 # restore mined ore deposits
+#     ContainerDefaultLoot: false     # re-roll chest loot. OFF: the one refresh that grants items
+#
+#   Throughput:                       # sweep pacing. Retune only if the server is struggling
+#     SweepBudgetMillisecondsPerFrame: 4    # primary throttle (LocationResetSweepBudgetMs wins)
+#     MaxZonesPerSecondFastLane: 200        # ZDO-only refreshes
+#     MaxZonesPerSecondSlowLane: 2          # resets that must load the zone
+#     AdaptiveBackoffFrameMs: 50            # over this frame time, halve the budget next tick
+#     ZdoGrowthTolerance: 0                 # ZDOs a reset may leak before the zone is backed off
 #################################################
 ",
-                Serialize = () => DataObjects.yamlSerializer.Serialize(LocationResetData.BuildPopulatedDefault()),
+                Serialize = () => DataObjects.yamlSerializer.Serialize(LocationResetData.BuildDefaultConfig()),
             };
 
             // Missing or empty files get defaults written to disk; populated files are left alone.
@@ -724,10 +790,10 @@ namespace StarLevelSystem.common {
             ConfigFileWatcher.Register(locationResetFilePath, UpdateLocationResetSettings);
         }
 
-        // The Location Reset defaults are only genuinely useful once ZoneSystem exists, because the
-        // full location/vegetation list (including entries other mods add) is read from it. Awake runs
-        // long before that, so the first write is a skeleton and LocationResetControl rewrites it with
-        // the populated catalog the first time a world loads. Everything defaults to disabled either way.
+        // The Location Reset default config needs no game state -- reset groups carry the shipped
+        // targeting and Locations/Vegetation exist only for per-prefab overrides -- so this writes a
+        // complete file even at Awake. The exhaustive per-prefab catalogue is a separate artefact,
+        // written on request by SLS-loc-reset-dump.
         internal static void WriteLocationResetDefaultFile() {
             if (YamlDefaultsByPath.TryGetValue(locationResetFilePath, out var def)) {
                 RestoreDefaultConfigFile(locationResetFilePath, def);
@@ -738,15 +804,15 @@ namespace StarLevelSystem.common {
 #
 # Resets overworld locations, dungeons, vegetation, ores and pickables so they can be
 # looted again. Sweeps run server-side, in the background, only in zones with no players
-# nearby. Every location and vegetation entry defaults to Enabled: false - opt in to the
-# ones you want. Timers are in real-world hours.
+# nearby. Reset groups do the targeting; nothing resets until both EnableLocationReset and
+# the Enabled flag below are on. Timers are in real-world hours.
 #
 # BACK UP YOUR WORLD before enabling this.
 #################################################
 ";
                 using StreamWriter writetext = new StreamWriter(locationResetFilePath);
                 writetext.WriteLine(header);
-                writetext.WriteLine(DataObjects.yamlSerializer.Serialize(LocationResetData.BuildPopulatedDefault()));
+                writetext.WriteLine(DataObjects.yamlSerializer.Serialize(LocationResetData.BuildDefaultConfig()));
             }
         }
 
@@ -768,6 +834,17 @@ namespace StarLevelSystem.common {
             using StreamWriter writetext = new StreamWriter(path);
             writetext.WriteLine(def.Header);
             writetext.WriteLine(def.Serialize());
+            ConfigFileWatcher.RefreshStamp(path);
+        }
+
+        // Overwrite a registered config file with already-serialized content, keeping the documented
+        // header block in front of it. Code that rewrites a config in place has to go through this
+        // rather than File.WriteAllText: the header is the only in-file documentation there is, and a
+        // bare write silently deletes it.
+        internal static void RewriteConfigFileWithHeader(string path, string serializedYaml) {
+            using StreamWriter writetext = new StreamWriter(path);
+            if (YamlDefaultsByPath.TryGetValue(path, out var def)) { writetext.WriteLine(def.Header); }
+            writetext.WriteLine(serializedYaml);
             ConfigFileWatcher.RefreshStamp(path);
         }
 

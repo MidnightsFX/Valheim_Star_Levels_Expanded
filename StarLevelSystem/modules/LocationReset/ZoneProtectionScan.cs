@@ -34,6 +34,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // from the prefab.
         internal static readonly Dictionary<int, int> MineRockAreaCounts = new Dictionary<int, int>();
         internal static readonly Dictionary<int, float> MineRockBaseHealth = new Dictionary<int, float>();
+        // Every registered prefab name by hash. Lets a reset group name a target that appears in no
+        // ZoneSystem placement list -- a dungeon pickable, say -- and still get a real name on the
+        // resolved entry for logs, plus tells LocationResetData whether a member name exists at all.
+        internal static readonly Dictionary<int, string> PrefabNamesByHash = new Dictionary<int, string>();
         // Used to locate a sky dungeon's interior so it can be cleared along with the entrance.
         internal static readonly HashSet<int> DungeonGeneratorHashes = new HashSet<int>();
         // Player terraforming ops that persist as their own ZDOs. They have to be instantiated before
@@ -81,10 +85,12 @@ namespace StarLevelSystem.modules.LocationReset {
             MineRockBaseHealth.Clear();
             DungeonGeneratorHashes.Clear();
             TerrainModifierHashes.Clear();
+            PrefabNamesByHash.Clear();
 
             foreach (GameObject prefab in ZNetScene.instance.m_prefabs) {
                 if (prefab == null) { continue; }
                 int hash = prefab.name.GetStableHashCode();
+                PrefabNamesByHash[hash] = prefab.name;
                 if (prefab.GetComponent<Piece>() != null) { pieceHashes.Add(hash); }
                 if (prefab.GetComponent<TombStone>() != null) { tombstoneHashes.Add(hash); }
                 if (prefab.GetComponent<PrivateArea>() != null) { wardHashes.Add(hash); }

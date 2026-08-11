@@ -12,6 +12,18 @@ namespace StarLevelSystem.modules.Raids
 {
     internal static class RaidPatches
     {
+        // The vanilla raid pipeline is server-authoritative: UpdateRandomEvent, StartRandomEvent and the
+        // SetRandomEvent broadcast all early-return on clients. A client only reaches SetRandomEvent /
+        // SetRandomEventByName through RPC_SetEvent (the server telling it which raid is running) or
+        // RandEventSystem.Load, so it must always defer to vanilla there. SLS raids reach clients over
+        // ClientStartRaidRPC, never through these methods.
+        //
+        // Gating here also makes a missed config sync harmless. Jotunn forces admin-only entries to their
+        // bind default at ZNet.Start, so a client that never receives the server's ConfigRPC sits at
+        // UseVanillaRaidConfiguration = false all session. Since the SLS raid names match the vanilla event
+        // names, such a client used to swallow every vanilla raid the server broadcast and spawn a fresh
+        // RaidRunner on each 2s re-broadcast instead.
+        private static bool IsRaidAuthority() => ZNet.instance != null && ZNet.instance.IsServer();
 
         [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
         internal static class UpdatePlayerPrivateKeys {
@@ -42,6 +54,14 @@ namespace StarLevelSystem.modules.Raids
         public static class RandEventSystemAwakePatch {
             public static void Postfix(RandEventSystem __instance) {
                 //if (ZNet.instance.IsServer() == false) { return; }
+                // Snapshot the vanilla raid interval before anything scales it, so the scalar can be re-applied
+                // from a fixed baseline and handed back intact when vanilla raids are re-enabled.
+                RaidControl.CaptureVanillaRaidBaseline(__instance);
+                // Apply here as well: config sync and RaidsData.Init both land before a world exists, so their
+                // ApplyRaidConfiguration calls no-op on a null RandEventSystem and GlobalRaidIntervalScalar
+                // never reached a freshly loaded world. Safe to repeat now that the interval is assigned from
+                // the baseline rather than multiplied in place.
+                RaidControl.ApplyRaidConfiguration(__instance);
                 Logger.LogRaid("Adding custom raid manager");
                 RaidControl.RaidMan = __instance.gameObject.AddComponent<RaidManager>();
                 RaidControl.RaidMan.Setup();   
@@ -52,6 +72,7 @@ namespace StarLevelSystem.modules.Raids
         public static class SetRandomCustomEvent {
             public static bool Prefix(RandEventSystem __instance, RandomEvent ev, Vector3 pos) {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                if (IsRaidAuthority() == false) { return true; }
                 if (ev == null) { return true; }
 
                 Logger.LogRaid($"Checking for random Raid {ev.m_name}");
@@ -75,6 +96,7 @@ namespace StarLevelSystem.modules.Raids
         public static class RandEventSystemStartEvent {
             public static bool Prefix(RandEventSystem __instance) {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                if (IsRaidAuthority() == false) { return true; }
 
                 if (RaidMan != null) {
                     RaidMan.ForceRaidStart();
@@ -99,6 +121,9 @@ namespace StarLevelSystem.modules.Raids
         public static class ResetRandomEvents {
             public static bool Prefix() {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                // Clients must not run this: ZNet.GetPeers() holds the server for them, so the clear-events
+                // RPC would be sent back up to the server rather than fanned out to peers.
+                if (IsRaidAuthority() == false) { return true; }
                 // We override the entire raid selection process if SLS raids are enabled
 
                 foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
@@ -134,6 +159,7 @@ namespace StarLevelSystem.modules.Raids
         public static class RouteNamedEventToSLS {
             public static bool Prefix(string name, Vector3 pos) {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                if (IsRaidAuthority() == false) { return true; }
                 if (RaidsData.RaidsByName.TryGetValue(name, out RaidDefinition raidDef) == false) {
                     // Vanilla / CustomRaids event (present in m_events) — let vanilla resolve and start it.
                     return true;
@@ -161,6 +187,7 @@ namespace StarLevelSystem.modules.Raids
         public static class OverrideRaidSelectionSystem {
             public static bool Prefix() {
                 if (ValConfig.UseVanillaRaidConfiguration.Value) { return true; }
+                if (IsRaidAuthority() == false) { return true; }
                 // When CustomRaids compat is active, let the vanilla selection loop run so CustomRaids raids can fire.
                 // SLS's own RaidManager continues selecting raids independently, so both systems run in parallel.
                 if (Compatibility.CustomRaidsCompatActive) { return true; }

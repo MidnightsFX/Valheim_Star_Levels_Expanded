@@ -178,19 +178,59 @@ namespace StarLevelSystem.modules.Raids
             RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(ServerPlayerRaidData));
         }
 
+        // The vanilla m_eventIntervalMin, captured before SLS scales it. ApplyRaidConfiguration runs on every
+        // config sync and every ConfigFileWatcher reload, so scaling in place compounded (2x -> 4x -> 8x ...)
+        // and was never restored when switching back to vanilla raids. Tracked alongside the instance it came
+        // from so a world reload re-captures rather than reusing a stale baseline.
+        private static RandEventSystem vanillaRaidBaselineSource;
+        private static float vanillaEventIntervalMin;
+
+        internal static void CaptureVanillaRaidBaseline(RandEventSystem res) {
+            if (res == null || vanillaRaidBaselineSource == res) { return; }
+            vanillaRaidBaselineSource = res;
+            vanillaEventIntervalMin = res.m_eventIntervalMin;
+        }
+
         internal static void ApplyRaidConfiguration(RandEventSystem res) {
             if (res == null) { return; }
-            if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+            // Awake normally captures this, but a client that joins mid-session or a re-entered scene can reach
+            // here first; capturing lazily keeps the baseline honest either way.
+            CaptureVanillaRaidBaseline(res);
+
+            if (ValConfig.UseVanillaRaidConfiguration.Value) {
+                // Hand the vanilla interval back, otherwise vanilla raids stay rate-suppressed for the session.
+                res.m_eventIntervalMin = vanillaEventIntervalMin;
+                return;
+            }
 
             RaidConfiguration cfg = RaidsData.SLE_Raid_Settings ?? RaidsData.DefaultConfiguration;
 
-            if (cfg.GlobalSettings != null) {
-                if (cfg.GlobalSettings.GlobalRaidIntervalScalar > 0f) {
-                    res.m_eventIntervalMin *= cfg.GlobalSettings.GlobalRaidIntervalScalar;
-                }
+            if (cfg.GlobalSettings != null && cfg.GlobalSettings.GlobalRaidIntervalScalar > 0f) {
+                res.m_eventIntervalMin = vanillaEventIntervalMin * cfg.GlobalSettings.GlobalRaidIntervalScalar;
+            } else {
+                res.m_eventIntervalMin = vanillaEventIntervalMin;
             }
 
             Logger.LogInfo($"SLS raid system: applied {cfg.Raids.Count} raid definitions.");
+        }
+
+        // UseVanillaRaidConfiguration is server-authoritative and arrives on clients through Jotunn's config sync,
+        // which assigns BoxedValue and so raises SettingChanged on every machine. Without this, flipping to vanilla
+        // mid-session stranded any live raid: RaidRunner.Update early-returns on the flag before it can wind down,
+        // leaving creatures, map pins, music and the forced environment in place permanently.
+        internal static void OnVanillaRaidModeChanged(object sender, EventArgs e) {
+            RandEventSystem res = RandEventSystem.instance;
+
+            if (ValConfig.UseVanillaRaidConfiguration.Value == false) {
+                ApplyRaidConfiguration(res);
+                return;
+            }
+
+            // Switching to vanilla: hard-stop everything SLS owns. Each RaidRunner.OnDestroy unregisters the raid,
+            // removes its map pins, stops the music, releases the environment override and clears its creatures.
+            RemoveNearbyRunningEvents();
+            // Restores m_eventIntervalMin to the vanilla baseline.
+            ApplyRaidConfiguration(res);
         }
 
         internal static void UpdateAvailableRaidsPerPlayer() {
@@ -359,7 +399,9 @@ namespace StarLevelSystem.modules.Raids
 
         public static void RemoveNearbyRunningEvents() {
             Logger.LogRaid($"Client recieved remove nearby event command.");
-            
+            // Reachable outside a loaded world (config change in the main menu), where there is nothing to destroy.
+            if (ZNetScene.instance == null) { return; }
+
             // Avoid the original
             IEnumerable<RaidRunner> objects = Resources.FindObjectsOfTypeAll<RaidRunner>();
             //Logger.LogDebug($"Removing {objects.Count()} nearby events.");

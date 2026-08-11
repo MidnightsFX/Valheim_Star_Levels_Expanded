@@ -27,7 +27,28 @@ namespace StarLevelSystem.modules.LocationReset {
             internal long ZoneStamp;
             // prefab hash -> record. Only holds prefabs the config actually tracks.
             internal Dictionary<int, EntryRecord> Entries = new Dictionary<int, EntryRecord>();
+
+            // Short retry for a TRANSIENT block: a player walking through, or a zone that would not
+            // load. 0 = none. When set it overrides the interval floor in EvaluateZone, which makes
+            // this the only way a zone becomes due sooner than MinEnabledIntervalSeconds.
+            //
+            // Deliberately NOT serialized. Save/Load is a strict version-equality format with no
+            // migration path (see Load below), so persisting these would mean bumping FileVersion
+            // and discarding every zone stamp and census baseline in the world -- an absurd price
+            // for state measured in minutes. A restart just re-evaluates on the normal schedule.
+            internal long RetryAt;
+            internal byte RetryCount;
         }
+
+        // How many extra attempts a transiently-blocked zone gets before it is deferred to its next
+        // normal cycle, and how long to wait before each. Constants rather than yaml knobs: two more
+        // config keys would buy very little and cost the config file's readability.
+        //
+        // These are minimums, not appointments. The sweep walks a cursor over every generated zone,
+        // so a zone becomes eligible again after its delay but is only actually looked at when the
+        // cursor next reaches it -- which on a large world can be the longer of the two.
+        internal const int MaxTransientRetries = 2;
+        private static readonly float[] RetryDelaysSeconds = { 300f, 900f };
 
         private static readonly Dictionary<Vector2i, ZoneRecord> zones = new Dictionary<Vector2i, ZoneRecord>();
         private static string loadedWorld = "";
@@ -63,17 +84,54 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static void StampZone(Vector2i zone) {
             ZoneRecord record = GetOrCreate(zone);
             record.ZoneStamp = Now;
+            // The zone is done, so whatever transient block it was retrying is over.
+            record.RetryAt = 0L;
+            record.RetryCount = 0;
             dirty = true;
         }
 
         // Push a zone's next examination out without resetting it, used when a zone is blocked by a
         // player structure or fails a reset. Prevents a permanently-blocked zone from being retried
         // every sweep cycle.
+        //
+        // Note this can only ever push a zone FURTHER out: the offset is clamped at 0 and the due
+        // gate then adds a full MinEnabledIntervalSeconds on top. To bring a zone forward, use
+        // TryScheduleRetry.
         internal static void BackoffZone(Vector2i zone, float extraSeconds) {
             ZoneRecord record = GetOrCreate(zone);
             record.ZoneStamp = Now + (long)Math.Max(0f, extraSeconds);
+            // An explicit long deferral supersedes any pending short retry.
+            record.RetryAt = 0L;
+            record.RetryCount = 0;
             dirty = true;
         }
+
+        // Ask for a short retry instead of writing the zone off for a whole cycle. Returns false once
+        // the attempt budget is spent, and the caller then backs the zone off normally.
+        //
+        // Only for blocks that plausibly clear on their own -- a player passing through, a zone that
+        // did not finish loading. A chunk blocked by a player-built structure is NOT transient and
+        // deliberately does not use this: a base built over a crypt will not move in fifteen minutes,
+        // and the protection scan is the expensive part of a tick.
+        internal static bool TryScheduleRetry(Vector2i zone, out int attempt, out float delaySeconds) {
+            ZoneRecord record = GetOrCreate(zone);
+            if (record.RetryCount >= MaxTransientRetries) {
+                attempt = record.RetryCount;
+                delaySeconds = 0f;
+                return false;
+            }
+
+            delaySeconds = RetryDelaysSeconds[record.RetryCount];
+            record.RetryCount++;
+            attempt = record.RetryCount;
+            record.RetryAt = Now + (long)delaySeconds;
+            dirty = true;
+            return true;
+        }
+
+        // No separate ClearRetry: every path out of ProcessZone ends in StampZone (the zone is done)
+        // or BackoffZone (deferred for a full cycle), and both clear the retry state themselves. A
+        // third way to clear it would just be a way to forget to call it.
 
         internal static void StampEntry(Vector2i zone, int prefabHash, ushort baseline) {
             ZoneRecord record = GetOrCreate(zone);

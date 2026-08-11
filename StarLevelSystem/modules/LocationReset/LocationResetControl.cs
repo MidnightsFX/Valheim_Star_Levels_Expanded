@@ -22,7 +22,7 @@ namespace StarLevelSystem.modules.LocationReset {
             get {
                 if (LocationResetData.BlockedByModConflict) { return false; }
                 if (ValConfig.EnableLocationReset.Value == false) { return false; }
-                if (LocationResetData.SLE_LocationReset_Settings.Enabled == false) { return false; }
+                if (LocationResetData.ConfigEnabled == false) { return false; }
                 if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return false; }
                 return Ready;
             }
@@ -34,7 +34,7 @@ namespace StarLevelSystem.modules.LocationReset {
             get {
                 float bepinex = ValConfig.LocationResetSweepBudgetMs.Value;
                 if (bepinex > 0f) { return bepinex; }
-                return LocationResetData.SLE_LocationReset_Settings.Throughput.SweepBudgetMillisecondsPerFrame;
+                return LocationResetData.Throughput.SweepBudgetMillisecondsPerFrame;
             }
         }
 
@@ -76,49 +76,33 @@ namespace StarLevelSystem.modules.LocationReset {
             Logger.LogLocationReset($"World ready. Sweep allowed: {SweepAllowed}, tracked zones: {LocationResetState.TrackedZoneCount}.");
         }
 
-        // Awake runs long before ZoneSystem exists, so the config file created there has empty
-        // Locations/Vegetation maps. Once the catalogue is available, fill it in so admins get a
-        // complete, mod-aware list to opt into.
-        //
-        // Only runs while both maps are still empty, so a hand-edited file is never clobbered, and
-        // it merges the catalogue into the EXISTING settings rather than regenerating the file, so
-        // any Defaults/Throughput/InPlaceRefresh values the admin already changed are preserved.
+        // Reset groups stand alone and the default config is complete from its first write, so there
+        // is no longer a catalogue to merge in here -- the exhaustive per-prefab list moved to
+        // SLS-loc-reset-dump. All that remains is backfilling groups onto a config written before
+        // they existed.
         private static void EnsureConfigCatalogPopulated() {
             try {
                 LocationResetConfiguration current = LocationResetData.SLE_LocationReset_Settings;
                 if (current == null) { return; }
                 if (ZoneSystem.instance == null) { return; }
+                if (current.ResetGroups != null && current.ResetGroups.Count > 0) { return; }
 
-                // Groups are backfilled independently of the catalogue, so a server that has been
-                // running since before groups existed picks them up too. They arrive ENABLED, which
-                // is only safe because both master switches still gate the sweep -- so say so loudly
-                // rather than letting an admin discover new reset targets in the world.
-                if (current.ResetGroups == null || current.ResetGroups.Count == 0) {
-                    current.ResetGroups = LocationResetData.DefaultResetGroups();
-                    foreach (KeyValuePair<string, LocationResetGroup> kvp in current.ResetGroups) {
-                        Logger.LogLocationResetWarning($"Added reset group '{kvp.Key}' ({kvp.Value.ResetHours ?? 0f:0.#}h, " +
-                            $"{kvp.Value.Members.Count} members, enabled). It does nothing until EnableLocationReset is on.");
-                    }
-                    File.WriteAllText(ValConfig.locationResetFilePath, DataObjects.yamlSerializer.Serialize(current));
-                    LocationResetData.Rebuild();
+                // Groups arrive ENABLED, which is only safe because both master switches still gate
+                // the sweep -- so say so loudly rather than letting an admin discover new reset
+                // targets in the world.
+                current.ResetGroups = LocationResetData.DefaultResetGroups();
+                foreach (KeyValuePair<string, LocationResetGroup> kvp in current.ResetGroups) {
+                    Logger.LogLocationResetWarning($"Added reset group '{kvp.Key}' ({kvp.Value.ResetHours ?? 0f:0.#}h, " +
+                        $"{kvp.Value.Members.Count} members, enabled). It does nothing until EnableLocationReset is on.");
                 }
-
-                bool hasLocations = current.Locations != null && current.Locations.Count > 0;
-                bool hasVegetation = current.Vegetation != null && current.Vegetation.Count > 0;
-                if (hasLocations || hasVegetation) { return; }
-
-                LocationResetConfiguration catalog = LocationResetData.BuildPopulatedDefault();
-                if (catalog.Locations.Count == 0 && catalog.Vegetation.Count == 0) { return; }
-
-                current.Locations = catalog.Locations;
-                current.Vegetation = catalog.Vegetation;
-
-                Logger.LogLocationResetAlways($"Populating LocationResetSettings.yaml with this world's " +
-                    $"{catalog.Locations.Count} locations and {catalog.Vegetation.Count} vegetation entries (all disabled by default).");
-                File.WriteAllText(ValConfig.locationResetFilePath, DataObjects.yamlSerializer.Serialize(current));
+                // Through ValConfig rather than a bare File.WriteAllText: the latter dropped the
+                // explanatory comment block on every rewrite, which is most of what makes the file
+                // approachable.
+                ValConfig.RewriteConfigFileWithHeader(ValConfig.locationResetFilePath,
+                    DataObjects.yamlSerializer.Serialize(current));
                 LocationResetData.Rebuild();
             } catch (Exception e) {
-                Logger.LogLocationResetWarning($"Could not populate the default config catalogue: {e.Message}");
+                Logger.LogLocationResetWarning($"Could not backfill the default reset groups: {e.Message}");
             }
         }
 
@@ -132,6 +116,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // zones out of a world that is already tearing down.
             ZoneLoader.Clear();
             ZoneProtectionScan.ResetPrefabSets();
+            LocationResetData.ResetWorldCatalogIndex();
         }
 
         // -----------------------------------------------------------------------------------
@@ -151,7 +136,15 @@ namespace StarLevelSystem.modules.LocationReset {
             sb.AppendLine($"Generated zones    : {(ZoneSystem.instance != null ? ZoneSystem.instance.m_generatedZones.Count : 0)}");
             sb.AppendLine($"Enabled locations  : {CountEnabled(LocationResetData.LocationsByHash)}");
             sb.AppendLine($"Enabled vegetation : {CountEnabled(LocationResetData.VegetationByPrefabHash)}");
-            sb.AppendLine($"Min reset interval : {LocationResetData.MinEnabledIntervalSeconds / 3600f:0.##} h");
+            // The sweep's examination floor. With a cron target enabled this is derived from the
+            // tightest gap its expression can produce, not from a configured interval.
+            sb.AppendLine($"Sweep floor        : {LocationResetData.MinEnabledIntervalSeconds / 3600f:0.##} h");
+            if (LocationResetData.DefaultSchedule != null) {
+                sb.AppendLine($"Default schedule   : {LocationResetData.DefaultSchedule.Describe(LocationResetState.Now)}");
+            } else {
+                float defaultHours = LocationResetData.SLE_LocationReset_Settings?.Defaults?.ResetHours ?? 0f;
+                sb.AppendLine($"Default interval   : {defaultHours:0.##} h");
+            }
 
             double uptimeHours = (Time.realtimeSinceStartupAsDouble - LocationResetManager.SweepStartedAt) / 3600d;
             sb.AppendLine($"--- since world load ({uptimeHours:0.##} h) ---");
@@ -159,7 +152,10 @@ namespace StarLevelSystem.modules.LocationReset {
             sb.AppendLine($"First-sight stamps : {LocationResetManager.FirstSightZones}");
             sb.AppendLine($"Fast lane (no load): {LocationResetManager.FastLaneZones}");
             sb.AppendLine($"Slow lane (loaded) : {LocationResetManager.SlowLaneZones}");
-            sb.AppendLine($"Blocked by players : {LocationResetManager.BlockedZones}");
+            sb.AppendLine($"Blocked by players : {LocationResetManager.PlayerBlockedZones}");
+            sb.AppendLine($"Blocked by builds  : {LocationResetManager.ProtectionBlockedZones}");
+            sb.AppendLine($"Short retries      : {LocationResetManager.RetriedZones} " +
+                $"({LocationResetManager.RetriesExhaustedZones} gave up after {LocationResetState.MaxTransientRetries})");
             sb.AppendLine($"Cumulative ZDO drift: {LocationResetManager.ZdoGrowthTotal} (expected 0)");
 
             // Projected time to work through every generated zone at the current observed rate. This
@@ -228,8 +224,11 @@ namespace StarLevelSystem.modules.LocationReset {
                         string outer = group.MaxDistance.GetValueOrDefault() > 0f ? $"{group.MaxDistance.Value:0}m" : "unbounded";
                         scope = $", {group.MinDistance.GetValueOrDefault():0}m-{outer}";
                     }
-                    string hours = group.ResetHours.HasValue ? $"{group.ResetHours.Value:0.#}h" : "default";
-                    sb.AppendLine($"  {kvp.Key,-16} {(group.Enabled.GetValueOrDefault(true) ? "on " : "off")} {hours}{scope}, matched {matched}/{total}");
+                    // A cron group has no hours figure to print, so show the expression instead.
+                    string frequency = group.ResetSchedule != null ? group.ResetSchedule
+                        : group.ResetHours.HasValue ? $"{group.ResetHours.Value:0.#}h"
+                        : "default";
+                    sb.AppendLine($"  {kvp.Key,-16} {(group.Enabled.GetValueOrDefault(true) ? "on " : "off")} {frequency}{scope}, matched {matched}/{total}");
                 }
             }
 
@@ -255,10 +254,10 @@ namespace StarLevelSystem.modules.LocationReset {
                     matched += LocationResetData.CountCategoryMembers(trimmed);
                     continue;
                 }
-                int hash = trimmed.GetStableHashCode();
-                if (LocationResetData.LocationsByHash.ContainsKey(hash) || LocationResetData.VegetationByPrefabHash.ContainsKey(hash)) {
-                    matched++;
-                }
+                // Against the world catalogue, not the resolved lookups: a member is "matched" when
+                // this world has something by that name, which is the check that catches a game
+                // update renaming a prefab.
+                if (LocationResetData.IsKnownTargetName(trimmed.GetStableHashCode())) { matched++; }
             }
             return matched;
         }

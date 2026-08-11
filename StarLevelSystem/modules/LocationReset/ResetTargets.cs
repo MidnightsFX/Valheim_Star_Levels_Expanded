@@ -72,11 +72,19 @@ namespace StarLevelSystem.modules.LocationReset {
                 entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
                 if (entry.Enabled == false) { return false; }
                 if (LocationResetState.TryGetEntry(zone, prefabHash, out LocationResetState.EntryRecord record) && record.Stamp > 0) {
-                    return LocationResetState.Now - record.Stamp >= ZoneRates.ScaleSeconds(entry.ResetSeconds, rate);
+                    return entry.IsDue(record.Stamp, LocationResetState.Now, rate);
                 }
                 return true;
             }
             if (LocationResetState.TryGetZone(zone, out LocationResetState.ZoneRecord zoneRecord) == false) { return false; }
+            // No config entry of its own, so this one rides on Defaults - which can itself be a cron
+            // schedule, hence the snapshot carrying both forms.
+            if (cfg.DefaultSchedule != null) {
+                // The interval branch below gets this for free from ScaleSeconds; state it here so
+                // both halves agree that an excluded chunk is never due.
+                if (rate <= ZoneRates.Excluded) { return false; }
+                return cfg.DefaultSchedule.HasElapsedSince(zoneRecord.ZoneStamp, LocationResetState.Now);
+            }
             return LocationResetState.Now - zoneRecord.ZoneStamp >= ZoneRates.ScaleSeconds(cfg.DefaultIntervalSeconds, rate);
         }
 
@@ -158,7 +166,18 @@ namespace StarLevelSystem.modules.LocationReset {
             bool loaded = false;
             yield return ZoneLoader.Load(zone, cfg.MaxZoneLoadWaitSeconds, force, (ok) => { loaded = ok; });
             if (loaded == false) {
-                report.SkipReason = report.SkipReason ?? "zone did not finish loading in time";
+                // A load timeout is usually transient (the server was busy), so retry shortly. It
+                // MUST defer one way or the other: this path used to return before the backoff block
+                // below, leaving ZoneStamp untouched, so the zone stayed permanently due and burned
+                // MaxZoneLoadWaitSeconds of slow-lane budget on every single cursor lap, forever.
+                if (LocationResetState.TryScheduleRetry(zone, out int attempt, out float delay)) {
+                    report.SkipReason = $"zone did not finish loading in {cfg.MaxZoneLoadWaitSeconds:0}s; " +
+                        $"retry {attempt}/{LocationResetState.MaxTransientRetries} in {delay / 60f:0.#} min";
+                } else {
+                    LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
+                    report.SkipReason = $"zone did not finish loading in {cfg.MaxZoneLoadWaitSeconds:0}s; " +
+                        $"{LocationResetState.MaxTransientRetries} retries spent, deferred to the next cycle";
+                }
                 onComplete?.Invoke(false);
                 yield break;
             }
@@ -280,12 +299,13 @@ namespace StarLevelSystem.modules.LocationReset {
             if (force == false) {
                 // Per-location timer rides on the proxy ZDO so it survives even if the state file is lost.
                 long lastReset = proxy.GetLong(DataObjects.SLS_LOC_RESET, 0L);
-                float dueSeconds = ZoneRates.ScaleSeconds(entry.ResetSeconds, report.RateMultiplier);
-                if (lastReset > 0 && LocationResetState.Now - lastReset < dueSeconds) {
+                long now = LocationResetState.Now;
+                if (lastReset > 0 && entry.IsDue(lastReset, now, report.RateMultiplier) == false) {
                     report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.NotDue);
                     if (report.Verbose) {
-                        float elapsedHours = (LocationResetState.Now - lastReset) / 3600f;
-                        report.Detail($"location '{entry.Name}' not due ({elapsedHours:0.#}h of {dueSeconds / 3600f:0.#}h elapsed)");
+                        float elapsedHours = (now - lastReset) / 3600f;
+                        report.Detail($"location '{entry.Name}' not due ({elapsedHours:0.#}h elapsed, " +
+                            $"schedule {entry.DescribeSchedule(now, report.RateMultiplier)})");
                     }
                     return;
                 }
@@ -757,12 +777,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (entry.Enabled == false) { continue; }
 
                 if (force == false && LocationResetState.TryGetEntry(zone, hash, out LocationResetState.EntryRecord record)) {
-                    float dueSeconds = ZoneRates.ScaleSeconds(entry.ResetSeconds, report.RateMultiplier);
-                    if (record.Stamp > 0 && LocationResetState.Now - record.Stamp < dueSeconds) {
+                    long now = LocationResetState.Now;
+                    if (record.Stamp > 0 && entry.IsDue(record.Stamp, now, report.RateMultiplier) == false) {
                         report.VegetationEntriesSkipped++;
                         if (report.Verbose) {
-                            float elapsedHours = (LocationResetState.Now - record.Stamp) / 3600f;
-                            report.Detail($"vegetation '{entry.Name}' skipped - not due ({elapsedHours:0.#}h of {dueSeconds / 3600f:0.#}h elapsed)");
+                            float elapsedHours = (now - record.Stamp) / 3600f;
+                            report.Detail($"vegetation '{entry.Name}' skipped - not due ({elapsedHours:0.#}h elapsed, " +
+                                $"schedule {entry.DescribeSchedule(now, report.RateMultiplier)})");
                         }
                         continue;
                     }

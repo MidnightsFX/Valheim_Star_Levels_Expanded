@@ -34,6 +34,9 @@ namespace StarLevelSystem.modules.Raids {
         // skips the force-delete cleanup. Hard teardowns (admin reset, shutdown) leave this false and still clean up.
         private bool skipCreatureCleanup = false;
         private List<RaidMonitor> RaidSpawners = new List<RaidMonitor>();
+        // The environment name this runner last wrote into EnvMan.m_forceEnv, so teardown can release the
+        // override without stomping one another system has taken over since. Null when we hold no override.
+        private string forcedEnvName;
 
         // Should map pins be persisted between clients? probably
         private Minimap.PinData AreaPin;
@@ -54,13 +57,15 @@ namespace StarLevelSystem.modules.Raids {
             // Force the raid environment only once the raid has actually committed, so an aborted raid (e.g. no
             // valid spawn points) never flips the weather and then snaps it back.
             RaidDefinition raid = RunningRaid.Get();
-            // While the raid runs, force its environment for all in-range clients. Once it winds down, revert to Clear
-            // (mirrors OnDestroy) so the weather returns to normal immediately instead of lingering until the runner
-            // is finally destroyed at the end of the wind-down window.
+            // While the raid runs, force its environment for all in-range clients. Once it winds down, hand the
+            // override back (mirrors OnDestroy) so the weather returns to normal immediately instead of lingering
+            // until the runner is finally destroyed at the end of the wind-down window.
             if (RaidStarted.Get()) {
-                EnvMan.instance.m_forceEnv = IsWindingDown()
-                    ? DataObjects.Environment.Clear.ToString()
-                    : raid.ForceEnvironment.ToString();
+                if (IsWindingDown()) {
+                    ReleaseForcedEnvironment();
+                } else {
+                    ForceEnvironment(raid.ForceEnvironment.ToString());
+                }
             }
 
             if (Znet.IsOwner() == false) { return; }
@@ -239,10 +244,8 @@ namespace StarLevelSystem.modules.Raids {
             }
 
 
-            // Clear the environment
-            if (EnvMan.instance != null) {
-                EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString();
-            }
+            // Hand the environment override back
+            ReleaseForcedEnvironment();
 
             // A wind-down that intentionally left its stragglers to despawn on their own asks us to skip the
             // force-delete. Hard teardowns (admin reset, shutdown) leave skipCreatureCleanup false and still clean up.
@@ -268,7 +271,28 @@ namespace StarLevelSystem.modules.Raids {
             RemoveExistingMapPins();
             Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.EndMessage);
             if (MusicMan.instance != null) { MusicMan.instance.StopMusic(); }
-            if (EnvMan.instance != null) { EnvMan.instance.m_forceEnv = DataObjects.Environment.Clear.ToString(); }
+            ReleaseForcedEnvironment();
+        }
+
+        // Take the vanilla environment override for this raid. Idempotent, so the per-frame Update path is cheap.
+        private void ForceEnvironment(string envName) {
+            if (EnvMan.instance == null || string.IsNullOrEmpty(envName)) { return; }
+            if (EnvMan.instance.m_forceEnv == envName) { forcedEnvName = envName; return; }
+            EnvMan.instance.m_forceEnv = envName;
+            forcedEnvName = envName;
+        }
+
+        // Vanilla's release value for m_forceEnv is "" (EnvMan.m_forceEnv defaults to empty, and EnvMan only
+        // consults it when non-empty). Writing "Clear" instead left a permanent hard override in place, which
+        // beat biome weather and RandEventSystem.GetEnvOverride — so vanilla raid weather could never apply
+        // again after the first SLS raid. Only release if the override is still the one we set; an EnvZone,
+        // boss event or another raid may have taken it over in the meantime.
+        private void ReleaseForcedEnvironment() {
+            if (forcedEnvName == null) { return; }
+            if (EnvMan.instance != null && EnvMan.instance.m_forceEnv == forcedEnvName) {
+                EnvMan.instance.m_forceEnv = "";
+            }
+            forcedEnvName = null;
         }
 
         // Owner-side per-tick wind-down management: prune creatures that have already wandered off and self-despawned,

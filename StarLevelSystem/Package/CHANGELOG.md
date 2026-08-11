@@ -3,31 +3,12 @@
  ```
  - Adds the Location Reset system! Restores looted overworld locations, dungeons, ores, pickables and vegetation so they can be gathered again. Built for large servers where many players compete for a finite pool of resources. Disabled by default (EnableLocationReset), and every location/vegetation entry is opt-in
 	- Resets run server-side in the background, and ONLY in zones with no players nearby, so players never see a reset happen
-	- Locations are restored to their original position and rotation rather than re-rolled, so buildings never shift or clip
-	- Ore, pickables and vegetation regenerate in their exact original spots, because placement is replayed with the world's own deterministic seed
-	- Dungeon interiors (crypts, caves, mines, citadels) reset along with their entrance
-	- Terrain can be reset around ore and locations to undo mining craters. Boss altars support a TerrainOnly mode that flattens the ground without touching the altar
-	- Player structures, tombstones, wards, portals, beds, player chests and tamed creatures are protected. Protection is configurable per location and per vegetation entry
-	- Timers are in real-world hours and are configured in LocationResetSettings.yaml
-	- Throughput is throttled by a server frame-time budget (LocationResetSweepBudgetMs) that automatically backs off when the server is under load
-	- Adds terminal commands: SLS-loc-reset-status, SLS-loc-reset-dump, SLS-loc-reset-stamp-all, SLS-loc-reset-here, SLS-loc-reset-audit
-	- Automatically disabled when VentureValheim LocationReset is installed, since both would fight over the same objects
-	- Adds a dedicated Location Reset log (EnableLocationResetLog, on by default). Every chunk the system works on gets a record in SavedData/LocationResetLog.log with its zone coordinates, world position and biome, and what was and was not reset inside it - including why something was skipped
-	- EnableDebugLocationResetDetails now adds the background sweep's per-chunk lines to the BepInEx log and expands every record with a per-entry breakdown
-	- SLS-loc-reset-here now really does ignore every timer. It previously still honoured per-prefab timestamps for pickables, ore and containers
-	- SLS-loc-reset-here now resets the chunks currently loaded around you. It previously skipped every loaded chunk, which at the default radius meant it did nothing at all
-	- The SLS-loc-reset-* commands now print to the in-game console instead of only the BepInEx log file
-	- SLS-loc-reset-here now refuses to run when a conflicting reset mod is installed, matching the background sweep
-	- Adds BiomeRates and DistanceBands: per-biome and concentric distance-from-spawn multipliers on every reset timer, so resets can be focused on the biomes and the spawn-adjacent areas players actually deplete. A rate of 0 excludes that biome or band entirely, and excluded chunks are skipped before any work is considered
-	- Protection categories can now list Ignored prefabs. An ignored prefab neither blocks a chunk from resetting nor survives one. fire_pit is ignored by default: one abandoned campfire previously froze a chunk and its 8 neighbours forever, and a campfire on an ore spawn stopped that node from ever returning. Tombstones can never be ignored
-	- Adds ExtraTerrainRadius for locations - resets terrain beyond the location's own footprint, for the ramps and moats players dig around the outside. Neighbouring chunks are loaded so the terrain actually resets on both sides of a chunk boundary
-	- DistanceBonusIsFromStarterTemple now works on dedicated servers. It previously resolved the temple by scanning instantiated objects, which never ran headless, so servers silently measured from world origin while their clients measured from the temple
-	- Fixes terrain resets doing nothing unless a player happened to be standing nearby. A chunk the sweep loads itself has no live terrain compiler - the game only creates those near a player, and on a dedicated server that is the world origin forever - so every terrain reset silently found nothing to do. The needed objects are now brought up for the reset and torn down after. Chunk records report how many terrain modifications were actually reverted, so "nothing to undo" is no longer indistinguishable from "never ran"
-	- Fixes location contents coming back floating in mid-air, most visibly tar clumps hovering above a tarpit. Locations are now respawned the same way world generation creates them, so terrain shaping built into a location (a tarpit's depression) is applied before its contents are snapped to the ground. Previously the contents were snapped to unshaped terrain and that height was saved permanently
-	- Fixes every location reset leaving behind a duplicate LocationProxy, which made the game spawn a second overlapping copy of the location. The replacement now takes over the reset timestamp and the old one is retired
-	- Adds ResetGroups: name a set of prefabs once and give the whole set a timer, instead of hunting through 300+ generated entries to enable them one at a time. Values resolve entry -> group -> Defaults, so an individual entry still overrides its group. Members can also be $Mineable or $Pickable, which cover modded content automatically, and a group can be limited to a ring around spawn - outside that ring its members fall back to whatever unscoped group covers them
-	- Ships working groups (Ores, Berries, Foraging, FlintNearSpawn, Leviathans, QuestSites, CharredSpawners, AshlandsForts) enabled, so Location Reset is usable without editing the yaml. Nothing resets until EnableLocationReset is turned on. Existing configs are given the same groups on load, with a log line naming each. SLS-loc-reset-status reports a matched/total member count per group so a renamed prefab is visible instead of silently doing nothing
 - Adds full safety fallback for empty configs. If a config is empty it will automatically revert to the default configuration. 
+- Fixes UseVanillaRaidConfiguration not producing vanilla raids for clients whose config sync failed to arrive. SLS raid names deliberately match the vanilla event names, so a client that never received the server's setting would intercept every vanilla raid the server broadcast, hide it (no banner, minimap circle, music or weather) and start a fresh SLS raid on each 2 second re-broadcast instead. The vanilla raid pipeline is server-authoritative, so clients now always defer to the server for it and a missed sync no longer changes what a client does
+	- The raid config is server authoritative: on a server the server's UseVanillaRaidConfiguration and RaidSettings.yaml are synced to clients, so editing them client-side does nothing. This is now noted in the config description and the README
+- Fixes vanilla raid weather never applying again after the first SLS raid. Raids released the environment override by forcing "Clear" rather than clearing it, which left a permanent override in place that outranked biome weather and vanilla raid weather. Raids now hand the override back, and only if another system has not taken it over since
+- Fixes GlobalRaidIntervalScalar compounding
+- Switching UseVanillaRaidConfiguration on mid-session now tears down any running SLS raid instead of stranding its creatures, map pins, music and forced weather permanently
 ```
 
 **1.4.2**

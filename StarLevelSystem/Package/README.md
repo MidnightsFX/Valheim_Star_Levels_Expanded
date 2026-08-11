@@ -399,6 +399,8 @@ during an event.
 
 The number of players, frequency, and most all details of each raid is configurable through `RaidSettings.yaml`.
 
+Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
+
 Below is an example of many of the details that can be configured for a given raid
 ```
 - Name: foresttrolls              # Each raid has its own name, these should be unique or can be incorrectly selected
@@ -519,20 +521,22 @@ content the early players already stripped. Location Reset brings that content b
 How it works:
 - **Resets happen in the background, only in zones with no players nearby.** Nobody ever watches a
   location pop out and back in, which is what causes the lag spikes and item duplication other
-  reset mods warn about.
+  reset mods warn about. A chunk somebody happened to be standing in is re-tried a couple of times
+  a few minutes later rather than losing its whole cycle.
 - **Locations are restored, not re-rolled.** The original position and rotation are kept, so
   buildings never rotate, shift or clip into the terrain after a reset.
 - **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
   replayed using the world's own generation seed. Anything still standing is left alone rather than
   duplicated.
 - **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels.
-- **Terrain can be reset** around ore to undo mining craters. Boss altars support `Mode: TerrainOnly`,
-  which flattens the ground around them without touching the altar itself.
+- **Terrain can be reset** around ore to undo mining craters. Locations also support
+  `Mode: TerrainOnly`, which flattens the ground around one without touching the structure itself.
 - **Your stuff is safe.** Player-built structures, tombstones, wards, portals, beds, player-placed
   chests and tamed creatures all block a reset. Protection is configurable per entry, so you can
   decide (for example) that a stray dropped item is preserved rather than blocking the whole zone.
-- `StartTemple` can never be reset. Boss altars, `BogWitch_Camp`, `Hildir_camp` and
-  `Vendor_BlackForest` ship disabled.
+- `StartTemple` can never be reset. Boss altars are covered by the `BossAltars` group, which ships
+  enabled with terrain reset on to undo the crater players dig around a summoning circle — set
+  `Enabled: false` on that group to leave them alone.
 
 Timers are in **real-world hours** (`ResetHours`), which stays predictable on a server that runs
 24/7. Throughput is controlled by `LocationResetSweepBudgetMs` — the milliseconds of server frame
@@ -542,9 +546,9 @@ when the server is under load. Use `SLS-loc-reset-status` to see the projected t
 After installing on an already-explored world, run `SLS-loc-reset-stamp-all` once so every zone's
 timer starts from today instead of everything becoming due at once.
 
-**Reset groups.** The generated config carries one entry per prefab in the world — over 300 of them,
-in registration order, all disabled — so tuning "all ore" one key at a time is impractical. A group
-configures and **enables** a whole set in one block:
+**Reset groups.** Groups are how this feature is configured. A group configures and **enables** a
+whole set of targets in one block, and stands on its own — a member needs no entry anywhere else in
+the file:
 
 ```yaml
 ResetGroups:
@@ -555,26 +559,79 @@ ResetGroups:
     Members: [rock4_copper, MineRock_Tin, silvervein, rock3_silver, mudpile_beacon]
 ```
 
-Values resolve as **entry → group → Defaults**, so a per-prefab `ResetHours` still wins over its
-group. A group turns its members on; to exclude one, drop it from `Members`. If two groups claim the
-same prefab the shorter interval wins and the other is named in a warning.
+To turn a whole category off, set its `Enabled: false`; to drop one target, remove it from
+`Members`. If two groups claim the same prefab the shorter interval wins and the other is named in a
+warning, and a member name your game version has nothing for is warned about at load.
 
-A member can also be a category token — `$Mineable` or `$Pickable` — which expands to every
-configured entry carrying that component, and so picks up modded ore and pickables automatically.
-Note that berry bushes are *not* `Pickable_*` prefabs, which is why the shipped config lists them
-separately. Prefab names are irregular enough that this matters: copper is `rock4_copper` while
-`rock4_forest` is worthless scenery, and silver is both `rock3_silver` and `silvervein`.
+A member can also be a category token — `$Mineable` or `$Pickable` — which expands to everything the
+world *places* carrying that component, and so picks up modded ore and pickables automatically.
+Unlike a named member a token stops there: one-off pickups that only exist inside dungeons are not
+swept up by it, so name those explicitly if you want them. Note that berry bushes are *not*
+`Pickable_*` prefabs, which is why the shipped config lists them separately. Prefab names are
+irregular enough that this matters: copper is `rock4_copper` while `rock4_forest` is worthless
+scenery, and silver is both `rock3_silver` and `silvervein`.
 
 A group can be limited to a ring around spawn with `MinDistance` / `MaxDistance` (`MaxDistance: 0`
 means no outer limit). A scoped group applies only inside its range; outside it, its members fall
 back to whatever unscoped group covers them — so `FlintNearSpawn` at 6h within 3000m leaves flint on
 the normal foraging timer everywhere else.
 
-The mod ships working groups (`Ores`, `Berries`, `Foraging`, `FlintNearSpawn`, `Leviathans`,
-`QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature is usable
-without editing anything. Nothing resets until `EnableLocationReset` and the YAML `Enabled` are both
-turned on. `SLS-loc-reset-status` lists every group with a `matched/total` member count — a shortfall
-means a prefab name no longer exists in your game version.
+The mod ships working groups (`BossAltars`, `Ores`, `Berries`, `Foraging`, `FlintNearSpawn`,
+`Leviathans`, `QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature
+is usable without editing anything. Nothing resets until `EnableLocationReset` and the YAML
+`Enabled` are both turned on. `SLS-loc-reset-status` lists every group with a `matched/total` member
+count — a shortfall means a prefab name no longer exists in your game version.
+
+**Locations and Vegetation are overrides.** Both ship empty and can usually stay that way. Add a key
+only to retune one target or to enable something no group covers; values resolve as
+**entry → group → Defaults**, so a per-prefab setting always beats its group:
+
+```yaml
+Locations:
+  Eikthyrnir:
+    ResetHours: 12        # BossAltars still enables it; this just retimes it
+```
+
+For the full list of names your world can reset — including everything other mods add — run
+`SLS-loc-reset-dump`. It writes `SavedData/LocationResetCatalog.yaml` as a reference; that file is a
+dump, not a config, and editing it does nothing.
+
+**Advanced sections are omitted while unused.** `Throughput`, `InPlaceRefresh`, `ProtectedPrefabs`
+and `DistanceBands` are left out of the generated file because their defaults suit almost every
+server. Add a section by hand to use one — anything you leave out keeps its default. The config
+file's own header comment documents each with its default value.
+
+**Scheduling by clock time.** `ResetHours` measures elapsed time since a target last reset, so a
+24h timer drifts a little later every cycle and you cannot say "restock overnight". `ResetSchedule`
+takes a cron expression instead, usable anywhere `ResetHours` is:
+
+```yaml
+ResetGroups:
+  Ores:
+    ResetSchedule: 0 3 * * *        # 03:00 every day
+  Foraging:
+    ResetSchedule: '*/30 * * * *'   # every 30 minutes
+  AshlandsForts:
+    ResetSchedule: 0 4 * * MON      # 04:00 on Mondays
+```
+
+Fields are `minute hour day-of-month month day-of-week`, supporting `*`, `,`, `-` and `*/n`.
+Day-of-week is `0-6` (0 = Sunday) or `SUN`–`SAT`, months are `1-12` or `JAN`–`DEC`, and the macros
+`@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly` and `@yearly` all work. Quote any expression
+starting with `*`, or YAML will read it as an alias.
+
+Times are the **server's local time**, not UTC and not in-game time. Two things to know:
+
+- If **both** day-of-month and day-of-week are restricted, a day matching *either* fires —
+  `0 0 1 * MON` is the 1st of the month **and** every Monday. Surprising, but it is what every cron
+  does.
+- `BiomeRates` and `DistanceBands` do **not** scale a cron schedule; there is no sensible way to
+  halve "every Tuesday at 3am". A rate of `0` still excludes the chunk entirely.
+
+The two fields resolve as one unit, entry → group → Defaults: the first level that sets *either* one
+owns the timing, so a per-prefab `ResetHours` still overrides its group's `ResetSchedule`. An invalid
+expression is logged and that target quietly falls back to `ResetHours` rather than taking the config
+file down.
 
 **Focusing resets where they are needed.** Depletion is not uniform — it concentrates in the
 biomes and near the spawn areas your players actually work. Two multipliers stack on top of each
@@ -611,7 +668,7 @@ Protection:
     - fire_pit
 ```
 
-> ⚠️ An ignored prefab neither blocks a reset **nor survives one — it is deleted.** `fire_pit` ships
+> An ignored prefab neither blocks a reset **nor survives one — it is deleted.** `fire_pit` ships
 > ignored for the reasons above; add to the list sparingly. Tombstones can never be ignored, and
 > anything in `ProtectedPrefabs` wins over an ignore. Every deletion is recorded in the chunk log.
 

@@ -912,13 +912,15 @@ namespace StarLevelSystem.common
             }
         }
 
-        // A named set of reset targets that share settings.
+        // A named set of reset targets that share settings, and the primary way this feature is
+        // configured.
         //
-        // A group both ENABLES its members and gives them their timers, which is the whole point: the
-        // generated config carries one key per prefab in the world (300+ of them, in registration
-        // order, all disabled), so "all ore on a 48h timer" would otherwise mean hunting down eight
-        // scattered keys and editing each. Null fields fall through to Defaults exactly as a per-entry
-        // value does, and an explicit per-entry value still wins over the group.
+        // A group both ENABLES its members and gives them their timers, and stands on its own: a
+        // member resolves whether or not Locations/Vegetation carries a key for it. That is what lets
+        // the generated config ship with those lists empty instead of one key per prefab in the world
+        // (300+ of them, in registration order), where "all ore on a 48h timer" meant hunting down
+        // eight scattered keys and editing each. Null fields fall through to Defaults exactly as a
+        // per-entry value does, and an explicit per-entry value still wins over the group.
         public class LocationResetGroup {
             // Nullable on purpose. A plain bool with [DefaultValue(true)] would be OMITTED from the
             // generated file whenever it is true, hiding the switch from anyone who never reads the
@@ -927,6 +929,11 @@ namespace StarLevelSystem.common
             // absent still means enabled.
             public bool? Enabled { get; set; } = true;
             public float? ResetHours { get; set; }
+            // A cron expression, as an alternative to ResetHours. See CronSchedule. Where a single
+            // level sets both, the schedule wins; the two are resolved as one unit, so a per-entry
+            // ResetHours still overrides a group's ResetSchedule.
+            [DefaultValue(null)]
+            public string ResetSchedule { get; set; } = null;
             public bool? ResetTerrain { get; set; }
             public float? TerrainRadius { get; set; }
             public float? ExtraTerrainRadius { get; set; }
@@ -939,9 +946,10 @@ namespace StarLevelSystem.common
             public float? MinDistance { get; set; }
             public float? MaxDistance { get; set; }
 
-            // Prefab names, or a category token ($Mineable / $Pickable) that expands to every
-            // configured entry carrying that component. Names that match nothing are warned about at
-            // config load, never fatal.
+            // Prefab names, or a category token ($Mineable / $Pickable) that expands to everything the
+            // world places carrying that component. A named member can be any prefab at all; a token
+            // deliberately reaches no further than the placement lists. Names that match nothing are
+            // warned about at config load, never fatal.
             public List<string> Members { get; set; } = new List<string>();
         }
 
@@ -958,8 +966,11 @@ namespace StarLevelSystem.common
         }
 
         public class LocationResetConfiguration {
-            [DefaultValue(false)]
-            public bool Enabled { get; set; } = false;
+            // Nullable for the same reason LocationResetGroup.Enabled is: a plain bool would be
+            // omitted from the generated file at its default and leave the master switch invisible in
+            // a file whose entire header talks about turning it on. Absent means off here -- this one
+            // has to fail closed. Read it through LocationResetData.ConfigEnabled.
+            public bool? Enabled { get; set; } = false;
             // Metres from a zone centre within which a player's presence defers the sweep.
             [DefaultValue(256f)]
             public float PlayerSafeRadius { get; set; } = 256f;
@@ -970,15 +981,27 @@ namespace StarLevelSystem.common
             [DefaultValue(10f)]
             public float MaxZoneLoadWaitSeconds { get; set; } = 10f;
 
-            public LocationResetThroughput Throughput { get; set; } = new LocationResetThroughput();
+            // Null by default so an untouched section is omitted from the generated file rather than
+            // written as `Throughput: {}`. Every value inside carries its own [DefaultValue], so a
+            // present-but-all-default object would serialize as an empty mapping and read as noise.
+            // Read them through LocationResetData.Throughput / .InPlaceRefresh, never directly.
+            [DefaultValue(null)]
+            public LocationResetThroughput Throughput { get; set; } = null;
+            // Defaults deliberately stays non-null: its Protection block is real content admins need
+            // to see and edit, not a section of hidden knobs.
             public LocationResetDefaults Defaults { get; set; } = new LocationResetDefaults();
-            public LocationResetInPlace InPlaceRefresh { get; set; } = new LocationResetInPlace();
+            [DefaultValue(null)]
+            public LocationResetInPlace InPlaceRefresh { get; set; } = null;
 
+            // Per-prefab OVERRIDES. Reset groups stand on their own, so these only need an entry for a
+            // prefab whose settings should differ from whatever group covers it (or for one no group
+            // covers at all). Generated empty; SLS-loc-reset-dump writes the full catalogue.
             public Dictionary<string, LocationResetEntry> Locations { get; set; } = new Dictionary<string, LocationResetEntry>();
             public Dictionary<string, LocationResetEntry> Vegetation { get; set; } = new Dictionary<string, LocationResetEntry>();
 
             // Extra prefabs treated as protected regardless of category detection.
-            public List<string> ProtectedPrefabs { get; set; } = new List<string>();
+            [DefaultValue(null)]
+            public List<string> ProtectedPrefabs { get; set; } = null;
 
             // Named groups of targets that share settings, so a whole set can be enabled and timed in
             // one block instead of editing hundreds of individual entries.
@@ -992,7 +1015,8 @@ namespace StarLevelSystem.common
             // Concentric bands measured from the reset centre, evaluated in order; the first band
             // containing a chunk wins. A chunk matching no band is unaffected (rate 1.0), so a partial
             // list never accidentally disables the rest of the world.
-            public List<LocationResetBand> DistanceBands { get; set; } = new List<LocationResetBand>();
+            [DefaultValue(null)]
+            public List<LocationResetBand> DistanceBands { get; set; } = null;
         }
 
         public class LocationResetThroughput {
@@ -1018,6 +1042,10 @@ namespace StarLevelSystem.common
         public class LocationResetDefaults {
             [DefaultValue(72f)]
             public float ResetHours { get; set; } = 72f;
+            // Fallback cron expression for every target that sets neither ResetHours nor
+            // ResetSchedule of its own. Null (the default) leaves everything on ResetHours.
+            [DefaultValue(null)]
+            public string ResetSchedule { get; set; } = null;
             [DefaultValue(false)]
             public bool ResetTerrain { get; set; } = false;
             // 0 = use the location's own m_exteriorRadius.
@@ -1065,8 +1093,12 @@ namespace StarLevelSystem.common
         public class LocationResetEntry {
             [DefaultValue(false)]
             public bool Enabled { get; set; } = false;
-            // Hours of real time between resets. Null = use Defaults.ResetHours.
+            // Hours of real time between resets. Null = use the group's, then Defaults.ResetHours.
             public float? ResetHours { get; set; }
+            // A cron expression, as an alternative to ResetHours. See CronSchedule. Setting either
+            // one here takes this target off whatever its group says about timing.
+            [DefaultValue(null)]
+            public string ResetSchedule { get; set; } = null;
             [DefaultValue(LocationResetMode.Full)]
             public LocationResetMode Mode { get; set; } = LocationResetMode.Full;
             public bool? ResetTerrain { get; set; }

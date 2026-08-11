@@ -19,15 +19,10 @@ namespace StarLevelSystem.Data {
             "StartTemple",
         };
 
-        // Shipped disabled, as there is no real reason to reset them.
-        internal static readonly string[] DefaultDisabledLocations = new string[] {
-            "BogWitch_Camp",
-            "Hildir_camp",
-            "Vendor_BlackForest",
-        };
-
-        // Boss altars. Default off; when enabled they default to TerrainOnly, since the usual reason
-        // to touch them is to undo the crater players dig around the summoning circle.
+        // Boss altars, shipped as the BossAltars group in DefaultResetGroups(). Enabled by default in
+        // Full mode with the terrain reset on, because the usual reason to touch one is to undo the
+        // crater players dig around the summoning circle. Nothing resets until both master switches
+        // (EnableLocationReset and the yaml Enabled) are on.
         internal static readonly string[] BossAltarLocations = new string[] {
             "Eikthyrnir",
             "GDKing",
@@ -43,9 +38,27 @@ namespace StarLevelSystem.Data {
         internal static readonly Dictionary<int, ResolvedResetEntry> LocationsByHash = new Dictionary<int, ResolvedResetEntry>();
         internal static readonly HashSet<int> ExtraProtectedPrefabHashes = new HashSet<int>();
 
+        // Throughput and InPlaceRefresh are omitted from the generated config (see
+        // LocationResetConfiguration), so they are null on any file that never mentioned them. These
+        // hand out a shared all-defaults instance instead, which is why nothing writes the fallback
+        // back onto the config -- doing so would resurrect `Throughput: {}` on the next rewrite.
+        private static readonly LocationResetThroughput ThroughputFallback = new LocationResetThroughput();
+        private static readonly LocationResetInPlace InPlaceFallback = new LocationResetInPlace();
+        internal static LocationResetThroughput Throughput {
+            get { return SLE_LocationReset_Settings?.Throughput ?? ThroughputFallback; }
+        }
+        internal static LocationResetInPlace InPlaceRefresh {
+            get { return SLE_LocationReset_Settings?.InPlaceRefresh ?? InPlaceFallback; }
+        }
+
         // Shortest enabled interval across every target, in seconds. A zone is only considered due
         // when this much time has passed since its stamp, which keeps the due-queue scan cheap.
         internal static float MinEnabledIntervalSeconds = float.MaxValue;
+
+        // Defaults.ResetSchedule, parsed once per config load. Null when Defaults uses ResetHours.
+        // Only the fallback path matters here -- prefabs with no config entry of their own, which are
+        // timed off the zone stamp rather than a resolved entry.
+        internal static CronSchedule DefaultSchedule { get; private set; }
 
         // Ceiling on ExtraTerrainRadius, and not an arbitrary number: ScanZone covers the chunk plus
         // its 8 neighbours (+/-96m from the chunk centre) and a location sits within 32m of that
@@ -57,8 +70,15 @@ namespace StarLevelSystem.Data {
         // yaml Enabled flag so nothing can turn it back on mid-session.
         internal static bool BlockedByModConflict = false;
 
+        // The yaml master switch. Nullable on disk so it stays visible in the generated file; absent
+        // means OFF, unlike a reset group, because this is the switch that lets the sweep delete
+        // things at all.
+        internal static bool ConfigEnabled {
+            get { return SLE_LocationReset_Settings?.Enabled.GetValueOrDefault(false) ?? false; }
+        }
+
         internal static bool SweepEnabled {
-            get { return SLE_LocationReset_Settings.Enabled && BlockedByModConflict == false; }
+            get { return ConfigEnabled && BlockedByModConflict == false; }
         }
 
         // A single target with its fallbacks already folded in.
@@ -67,6 +87,9 @@ namespace StarLevelSystem.Data {
             internal int PrefabHash;
             internal bool Enabled;
             internal float ResetSeconds;
+            // Set instead of ResetSeconds when this target is on a cron schedule. Never both: the
+            // two are resolved as one unit by PickFrequency.
+            internal CronSchedule Schedule;
             internal LocationResetMode Mode;
             internal bool ResetTerrain;
             internal float TerrainRadius;
@@ -101,6 +124,25 @@ namespace StarLevelSystem.Data {
                 return this;
             }
 
+            // The single due-check for every tier. Was five copies of
+            // "Now - stamp >= modules.LocationReset.ZoneRates.ScaleSeconds(ResetSeconds, rate)" before cron existed.
+            internal bool IsDue(long stamp, long now, float rate) {
+                // An excluded biome or band means never, on both kinds of schedule.
+                if (rate <= modules.LocationReset.ZoneRates.Excluded) { return false; }
+                // Biome and band multipliers scale an interval, and there is nothing coherent to
+                // scale on a calendar time -- halving "every Tuesday at 3am" is meaningless. A cron
+                // target therefore ignores the multipliers and honours only the exclusion above.
+                if (Schedule != null) { return Schedule.HasElapsedSince(stamp, now); }
+                return now - stamp >= modules.LocationReset.ZoneRates.ScaleSeconds(ResetSeconds, rate);
+            }
+
+            // How long until this target could next come due, for the chunk log. Meaningless for
+            // cron, which is why callers use DescribeSchedule instead of formatting hours.
+            internal string DescribeSchedule(long now, float rate) {
+                if (Schedule != null) { return Schedule.Describe(now); }
+                return $"{modules.LocationReset.ZoneRates.ScaleSeconds(ResetSeconds, rate) / 3600f:0.#}h";
+            }
+
             internal ProtectionAction ActionFor(ProtectionCategory category) {
                 if (Protection != null && Protection.TryGetValue(category, out ProtectionRule rule) && rule != null) { return rule.Action; }
                 return ProtectionAction.Block;
@@ -114,17 +156,17 @@ namespace StarLevelSystem.Data {
             }
         }
 
+        // Throughput and InPlaceRefresh are left null on purpose; read them through the accessors
+        // above. Rebuild() must never fill them in here -- this is a shared static instance that
+        // Init() hands straight to SLE_LocationReset_Settings.
         public static readonly LocationResetConfiguration DefaultConfiguration = new LocationResetConfiguration() {
             Enabled = false,
             PlayerSafeRadius = 256f,
             StampOnFirstSight = true,
             MaxZoneLoadWaitSeconds = 10f,
-            Throughput = new LocationResetThroughput(),
             Defaults = new LocationResetDefaults(),
-            InPlaceRefresh = new LocationResetInPlace(),
             Locations = new Dictionary<string, LocationResetEntry>(),
             Vegetation = new Dictionary<string, LocationResetEntry>(),
-            ProtectedPrefabs = new List<string>(),
         };
 
         internal static void Init() {
@@ -180,20 +222,29 @@ namespace StarLevelSystem.Data {
 
         // Flatten the config into the hash-keyed lookups the sweep uses, applying Defaults for any
         // unset per-entry value. Safe to call before ZoneSystem exists; prefab hashes are computed
-        // from names so no game state is required.
+        // from names so no game state is required. Group-only targets need the world catalogue and so
+        // only materialise on the world-ready pass -- see AddGroupOnlyTargets.
+        //
+        // Never writes fallback objects back onto cfg: SLE_LocationReset_Settings can be the shared
+        // DefaultConfiguration instance, and a filled-in Throughput would be re-serialized as
+        // `Throughput: {}` the next time the file is rewritten.
         internal static void Rebuild() {
             LocationResetConfiguration cfg = SLE_LocationReset_Settings;
             if (cfg == null) { return; }
             if (cfg.Defaults == null) { cfg.Defaults = new LocationResetDefaults(); }
             if (cfg.Defaults.Protection == null) { cfg.Defaults.Protection = LocationResetDefaults.DefaultProtection(); }
-            if (cfg.Throughput == null) { cfg.Throughput = new LocationResetThroughput(); }
-            if (cfg.InPlaceRefresh == null) { cfg.InPlaceRefresh = new LocationResetInPlace(); }
 
             LocationsByHash.Clear();
             VegetationByPrefabHash.Clear();
             ExtraProtectedPrefabHashes.Clear();
             MinEnabledIntervalSeconds = float.MaxValue;
+            // Both are per-load: a reload must re-parse whatever the file now says, and must warn
+            // again about anything still wrong with it.
+            scheduleCache.Clear();
+            scheduleWarnings.Clear();
+            DefaultSchedule = ParseSchedule(cfg.Defaults.ResetSchedule, "Defaults", "Defaults");
 
+            BuildWorldCatalogIndex();
             GroupMembership membership = ExpandGroups(cfg);
 
             if (cfg.Locations != null) {
@@ -218,6 +269,7 @@ namespace StarLevelSystem.Data {
                 }
             }
 
+            AddGroupOnlyTargets(cfg, membership);
             membership.WarnOnUnmatchedMembers();
 
             if (cfg.ProtectedPrefabs != null) {
@@ -283,14 +335,154 @@ namespace StarLevelSystem.Data {
         }
 
         private static void TrackInterval(ResolvedResetEntry entry) {
-            if (entry.Enabled && entry.ResetSeconds > 0f && entry.ResetSeconds < MinEnabledIntervalSeconds) {
-                MinEnabledIntervalSeconds = entry.ResetSeconds;
+            if (entry.Enabled) {
+                float floor = FloorContribution(entry);
+                if (floor > 0f && floor < MinEnabledIntervalSeconds) { MinEnabledIntervalSeconds = floor; }
             }
             // Scoped variants count too, and are checked even when the base is disabled: a prefab
             // covered ONLY by a distance-scoped group has a disabled base by design, and skipping its
             // variants here would leave the 6h group sitting behind a 72h floor, never coming due.
             if (entry.Scoped == null) { return; }
             for (int i = 0; i < entry.Scoped.Count; i++) { TrackInterval(entry.Scoped[i]); }
+        }
+
+        // How low this target needs the sweep's examination floor to be. A cron target has no
+        // interval, so it contributes the tightest gap its expression can produce -- without this it
+        // would contribute nothing and an hourly cron would sit behind, say, FlintNearSpawn's 6h
+        // floor and never fire.
+        //
+        // The slack matters: the floor is measured from ZoneStamp (when the zone was last EXAMINED)
+        // while cron fires against the per-target stamp. A daily 03:00 whose zone was examined at
+        // 03:05 is 23h55m from its own fire, so an exact 24h floor would hold it back another five
+        // minutes every single day.
+        private const float CronFloorSlackSeconds = 600f;
+
+        private static float FloorContribution(ResolvedResetEntry entry) {
+            if (entry.Schedule == null) { return entry.ResetSeconds; }
+            return Math.Max(60f, entry.Schedule.MinGapSeconds - CronFloorSlackSeconds);
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // World catalogue index
+        // ------------------------------------------------------------------------------------------
+        //
+        // What this world can actually place, by name hash. Two jobs, both of which used to be done
+        // by the exhaustive Locations/Vegetation lists in the config file:
+        //
+        //   1. Tell a group member apart as a location (found by LocationInstance.m_location.Hash)
+        //      or a prefab-hash ZDO (found by ZDO.m_prefab). The two lookups are not interchangeable.
+        //   2. Decide whether a member name matched anything at all, which is the check that catches
+        //      a game update renaming a prefab out from under a curated list.
+        private static readonly HashSet<int> KnownLocationHashes = new HashSet<int>();
+        private static readonly HashSet<int> KnownVegetationHashes = new HashSet<int>();
+        private static readonly Dictionary<int, string> KnownNames = new Dictionary<int, string>();
+        private static bool worldCatalogBuilt = false;
+
+        // Needs BOTH ZoneSystem (placement lists) and ZNetScene (prefabs). Requiring both matters:
+        // with ZNetScene missing, every dungeon-only pickable would look like a member that matched
+        // nothing and produce a false warning. A no-op before then, and LocationResetControl re-runs
+        // Rebuild at world ready -- the same pass that resolves $Mineable / $Pickable.
+        internal static void BuildWorldCatalogIndex() {
+            if (worldCatalogBuilt) { return; }
+            if (ZoneSystem.instance == null || ZNetScene.instance == null) { return; }
+
+            KnownLocationHashes.Clear();
+            KnownVegetationHashes.Clear();
+            KnownNames.Clear();
+            modules.LocationReset.ZoneProtectionScan.BuildPrefabSets();
+
+            if (ZoneSystem.instance.m_locations != null) {
+                foreach (ZoneSystem.ZoneLocation location in ZoneSystem.instance.m_locations) {
+                    if (location == null) { continue; }
+                    string name = SafePrefabName(location);
+                    if (string.IsNullOrEmpty(name)) { continue; }
+                    int hash = name.GetStableHashCode();
+                    KnownLocationHashes.Add(hash);
+                    KnownNames[hash] = name;
+                }
+            }
+
+            if (ZoneSystem.instance.m_vegetation != null) {
+                foreach (ZoneSystem.ZoneVegetation veg in ZoneSystem.instance.m_vegetation) {
+                    if (veg == null || veg.m_prefab == null) { continue; }
+                    string name = veg.m_prefab.name;
+                    if (string.IsNullOrEmpty(name)) { continue; }
+                    int hash = name.GetStableHashCode();
+                    KnownVegetationHashes.Add(hash);
+                    KnownNames[hash] = name;
+                }
+            }
+
+            worldCatalogBuilt = true;
+            Logger.LogLocationReset($"World catalogue indexed: {KnownLocationHashes.Count} locations, " +
+                $"{KnownVegetationHashes.Count} vegetation prefabs.");
+        }
+
+        internal static void ResetWorldCatalogIndex() {
+            KnownLocationHashes.Clear();
+            KnownVegetationHashes.Clear();
+            KnownNames.Clear();
+            worldCatalogBuilt = false;
+        }
+
+        // A name this world has something for: a placeable location, placeable vegetation, or any
+        // registered prefab. The last case covers dungeon-only pickables and mine rocks, which never
+        // appear in ZoneSystem's placement lists but are perfectly valid reset targets.
+        internal static bool IsKnownTargetName(int prefabHash) {
+            if (KnownLocationHashes.Contains(prefabHash) || KnownVegetationHashes.Contains(prefabHash)) { return true; }
+            return modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.ContainsKey(prefabHash);
+        }
+
+        private static string ResolveKnownName(int prefabHash) {
+            if (KnownNames.TryGetValue(prefabHash, out string name)) { return name; }
+            if (modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.TryGetValue(prefabHash, out string prefabName)) { return prefabName; }
+            return null;
+        }
+
+        // Groups stand on their own: a member resolves whether or not Locations/Vegetation carries a
+        // key for it, which is what lets the generated config ship with both lists empty instead of
+        // one entry per prefab in the world. A per-entry key still wins where one exists -- those
+        // were already resolved by the two passes above and are skipped here.
+        private static void AddGroupOnlyTargets(LocationResetConfiguration cfg, GroupMembership membership) {
+            if (worldCatalogBuilt == false) { return; }
+
+            foreach (KeyValuePair<int, List<KeyValuePair<string, LocationResetGroup>>> kvp in membership.ByPrefab) {
+                int hash = kvp.Key;
+                bool isLocation = KnownLocationHashes.Contains(hash);
+                bool isVegetation = KnownVegetationHashes.Contains(hash);
+                if (isLocation == false && isVegetation == false) {
+                    // Neither placement list mentions it. If a prefab exists it is something like a
+                    // dungeon pickable, which the sweep finds by ZDO prefab hash -- the vegetation
+                    // lookup. If no prefab exists either, WarnOnUnmatchedMembers already covers it.
+                    //
+                    // Named members only. A $token must not reach past the placement lists: it is a
+                    // wildcard shipped ENABLED (Foraging), and quietly extending it to every Pickable
+                    // in the game would start regrowing one-off dungeon and quest pickups.
+                    if (membership.NamedMembers.Contains(hash) == false) { continue; }
+                    if (modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.ContainsKey(hash) == false) { continue; }
+                    isVegetation = true;
+                }
+
+                string name = ResolveKnownName(hash);
+                if (string.IsNullOrEmpty(name)) { continue; }
+                if (isLocation && HardBlockedLocations.Contains(name)) { isLocation = false; }
+
+                bool needLocation = isLocation && LocationsByHash.ContainsKey(hash) == false;
+                bool needVegetation = isVegetation && VegetationByPrefabHash.ContainsKey(hash) == false;
+                if (needLocation == false && needVegetation == false) { continue; }
+
+                // A name registered in both catalogues (LeviathanLava) shares one resolution rather
+                // than resolving twice -- ResolvedResetEntry is immutable once built, and a second
+                // ResolveWithGroups call would repeat its overlapping-groups warning.
+                if (LocationsByHash.TryGetValue(hash, out ResolvedResetEntry resolved) == false
+                        && VegetationByPrefabHash.TryGetValue(hash, out resolved) == false) {
+                    resolved = ResolveWithGroups(name, null, cfg.Defaults, membership);
+                    TrackInterval(resolved);
+                }
+
+                if (needLocation) { LocationsByHash[hash] = resolved; }
+                if (needVegetation) { VegetationByPrefabHash[hash] = resolved; }
+            }
         }
 
         // Category tokens usable in a group's Members list. They resolve from the component-derived
@@ -301,12 +493,15 @@ namespace StarLevelSystem.Data {
 
         // Which groups claim which prefab, built once per config load.
         private class GroupMembership {
-            internal readonly Dictionary<int, List<KeyValuePair<string, LocationResetGroup>>> ByPrefab
-                = new Dictionary<int, List<KeyValuePair<string, LocationResetGroup>>>();
-            // group name -> member names not yet seen in the entry dictionaries. Every name-based
-            // member starts here and is removed once a matching entry is walked, so whatever remains
-            // at the end named nothing this world has.
+            internal readonly Dictionary<int, List<KeyValuePair<string, LocationResetGroup>>> ByPrefab = new Dictionary<int, List<KeyValuePair<string, LocationResetGroup>>>();
+            // group name -> member names this world has nothing for. Checked against the world
+            // catalogue index rather than against the config's own entry lists: now that groups stand
+            // alone, "no key in Locations/Vegetation" is the normal case and says nothing about
+            // whether the name is real.
             internal readonly Dictionary<string, List<string>> Unmatched = new Dictionary<string, List<string>>();
+            // Prefabs a group named outright, as opposed to ones a $token swept up. Only these may
+            // become targets that no ZoneSystem placement list mentions -- see AddGroupOnlyTargets.
+            internal readonly HashSet<int> NamedMembers = new HashSet<int>();
 
             internal void Add(int prefabHash, string groupName, LocationResetGroup group) {
                 if (ByPrefab.TryGetValue(prefabHash, out List<KeyValuePair<string, LocationResetGroup>> list) == false) {
@@ -353,8 +548,14 @@ namespace StarLevelSystem.Data {
                         ExpandCategoryToken(trimmed, kvp.Key, group, membership);
                         continue;
                     }
-                    membership.Add(trimmed.GetStableHashCode(), kvp.Key, group);
-                    membership.NoteUnmatched(kvp.Key, trimmed);
+                    int hash = trimmed.GetStableHashCode();
+                    membership.Add(hash, kvp.Key, group);
+                    membership.NamedMembers.Add(hash);
+                    // Only meaningful once the catalogue is indexed; before that everything would
+                    // look unmatched.
+                    if (worldCatalogBuilt && IsKnownTargetName(hash) == false) {
+                        membership.NoteUnmatched(kvp.Key, trimmed);
+                    }
                 }
             }
             return membership;
@@ -396,21 +597,18 @@ namespace StarLevelSystem.Data {
                 return Resolve(name, entry, null, defaults);
             }
 
-            // This prefab exists, so every group naming it matched something.
-            ClearUnmatched(membership, groups, name);
-
             List<KeyValuePair<string, LocationResetGroup>> unscoped = new List<KeyValuePair<string, LocationResetGroup>>();
             List<KeyValuePair<string, LocationResetGroup>> scoped = new List<KeyValuePair<string, LocationResetGroup>>();
             for (int i = 0; i < groups.Count; i++) {
                 if (IsScoped(groups[i].Value)) { scoped.Add(groups[i]); } else { unscoped.Add(groups[i]); }
             }
 
-            SortByInterval(unscoped, defaults);
-            SortByInterval(scoped, defaults);
+            SortByFrequency(unscoped, name, defaults);
+            SortByFrequency(scoped, name, defaults);
 
             if (unscoped.Count > 1) {
                 Logger.LogLocationResetWarning($"'{name}' is claimed by {unscoped.Count} groups " +
-                    $"({string.Join(", ", unscoped.ConvertAll(g => g.Key))}); using '{unscoped[0].Key}' as it has the shortest interval.");
+                    $"({string.Join(", ", unscoped.ConvertAll(g => g.Key))}); using '{unscoped[0].Key}' as it resets most often.");
             }
 
             LocationResetGroup winner = unscoped.Count > 0 ? unscoped[0].Value : null;
@@ -435,22 +633,23 @@ namespace StarLevelSystem.Data {
                 || (group.MaxDistance.HasValue && group.MaxDistance.Value > 0f);
         }
 
-        private static void SortByInterval(List<KeyValuePair<string, LocationResetGroup>> groups, LocationResetDefaults defaults) {
+        // Most-frequent-first. A cron group is ranked by the tightest gap its expression can produce,
+        // so "every 15 minutes" still beats "every 48 hours" whichever way each is written.
+        private static void SortByFrequency(List<KeyValuePair<string, LocationResetGroup>> groups,
+                                            string target, LocationResetDefaults defaults) {
             groups.Sort((a, b) => {
-                float ha = a.Value.ResetHours ?? defaults.ResetHours;
-                float hb = b.Value.ResetHours ?? defaults.ResetHours;
-                int byHours = ha.CompareTo(hb);
+                float sa = GroupPeriodSeconds(a.Value, target, defaults);
+                float sb = GroupPeriodSeconds(b.Value, target, defaults);
+                int byPeriod = sa.CompareTo(sb);
                 // Name tie-break so the outcome cannot depend on dictionary ordering.
-                return byHours != 0 ? byHours : string.CompareOrdinal(a.Key, b.Key);
+                return byPeriod != 0 ? byPeriod : string.CompareOrdinal(a.Key, b.Key);
             });
         }
 
-        private static void ClearUnmatched(GroupMembership membership, List<KeyValuePair<string, LocationResetGroup>> groups, string name) {
-            for (int i = 0; i < groups.Count; i++) {
-                if (membership.Unmatched.TryGetValue(groups[i].Key, out List<string> list) == false) { continue; }
-                list.RemoveAll(m => string.Equals(m, name, StringComparison.OrdinalIgnoreCase));
-                if (list.Count == 0) { membership.Unmatched.Remove(groups[i].Key); }
-            }
+        private static float GroupPeriodSeconds(LocationResetGroup group, string target, LocationResetDefaults defaults) {
+            CronSchedule schedule = ParseSchedule(group.ResetSchedule, target, "group");
+            if (schedule != null) { return schedule.MinGapSeconds; }
+            return (group.ResetHours ?? defaults.ResetHours) * 3600f;
         }
 
         // entry ?? group ?? defaults, per field. group is null when nothing claims this prefab.
@@ -475,7 +674,7 @@ namespace StarLevelSystem.Data {
                 }
             }
 
-            float hours = entry.ResetHours ?? group?.ResetHours ?? defaults.ResetHours;
+            PickFrequency(name, entry, group, defaults, out float hours, out CronSchedule schedule);
 
             return new ResolvedResetEntry() {
                 Name = name,
@@ -484,6 +683,7 @@ namespace StarLevelSystem.Data {
                 // to exclude one member, drop it from the group's Members list.
                 Enabled = entry.Enabled || (group != null && group.Enabled.GetValueOrDefault(true)),
                 ResetSeconds = Math.Max(0f, hours) * 3600f,
+                Schedule = schedule,
                 Mode = entry.Mode,
                 ResetTerrain = entry.ResetTerrain ?? group?.ResetTerrain ?? defaults.ResetTerrain,
                 TerrainRadius = entry.TerrainRadius ?? group?.TerrainRadius ?? defaults.TerrainRadius,
@@ -491,6 +691,61 @@ namespace StarLevelSystem.Data {
                 ResetInterior = entry.ResetInterior,
                 Protection = protection,
             };
+        }
+
+        // Reset frequency resolves as ONE unit, not two independent fallback chains: the first level
+        // that says anything about timing owns both fields. Chaining them separately would let a
+        // group's ResetSchedule survive a per-entry ResetHours written specifically to override it,
+        // which is the opposite of what a per-entry override is for.
+        //
+        // Within a level, ResetSchedule wins over ResetHours.
+        private static void PickFrequency(string name, LocationResetEntry entry, LocationResetGroup group,
+                                          LocationResetDefaults defaults, out float hours, out CronSchedule schedule) {
+            if (entry.ResetSchedule != null || entry.ResetHours.HasValue) {
+                hours = entry.ResetHours ?? defaults.ResetHours;
+                schedule = ParseSchedule(entry.ResetSchedule, name, "entry");
+                WarnIfBoth(entry.ResetSchedule, entry.ResetHours.HasValue, name, "entry", schedule);
+                return;
+            }
+            if (group != null && (group.ResetSchedule != null || group.ResetHours.HasValue)) {
+                hours = group.ResetHours ?? defaults.ResetHours;
+                schedule = ParseSchedule(group.ResetSchedule, name, "group");
+                WarnIfBoth(group.ResetSchedule, group.ResetHours.HasValue, name, "group", schedule);
+                return;
+            }
+            hours = defaults.ResetHours;
+            schedule = ParseSchedule(defaults.ResetSchedule, name, "Defaults");
+        }
+
+        // Parsed expressions are cached for the life of a config load: Rebuild resolves every target
+        // separately, so a group of 30 members would otherwise re-parse the same string 30 times.
+        private static readonly Dictionary<string, CronSchedule> scheduleCache = new Dictionary<string, CronSchedule>();
+        // Names already warned about, so one bad expression is one log line rather than one per member.
+        private static readonly HashSet<string> scheduleWarnings = new HashSet<string>();
+
+        private static CronSchedule ParseSchedule(string expression, string target, string level) {
+            if (string.IsNullOrWhiteSpace(expression)) { return null; }
+            if (scheduleCache.TryGetValue(expression, out CronSchedule cached)) { return cached; }
+
+            if (CronSchedule.TryParse(expression, out CronSchedule parsed, out string error)) {
+                scheduleCache[expression] = parsed;
+                return parsed;
+            }
+            // Fall back to the interval rather than rejecting the file: a typo should make a reset
+            // slower, never open one up, and never take the whole config down with it.
+            if (scheduleWarnings.Add(expression)) {
+                Logger.LogLocationResetWarning($"ResetSchedule '{expression}' on {level} '{target}' is not a valid cron " +
+                    $"expression ({error}). Falling back to ResetHours for everything using it.");
+            }
+            scheduleCache[expression] = null;
+            return null;
+        }
+
+        private static void WarnIfBoth(string expression, bool hasHours, string target, string level, CronSchedule schedule) {
+            if (expression == null || hasHours == false || schedule == null) { return; }
+            if (scheduleWarnings.Add($"both:{level}:{target}") == false) { return; }
+            Logger.LogLocationResetWarning($"{level} '{target}' sets both ResetSchedule and ResetHours; " +
+                $"the schedule '{expression}' wins and ResetHours is ignored.");
         }
 
         // Every biome at 1.0, so the generated config shows the knob exists and what to write in it.
@@ -521,6 +776,15 @@ namespace StarLevelSystem.Data {
         // at config load rather than silently doing nothing.
         internal static Dictionary<string, LocationResetGroup> DefaultResetGroups() {
             return new Dictionary<string, LocationResetGroup>() {
+                // Enabled and ResetHours are left unset deliberately: absent means enabled, and the
+                // interval falls through to Defaults.ResetHours. Together with Mode (no group
+                // equivalent, and Full is the LocationResetEntry default) that reproduces exactly
+                // what the old per-entry boss handling in BuildPopulatedDefault wrote.
+                { "BossAltars", new LocationResetGroup() {
+                    ResetTerrain = true,
+                    ExtraTerrainRadius = 32f,
+                    Members = new List<string>(BossAltarLocations),
+                } },
                 { "Ores", new LocationResetGroup() {
                     ResetHours = 48f,
                     // Mining leaves craters; mudpile_beacon in particular needs the ground back.
@@ -628,13 +892,15 @@ namespace StarLevelSystem.Data {
                     Members = new List<string>() { 
                         "Mistlands_GuardTower1_ruined_new2", "Mistlands_GuardTower3_new", "Mistlands_GuardTower3_ruined_new",
                         "Mistlands_GuardTower1_new", "Mistlands_GuardTower2_new", "Mistlands_GuardTower1_ruined_new", "Mistlands_Lighthouse1_new",
-                        "Mistlands_Excavation1", "Mistlands_Excavation2", "Mistlands_Excavation3", "Mistlands_Harbour1", ""
+                        "Mistlands_Excavation1", "Mistlands_Excavation2", "Mistlands_Excavation3", "Mistlands_Harbour1",
                     },
                 } },
+                // Mistlands_DvergrBossEntrance1 belongs to BossAltars, not here: two unscoped groups
+                // claiming it would resolve deterministically but warn on every config load.
                 { "MistlandDungeons", new LocationResetGroup() {
                     ResetHours = 48f,
                     Members = new List<string>() {
-                        "Mistlands_DvergrTownEntrance1", "Mistlands_DvergrTownEntrance2", "Mistlands_DvergrBossEntrance1"
+                        "Mistlands_DvergrTownEntrance1", "Mistlands_DvergrTownEntrance2"
                     },
                 } },
                 // Regular reset of Ashland forts, as they are a very limited resource
@@ -692,17 +958,27 @@ namespace StarLevelSystem.Data {
             return LocationsByHash.TryGetValue(locationHash, out entry);
         }
 
-        // Build a complete config from whatever locations and vegetation this server actually has
-        // loaded, so the generated yaml covers modded entries too. Falls back to a bare default when
-        // ZoneSystem is not up yet (e.g. first launch before a world is loaded).
-        internal static LocationResetConfiguration BuildPopulatedDefault() {
-            LocationResetConfiguration cfg = new LocationResetConfiguration();
-            cfg.BiomeRates = DefaultBiomeRates();
-            cfg.ResetGroups = DefaultResetGroups();
-            if (ZoneSystem.instance == null) { return cfg; }
+        // What gets written to LocationResetSettings.yaml. Groups stand alone, so this carries no
+        // per-prefab entries at all: Locations and Vegetation ship empty and exist only for
+        // overrides. Needs no game state, so the file is complete from the very first write rather
+        // than being a skeleton that gets rewritten once a world loads.
+        //
+        // The exhaustive catalogue lives in BuildPopulatedDefault, which SLS-loc-reset-dump writes to
+        // SavedData/LocationResetCatalog.yaml on request.
+        internal static LocationResetConfiguration BuildDefaultConfig() {
+            return new LocationResetConfiguration() {
+                BiomeRates = DefaultBiomeRates(),
+                ResetGroups = DefaultResetGroups(),
+            };
+        }
 
-            HashSet<string> bossAltars = new HashSet<string>(BossAltarLocations);
-            HashSet<string> disabled = new HashSet<string>(DefaultDisabledLocations);
+        // Every location and vegetation entry this server has loaded, including ones other mods add,
+        // each disabled. This is the REFERENCE dump behind SLS-loc-reset-dump, not the config
+        // default -- see BuildDefaultConfig. Falls back to groups and biome rates alone when
+        // ZoneSystem is not up yet.
+        internal static LocationResetConfiguration BuildPopulatedDefault() {
+            LocationResetConfiguration cfg = BuildDefaultConfig();
+            if (ZoneSystem.instance == null) { return cfg; }
 
             if (ZoneSystem.instance.m_locations != null) {
                 foreach (ZoneSystem.ZoneLocation location in ZoneSystem.instance.m_locations) {
@@ -716,17 +992,9 @@ namespace StarLevelSystem.Data {
                     if (HardBlockedLocations.Contains(name)) { continue; }
                     if (cfg.Locations.ContainsKey(name)) { continue; }
 
-                    // TODO: Consider enabling all things by default? wait for user feedback first
-                    LocationResetEntry entry = new LocationResetEntry() { Enabled = false };
-                    if (bossAltars.Contains(name)) {
-                        entry.Enabled = true;
-                        entry.Mode = LocationResetMode.Full;
-                        entry.ResetTerrain = true;
-                        entry.ExtraTerrainRadius = 32f;
-                    } else if (disabled.Contains(name)) {
-                        entry.Enabled = false;
-                    }
-                    cfg.Locations[name] = entry;
+                    // Uniformly disabled. Which targets ship enabled is a question for the groups in
+                    // DefaultResetGroups, not for a reference dump of the catalogue.
+                    cfg.Locations[name] = new LocationResetEntry() { Enabled = false };
                 }
             }
 

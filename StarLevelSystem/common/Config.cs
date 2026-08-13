@@ -89,12 +89,14 @@ namespace StarLevelSystem.common {
         internal static CustomRPC AddNemesisBossPinRPC;
         internal static CustomRPC RemoveNemesisBossPinRPC;
         internal static CustomRPC ReportNemesisBossDeathRPC;
-        internal static CustomRPC ClientRequestNemesisRemoteSpawnRPC;
         internal static CustomRPC ClientPlaceNemesisSpawnerRPC;
+        internal static CustomRPC ClientCommandRequestRPC;
+        internal static CustomRPC CommandOutputRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
+        public static ConfigEntry<bool> EnableTerminalColors;
         public static ConfigEntry<int> MaxLevel;
         public static ConfigEntry<int> MaxBossLevel;
         public static ConfigEntry<bool> OverLevelCreaturesGetRerolledOnLoad;
@@ -268,8 +270,14 @@ namespace StarLevelSystem.common {
             RemoveNemesisBossPinRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossPinRPC", OnServerReceiveConfigs, OnClientReceiveNemesisBossPinRemove);
             // Owner of a dying remote boss reports it to the server, which removes the registry entry + pin.
             ReportNemesisBossDeathRPC = NetworkManager.Instance.AddRPC("SLS_ReportNemesisBossDeathRPC", OnServerReceiveNemesisBossDeath, NOOPReceive);
-            // Admin client asks the server to force-spawn a remote Nemesis boss for a biome (console command).
-            ClientRequestNemesisRemoteSpawnRPC = NetworkManager.Instance.AddRPC("SLS_ClientRequestNemesisRemoteSpawnRPC", OnServerReceiveNemesisRemoteSpawnRequest, NOOPReceive);
+            // Admin client asks the server to run a server-authoritative SLS console command, and the
+            // server streams that command's output back to whoever asked. Both directions are needed
+            // because a dedicated server has no Terminal of its own: Console.Awake and
+            // Terminal.InitTerminal only ever run on a client, so these commands are otherwise
+            // untypeable anywhere. Vanilla's own relay (remoteCommand -> ZNet.RPC_RemoteCommand) ends in
+            // Console.instance.TryRunCommand and null-references headless, so it cannot be used here.
+            ClientCommandRequestRPC = NetworkManager.Instance.AddRPC("SLS_ClientCommandRequestRPC", OnServerReceiveCommandRequest, NOOPReceive);
+            CommandOutputRPC = NetworkManager.Instance.AddRPC("SLS_CommandOutputRPC", OnServerReceiveConfigs, OnClientReceiveCommandOutput);
             // Server -> a chosen client: instantiate + own the dormant remote-boss placeholder. A dedicated
             // server can't own/drive it itself, so it delegates instantiation to the nearest ready peer.
             ClientPlaceNemesisSpawnerRPC = NetworkManager.Instance.AddRPC("SLS_ClientPlaceNemesisSpawnerRPC", OnServerReceiveConfigs, OnClientReceivePlaceNemesisSpawner);
@@ -327,6 +335,10 @@ namespace StarLevelSystem.common {
                 new ConfigDescription("Writes a record of every chunk the Location Reset system touches - its zone coordinates, world position, and what was and was not reset inside it - to SavedData/LocationResetLog.log.",
                 null,
                 new ConfigurationManagerAttributes { IsAdvanced = true }));
+            EnableTerminalColors = Config.Bind("Client config", "EnableTerminalColors", true,
+                new ConfigDescription("Colours StarLevelSystem console output by severity. Only affects what the console shows - the BepInEx log and the Location Reset chunk log are always written as plain text.",
+                null,
+                new ConfigurationManagerAttributes { }));
             ShowMinimapLevelIndicator = Config.Bind("Client config", "ShowMinimapLevelIndicator", true,
                 new ConfigDescription("Show a small ring/zone level readout next to the minimap. Each section is hidden when its scaling system is disabled.",
                 null,
@@ -455,8 +467,8 @@ namespace StarLevelSystem.common {
             EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
             ZoneOverlayAboveFog = BindServerConfig("ZoneScaling", "ZoneOverlayAboveFog", false, "When enabled, zone boundaries draw above the map fog so they are visible even in unexplored areas. When disabled, boundaries sit below the fog and only appear once an area has been explored.");
             ZoneOverlayAboveFog.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayFogOnChange;
-            MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 500f, 10000f);
-            MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (SLS-rebuild-zones).", false, 1000f, 10000f);
+            MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 500f, 10000f);
+            MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 1000f, 10000f);
             KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters.", true);
             ZoneOverlayColorOptions = BindServerConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
             ZoneOverlayColorOptions.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
@@ -669,7 +681,7 @@ namespace StarLevelSystem.common {
 #       ResetHours: 12      # BossAltars still enables it; this just retimes it
 #
 # For the full list of names this world can reset - including everything other mods add - run
-# the console command SLS-loc-reset-dump. It writes SavedData/LocationResetCatalog.yaml as a
+# the console command sls-loc-dump. It writes SavedData/LocationResetCatalog.yaml as a
 # reference; that file is a dump, not a config, and editing it does nothing.
 #
 # --- Scheduling: ResetHours or ResetSchedule ---
@@ -806,7 +818,7 @@ namespace StarLevelSystem.common {
         // The Location Reset default config needs no game state -- reset groups carry the shipped
         // targeting and Locations/Vegetation exist only for per-prefab overrides -- so this writes a
         // complete file even at Awake. The exhaustive per-prefab catalogue is a separate artefact,
-        // written on request by SLS-loc-reset-dump.
+        // written on request by sls-loc-dump.
         internal static void WriteLocationResetDefaultFile() {
             if (YamlDefaultsByPath.TryGetValue(locationResetFilePath, out var def)) {
                 RestoreDefaultConfigFile(locationResetFilePath, def);
@@ -1077,17 +1089,41 @@ namespace StarLevelSystem.common {
             yield return null;
         }
 
-        // Server handler: an admin client asked to force-spawn a remote Nemesis boss for a biome. The console
-        // command is authoritative on the host, but on a dedicated server clients have no manager of their own,
-        // so the request is routed here. Gate on admin because any peer could craft this RPC.
-        public static IEnumerator OnServerReceiveNemesisRemoteSpawnRequest(long sender, ZPackage package) {
-            if (ZNet.instance != null && ZNet.instance.IsServer()) {
-                if (SenderIsAdmin(sender) == false) {
-                    Logger.LogWarning($"Rejecting remote Nemesis spawn request from non-admin peer {sender}.");
-                    yield break;
-                }
-                Heightmap.Biome biome = (Heightmap.Biome)package.ReadInt();
-                global::StarLevelSystem.modules.NemesisSystem.NemesisRemoteSpawnControl.Manager?.ForceSpawnForBiome(biome);
+        // Server handler: an admin client asked to run a server-authoritative SLS console command. These
+        // commands read or mutate world state only the server owns, and on a dedicated server there is
+        // no console to type them into, so the request is routed here. Gate on admin because any peer
+        // could craft this RPC; the client-side check is only there for a clearer message.
+        public static IEnumerator OnServerReceiveCommandRequest(long sender, ZPackage package) {
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { yield break; }
+
+            string command = package.ReadString();
+            if (SenderIsAdmin(sender) == false) {
+                Logger.LogWarning($"Rejecting '{command}' from non-admin peer {sender}.");
+                // Answer rather than going quiet, so the sender sees a refusal instead of nothing.
+                TerminalOutput refusal = TerminalOutput.Remote(sender);
+                refusal.Error($"Only server admins can run {command}.", log: false);
+                refusal.Flush();
+                yield break;
+            }
+
+            int argCount = package.ReadInt();
+            string[] args = new string[argCount];
+            for (int i = 0; i < argCount; i++) { args[i] = package.ReadString(); }
+            bool hasCenter = package.ReadBool();
+            Vector3 center = package.ReadVector3();
+
+            TerminalManager.ExecuteFromNetwork(command, args, center, hasCenter, TerminalOutput.Remote(sender));
+            yield return null;
+        }
+
+        // Client handler: a batch of output lines from a command this client asked the server to run.
+        // Severity travels as a byte and the colour is applied here, so the server's log and chunk log
+        // never contain markup and each client honours its own EnableTerminalColors setting.
+        private static IEnumerator OnClientReceiveCommandOutput(long sender, ZPackage package) {
+            int count = package.ReadInt();
+            for (int i = 0; i < count; i++) {
+                OutputLevel level = (OutputLevel)package.ReadByte();
+                TerminalManager.PrintResponse(level, package.ReadString());
             }
             yield return null;
         }

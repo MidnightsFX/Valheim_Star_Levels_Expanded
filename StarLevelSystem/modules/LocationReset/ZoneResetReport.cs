@@ -33,7 +33,7 @@ namespace StarLevelSystem.modules.LocationReset {
         internal Vector2i Zone;
         internal Vector3 Center;
         internal Heightmap.Biome Biome;
-        // Came from SLS-loc-reset-here rather than the background sweep.
+        // Came from sls-loc-reset rather than the background sweep.
         internal bool Forced;
         internal bool Verbose;
         // The zone was already live and we worked on it in place instead of poke-loading it.

@@ -963,7 +963,7 @@ namespace StarLevelSystem.Data {
         // overrides. Needs no game state, so the file is complete from the very first write rather
         // than being a skeleton that gets rewritten once a world loads.
         //
-        // The exhaustive catalogue lives in BuildPopulatedDefault, which SLS-loc-reset-dump writes to
+        // The exhaustive catalogue lives in BuildPopulatedDefault, which sls-loc-dump writes to
         // SavedData/LocationResetCatalog.yaml on request.
         internal static LocationResetConfiguration BuildDefaultConfig() {
             return new LocationResetConfiguration() {
@@ -973,7 +973,7 @@ namespace StarLevelSystem.Data {
         }
 
         // Every location and vegetation entry this server has loaded, including ones other mods add,
-        // each disabled. This is the REFERENCE dump behind SLS-loc-reset-dump, not the config
+        // each disabled. This is the REFERENCE dump behind sls-loc-dump, not the config
         // default -- see BuildDefaultConfig. Falls back to groups and biome rates alone when
         // ZoneSystem is not up yet.
         internal static LocationResetConfiguration BuildPopulatedDefault() {

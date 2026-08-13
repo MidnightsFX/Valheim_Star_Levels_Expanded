@@ -64,7 +64,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // anything else falls back to the global default interval measured from the zone stamp.
         //
         // force skips the timers entirely. An admin asking for a reset now means now, and without this
-        // SLS-loc-reset-here would still silently honour every per-prefab timestamp.
+        // sls-loc-reset would still silently honour every per-prefab timestamp.
         private static bool DueForRefresh(Vector2i zone, int prefabHash, LocationResetConfigSnapshot cfg, bool force, float rate) {
             if (force) { return true; }
             if (LocationResetData.TryGetVegetationEntry(prefabHash, out LocationResetData.ResolvedResetEntry entry)) {
@@ -284,7 +284,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 // reported failure) meant a drift report suppressed the very bookkeeping that would
                 // have kept the next pass correct.
                 Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y} gained {growth} ZDOs during a reset " +
-                    $"(before {zdosBefore}, after {zdosAfter}). Reset kept; check SLS-loc-reset-audit if this persists.");
+                    $"(before {zdosBefore}, after {zdosAfter}). Reset kept; check sls-loc-audit if this persists.");
             }
 
             // Reported last so this method owns every backoff decision; the caller only stamps the

@@ -995,7 +995,7 @@ namespace StarLevelSystem.common
 
             // Per-prefab OVERRIDES. Reset groups stand on their own, so these only need an entry for a
             // prefab whose settings should differ from whatever group covers it (or for one no group
-            // covers at all). Generated empty; SLS-loc-reset-dump writes the full catalogue.
+            // covers at all). Generated empty; sls-loc-dump writes the full catalogue.
             public Dictionary<string, LocationResetEntry> Locations { get; set; } = new Dictionary<string, LocationResetEntry>();
             public Dictionary<string, LocationResetEntry> Vegetation { get; set; } = new Dictionary<string, LocationResetEntry>();
 

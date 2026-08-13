@@ -36,7 +36,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Rolling server frame time, drives the adaptive backoff.
         private float smoothedFrameMs = 0f;
 
-        // ---- statistics, surfaced by SLS-loc-reset-status ----
+        // ---- statistics, surfaced by sls-loc-status ----
         internal static long ZonesExamined = 0;
         internal static long FastLaneZones = 0;
         internal static long SlowLaneZones = 0;

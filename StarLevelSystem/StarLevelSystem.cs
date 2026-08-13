@@ -26,7 +26,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.5.1";
+        public const string PluginVersion = "1.5.2";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -69,7 +69,7 @@ namespace StarLevelSystem
             SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.HasServerUpdates();
             UIHudControl.LoadAssets();
             RaidControl.LoadAssets();
-            TerminalCommands.AddCommands();
+            TerminalManager.Init();
             NemesisSystem.Initialize();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
             //DocumentationUpdater.UpdateDocumentation();

@@ -21,7 +21,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Poke the zone until vanilla reports it loaded. onResult receives whether it came up in time.
         //
         // adoptIfLoaded is for the forced admin reset. Valheim keeps the 3x3 zone block around every
-        // player loaded, which is exactly what SLS-loc-reset-here targets at its default radius, so
+        // player loaded, which is exactly what sls-loc-reset targets at its default radius, so
         // refusing loaded zones outright would make the command a no-op where it is used most.
         internal static IEnumerator Load(Vector2i zone, float maxWaitSeconds, bool adoptIfLoaded, System.Action<bool> onResult) {
             if (ZoneSystem.instance == null) { onResult?.Invoke(false); yield break; }

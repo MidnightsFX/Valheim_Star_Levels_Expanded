@@ -339,7 +339,7 @@ namespace StarLevelSystem.common {
             return smallest;
         }
 
-        // "0 3 * * * (next Wed 03:00)". Used in the chunk log and SLS-loc-reset-status, where an
+        // "0 3 * * * (next Wed 03:00)". Used in the chunk log and sls-loc-status, where an
         // hours figure would be meaningless.
         internal string Describe(long nowUnix) {
             DateTime? next = NextAfter(nowUnix);

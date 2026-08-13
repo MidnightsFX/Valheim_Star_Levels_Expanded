@@ -9,7 +9,7 @@ namespace StarLevelSystem.modules.LocationReset {
     // appended to SavedData/LocationResetLog.log in batches. Same design as the Nemesis action log
     // (NemesisManager -> NemesisSystemData.UpdateNemesisLog), except the buffer is a static rather than
     // a field on the driver, because two drivers write to it: the background sweep and the
-    // SLS-loc-reset-here coroutine.
+    // sls-loc-reset coroutine.
     //
     // This is deliberately separate from the BepInEx log. Reset timers run in real-world hours, so the
     // interesting question is usually "what happened to this chunk over the last week", which is a file

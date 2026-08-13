@@ -78,7 +78,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Reset groups stand alone and the default config is complete from its first write, so there
         // is no longer a catalogue to merge in here -- the exhaustive per-prefab list moved to
-        // SLS-loc-reset-dump. All that remains is backfilling groups onto a config written before
+        // sls-loc-dump. All that remains is backfilling groups onto a config written before
         // they existed.
         private static void EnsureConfigCatalogPopulated() {
             try {
@@ -273,26 +273,26 @@ namespace StarLevelSystem.modules.LocationReset {
         // Force an immediate reset of the zones around a point, ignoring timers and the
         // player-proximity rule (but never the protection scan). Admin escape hatch and the main way
         // to test a configuration without waiting hours.
-        internal static void ForceResetAround(Vector3 center, float radius, Terminal context) {
+        internal static void ForceResetAround(Vector3 center, float radius, TerminalOutput output) {
             // Two mods resetting the same objects on their own timers corrupts both. The background
             // sweep already refuses through SweepAllowed; the manual path has to refuse too.
             if (LocationResetData.BlockedByModConflict) {
-                Announce(context, "Refusing: a conflicting reset mod (VentureValheim LocationReset) is installed.");
+                Announce(output, "Refusing: a conflicting reset mod (VentureValheim LocationReset) is installed.");
                 return;
             }
             if (Ready == false) {
-                Announce(context, "Not ready: no world loaded, or this is not the server.");
+                Announce(output, "Not ready: no world loaded, or this is not the server.");
                 return;
             }
             if (ValConfig.EnableLocationReset.Value == false) {
                 // Still allowed: this is the escape hatch admins use to test a configuration without
                 // switching the sweep on for the whole server.
-                Announce(context, "Note: EnableLocationReset is off, so the background sweep will not follow up on these chunks.");
+                Announce(output, "Note: EnableLocationReset is off, so the background sweep will not follow up on these chunks.");
             }
-            TaskRunner.Run().StartCoroutine(ForceResetRoutine(center, radius, context));
+            TaskRunner.Run().StartCoroutine(ForceResetRoutine(center, radius, output));
         }
 
-        private static System.Collections.IEnumerator ForceResetRoutine(Vector3 center, float radius, Terminal context) {
+        private static System.Collections.IEnumerator ForceResetRoutine(Vector3 center, float radius, TerminalOutput output) {
             LocationResetConfigSnapshot cfg = LocationResetConfigSnapshot.Capture();
             Vector2i centerZone = ZoneSystem.GetZone(center);
             int span = Mathf.Max(0, Mathf.CeilToInt(radius / 64f));
@@ -300,7 +300,7 @@ namespace StarLevelSystem.modules.LocationReset {
             int blocked = 0;
             int ungenerated = 0;
             int adopted = 0;
-            string source = $"SLS-loc-reset-here r={radius:0}";
+            string source = $"sls-loc-reset r={radius:0}";
 
             for (int dx = -span; dx <= span; dx++) {
                 for (int dy = -span; dy <= span; dy++) {
@@ -317,7 +317,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     if (ZoneSystem.instance.IsZoneGenerated(zone) == false) {
                         ungenerated++;
                         report.SkipReason = "never generated";
-                        Announce(context, report, source);
+                        Announce(output, report, source);
                         continue;
                     }
 
@@ -325,7 +325,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     if (protection.Blocked) {
                         blocked++;
                         report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
-                        Announce(context, report, source);
+                        Announce(output, report, source);
                         continue;
                     }
 
@@ -342,32 +342,36 @@ namespace StarLevelSystem.modules.LocationReset {
                         done++;
                         if (report.ZoneAdopted) { adopted++; }
                     }
-                    Announce(context, report, source);
+                    Announce(output, report, source);
                     yield return null;
                 }
             }
 
             LocationResetState.Save();
-            Announce(context, $"Forced reset complete: {done} chunks reset ({adopted} adopted while loaded), " +
+            Announce(output, $"Forced reset complete: {done} chunks reset ({adopted} adopted while loaded), " +
                 $"{blocked} skipped as protected, {ungenerated} never generated.");
             LocationResetLog.Note($"Forced reset around x={center.x:0} z={center.z:0} r={radius:0}: {done} reset, " +
                 $"{adopted} adopted, {blocked} protected, {ungenerated} ungenerated.", source);
             LocationResetLog.Flush();
+            // This routine outlives the command call that started it, so the tail of the sweep would
+            // otherwise sit in the sink's buffer until something else pushed it out.
+            output?.Flush();
         }
 
         // A manual command reports unconditionally: to the chunk log, to the BepInEx log, and to
-        // whichever terminal the admin typed into. Only the per-entry detail block stays behind the
-        // EnableDebugLocationResetDetails flag, via ToRecord.
-        private static void Announce(Terminal context, ZoneResetReport report, string source) {
+        // whichever terminal the admin typed into (or back over the network to the admin who asked).
+        // Only the per-entry detail block stays behind the EnableDebugLocationResetDetails flag, via
+        // ToRecord. log: false because the line has already gone to the tagged Location Reset logger.
+        private static void Announce(TerminalOutput output, ZoneResetReport report, string source) {
             string record = report.ToRecord();
             LocationResetLog.Record(record, source);
             Logger.LogLocationResetAlways(record);
-            context?.AddString(record);
+            output?.Detail(record, log: false);
         }
 
-        private static void Announce(Terminal context, string message) {
+        private static void Announce(TerminalOutput output, string message) {
             Logger.LogLocationResetAlways(message);
-            context?.AddString(message);
+            output?.Info(message, log: false);
         }
 
         // Baseline an already-explored world so timers start now rather than firing everywhere at

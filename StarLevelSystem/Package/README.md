@@ -528,7 +528,7 @@ How it works:
 - **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
   replayed using the world's own generation seed. Replaying it re-places every node in the chunk, so
   the ones still standing are matched by position and discarded rather than stacked on top of the
-  survivor — `SLS-loc-reset-audit` will tell you if any ever slip through.
+  survivor — `sls-loc-audit` will tell you if any ever slip through.
 - **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels.
 - **Terrain can be reset** around ore to undo mining craters. Locations also support
   `Mode: TerrainOnly`, which flattens the ground around one without touching the structure itself.
@@ -542,9 +542,9 @@ How it works:
 Timers are in **real-world hours** (`ResetHours`), which stays predictable on a server that runs
 24/7. Throughput is controlled by `LocationResetSweepBudgetMs` — the milliseconds of server frame
 time the sweep may use per frame. Raise it to restore the world faster; it automatically backs off
-when the server is under load. Use `SLS-loc-reset-status` to see the projected time for a full pass.
+when the server is under load. Use `sls-loc-status` to see the projected time for a full pass.
 
-After installing on an already-explored world, run `SLS-loc-reset-stamp-all` once so every zone's
+After installing on an already-explored world, run `sls-loc-stamp` once so every zone's
 timer starts from today instead of everything becoming due at once.
 
 **Reset groups.** Groups are how this feature is configured. A group configures and **enables** a
@@ -580,7 +580,7 @@ the normal foraging timer everywhere else.
 The mod ships working groups (`BossAltars`, `Ores`, `Berries`, `Foraging`, `FlintNearSpawn`,
 `Leviathans`, `QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature
 is usable without editing anything. Nothing resets until `EnableLocationReset` and the YAML
-`Enabled` are both turned on. `SLS-loc-reset-status` lists every group with a `matched/total` member
+`Enabled` are both turned on. `sls-loc-status` lists every group with a `matched/total` member
 count — a shortfall means a prefab name no longer exists in your game version.
 
 **Locations and Vegetation are overrides.** Both ship empty and can usually stay that way. Add a key
@@ -594,7 +594,7 @@ Locations:
 ```
 
 For the full list of names your world can reset — including everything other mods add — run
-`SLS-loc-reset-dump`. It writes `SavedData/LocationResetCatalog.yaml` as a reference; that file is a
+`sls-loc-dump`. It writes `SavedData/LocationResetCatalog.yaml` as a reference; that file is a
 dump, not a config, and editing it does nothing.
 
 **Advanced sections are omitted while unused.** `Throughput`, `InPlaceRefresh`, `ProtectedPrefabs`
@@ -710,17 +710,59 @@ Localization is available for everything in the mod. I accept community translat
 Otherwise localizations are available at `Bepinex/config/StarLevelSystems/localizations`, new languages can be made using any of [Jotunns language specific names](https://valheim-modding.github.io/Jotunn/data/localization/language-list.html)
 
 ### Terminal Commands
-Star Level Systems provides a number of terminal commands for debugging and testing and cleanup.
-- `sls-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures.
-- `sls-give-modifier [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
-- `sls-dump-loottables` - provides dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
+Star Level Systems provides a number of terminal commands for debugging, testing and cleanup. Type
+`sls-help` in the console for the full list, or `sls-help loc` for a single group. Tab-completes each
+argument as you type it, and colours output by severity (turn that off with the `EnableTerminalColors`
+client setting if you prefer plain text).
 
-Location Reset commands (server side):
-- `SLS-loc-reset-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
-- `SLS-loc-reset-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
-- `SLS-loc-reset-stamp-all` - stamps every generated zone as reset right now. Run this once after installing on an existing world
-- `SLS-loc-reset-here [range:64]` - immediately resets the chunks around you, ignoring every timer, including the chunks currently loaded around you. Reports each chunk it touched to the console. Player structures are still protected
-- `SLS-loc-reset-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
+- `sls-help [area]` - lists the StarLevelSystem commands, optionally just one area
+- `sls-creature-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures
+- `sls-mod-give [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
+- `sls-loot-dump` - dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
+- `sls-zone-rebuild` - regenerates the zone map from the world and redraws the minimap overlay. Resets zone kill counts and levels
+- `sls-nemesis-spawn [biome]` - force-scouts and places one remote Nemesis boss
+- `sls-nemesis-score [value]` - sets your local Nemesis score
+
+Location Reset commands (server authoritative):
+- `sls-loc-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
+- `sls-loc-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
+- `sls-loc-stamp` - stamps every generated zone as reset right now. Run this once after installing on an existing world
+- `sls-loc-reset [range:64]` - immediately resets the chunks around you, ignoring every timer, including the chunks currently loaded around you. Reports each chunk it touched to the console. Player structures are still protected
+- `sls-loc-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
+
+#### Running the server commands from a client
+
+The Location Reset commands and `sls-nemesis-spawn` act on world state only the server owns. A
+dedicated server has no console of its own, so an **admin** can now run them from a connected client:
+the request goes to the server, the server runs it, and its output is streamed back into your console
+as well as being written to the server's log. `sls-loc-reset` and `sls-loc-audit` centre on **your**
+position, which is what makes them usable on a headless server at all.
+
+Non-admins are refused. Several of these are flagged as cheat commands, which vanilla only allows once
+`devcommands` is active — on a server that requires
+[Server devcommands](https://github.com/JereKuusela/valheim-dev) on the client. `sls-loc-status` is not
+a cheat command and works without it.
+
+#### Renamed commands
+
+Commands were regrouped as `sls-<area>-<verb>` in 1.5.2. Every old name still works and is accepted
+silently, so existing macros and guides are unaffected; `sls-help` lists the old name alongside each
+command.
+
+| Old name | New name |
+| --- | --- |
+| `SLS-killall` | `sls-creature-killall` |
+| `SLS-give-modifier` | `sls-mod-give` |
+| `SLS-Dump-LootTables` | `sls-loot-dump` |
+| `SLS-rebuild-zones` | `sls-zone-rebuild` |
+| `SLS-spawn-nemesis-remote` | `sls-nemesis-spawn` |
+| `SLS-SetNem-Score` | `sls-nemesis-score` |
+| `SLS-reset-player-modifiers` | `sls-player-reset` |
+| `sls-loc-status` | `sls-loc-status` |
+| `sls-loc-reset` | `sls-loc-reset` |
+| `sls-loc-audit` | `sls-loc-audit` |
+| `sls-loc-dump` | `sls-loc-dump` |
+| `sls-loc-stamp` | `sls-loc-stamp` |
 
 ### API Usage (WIP)
 Star Level Systems provides a public API for other mods to interact with.

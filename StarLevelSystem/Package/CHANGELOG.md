@@ -1,3 +1,18 @@
+**1.5.2**
+ ---
+ ```
+ - Admins can now run the server-authoritative commands (all sls-loc-* plus sls-nemesis-spawn) from a connected client
+	- Non-admins are refused, and the server re-checks the sender on every request rather than trusting the client
+	- Tab-completion now works on every argument, and offers values that depend on the earlier arguments - sls-mod-give completes the modifier type, then only the modifiers belonging to that type
+	- Output is coloured by severity. Turn it off with the EnableTerminalColors client setting. The BepInEx log and the Location Reset chunk log are always plain text
+	- Adds sls-help, which lists the SLS commands grouped by area with their old names
+ - Renamed commands to a consistent sls-<area>-<verb> scheme. Every old name still works, so existing macros and guides are unaffected
+	- SLS-loc-reset-status/here/audit/dump/stamp-all -> sls-loc-status/reset/audit/dump/stamp
+	- SLS-killall -> sls-creature-killall, SLS-give-modifier -> sls-mod-give, SLS-Dump-LootTables -> sls-loot-dump
+	- SLS-rebuild-zones -> sls-zone-rebuild, SLS-spawn-nemesis-remote -> sls-nemesis-spawn, SLS-SetNem-Score -> sls-nemesis-score
+	- SLS-reset-player-modifiers -> sls-player-reset (note this command is still only for debugging really, players can't have modifiers... right now)
+ ```
+
 **1.5.1**
  ---
  ```

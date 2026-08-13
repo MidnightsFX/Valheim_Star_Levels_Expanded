@@ -335,7 +335,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     // rather than skipped. Protection is never bypassed.
                     ResetTargets.RefreshZoneInPlace(zone, cfg, true, report);
                     bool ok = false;
-                    yield return ResetTargets.RegenerateZone(zone, cfg, protection, true, report, (r) => { ok = r; });
+                    yield return ResetTargets.RegenerateZone(zone, cfg, true, report, (r) => { ok = r; });
                     if (ok) {
                         LocationResetState.StampZone(zone);
                         ZoneProtectionScan.RecordBaseline(zone);

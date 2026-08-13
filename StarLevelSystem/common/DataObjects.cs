@@ -1033,8 +1033,10 @@ namespace StarLevelSystem.common
             // If the server's average frame time exceeds this, halve the budget next tick.
             [DefaultValue(50f)]
             public float AdaptiveBackoffFrameMs { get; set; } = 50f;
-            // A true restore returns a sector to its baseline ZDO count. Anything above this
-            // tolerance means the reset is leaking ZDOs; the zone is backed off and reported.
+            // A true restore returns a chunk to its baseline ZDO count. Growth above this tolerance is
+            // reported in the log and counted towards the cumulative drift figure, but does not defer
+            // the zone -- the reset itself completed, and suppressing the zone's bookkeeping over a
+            // drift reading is what previously left its census permanently stale.
             [DefaultValue(0)]
             public int ZdoGrowthTolerance { get; set; } = 0;
         }
@@ -1106,7 +1108,11 @@ namespace StarLevelSystem.common
             // Locations only: metres of terrain reset beyond the location's own radius. Null = use
             // Defaults.ExtraTerrainRadius.
             public float? ExtraTerrainRadius { get; set; }
-            // Locations only: also clear and regenerate the dungeon interior (objects above y=4000).
+            // Locations only. Setting this false on a location that HAS an interior skips that
+            // location entirely rather than resetting only its surface, because Valheim's own
+            // SpawnLocation always re-runs DungeonGenerator.Generate -- so a half reset would stack a
+            // fresh interior on the old one every single cycle. Terrain is still handled per
+            // ResetTerrain. On a location with no interior this does nothing.
             [DefaultValue(true)]
             public bool ResetInterior { get; set; } = true;
             // Overrides for individual protection categories; unset categories use Defaults.Protection.

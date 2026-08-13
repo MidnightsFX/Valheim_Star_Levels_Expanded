@@ -526,8 +526,9 @@ How it works:
 - **Locations are restored, not re-rolled.** The original position and rotation are kept, so
   buildings never rotate, shift or clip into the terrain after a reset.
 - **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
-  replayed using the world's own generation seed. Anything still standing is left alone rather than
-  duplicated.
+  replayed using the world's own generation seed. Replaying it re-places every node in the chunk, so
+  the ones still standing are matched by position and discarded rather than stacked on top of the
+  survivor — `SLS-loc-reset-audit` will tell you if any ever slip through.
 - **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels.
 - **Terrain can be reset** around ore to undo mining craters. Locations also support
   `Mode: TerrainOnly`, which flattens the ground around one without touching the structure itself.

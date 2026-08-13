@@ -133,17 +133,22 @@ namespace StarLevelSystem.modules.LocationReset {
         // or BackoffZone (deferred for a full cycle), and both clear the retry state themselves. A
         // third way to clear it would just be a way to forget to call it.
 
-        internal static void StampEntry(Vector2i zone, int prefabHash, ushort baseline) {
-            ZoneRecord record = GetOrCreate(zone);
-            record.Entries[prefabHash] = new EntryRecord() { Stamp = Now, Baseline = baseline };
-            dirty = true;
-        }
-
         // Record the census baseline without moving the timer. Used on first sight.
         internal static void SetBaseline(Vector2i zone, int prefabHash, ushort baseline) {
             ZoneRecord record = GetOrCreate(zone);
             record.Entries.TryGetValue(prefabHash, out EntryRecord existing);
             record.Entries[prefabHash] = new EntryRecord() { Stamp = existing.Stamp, Baseline = baseline };
+            dirty = true;
+        }
+
+        // The mirror of SetBaseline: move the timer, keep the census. Used right after a regeneration,
+        // where the timer is known but the new counts are not -- RecordBaseline supplies those once
+        // the reset is known to have completed. Writing a placeholder baseline here instead would be
+        // read downstream as "nothing missing" and freeze the entry out of future resets.
+        internal static void StampEntryTime(Vector2i zone, int prefabHash) {
+            ZoneRecord record = GetOrCreate(zone);
+            record.Entries.TryGetValue(prefabHash, out EntryRecord existing);
+            record.Entries[prefabHash] = new EntryRecord() { Stamp = Now, Baseline = existing.Baseline };
             dirty = true;
         }
 

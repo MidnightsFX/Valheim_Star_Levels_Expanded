@@ -245,7 +245,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 SlowLaneZones++;
                 onSlowUsed?.Invoke(true);
                 bool succeeded = false;
-                yield return ResetTargets.RegenerateZone(zone, cfg, protection, false, report, (ok) => { succeeded = ok; });
+                yield return ResetTargets.RegenerateZone(zone, cfg, false, report, (ok) => { succeeded = ok; });
 
                 if (succeeded == false) {
                     // RegenerateZone owns the deferral decision on every one of its failure paths --

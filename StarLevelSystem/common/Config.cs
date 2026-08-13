@@ -719,8 +719,20 @@ namespace StarLevelSystem.common {
 # 'instantly'. Outer: 0 means the band has no outer limit. A chunk matching no band is
 # left at 1.0, so a partial band list never disables the rest of the world.
 #
+# --- Protection: the three actions ---
+# Every Protection category takes one of three actions:
+#
+#   Block     the whole chunk is left alone while the object is there. The safest, and the
+#             default for everything except dropped items
+#   Preserve  the object is kept, and the reset goes ahead around it
+#   Ignore    the object is ordinary resettable content and IS DELETED
+#
+# DroppedItem ships as Preserve, so loot a player left on the ground survives a reset without
+# holding the chunk back. If you ever see items piling up inside a location, set it to Ignore
+# and they will be cleared with everything else.
+#
 # --- Ignored prefabs ---
-# Each Protection category can list prefabs exempt from it. An ignored prefab neither
+# Each category can also list individual prefabs exempt from it. An ignored prefab neither
 # blocks a chunk from resetting nor survives one - IT IS DELETED. fire_pit ships ignored
 # because one abandoned campfire otherwise freezes a chunk (and its 8 neighbours) forever,
 # and a campfire sitting on an ore spawn stops that ore ever coming back.
@@ -732,6 +744,7 @@ namespace StarLevelSystem.common {
 #       - fire_pit
 #
 # Tombstones can never be ignored, and anything in ProtectedPrefabs wins over an ignore.
+# Tamed creatures are never deleted, whatever the categories or ignore lists say.
 #
 # --- ExtraTerrainRadius ---
 # Per location: metres of terrain reset BEYOND the location's own radius, for the ramps and
@@ -756,7 +769,7 @@ namespace StarLevelSystem.common {
 #     MaxZonesPerSecondFastLane: 200        # ZDO-only refreshes
 #     MaxZonesPerSecondSlowLane: 2          # resets that must load the zone
 #     AdaptiveBackoffFrameMs: 50            # over this frame time, halve the budget next tick
-#     ZdoGrowthTolerance: 0                 # ZDOs a reset may leak before the zone is backed off
+#     ZdoGrowthTolerance: 0                 # ZDOs a reset may leak before it is reported in the log
 #################################################
 ",
                 Serialize = () => DataObjects.yamlSerializer.Serialize(LocationResetData.BuildDefaultConfig()),

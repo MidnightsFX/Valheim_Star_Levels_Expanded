@@ -38,8 +38,9 @@ namespace StarLevelSystem.modules.LocationReset {
         // ZoneSystem placement list -- a dungeon pickable, say -- and still get a real name on the
         // resolved entry for logs, plus tells LocationResetData whether a member name exists at all.
         internal static readonly Dictionary<int, string> PrefabNamesByHash = new Dictionary<int, string>();
-        // Used to locate a sky dungeon's interior so it can be cleared along with the entrance.
-        internal static readonly HashSet<int> DungeonGeneratorHashes = new HashSet<int>();
+        // A one-shot CreatureSpawner records what it spawned as a ZDO connection, so clearing a
+        // location means following those links and taking each spawner's creature with it.
+        internal static readonly HashSet<int> CreatureSpawnerHashes = new HashSet<int>();
         // Player terraforming ops that persist as their own ZDOs. They have to be instantiated before
         // a terrain reset can see them, because TerrainModifier.GetAllInstances only reports live
         // components -- see ZoneLoader.CreateTerrainObjects.
@@ -54,6 +55,12 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static readonly int TerrainCompilerHash = "_TerrainCompiler".GetStableHashCode();
         internal static readonly int LocationProxyHash = "LocationProxy".GetStableHashCode();
 
+        // Above this altitude a ZDO belongs to a dungeon interior rather than the surface. Vanilla
+        // parks interiors at their entrance's y + 5000 (Location.Awake) and defines "indoors" as
+        // y > 3000 (Character.InInterior), so this matches the engine rather than guessing. Nothing
+        // legitimate sits between the highest terrain (~350m) and here.
+        internal const float SkyThreshold = 3000f;
+
         // Outcome of scanning a zone for player property.
         internal class ProtectionResult {
             // At least one object mapped to a Block action; the zone must not be touched.
@@ -63,8 +70,10 @@ namespace StarLevelSystem.modules.LocationReset {
             internal ProtectionCategory BlockingCategory;
             internal int BlockingPrefabHash;
             internal Vector3 BlockingPosition;
-            // ZDOs that must survive a reset but do not block it (Preserve).
-            internal readonly HashSet<ZDOID> Preserved = new HashSet<ZDOID>();
+            // No Preserve set here. This scan runs zone-wide with entry: null, so it can only judge
+            // against Defaults, and it happens before any location is chosen. Which individual
+            // objects survive a clear is decided per object by ResetTargets.ShouldPreserve, against
+            // the resolved entry's own rules.
         }
 
         internal static void BuildPrefabSets() {
@@ -83,7 +92,7 @@ namespace StarLevelSystem.modules.LocationReset {
             MineRock5Hashes.Clear();
             MineRockAreaCounts.Clear();
             MineRockBaseHealth.Clear();
-            DungeonGeneratorHashes.Clear();
+            CreatureSpawnerHashes.Clear();
             TerrainModifierHashes.Clear();
             PrefabNamesByHash.Clear();
 
@@ -102,7 +111,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 if (prefab.GetComponent<Pickable>() != null) { PickableHashes.Add(hash); }
                 if (prefab.GetComponent<MineRock5>() != null) { MineRock5Hashes.Add(hash); }
-                if (prefab.GetComponent<DungeonGenerator>() != null) { DungeonGeneratorHashes.Add(hash); }
+                if (prefab.GetComponent<CreatureSpawner>() != null) { CreatureSpawnerHashes.Add(hash); }
                 if (prefab.GetComponent<TerrainModifier>() != null) { TerrainModifierHashes.Add(hash); }
                 MineRock mineRock = prefab.GetComponent<MineRock>();
                 if (mineRock != null && mineRock.m_hitAreas != null) {
@@ -122,7 +131,12 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Classify a single ZDO. Returns false when the object is ordinary resettable content.
         // Ownership checks read the ZDO directly so this works on unloaded zones.
-        private static bool TryClassify(ZDO zdo, out ProtectionCategory category) {
+        //
+        // internal because ResetTargets.ShouldPreserve needs the same classification: the scan decides
+        // whether a zone may be touched at all, the clear decides which individual objects survive it,
+        // and the two must agree about what a thing IS even when they disagree about what to do.
+        // Callers must have run BuildPrefabSets.
+        internal static bool TryClassify(ZDO zdo, out ProtectionCategory category) {
             category = ProtectionCategory.PlayerBuiltPiece;
             int prefab = zdo.m_prefab;
 
@@ -191,6 +205,8 @@ namespace StarLevelSystem.modules.LocationReset {
                     ? entry.ActionFor(category)
                     : DefaultActionFor(category);
 
+                // Only Block is decided here. Preserve and Ignore both mean "this zone may be reset",
+                // and which objects inside it survive is ShouldPreserve's call at clear time.
                 if (action == ProtectionAction.Block) {
                     result.Blocked = true;
                     result.BlockingCategory = category;
@@ -198,9 +214,6 @@ namespace StarLevelSystem.modules.LocationReset {
                     result.BlockingPosition = zdo.GetPosition();
                     zdoBuffer.Clear();
                     return true;
-                }
-                if (action == ProtectionAction.Preserve) {
-                    result.Preserved.Add(zdo.m_uid);
                 }
             }
 
@@ -266,15 +279,98 @@ namespace StarLevelSystem.modules.LocationReset {
             }
         }
 
-        // Total ZDO count in a sector. Used for the before/after accounting that catches a reset
-        // leaking ZDOs into the world save.
-        internal static int SectorZdoCount(Vector2i zone) {
+        // ZDO count over a chunk AND its 8 neighbours, for the before/after accounting that catches a
+        // reset leaking ZDOs into the world save. The 3x3 block is the footprint a reset actually
+        // mutates: ClearLocation sweeps it, and a location's spawned children routinely land in a
+        // neighbouring sector. An earlier single-sector version compared two different areas.
+        //
+        // Surface and interior are counted SEPARATELY, and the split is the whole point. A dungeon
+        // interior shares its entrance's sector -- ZoneSystem.GetZone is xz-only and vanilla parks the
+        // interior directly overhead -- so it lands in this count, and a regenerated dungeon comes
+        // back with a legitimately different room layout and object count. Folding that into the
+        // drift figure reported every chunk containing a dungeon as leaking.
+        //
+        // Pass the per-prefab dictionaries to also break each side down by prefab hash. That costs a
+        // dictionary write per ZDO, so the sweep leaves them null and only the debug growth
+        // breakdown asks for them.
+        internal static int BlockZdoCount(Vector2i zone, out int interiorCount,
+                                          Dictionary<int, int> surfaceByPrefab = null,
+                                          Dictionary<int, int> interiorByPrefab = null) {
+            interiorCount = 0;
             if (ZDOMan.instance == null) { return 0; }
+
+            int surfaceCount = 0;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null) { continue; }
+                        bool interior = zdo.GetPosition().y > SkyThreshold;
+                        if (interior) { interiorCount++; } else { surfaceCount++; }
+
+                        Dictionary<int, int> breakdown = interior ? interiorByPrefab : surfaceByPrefab;
+                        if (breakdown == null) { continue; }
+                        breakdown.TryGetValue(zdo.m_prefab, out int current);
+                        breakdown[zdo.m_prefab] = current + 1;
+                    }
+                }
+            }
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
-            int count = zdoBuffer.Count;
+            return surfaceCount;
+        }
+
+        // Readable name for a prefab hash, for logs. Falls back to the hash itself, which still
+        // identifies the prefab even when ZNetScene has not been walked yet.
+        internal static string PrefabNameFor(int prefabHash) {
+            if (PrefabNamesByHash.TryGetValue(prefabHash, out string name)) { return name; }
+            return $"#{prefabHash}";
+        }
+
+        // Where every configured vegetation prefab currently sits, keyed by prefab hash. Positions are
+        // XZ only: vegetation placement is seeded per prefab per zone, so a surviving node replays at
+        // an identical XZ, while its y is re-snapped to terrain that may have moved.
+        //
+        // Taken BEFORE a regeneration so the freshly placed ghosts cannot match themselves -- a ZDO
+        // enters the sector index synchronously on creation.
+        //
+        // Scans the 3x3 block, not just this sector. Vanilla insets group centres by
+        // 32 - m_groupRadius so members stay within +/-32 of the zone centre, but GetZone floors
+        // (x + 32) / 64, so a node right on the +32 edge rounds into the NEIGHBOURING sector. A
+        // survivor this index cannot see is a survivor the replay duplicates -- and permanently,
+        // because each new copy lands in the same blind spot and is missed again next pass. That was
+        // a deterministic +1 per reset on chunks with group-spawned prefabs like MineRock_Tin.
+        //
+        // Matching stays prefab hash + XZ within a tight epsilon, which is unambiguous across a 3x3:
+        // zones are 64m apart, so a same-prefab node from a neighbour cannot sit that close to ours
+        // unless it IS ours.
+        internal static Dictionary<int, List<Vector2>> TrackedVegetationPositions(Vector2i zone) {
+            Dictionary<int, List<Vector2>> positions = new Dictionary<int, List<Vector2>>();
+            if (ZDOMan.instance == null) { return positions; }
+            if (LocationResetData.VegetationByPrefabHash.Count == 0) { return positions; }
+
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (LocationResetData.VegetationByPrefabHash.ContainsKey(zdo.m_prefab) == false) { continue; }
+                        if (positions.TryGetValue(zdo.m_prefab, out List<Vector2> list) == false) {
+                            list = new List<Vector2>();
+                            positions[zdo.m_prefab] = list;
+                        }
+                        Vector3 p = zdo.GetPosition();
+                        list.Add(new Vector2(p.x, p.z));
+                    }
+                }
+            }
+
             zdoBuffer.Clear();
-            return count;
+            return positions;
         }
     }
 }

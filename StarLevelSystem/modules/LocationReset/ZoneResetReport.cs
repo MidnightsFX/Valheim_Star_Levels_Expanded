@@ -26,6 +26,8 @@ namespace StarLevelSystem.modules.LocationReset {
             Disabled,
             HardBlocked,
             NoProxy,
+            // ResetInterior is off and this location has one, so it was left entirely alone.
+            InteriorPreserved,
         }
 
         internal Vector2i Zone;
@@ -55,14 +57,20 @@ namespace StarLevelSystem.modules.LocationReset {
         internal int TerrainModificationsUndone;
         // Effective terrain reset radius actually used, after the extra radius and its clamp.
         internal float TerrainRadius;
+        // Spawners found by walking the location's own layout rather than by the radius sweep, i.e.
+        // ones sitting outside the location's declared radius. Reported separately because a non-zero
+        // count is the targeted pass earning its keep.
+        internal int SpawnersRemoved;
 
         // Tier 1, split by family so a record shows which kind of content came back.
         internal int PickablesRefreshed, PickablesNotDue;
         internal int MineRocksRefreshed, MineRocksNotDue;
         internal int ContainersRefreshed, ContainersNotDue;
 
-        // Tier 2
+        // Tier 2. VegetationDuplicatesRejected is the replayed nodes that landed on something still
+        // standing and were dropped again; a non-zero count here is the system working, not failing.
         internal int VegetationEntriesReset, VegetationEntriesSkipped, VegetationObjects;
+        internal int VegetationDuplicatesRejected;
 
         // Reset group the location's timer came from, so the log answers "why is this on a 48h
         // timer" and shows when a distance-scoped group took over.
@@ -75,8 +83,11 @@ namespace StarLevelSystem.modules.LocationReset {
         internal int LocationCleared;
         internal int LocationSpawned;
 
-        // Sector ZDO totals either side of a regeneration; a faithful restore leaves them equal.
+        // Block ZDO totals either side of a regeneration; a faithful restore leaves them equal.
+        // Interior is tracked apart from the surface because a regenerated dungeon legitimately comes
+        // back with a different room layout, so its delta is reported but never treated as drift.
         internal int ZdoBefore, ZdoAfter;
+        internal int ZdoInteriorBefore, ZdoInteriorAfter;
         internal bool ZdoCounted;
 
         private List<string> details;
@@ -136,13 +147,19 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (ContainersRefreshed > 0) { inPlace.Add($"containers {ContainersRefreshed}"); }
                 if (inPlace.Count > 0) { parts.Add("refreshed " + string.Join(", ", inPlace)); }
 
-                if (VegetationObjects > 0) {
-                    parts.Add($"vegetation {VegetationObjects} objects across {VegetationEntriesReset} entries");
+                if (VegetationObjects > 0 || VegetationDuplicatesRejected > 0) {
+                    string duplicates = VegetationDuplicatesRejected > 0
+                        ? $" ({VegetationDuplicatesRejected} duplicates rejected)" : "";
+                    parts.Add($"vegetation {VegetationObjects} objects across {VegetationEntriesReset} entries{duplicates}");
                 }
                 if (IgnoredPiecesCleared > 0) { parts.Add($"cleared {IgnoredPiecesCleared} ignored pieces"); }
                 if (TerrainModificationsUndone > 0) { parts.Add($"terrain {TerrainModificationsUndone} reverted"); }
                 parts.Add(DescribeLocation());
                 if (ZdoCounted) { parts.Add($"ZDO {ZdoBefore}->{ZdoAfter}"); }
+                // Only when there is an interior to talk about; most chunks have none.
+                if (ZdoCounted && (ZdoInteriorBefore > 0 || ZdoInteriorAfter > 0)) {
+                    parts.Add($"interior {ZdoInteriorBefore}->{ZdoInteriorAfter}");
+                }
                 if (ZoneAdopted) { parts.Add("adopted while loaded"); }
                 if (string.IsNullOrEmpty(SkipReason) == false) { parts.Add($"incomplete: {SkipReason}"); }
                 parts.RemoveAll(string.IsNullOrEmpty);
@@ -170,7 +187,8 @@ namespace StarLevelSystem.modules.LocationReset {
             if (string.IsNullOrEmpty(GroupName) == false) { name = $"{name}' via group '{GroupName}"; }
             switch (LocationResult) {
                 case LocationOutcome.Rebuilt:
-                    return $"location '{name}' rebuilt (cleared {LocationCleared}, spawned {LocationSpawned}{DescribeTerrain()})";
+                    string strays = SpawnersRemoved > 0 ? $", +{SpawnersRemoved} stray spawners" : "";
+                    return $"location '{name}' rebuilt (cleared {LocationCleared}{strays}, spawned {LocationSpawned}{DescribeTerrain()})";
                 case LocationOutcome.TerrainOnly:
                     return $"location '{name}' terrain-only ({LocationCleared} modifications undone{DescribeTerrain()})";
                 case LocationOutcome.NotDue:
@@ -183,6 +201,8 @@ namespace StarLevelSystem.modules.LocationReset {
                     return $"location '{name}' can never be reset";
                 case LocationOutcome.NoProxy:
                     return $"location '{name}' has no proxy to time from";
+                case LocationOutcome.InteriorPreserved:
+                    return $"location '{name}' left alone (ResetInterior off; its interior would be rebuilt regardless)";
                 default:
                     return "";
             }

@@ -1,3 +1,12 @@
+**1.5.1**
+ ---
+ ```
+ - Improves ZDO growth tracking for vegetation
+ - EnableDebugLocationResetDetails now breaks down the details of any chunk that ends a reset with more ZDOs than it started with
+	- If you see repeatedly that a chunk is ending with more ZDOs than it started with, please report it to the mod author with the details of the chunk and the server's configuration
+ - Improves dungeon reset to ensure creature removal
+ ```
+
 **1.5.0**
  ---
  ```

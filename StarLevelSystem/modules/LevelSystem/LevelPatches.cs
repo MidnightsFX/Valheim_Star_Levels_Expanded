@@ -174,10 +174,10 @@ namespace StarLevelSystem.modules.LevelSystem {
                 // Resolve the child's level: SLS cache first, then its ZDO, then the vanilla field. The cache
                 // entry can legitimately be missing - UpdateYamlConfig flushes the whole cache on a config sync -
                 // so the ZDO/m_level fallbacks are what keep the level inheritance working across that.
-                int level = (cdc_child != null && cdc_child.Level > 0) ? cdc_child.Level : 0;
-                if (level <= 0 && childZDO != null) { level = childZDO.GetInt(ZDOVars.s_level, 0); }
+                int level = childZDO.GetInt(ZDOVars.s_level, 0);
                 if (level <= 0) { level = childChar.m_level; }
                 if (level < 1) { level = 1; }
+                grownZDO.Set(ZDOVars.s_level, level);
 
                 // Modifiers must be written to the ZDO before the cache is built below- GetAndSetLocalCache reads
                 // them back out of the ZDO via GetCreatureModifiers, it does not take them as a parameter.
@@ -191,13 +191,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                     int evolveKills = childZDO.GetInt(SLS_EVOLVE, 0);
                     if (evolveKills > 0) { grownZDO.Set(SLS_EVOLVE, evolveKills); }
                 }
-
-                // Persist the inherited level immediately so nothing between here and the queue worker sees an
-                // unset s_level and rolls a fresh one. Setting the ZDO rather than calling SetLevel is deliberate:
-                // leaving m_level at its Awake default keeps the over-level check in StartZOwnerCreatureRoutines
-                // (which reads the stale m_level) from clamping an inherited level down to the grown up prefabs
-                // configured max. Grow up inheritance is uncapped, matching vanilla Growup.
-                grownZDO.Set(ZDOVars.s_level, level);
 
                 // multiply:false below is dropped by the CreatureSetupQueue dedupe- Character.Awake already
                 // enqueued this creature with multiply:true during Instantiate- so mark the ZDO directly, the

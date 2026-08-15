@@ -18,12 +18,27 @@ namespace StarLevelSystem.modules.Raids {
         bool setup = false;
         double nextCheckForRaidsTime = 0;
         bool forceRaidStart = false;
+        // Breadcrumb for the CheckForRaidUpdate error handler, so a failure names the player it was working on.
+        string currentlyCheckingPlayer = null;
 
         public void Awake() {
             InvokeRepeating("CheckForRaidUpdate", 30, 30);
         }
 
+        // InvokeRepeating target. Anything escaping the check would otherwise surface as a bare
+        // NullReferenceException on this frame with no indication of which player or peer was being processed,
+        // and would silently cost that entire cycle.
         public void CheckForRaidUpdate() {
+            try {
+                RunRaidCheck();
+            } catch (Exception e) {
+                Logger.LogError($"The raid check failed{(string.IsNullOrEmpty(currentlyCheckingPlayer) ? "" : $" while processing player {currentlyCheckingPlayer}")}, raids will be retried on the next check. Exception: {e}");
+            } finally {
+                currentlyCheckingPlayer = null;
+            }
+        }
+
+        private void RunRaidCheck() {
             if (setup == false) { return; }
             if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
@@ -41,21 +56,29 @@ namespace StarLevelSystem.modules.Raids {
                     return;
                 }
 
-                // Get updates requested for all of the existing players who do not have private key entries already
-                // Ideally this should never get hit, as we should already get this information when the players connect
+                // Get updates requested for all of the existing players who do not have private key entries already.
+                // Ideally this should never get hit, as we should already get this information when the players
+                // connect (RaidPatches syncs on Player.Load and on every unique-key change).
                 bool waitForPeerUpdates = false;
                 foreach (ZNetPeer zpeer in ZNet.instance.GetPeers()) {
+                    if (zpeer == null || zpeer.IsReady() == false) { continue; }
                     string playerPlatformID = SLSExtensions.GetPlatformUserID(zpeer.m_uid).ToString();
-                    if (RaidControl.ServerPlayerRaidData.Keys.Contains(playerPlatformID) == false) {
-                        ZPackage package = new ZPackage();
-                        ValConfig.ClientSendPlayerPrivateKeysRPC.SendPackage(zpeer.m_uid, package);
-                        waitForPeerUpdates = true;
-                    }
+                    if (RaidControl.ServerPlayerRaidData.ContainsKey(playerPlatformID)) { continue; }
+
+                    Logger.LogRaid($"No raid data held for peer {zpeer.m_playerName} ({playerPlatformID}), requesting their private keys.");
+                    ValConfig.ClientSendPlayerPrivateKeysRPC.SendPackage(zpeer.m_uid, new ZPackage());
+                    waitForPeerUpdates = true;
                 }
                 if (waitForPeerUpdates) {
-                    Logger.LogInfo("Networked players data is needed to ensure accurate raids, delaying raid initilaization and awaiting updated client data.");
+                    // Come back promptly to pick the pending peers up, but only abort the cycle if there is
+                    // genuinely nobody to raid yet. A single un-synced peer used to block raids for every other
+                    // player on the server, indefinitely if that client never answered the request.
                     nextCheckForRaidsTime = ZNet.instance.GetTimeSeconds() + 60;
-                    return;
+                    if (RaidControl.ServerPlayerRaidData.Count == 0) {
+                        Logger.LogInfo("Networked players data is needed to ensure accurate raids, delaying raid initilaization and awaiting updated client data.");
+                        return;
+                    }
+                    Logger.LogRaid("Some connected peers have no raid data yet; they will be considered once their client data arrives. Continuing with the players already known.");
                 }
                 // This is a non-networked player running the server
                 bool isIntegratedServer = false;
@@ -78,7 +101,11 @@ namespace StarLevelSystem.modules.Raids {
                     peers.Add($"{player.m_userInfo.m_id.m_platform}_{player.m_userInfo.m_id.m_userID}");
                 }
                 Logger.LogRaid($"Available players for raids:\n{string.Join("\n", peers)}\nAvailable Player data:\n{string.Join("\n", RaidControl.ServerPlayerRaidData.Keys)}");
-                foreach (KeyValuePair<string, PlayerRaidData> playerRaids in RaidControl.ServerPlayerRaidData) {
+                // Snapshot: committing a raid can add a player entry (RaidControl.FinalizeRaidCommit), which would
+                // invalidate a live enumerator mid-check. PlayerRaidData is a reference type, so updates still land.
+                List<KeyValuePair<string, PlayerRaidData>> trackedPlayers = RaidControl.ServerPlayerRaidData.ToList();
+                foreach (KeyValuePair<string, PlayerRaidData> playerRaids in trackedPlayers) {
+                    currentlyCheckingPlayer = playerRaids.Key;
                     Logger.LogRaid($"Checking raids for {playerRaids.Key}");
 
                     if (SLSExtensions.PlatformAndIDIsPlayerOnline(playerRaids.Key) == false) {
@@ -106,7 +133,7 @@ namespace StarLevelSystem.modules.Raids {
                     }
                     // Check distance to existing raids
                     bool tooClose = false;
-                    foreach (KeyValuePair<string, PlayerRaidData> playerRaid in RaidControl.ServerPlayerRaidData) {
+                    foreach (KeyValuePair<string, PlayerRaidData> playerRaid in trackedPlayers) {
                         // Skip distance check if the player is waiting for a raid still
                         if (playerRaid.Value.NextRaidableTime < currentTime) { continue; }
 
@@ -178,11 +205,17 @@ namespace StarLevelSystem.modules.Raids {
 
         public void Setup() {
             Logger.LogRaid("Starting setup for RaidManager.");
+            Dictionary<string, PlayerRaidData> loadedRaidData = null;
             try {
-                RaidControl.ServerPlayerRaidData = yamlDeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(RaidsData.LoadServerRaidData());
+                loadedRaidData = yamlDeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(RaidsData.LoadServerRaidData());
             } catch (Exception e) {
                 Logger.LogWarning($"There was an error loading saved player raid data. New data will be requested from players. Exception: {e}");
             }
+            // An absent or empty save deserializes to null without throwing, so the catch above never sees it.
+            if (loadedRaidData == null) {
+                Logger.LogWarning($"No saved player raid data was found ({ValConfig.raidsServerSavedData}), starting from an empty registry. Player data will be requested from connected clients.");
+            }
+            RaidControl.ServerPlayerRaidData = loadedRaidData;
             setup = true;
         }
 

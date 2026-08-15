@@ -25,10 +25,17 @@ namespace StarLevelSystem.modules.Raids
         // RaidRunner on each 2s re-broadcast instead.
         private static bool IsRaidAuthority() => ZNet.instance != null && ZNet.instance.IsServer();
 
+        // Private keys live on the client, so these must run wherever a local player exists -- which on a
+        // dedicated server is only ever the client. Gating on ZNet.IsServer() made them dead exactly there: a
+        // dedicated server never learned any player's keys, so raids gated on private keys could never fire and
+        // ServerPlayerRaidData stayed empty. OnClientReceiveRequestForPrivateKeys already branches correctly
+        // between "dedicated client -> RPC up to the server" and "integrated host -> update the registry directly".
+        private static bool CanSyncPrivateKeys() => ZNet.instance != null && Player.m_localPlayer != null;
+
         [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
         internal static class UpdatePlayerPrivateKeys {
             public static void Postfix() {
-                if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
+                if (CanSyncPrivateKeys() == false) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }
@@ -36,7 +43,7 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(Player), nameof(Player.RemoveUniqueKey))]
         internal static class RemovePlayerPrivateKey {
             public static void Postfix() {
-                if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
+                if (CanSyncPrivateKeys() == false) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }
@@ -44,7 +51,7 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(Player), nameof(Player.Load))]
         internal static class SyncPlayerPrivateKeysOnLoad {
             public static void Postfix() {
-                if (ZNet.instance.IsServer() == false || Player.m_localPlayer == null) { return; }
+                if (CanSyncPrivateKeys() == false) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }

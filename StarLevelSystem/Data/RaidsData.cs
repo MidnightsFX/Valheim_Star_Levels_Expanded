@@ -432,11 +432,15 @@ namespace StarLevelSystem.Data
         internal static void Init() {
             SLE_Raid_Settings = DefaultConfiguration;
             try {
+                // ValConfig.LoadYamlConfigs restores this file from the defaults before Init runs, so a missing
+                // file here means something went wrong with that -- keep the built-in defaults rather than
+                // reading a file that isn't there. (This branch used to write ServerRaidSavedData.yaml, an
+                // unrelated file, and then read the still-absent raid settings.)
                 if (File.Exists(ValConfig.raidsFilePath)) {
                     UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
                 } else {
-                    RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
-                    UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
+                    Jotunn.Logger.LogWarning($"No raid configuration was found at {ValConfig.raidsFilePath}, the built-in default raid configuration will be used.");
+                    UpdateYamlConfig(YamlDefaultConfig());
                 }
             }
             catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Raid values, defaults will be used. Exception: {e}"); }
@@ -449,12 +453,31 @@ namespace StarLevelSystem.Data
         public static bool UpdateYamlConfig(string yaml) {
             try {
                 Logger.LogDebug("Loaded new Raid settings...");
-                SLE_Raid_Settings = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(yaml);
+                RaidConfiguration parsed = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(yaml);
+
+                // An empty or comment-only file deserializes to null without throwing, which would leave every
+                // SLE_Raid_Settings reader (RaidManager.CheckForRaidUpdate first) dereferencing null forever.
+                if (parsed == null || parsed.Raids == null) {
+                    Logger.LogWarning($"The raid configuration was empty or unreadable ({ValConfig.raidsFilePath}), the built-in default raid configuration will be used instead.");
+                    parsed = DefaultConfiguration;
+                }
+                if (parsed.GlobalSettings == null) {
+                    Logger.LogWarning("The raid configuration had no GlobalSettings, the built-in global raid defaults will be used instead.");
+                    parsed.GlobalSettings = DefaultConfiguration.GlobalSettings;
+                }
+                SLE_Raid_Settings = parsed;
 
                 RaidsByName.Clear();
                 foreach (RaidDefinition raid in SLE_Raid_Settings.Raids) {
+                    if (raid == null || string.IsNullOrEmpty(raid.Name)) {
+                        Logger.LogWarning("A raid definition has no Name and will be skipped.");
+                        continue;
+                    }
+                    // Both of these used to fall through to Add and throw, dropping the whole configuration
+                    // into the catch below despite only one bad entry.
                     if (RaidsByName.ContainsKey(raid.Name)) {
                         Logger.LogWarning($"Raid with duplicate name, will be skipped. ({raid.Name})");
+                        continue;
                     }
                     RaidsByName.Add(raid.Name, raid);
                 }
@@ -462,7 +485,15 @@ namespace StarLevelSystem.Data
                 RaidControl.ApplyRaidConfiguration(RandEventSystem.instance);
             }
             catch (Exception ex) {
-                StarLevelSystem.Log.LogError($"Failed to parse RaidSettings YAML: {ex.Message}");
+                // Leave the system on a known-good configuration rather than whatever half-assigned state the
+                // throw produced -- RaidsByName may have been cleared partway through.
+                StarLevelSystem.Log.LogError($"Failed to parse RaidSettings YAML, the built-in default raid configuration will be used instead: {ex.Message}");
+                SLE_Raid_Settings = DefaultConfiguration;
+                RaidsByName.Clear();
+                foreach (RaidDefinition raid in DefaultConfiguration.Raids) {
+                    if (RaidsByName.ContainsKey(raid.Name)) { continue; }
+                    RaidsByName.Add(raid.Name, raid);
+                }
                 return false;
             }
             return true;

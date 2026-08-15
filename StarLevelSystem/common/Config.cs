@@ -1283,15 +1283,16 @@ namespace StarLevelSystem.common {
         internal static IEnumerator OnClientReceiveRequestForPrivateKeys(long sender, ZPackage _) {
             if (Player.m_localPlayer == null) { yield break; }
             //Logger.LogDebug("Collecting players private keys");
-            List<string> playerKeys = Player.m_localPlayer.GetPrivateKeysSanitize();
+            List<string> playerKeys = Player.m_localPlayer.GetPrivateKeysSanitize() ?? new List<string>();
+            // A player with no keys still has to answer: the server registers players by this response, and
+            // staying silent used to leave it waiting on that peer forever, holding up raid checks.
+            if (playerKeys.Count <= 0) {
+                Logger.LogDebug($"No private keys held by player: {Player.m_localPlayer.m_name}, registering them with an empty key set.");
+            }
             string fileContents = DataObjects.yamlSerializerJsonCompat.Serialize(playerKeys);
             ZPackage package = new ZPackage();
             package.Write(fileContents);
-            if (string.IsNullOrEmpty(fileContents) || playerKeys.Count <= 0) {
-                Logger.LogDebug($"No private keys received from player: {Player.m_localPlayer.m_name}, skipping update to the server.");
-                yield break;
-            }
-            
+
             if (ZNet.instance.GetServerPeer() != null && ZNet.instance.IsCurrentServerDedicated()) {
                 Logger.LogDebug($"Sending private keys to server: {fileContents}");
                 ClientSendPlayerPrivateKeysRPC.SendPackage(ZNet.instance.GetServerPeer().m_uid, package);

@@ -18,7 +18,15 @@ namespace StarLevelSystem.modules.Raids
 {
     internal static class RaidControl
     {
-        internal static Dictionary<string, PlayerRaidData> ServerPlayerRaidData = new Dictionary<string, PlayerRaidData>();
+        private static Dictionary<string, PlayerRaidData> serverPlayerRaidData = new Dictionary<string, PlayerRaidData>();
+
+        // A missing or empty ServerRaidSavedData.yaml deserializes to null rather than throwing (YamlDotNet maps
+        // an empty document to default(T)), which used to leave this null and NRE the entire raid check every
+        // interval. Coerce here so no reader has to guard; RaidManager.Setup reports when the fallback was used.
+        internal static Dictionary<string, PlayerRaidData> ServerPlayerRaidData {
+            get => serverPlayerRaidData;
+            set => serverPlayerRaidData = value ?? new Dictionary<string, PlayerRaidData>();
+        }
 
         internal static RaidManager RaidMan;
 
@@ -117,13 +125,20 @@ namespace StarLevelSystem.modules.Raids
         }
 
         internal static void UpdateOrAddPlayerPrivateKeys(long playerID, List<string> privatekeys) {
-            string playerPlatformID = SLSExtensions.GetPlatformUserID(playerID).ToString();
+            PlatformUserID platformUserID = SLSExtensions.GetPlatformUserID(playerID);
+            // An unresolvable peer yields PlatformUserID.None, whose string form is not empty -- without this it
+            // would be registered as a bogus player entry that no online player ever matches.
+            if (platformUserID.IsValid == false) {
+                Logger.LogWarning($"Received private keys from peer {playerID} but their platform ID could not be resolved, the update will be ignored.");
+                return;
+            }
+            string playerPlatformID = platformUserID.ToString();
             if (string.IsNullOrEmpty(playerPlatformID)) { return; }
             UpdateOrAddPlayerPrivateKeysToRegistry(playerPlatformID, privatekeys);
         }
 
         private static void UpdateOrAddPlayerPrivateKeysToRegistry(string playerPlatformID, List<string> privatekeys) {
-            if (ServerPlayerRaidData == null) { ServerPlayerRaidData = new Dictionary<string, PlayerRaidData>() { }; }
+            if (privatekeys == null) { privatekeys = new List<string>(); }
             if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
                 ServerPlayerRaidData[playerPlatformID].PlayerPrivatekeys = privatekeys;
             } else {

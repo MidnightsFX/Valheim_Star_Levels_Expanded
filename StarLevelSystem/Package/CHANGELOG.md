@@ -1,3 +1,9 @@
+**1.5.3**
+ ---
+ ```
+- Improves resiliance of per-player data synchronization for individual raids
+ ```
+
 **1.5.2**
  ---
  ```

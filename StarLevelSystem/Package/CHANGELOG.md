@@ -1,3 +1,10 @@
+**1.5.4**
+ ---
+ ```
+- Fixes raids never starting on crossplay (PlayFab) servers
+- Fixes a player's private keys not being set when the player was dead or respawning
+ ```
+
 **1.5.3**
  ---
  ```

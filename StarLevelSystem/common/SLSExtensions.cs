@@ -375,30 +375,100 @@ namespace StarLevelSystem.common
             return biomecfg;
         }
 
-        public static ZNetPeer GetPeerByPlatformID(string platformAndID) {
-            string compareID = platformAndID;
-            if (platformAndID.Contains("Steam")) {
-                compareID = platformAndID.Split('_')[1];
-            }
-            foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
-                if (peer.IsReady() && peer.m_socket.GetHostName() == compareID) {
-                    return peer;
-                }
+        /// <summary>
+        /// Resolve a connected peer to its canonical Splatform identity.
+        ///
+        /// The host name a socket reports is backend-dependent: ZSteamSocket.GetHostName() returns a bare
+        /// numeric SteamID ("76561198..."), while ZPlayFabSocket.GetHostName() returns the already-prefixed
+        /// PlatformUserID ("Steam_76561198..."). This mirrors ZNet.UpdatePlayerList exactly, so the id
+        /// produced here is identical to the one vanilla puts in ZNet.GetPlayerList() -- which is where every
+        /// raid registry key ultimately comes from -- on Steamworks, PlayFab/crossplay, EOS and CustomSocket
+        /// alike. Stripping a "Steam_" prefix by hand only ever lined up on Steamworks.
+        /// </summary>
+        public static PlatformUserID GetPeerPlatformUserID(ZNetPeer peer) {
+            if (peer == null || peer.m_socket == null) { return PlatformUserID.None; }
+
+            string hostName = peer.m_socket.GetHostName();
+            if (string.IsNullOrEmpty(hostName)) { return PlatformUserID.None; }
+
+            // Steamworks is the only backend whose host name is an unprefixed platform id.
+            if (ZNet.m_onlineBackend == OnlineBackendType.Steamworks) {
+                Splatform.Platform steamPlatform = ZNet.instance != null ? ZNet.instance.m_steamPlatform : new Splatform.Platform("Steam");
+                return new PlatformUserID(steamPlatform, hostName);
             }
 
+            // Every other backend already reports "<Platform>_<id>". TryParse rather than the string ctor:
+            // the ctor yields this same PlatformUserID.None on a failed parse, but also emits a
+            // UnityEngine.Debug.Log every time -- and a CustomSocket backend reports a bare IP here.
+            if (PlatformUserID.TryParse(hostName, out PlatformUserID parsed)) { return parsed; }
+            return PlatformUserID.None;
+        }
+
+        /// <summary>Find the ready peer whose platform identity matches, or null.</summary>
+        public static ZNetPeer GetPeerByPlatformUserID(PlatformUserID target) {
+            // The IsValid guard is load-bearing, not defensive: PlatformUserID equality returns true when
+            // both sides are invalid, so an unparseable target would match the first peer that also failed
+            // to resolve.
+            if (ZNet.instance == null || target.IsValid == false) { return null; }
+
+            foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
+                if (peer == null || peer.IsReady() == false) { continue; }
+                if (GetPeerPlatformUserID(peer) == target) { return peer; }
+            }
             return null;
         }
 
-        public static PlatformUserID GetPlatformUserID(long peerID) {
-            ZNetPeer peer = ZNet.instance.GetPeer(peerID);
-            if (peer == null || !peer.IsReady()) { return PlatformUserID.None; }
+        /// <summary>
+        /// Find the ready peer for a "&lt;Platform&gt;_&lt;id&gt;" key -- the form every ServerPlayerRaidData
+        /// key uses.
+        /// </summary>
+        public static ZNetPeer GetPeerByPlatformID(string platformAndID) {
+            if (ZNet.instance == null || string.IsNullOrEmpty(platformAndID)) { return null; }
 
-            foreach(PlayerInfo playerInfo in ZNet.instance.GetPlayerList())  {
-                if (playerInfo.m_characterID == peer.m_characterID) {
-                    return playerInfo.m_userInfo.m_id;
-                }
+            if (PlatformUserID.TryParse(platformAndID, out PlatformUserID target) == false) {
+                Logger.LogWarning($"'{platformAndID}' is not a platform id, so no peer can be resolved for it.");
+                return null;
             }
-            return PlatformUserID.None;
+
+            ZNetPeer match = GetPeerByPlatformUserID(target);
+            if (match == null) {
+                // Reaching here means the raid registry and the connected peers genuinely disagree. Name the
+                // backend and what the peers actually resolve to, so it is diagnosable from a log alone.
+                Logger.LogWarning($"No connected peer resolved to {platformAndID} (backend: {ZNet.m_onlineBackend}). Ready peers: {DescribeReadyPeers()}");
+            }
+            return match;
+        }
+
+        /// <summary>One-line dump of every ready peer's raw socket host name and resolved platform id.</summary>
+        internal static string DescribeReadyPeers() {
+            if (ZNet.instance == null) { return "<no ZNet>"; }
+
+            List<string> described = new List<string>();
+            foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
+                if (peer == null || peer.IsReady() == false) { continue; }
+                string hostName = peer.m_socket == null ? "<no socket>" : peer.m_socket.GetHostName();
+                described.Add($"{peer.m_playerName}(uid:{peer.m_uid} host:'{hostName}' id:'{GetPeerPlatformUserID(peer)}')");
+            }
+            return described.Count == 0 ? "<none>" : string.Join(", ", described);
+        }
+
+        /// <summary>
+        /// Resolve a peer uid to its platform identity, from the socket -- which is the source vanilla itself
+        /// derives ZNet.PlayerInfo.m_userInfo.m_id from.
+        ///
+        /// Deliberately does not fall back to joining peer.m_characterID against ZNet.GetPlayerList(): that
+        /// join is both lossier (m_players is only rebuilt on SendPlayerList) and unsound (m_characterID is
+        /// ZDOID.None through death/respawn, and ZDOID.None == ZDOID.None, so two peers in that window can
+        /// resolve to each other's identity -- filing one player's private keys or raid cooldown under
+        /// another's id).
+        /// </summary>
+        public static PlatformUserID GetPlatformUserID(long peerID) {
+            if (ZNet.instance == null) { return PlatformUserID.None; }
+
+            ZNetPeer peer = ZNet.instance.GetPeer(peerID);
+            if (peer == null || peer.IsReady() == false) { return PlatformUserID.None; }
+
+            return GetPeerPlatformUserID(peer);
         }
 
         public static string GetLocalUserPlatformAndID() {
@@ -407,10 +477,13 @@ namespace StarLevelSystem.common
         }
 
         public static bool PlatformAndIDIsPlayerOnline(string PlatformAndID) {
+            if (ZNet.instance == null || string.IsNullOrEmpty(PlatformAndID)) { return false; }
+
             foreach (PlayerInfo playerInfo in ZNet.instance.GetPlayerList()) {
-                string platformID = $"{playerInfo.m_userInfo.m_id.m_platform.ToString()}_{playerInfo.m_userInfo.m_id.m_userID.ToString()}";
-                Logger.LogDebug($"Checking {platformID} == {PlatformAndID}");
-                if (platformID == PlatformAndID) {
+                // ToString() rather than building "<platform>_<id>" by hand: the two agree for any valid id,
+                // but an invalid one renders as "" here and as "_" by hand -- and "_" is the value that could
+                // match a junk registry key.
+                if (playerInfo.m_userInfo.m_id.ToString() == PlatformAndID) {
                     return true;
                 }
             }

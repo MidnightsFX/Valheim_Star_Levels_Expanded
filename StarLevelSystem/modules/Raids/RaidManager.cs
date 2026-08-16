@@ -62,7 +62,14 @@ namespace StarLevelSystem.modules.Raids {
                 bool waitForPeerUpdates = false;
                 foreach (ZNetPeer zpeer in ZNet.instance.GetPeers()) {
                     if (zpeer == null || zpeer.IsReady() == false) { continue; }
-                    string playerPlatformID = SLSExtensions.GetPlatformUserID(zpeer.m_uid).ToString();
+                    PlatformUserID peerPlatformUserID = SLSExtensions.GetPeerPlatformUserID(zpeer);
+                    // An unresolvable peer would key the registry off PlatformUserID.None, whose string form
+                    // is empty -- a junk entry no online player ever matches, persisted to disk forever.
+                    if (peerPlatformUserID.IsValid == false) {
+                        Logger.LogWarning($"Could not resolve a platform ID for peer {zpeer.m_playerName} (uid {zpeer.m_uid}) on backend {ZNet.m_onlineBackend}; they will not be considered for raids.");
+                        continue;
+                    }
+                    string playerPlatformID = peerPlatformUserID.ToString();
                     if (RaidControl.ServerPlayerRaidData.ContainsKey(playerPlatformID)) { continue; }
 
                     Logger.LogRaid($"No raid data held for peer {zpeer.m_playerName} ({playerPlatformID}), requesting their private keys.");
@@ -98,7 +105,7 @@ namespace StarLevelSystem.modules.Raids {
                 Logger.LogRaid($"Starting raid init check potential num raids: {numRaids} start-time: {currentTime} checking {RaidControl.ServerPlayerRaidData.Count} players for raid availability.");
                 List<string> peers = new List<string>();
                 foreach (PlayerInfo player in ZNet.instance.GetPlayerList()) {
-                    peers.Add($"{player.m_userInfo.m_id.m_platform}_{player.m_userInfo.m_id.m_userID}");
+                    peers.Add(player.m_userInfo.m_id.ToString());
                 }
                 Logger.LogRaid($"Available players for raids:\n{string.Join("\n", peers)}\nAvailable Player data:\n{string.Join("\n", RaidControl.ServerPlayerRaidData.Keys)}");
                 // Snapshot: committing a raid can add a player entry (RaidControl.FinalizeRaidCommit), which would
@@ -121,7 +128,15 @@ namespace StarLevelSystem.modules.Raids {
                         break;
                     }
 
-                    if (ZNet.TryGetPlayerByPlatformUserID(new PlatformUserID(playerRaids.Key), out ZNet.PlayerInfo playerInfo) == false) {
+                    // TryParse rather than new PlatformUserID(key): an unparseable key yields
+                    // PlatformUserID.None, and TryGetPlayerByPlatformUserID compares with an equality that
+                    // treats two invalid ids as equal -- so a junk key would match the first player whose own
+                    // id failed to resolve.
+                    if (PlatformUserID.TryParse(playerRaids.Key, out PlatformUserID trackedPlatformUserID) == false) {
+                        Logger.LogInfo($"Tracked raid player '{playerRaids.Key}' is not a valid platform ID, this entry will be skipped.");
+                        continue;
+                    }
+                    if (ZNet.TryGetPlayerByPlatformUserID(trackedPlatformUserID, out ZNet.PlayerInfo playerInfo) == false) {
                         Logger.LogInfo($"Could not find player by platform ID {playerRaids.Key}, this player will be skipped.");
                         continue;
                     }
@@ -185,6 +200,7 @@ namespace StarLevelSystem.modules.Raids {
                                     Logger.LogWarning($"Tried to start raid {raid.Name} for player {playerRaids.Key} but networked dispatch failed (peer null or unavailable).");
                                     continue;
                                 }
+                                Logger.LogRaid($"Dispatched raid {raid.Name} to peer {zpeer.m_playerName} (uid {zpeer.m_uid}).");
                             }
                             // Cooldown + music are deferred until the client confirms the raid actually started
                             // (RaidControl.FinalizeRaidCommit). Mark a short pending hold so this player isn't
@@ -217,6 +233,9 @@ namespace StarLevelSystem.modules.Raids {
             }
             RaidControl.ServerPlayerRaidData = loadedRaidData;
             setup = true;
+            // Peer identity resolution is backend-dependent (see SLSExtensions.GetPeerPlatformUserID), so
+            // naming the backend here makes any future raid-dispatch report self-identifying.
+            Logger.LogInfo($"SLS raid manager ready. Online backend: {ZNet.m_onlineBackend}, dedicated: {(ZNet.instance == null ? "unknown" : ZNet.instance.IsDedicated().ToString())}, saved players: {RaidControl.ServerPlayerRaidData.Count}.");
         }
 
         public void ForceRaidStart() {

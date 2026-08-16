@@ -111,6 +111,11 @@ namespace StarLevelSystem.modules.Raids
 
             Logger.LogDebug($"Checking for raids for {playerPlatformID}");
 
+            if (string.IsNullOrEmpty(playerPlatformID)) {
+                Logger.LogWarning("A raid was requested without a resolvable player, no raid can be selected.");
+                return new RaidDefinition() { };
+            }
+
             if (ServerPlayerRaidData.ContainsKey(playerPlatformID) == false) {
                 Logger.LogWarning($"Player {playerPlatformID} was not found and an appropriate raid can't be determined, a random one will be selected. \n  Currently tracked: {string.Join(",", ServerPlayerRaidData.Keys.ToList())}");
                 return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count));
@@ -126,10 +131,11 @@ namespace StarLevelSystem.modules.Raids
 
         internal static void UpdateOrAddPlayerPrivateKeys(long playerID, List<string> privatekeys) {
             PlatformUserID platformUserID = SLSExtensions.GetPlatformUserID(playerID);
-            // An unresolvable peer yields PlatformUserID.None, whose string form is not empty -- without this it
-            // would be registered as a bogus player entry that no online player ever matches.
+            // An unresolvable peer yields PlatformUserID.None, which stringifies to "" -- without this it would
+            // be registered as a bogus player entry that no online player ever matches. Reaching here means the
+            // peer's socket host name could not be parsed on this backend, which is worth surfacing.
             if (platformUserID.IsValid == false) {
-                Logger.LogWarning($"Received private keys from peer {playerID} but their platform ID could not be resolved, the update will be ignored.");
+                Logger.LogWarning($"Received private keys from peer {playerID} but their platform ID could not be resolved (backend: {ZNet.m_onlineBackend}); the update will be ignored. Ready peers: {SLSExtensions.DescribeReadyPeers()}");
                 return;
             }
             string playerPlatformID = platformUserID.ToString();
@@ -251,7 +257,11 @@ namespace StarLevelSystem.modules.Raids
         internal static void UpdateAvailableRaidsPerPlayer() {
             foreach (ZNetPeer peer in ZNet.instance.GetPeers()) {
                 if (peer.IsReady() == false) { continue; }
-                string playerPlatformID = SLSExtensions.GetPlatformUserID(peer.m_uid).ToString();
+                PlatformUserID peerPlatformUserID = SLSExtensions.GetPeerPlatformUserID(peer);
+                // Without this guard an unresolvable peer keys the registry off PlatformUserID.None, whose
+                // string form is empty -- a junk entry that gets persisted and never matches anyone.
+                if (peerPlatformUserID.IsValid == false) { continue; }
+                string playerPlatformID = peerPlatformUserID.ToString();
                 List<RaidDefinition> playerAvailableRaids = GetValidRaidsForPlayer(peer.GetRefPos(), playerPlatformID);
                 if (ServerPlayerRaidData.ContainsKey(playerPlatformID)) {
                     ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids = playerAvailableRaids;

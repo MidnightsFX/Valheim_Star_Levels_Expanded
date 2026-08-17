@@ -48,10 +48,30 @@ namespace StarLevelSystem.modules.CreatureSetup {
         }
 
 
+        // Cave dwellers (Ulv, Fenring_Cultist, Draugr in crypts...) ship with MonsterAI.m_sleeping set on the
+        // prefab, so a bare Instantiate reproduces that and MonsterAI.UpdateAI short-circuits on IsSleeping().
+        // Neither SetAlerted nor SetHuntPlayer wakes a sleeper, so an SLS-spawned one would lie there inert until
+        // a player walked within m_wakeupRange (5m default) -- and our spawn points sit up to EventRange * 0.8
+        // (~77m) out. Wakeup() is also what clears both sleep records: ZDOVars.s_sleeping and the salted animator
+        // key ZSyncAnimation writes, so don't hand-roll it or the creature moves while stuck in the sleep pose.
+        // m_fallAsleepDistance is zeroed because UpdateSleep's other branch re-Sleep()s an awake creature whenever
+        // no player is within m_wakeupRange -- which would undo the wake within a frame or two.
+        internal static void ForceAwake(MonsterAI ai) {
+            if (ai == null) { return; }
+            // Instance field on the clone, not the shared prefab -- same as the m_faction write in the raid spawner.
+            ai.m_fallAsleepDistance = 0f;
+            ZNetView nview = ai.m_nview;
+            if (nview == null || nview.IsValid() == false) { return; }
+            if (nview.IsOwner()) { nview.GetZDO().Set(SLS_NO_SLEEP, true); }
+            ai.Wakeup();
+        }
+
         // Applies the configured spawn-time AI behaviour to a freshly spawned creature.
         // Shared by the raid and nemesis spawners so they stay in sync.
         internal static void ApplySpawnAI(MonsterAI ai, AI creatureAI) {
             if (ai == null) { return; }
+            // Being awake is a precondition for any of the modes below meaning anything, not an alternative to them.
+            ForceAwake(ai);
             switch (creatureAI) {
                 case AI.HuntPlayer:
                     ai.SetHuntPlayer(true);

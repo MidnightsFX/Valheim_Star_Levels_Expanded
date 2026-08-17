@@ -3,7 +3,6 @@
 > **This folder is a copy of `Common/Config/UI/` from JotunnTemplatePlugin.** Keep it textually identical
 > to the original apart from the namespace line, so the copies can be diffed against each other. The
 > `Examples/` file referenced below was not copied; this mod registers its own panel.
-
 A widget kit for building config panels out of Jotunn's `GUIManager` primitives, plus a **shared
 launcher**: one button bottom-right of the main and pause menus that lists every loaded mod which has
 registered a panel.
@@ -38,6 +37,32 @@ The button is visible **only to a host or a server admin** — a remote non-admi
 overwritten by the next server broadcast, so offering the editor at all would be a lie. Visibility
 re-evaluates on `OnAdminStatusChanged`, so it appears when admin status arrives without a relog.
 
+## Where the button appears
+
+**Main menu and pause menu, never the in-game HUD.** Two GameObjects, one per parent, and exactly one of
+them is ever on screen:
+
+| Parent | Shown when |
+| --- | --- |
+| `GUIManager.CustomGUIFront` | `FejdStartup.instance != null`, i.e. the `start` scene |
+| `Menu.m_root` | Valheim shows the pause menu — `m_root` is toggled by the game, so this follows for free |
+
+The `FejdStartup` gate is load-bearing. Jotunn **rebuilds `CustomGUIFront` on every scene change**
+(`GUIManager.TryCreateGUI`, wired to `SceneManager.sceneLoaded`), so without it the `main` scene grows its
+own copy of the button: one floating over the HUD, and a second one beside the pause menu's, at a
+different position because `CustomGUIFront` carries its own `Canvas` and `CanvasScaler`.
+
+Both parents route through the single `EnsureCornerButton(existing, parent)`. It bails when the button it
+already holds is still parented to `parent`, then falls back to `parent.Find(ButtonObjectName)` and adopts
+that if present, and only creates as a last resort — so `OnCustomGUIAvailable` and the `Menu.Start`
+postfix firing repeatedly cannot stack buttons.
+
+The mod list itself closes on its top-right `X` or on **Escape**. In-world that goes through a prefix on
+`Menu.Update`, which closes the list and returns `false` for that one frame: Valheim reads Escape inline
+there, so swallowing the frame is the only way to keep the press from also collapsing the pause menu the
+list was opened from. One press dismisses the list, a second dismisses the menu. In the start scene there
+is no `Menu`, so the broker's own `Update` handles it and no suppression is needed.
+
 ## The frozen cross-assembly contract
 
 Every mod compiles its **own** `QuickConfigBroker`, so those types are unrelated as far as the CLR is
@@ -49,7 +74,8 @@ cross the boundary.
 ```csharp
 internal const string BrokerObjectName = "ModQuickConfigLauncher";
 internal const string BrokerTypeName   = "QuickConfigBroker";
-internal const int    ContractVersion  = 1;
+internal const string ButtonObjectName = "ModQuickConfigButton";
+internal const int    ContractVersion  = 2;
 
 public int  BrokerVersion { get; }
 public void Register(string modName, Action openPanel);
@@ -84,6 +110,10 @@ visibility change to reflow.
 | `AddEnumFlagsRow` | a small enum used as a set |
 | `AddTextFieldRow` | free text |
 | `AddStringListEditor` | `List<string>` with add/remove |
+
+`AddCloseX(panel, panelWidth, onClick)` puts a dismiss button in a panel's top-right corner. Prefer it to
+a full-width "Close" at the bottom: panel titles are centred so the corner is free, whereas a bottom
+button has to be laid out around whatever the last row turns out to be.
 
 Rows inside a `CreateScroll` must use `NewLayoutRow`, not `NewRow`: Jotunn's scroll content carries a
 `VerticalLayoutGroup` that overwrites `anchoredPosition`, so those rows size themselves through a

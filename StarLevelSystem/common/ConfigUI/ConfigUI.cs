@@ -24,6 +24,7 @@ namespace StarLevelSystem.common {
         internal const float RowHeight = 34f;
         internal const float SubRowHeight = 26f;
         internal const float RowGap = 4f;
+        internal const float CloseXSize = 28f;
 
         // --- Input blocking -------------------------------------------------------------------------
 
@@ -250,6 +251,15 @@ namespace StarLevelSystem.common {
             rt.anchoredPosition = new Vector2(x, -y);
             if (onClick != null) { go.GetComponent<Button>().onClick.AddListener(onClick); }
             return go;
+        }
+
+        // A dismiss button for a panel's top-right corner.
+        //
+        // Panel titles are centred across the full width, so the corner is free real estate -- and a close
+        // control down among the content is a close control sitting on top of whatever row happens to be
+        // last. Pass the panel width CreatePanel was given.
+        internal static GameObject AddCloseX(Transform panel, float panelWidth, UnityAction onClick) {
+            return AddButton(panel, panelWidth - CloseXSize - 16f, 12f, CloseXSize, "X", onClick, CloseXSize);
         }
 
         // The one place the Jotunn CreateToggle workaround lives.

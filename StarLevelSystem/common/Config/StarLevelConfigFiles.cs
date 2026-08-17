@@ -407,7 +407,9 @@ namespace StarLevelSystem.common {
 #       MaxSpawned: 6                # cap on this entry's living creatures
 #       MaxSpawnTriggers: 0          # 0 = unlimited waves during the duration
 #       InitalSpawnDelay: 0
-#       CreatureAI: HuntPlayer       # HuntPlayer, Alerted or AgitatedByBuild
+#       CreatureAI: HuntPlayer       # HuntPlayer (default), Alerted or AgitatedByBuild
+#                                    # Raid and nemesis spawns are always woken, so cave dwellers such as
+#                                    # Ulv and Fenring_Cultist engage immediately instead of spawning asleep.
 #       Faction: Undead
 #       LevelMin: 3
 #       LevelMax: 10

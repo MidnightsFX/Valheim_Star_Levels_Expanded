@@ -31,7 +31,8 @@ namespace StarLevelSystem.common {
         // --- FROZEN ---
         internal const string BrokerObjectName = "ModQuickConfigLauncher";   // GameObject.Find key
         internal const string BrokerTypeName = "QuickConfigBroker";          // Type.Name, NOT FullName
-        internal const int ContractVersion = 1;
+        internal const string ButtonObjectName = "ModQuickConfigButton";     // Transform.Find key, dedupe guard
+        internal const int ContractVersion = 2;
 
         public int BrokerVersion {
             get { return ContractVersion; }
@@ -58,6 +59,7 @@ namespace StarLevelSystem.common {
 
         private const float ButtonW = 150f;
         private const float ButtonH = 38f;
+        private const float PanelW = 320f;
 
         private static QuickConfigBroker Instance;
         private static Harmony harmony;
@@ -84,9 +86,11 @@ namespace StarLevelSystem.common {
                     harmony = new Harmony(BrokerObjectName + ".broker");
                     harmony.Patch(AccessTools.Method(typeof(Menu), nameof(Menu.Start)),
                         postfix: new HarmonyMethod(typeof(QuickConfigBroker), nameof(OnMenuStart)));
+                    harmony.Patch(AccessTools.Method(typeof(Menu), nameof(Menu.Update)),
+                        prefix: new HarmonyMethod(typeof(QuickConfigBroker), nameof(OnMenuUpdate)));
                 }
             } catch (Exception e) {
-                Logger.LogWarning($"QuickConfig launcher could not patch Menu.Start: {e.Message}");
+                Logger.LogWarning($"QuickConfig launcher could not patch Menu: {e.Message}");
             }
 
             // The broker may be created AFTER OnCustomGUIAvailable has already fired -- a mod registering
@@ -115,6 +119,25 @@ namespace StarLevelSystem.common {
             Instance.EnsurePauseButton(__instance);
         }
 
+        // Escape dismisses the mod list, and is swallowed for that one frame so the pause menu it was
+        // opened from stays put -- one press closes the list, a second closes the menu. Valheim reads
+        // Escape inline in Menu.Update, so there is no hook finer than skipping the method for that frame;
+        // all it costs is a frame of the menu's own bookkeeping.
+        private static bool OnMenuUpdate() {
+            if (Instance == null || Instance.listPanel == null) { return true; }
+            if (ZInput.GetKeyDown(KeyCode.Escape) == false) { return true; }
+            Instance.CloseList();
+            return false;
+        }
+
+        public void Update() {
+            // Start scene only. There is no Menu there to run OnMenuUpdate, and nothing else is listening
+            // for Escape either, so nothing needs swallowing. The Menu.instance guard keeps the two paths
+            // from both firing on the same press.
+            if (listPanel == null || Menu.instance != null) { return; }
+            if (Input.GetKeyDown(KeyCode.Escape)) { CloseList(); }
+        }
+
         private void OnCustomGUIAvailable() {
             TryBuildButtons();
         }
@@ -122,32 +145,43 @@ namespace StarLevelSystem.common {
         private void TryBuildButtons() {
             if (GUIManager.IsHeadless() || GUIManager.Instance == null) { return; }
 
-            if (mainMenuButton == null && GUIManager.CustomGUIFront != null) {
-                mainMenuButton = CreateCornerButton(GUIManager.CustomGUIFront.transform);
+            // Start scene only. Jotunn rebuilds CustomGUIFront on every scene change, so without this gate
+            // the in-game scene grows its own copy -- one button floating over the HUD and a second one
+            // beside the pause menu's. This is the guard SLS had before the launcher became shared.
+            if (FejdStartup.instance != null && GUIManager.CustomGUIFront != null) {
+                mainMenuButton = EnsureCornerButton(mainMenuButton, GUIManager.CustomGUIFront.transform);
             }
             if (Menu.instance != null) { EnsurePauseButton(Menu.instance); }
             RefreshVisibility();
         }
 
+        // Parented to m_root, which Valheim already shows and hides with the pause menu, so the button
+        // follows it for free.
         private void EnsurePauseButton(Menu menu) {
-            if (GUIManager.IsHeadless() || GUIManager.Instance == null) { return; }
             if (menu == null || menu.m_root == null) { return; }
-            // Rebuild when the menu has been recreated under us -- m_root is torn down with the scene.
-            if (pauseButton != null && pauseButton.transform.parent == menu.m_root) {
-                RefreshVisibility();
-                return;
-            }
-            // Parented to m_root, which Valheim already shows and hides with the pause menu, so the button
-            // follows it for free.
-            pauseButton = CreateCornerButton(menu.m_root);
+            pauseButton = EnsureCornerButton(pauseButton, menu.m_root);
             RefreshVisibility();
         }
 
-        private GameObject CreateCornerButton(Transform parent) {
+        // The one and only place a launcher button is created. Both call sites fire repeatedly --
+        // OnCustomGUIAvailable on every scene load, the Menu.Start postfix on every menu rebuild -- so this
+        // adopts whatever is already under `parent` instead of stacking a second button on top of it.
+        private GameObject EnsureCornerButton(GameObject existing, Transform parent) {
+            if (GUIManager.IsHeadless() || GUIManager.Instance == null || parent == null) { return existing; }
+            // Also the rebuild check: m_root and CustomGUIFront are both torn down with their scene, so a
+            // button whose parent is no longer this one is a corpse and must not be reused.
+            if (existing != null && existing.transform.parent == parent) { return existing; }
+
+            // Transform.Find matches inactive children too, so a button hidden by RefreshVisibility is
+            // found rather than duplicated.
+            Transform found = parent.Find(ButtonObjectName);
+            if (found != null) { return found.gameObject; }   // already ours, listener included
+
             GameObject go = GUIManager.Instance.CreateButton(
                 text: ConfigUI.L("Mod Config"), parent: parent,
                 anchorMin: new Vector2(1f, 0f), anchorMax: new Vector2(1f, 0f),
                 position: new Vector2(-20f, 20f), width: ButtonW, height: ButtonH);
+            go.name = ButtonObjectName;
             RectTransform rt = (RectTransform)go.transform;
             rt.pivot = new Vector2(1f, 0f);
             rt.anchoredPosition = new Vector2(-20f, 20f);
@@ -169,7 +203,9 @@ namespace StarLevelSystem.common {
 
         private void RefreshVisibility() {
             bool show = entries.Count > 0 && CanConfigure();
-            if (mainMenuButton != null) { mainMenuButton.SetActive(show); }
+            // The main menu button only ever belongs to the start scene; the FejdStartup check covers the
+            // frame or two where the reference outlives it.
+            if (mainMenuButton != null) { mainMenuButton.SetActive(show && FejdStartup.instance != null); }
             if (pauseButton != null) { pauseButton.SetActive(show); }
             if (show == false && listPanel != null) { CloseList(); }
         }
@@ -185,19 +221,20 @@ namespace StarLevelSystem.common {
                 return;
             }
 
-            float height = Mathf.Clamp(96f + 42f * order.Count, 138f, 560f);
-            listPanel = ConfigUI.CreatePanel("Configure a mod", 320f, height, out Transform body);
+            // 64 clears the title, 42 per entry, 16 of bottom padding.
+            float height = Mathf.Clamp(80f + 42f * order.Count, 122f, 560f);
+            listPanel = ConfigUI.CreatePanel("Configure a mod", PanelW, height, out Transform body);
+            ConfigUI.AddCloseX(body, PanelW, CloseList);
 
             float y = 64f;
             foreach (string name in order) {
                 string entry = name;   // capture per iteration
-                ConfigUI.AddButton(body, 20f, y, 280f, entry, () => {
+                ConfigUI.AddButton(body, 20f, y, PanelW - 40f, entry, () => {
                     CloseList();
                     Invoke(entry);
                 });
                 y += 42f;
             }
-            ConfigUI.AddButton(body, 20f, height - 52f, 280f, "Close", CloseList, 34f);
         }
 
         private void CloseList() {

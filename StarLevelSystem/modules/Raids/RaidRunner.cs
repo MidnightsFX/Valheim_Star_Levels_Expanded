@@ -93,11 +93,20 @@ namespace StarLevelSystem.modules.Raids {
             // While the raid runs, force its environment for all in-range clients. Once it winds down, hand the
             // override back (mirrors OnDestroy) so the weather returns to normal immediately instead of lingering
             // until the runner is finally destroyed at the end of the wind-down window.
+            //
+            // Active-raid registration lives here, above the owner gate, because AnyActiveRaid() is a per-client
+            // fact that MonsterAI consults on whichever client owns a creature's ZDO -- not necessarily the runner's
+            // owner. Registering only on the owner meant that as soon as a second player took ownership of a raid
+            // creature, InEvent()/HaveActiveEvent() went false on their machine and MonsterAI cleared huntplayer and
+            // walked the creature off to despawn. Both calls are idempotent HashSet ops, and raidStartedCache /
+            // windDownStartCache are ZDO-backed so they already replicate to non-owners via RefreshZDataCache.
             if (raidStartedCache) {
                 if (IsWindingDown()) {
                     ReleaseForcedEnvironment();
+                    RaidControl.UnregisterActiveRaid(this);
                 } else {
                     ForceEnvironment(raidEnvNameCache);
+                    RaidControl.RegisterActiveRaid(this);
                 }
             }
 
@@ -108,10 +117,6 @@ namespace StarLevelSystem.modules.Raids {
 
             // Wait until the raid definition has replicated.
             if (raid == null) { return; }
-
-            // Re-assert active-raid registration each owner tick while the raid is running (idempotent). Covers the
-            // owner-handoff/reconnect case where a new owner picks up an already-committed raid.
-            if (raidStartedCache && IsWindingDown() == false) { RaidControl.RegisterActiveRaid(this); }
 
             // TODO: fallback for if/when the owner who starts generating points exits the game immediately etc
             if (spawnPointsReadyCache == false && spawnPointsGeneratingCache == false) {
@@ -199,18 +204,32 @@ namespace StarLevelSystem.modules.Raids {
                             }
                             GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, UnityEngine.Random.rotation);
                             spawns += 1;
-                            MonsterAI mAI = spawnedCreature.GetComponent<MonsterAI>();
-                            mAI.SetEventCreature(true);
-                            CreatureSetupControl.ApplySpawnAI(mAI, rmonitor.RaidSpawnDef.CreatureAI);
 
-                            Character chara = spawnedCreature.GetComponent<Character>();
-                            if (rmonitor.RaidSpawnDef.Faction != Character.Faction.TrainingDummy) {
-                                chara.m_faction = rmonitor.RaidSpawnDef.Faction;
+                            // Not every configured prefab is a creature -- army_charred_spawners spawns
+                            // Spawner_CharredStone, a destructible obelisk with no MonsterAI and no Character.
+                            // Unguarded, that threw mid-Update and left the raid half-started. Mirrors the
+                            // log-and-skip shape in NemesisRemoteSpawnControl.
+                            MonsterAI mAI = spawnedCreature.GetComponent<MonsterAI>();
+                            if (mAI != null) {
+                                mAI.SetEventCreature(true);
+                                CreatureSetupControl.ApplySpawnAI(mAI, rmonitor.RaidSpawnDef.CreatureAI);
                             }
 
-                            CreatureSetupControl.CreatureSpawnerSetup(chara, level, false, requiredModifiers: rmonitor.RaidSpawnDef.RequiredModifiers, notAllowedModifiers: rmonitor.RaidSpawnDef.ModifiersNotAllowed);
+                            Character chara = spawnedCreature.GetComponent<Character>();
+                            if (chara != null) {
+                                if (rmonitor.RaidSpawnDef.Faction != Character.Faction.TrainingDummy) {
+                                    chara.m_faction = rmonitor.RaidSpawnDef.Faction;
+                                }
+                                CreatureSetupControl.CreatureSpawnerSetup(chara, level, false, requiredModifiers: rmonitor.RaidSpawnDef.RequiredModifiers, notAllowedModifiers: rmonitor.RaidSpawnDef.ModifiersNotAllowed);
+                            }
 
-                            connectedSpawns.Add(spawnedCreature.GetComponent<ZNetView>().GetZDO().m_uid);
+                            // Still track non-creature spawns so MaxSpawned and the wind-down cleanup cover them.
+                            ZNetView spawnedView = spawnedCreature.GetComponent<ZNetView>();
+                            if (spawnedView == null || spawnedView.IsValid() == false) {
+                                Logger.LogWarning($"Raid spawn '{rmonitor.RaidSpawnDef.PrefabName}' has no valid ZNetView and cannot be tracked by the raid.");
+                                continue;
+                            }
+                            connectedSpawns.Add(spawnedView.GetZDO().m_uid);
                             rmonitor.StoreZDOIDS(connectedSpawns);
                         }
                     }

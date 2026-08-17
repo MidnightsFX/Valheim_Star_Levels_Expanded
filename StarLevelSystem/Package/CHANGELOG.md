@@ -19,6 +19,8 @@
 - Raid fixes:
 	- A raid wave with an invalid prefab name now logs and skips it
 	- Fixed a startup error when no saved raid registry exists yet
+	- Raid and nemesis spawns are now woken on spawn, and stay awake
+	- Raid creatures now actually hunt the player more reliably
 - Nemesis fixes:
 	- Nemesis map pins are cleared on logout so they can't leak into the next world
 	- Fixed a player-death score update that could throw before any score data existed, and minibosses defined without minions no longer throw when spawning

@@ -190,6 +190,22 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // InEvent() is a *different* method from HaveActiveEvent() and gates MonsterAI.HuntPlayer():
+        //   base.HuntPlayer() && (!IsEventCreature() || RandEventSystem.InEvent()) && ...
+        // Every raid spawn gets SetEventCreature(true), and SLS never sets RandEventSystem.m_activeEvent, so
+        // without this postfix HuntPlayer() is false for every raid creature no matter how it's configured --
+        // killing the UpdateSleep wake branch (so sleeping cave dwellers like Ulv never get up), the per-tick
+        // SetAlerted(true) at the top of UpdateAI, and the chase-retention in UpdateTarget.
+        // The game's only other InEvent() callers are Raven, which hides Hugin/Munin during an event; doing that
+        // during an SLS raid too is vanilla parity.
+        [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.InEvent))]
+        public static class SlsRaidCountsAsInEvent {
+            public static void Postfix(ref bool __result) {
+                if (__result || ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                if (RaidControl.AnyActiveRaid()) { __result = true; }
+            }
+        }
+
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.UpdateRandomEvent))]
         public static class OverrideRaidSelectionSystem {
             public static bool Prefix() {

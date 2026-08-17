@@ -56,6 +56,10 @@ namespace StarLevelSystem.common
         public static readonly string SLS_CUSTOM_LOOT = "SLS_CUSTOM_LOOT";
         public static readonly string SLS_NEMESIS_BOSS = "SLS_NEM_BOSS";
         public static readonly string SLS_NEMESIS_PIN = "SLS_NEM_PIN";
+        // Marks a creature SLS spawned awake on purpose. MonsterAI.m_fallAsleepDistance isn't networked, so a
+        // client that later takes ownership re-instantiates from the prefab and would put the creature back to
+        // sleep; this flag is what survives handoff and reload. See CreatureSleepPatches.
+        public static readonly string SLS_NO_SLEEP = "SLS_NOSLEEP";
         public static readonly string SLS_MOD_CAP = "EffectCap";
         // Unix seconds of the last Location Reset applied to a location, stored on its surviving
         // LocationProxy ZDO so the timer outlives the SavedData state file.
@@ -1225,8 +1229,12 @@ namespace StarLevelSystem.common
         [Serializable]
         public class RaidSpawnEntry {
             public string PrefabName { get; set; }
-            [DefaultValue(AI.Alerted)]
-            public AI CreatureAI { get; set; } = AI.Alerted;
+            // The attribute MUST match the initializer. The serializer runs OmitDefaults (YamlFormat.cs), so a
+            // mismatch makes the round-trip lossy: with the pair on Alerted, every shipped raid's HuntPlayer was
+            // written out and read back as Alerted, silently downgrading every raid. Files written before the
+            // attribute existed have no CreatureAI key at all and land on whatever this says.
+            [DefaultValue(AI.HuntPlayer)]
+            public AI CreatureAI { get; set; } = AI.HuntPlayer;
             [DefaultValue(10f)]
             public float SpawnInterval { get; set; } = 10f;
             [DefaultValue(100f)]
@@ -1414,6 +1422,8 @@ namespace StarLevelSystem.common
 
         public class NemesisSpawn {
             public string Prefab { get; set; }
+            // Keep the attribute and the initializer in lockstep -- see the note on RaidSpawnEntry.CreatureAI.
+            [DefaultValue(AI.HuntPlayer)]
             public AI CreatureAI { get; set; } = AI.HuntPlayer;
             [DefaultValue(0)]
             public int ForcedLevel { get; set; } = 0;

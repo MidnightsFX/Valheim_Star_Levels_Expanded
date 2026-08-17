@@ -39,6 +39,9 @@ namespace StarLevelSystem.modules.Raids
         internal static void RegisterActiveRaid(RaidRunner runner) { if (runner != null) { ActiveRaidRunners.Add(runner); } }
         internal static void UnregisterActiveRaid(RaidRunner runner) { if (runner != null) { ActiveRaidRunners.Remove(runner); } }
         internal static bool AnyActiveRaid() {
+            // MonsterAI.HuntPlayer() reaches this several times per creature per AI tick via the InEvent postfix,
+            // so skip the RemoveWhere walk in the overwhelmingly common no-raid case.
+            if (ActiveRaidRunners.Count == 0) { return false; }
             ActiveRaidRunners.RemoveWhere(x => x == null);
             return ActiveRaidRunners.Count > 0;
         }

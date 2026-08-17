@@ -2,6 +2,7 @@
  ---
  ```
 - Modifies the quick configuration system to add support for more mods
+- Every yaml config file now contains full documentation in-file
 - Creature modifier fixes:
 	- LifeLink now uses a per-creature cooldown
 	- Summoner bosses now work for every summoner

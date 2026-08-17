@@ -248,18 +248,271 @@ namespace StarLevelSystem.common {
 
         private const string LootSettingsHeader = @"#################################################
 # Star Level System Expanded - Creature loot configuration
+#
+# Custom drop tables for creatures and world objects, with level-aware scaling
+# that replaces vanilla's doubling-per-star. Server authoritative; edits apply
+# live. How amounts grow with level is picked by LootDropCalculationType in the
+# main .cfg: PerLevel (linear), Exponential, or ChancePerLevel (base amount as
+# an all-or-nothing roll whose chance grows with level).
+#
+# The console command sls-loot-dump writes the fully resolved loot tables for
+# this world out as a reference.
+#
+# --- CharacterSpecificLoot ---
+# Keyed by creature prefab name. An entry REPLACES that creature's vanilla
+# drops entirely - list everything it should drop. Creatures without an entry
+# keep their vanilla drops (still level-scaled by the setting above).
+#
+#   CharacterSpecificLoot:
+#     BlobElite:
+#     - Drop:
+#         Prefab: Ooze                # item or creature prefab to drop
+#         Min: 2                      # base amount range at 0 stars
+#         Max: 3
+#         Chance: 1                   # 0-1 chance for this drop line
+#       AmountScaleFactor: 0.5        # how strongly the amount scales per level
+#     - Drop:
+#         Prefab: TrophyBlob
+#         Chance: 0.1
+#       ChanceScaleFactor: 0.01       # chance grows with level instead of amount
+#       MaxScaledAmount: 1            # hard cap on the scaled amount
+#
+# Other per-drop options:
+#   DoesNotScale: true                # drop the base range at every level
+#   Drop.DontScale: true              # same, expressed on the inner drop
+#   ScalebyMaxLevel: true             # amount interpolates Min->Max across the
+#                                     # configured MaxLevel instead of per-level
+#   UseChanceAsMultiplier: true       # use the chance value as the level scale
+#   UntamedOnlyDrop / TamedOnlyDrop: true
+#   Drop.OnePerPlayer: true           # one copy per nearby player
+#
+# --- NonCharacterSpecificLoot ---
+# The same idea for trees, rocks, destructibles and pickables, keyed by prefab
+# name (e.g. Pickable_Turnip, MineRock_Tin). Uses the same Drop block plus
+# AmountScaleFactor / ChanceScaleFactor / MaxScaledAmount.
+#
+# --- Distance scaling ---
+# Optional extra loot the further from the world center the drop happens:
+#
+#   EnableDistanceLootModifier: true
+#   DistanceLootModifier:
+#     2000: { MinAmountScaleFactorBonus: 0.1, MaxAmountScaleFactorBonus: 0.2 }
+#     5000: { ChanceScaleFactorBonus: 0.05 }
 #################################################";
 
         private const string ModifiersHeader = @"#################################################
 # Star Level System Expanded - Creature Modifier Configuration
+#
+# Tunes the creature modifiers (affixes): which ones can roll, how likely each
+# is, how strong it is, and which creatures/biomes it is allowed on. Server
+# authoritative; edits apply live.
+#
+# Modifiers come in three pools: MajorModifiers, MinorModifiers and
+# BossModifiers. How MANY a creature rolls (and the chance per slot) comes from
+# the main .cfg (MaxMajorModifiers etc.) and can be overridden per creature in
+# LevelSettings.yaml. This file configures the modifiers themselves.
+#
+# IMPORTANT: a NON-EMPTY pool section REPLACES the built-in list for that pool.
+# If you write a MajorModifiers section, list every major you want active - a
+# modifier you leave out stops rolling. An absent section keeps the defaults.
+# Valid modifier names are exactly the keys in the generated default sections
+# (Brutal, Fast, Big, Alert, Fire, Frost, Poison, Lightning, ElementalChaos,
+# StaminaDrain, EitrDrain, Resist*, SoulEater, LifeLink, Splitter, Lootbags,
+# FireNova, PoisonNova, Evolving, BossSummoner, ...). New modifiers can only be
+# added through the mod API, not from yaml.
+#
+# Each entry:
+#
+#   MajorModifiers:
+#     Fire:
+#       Enabled: true
+#       SelectionWeight: 10          # relative weight against the other entries
+#       Config:
+#         BasePower: 0.3             # meaning is per-modifier; for the damage
+#         PerlevelPower: 0.01        # affixes these are fractions of the hit
+#       UnallowedCreatures: [ Deer, Hare, Chicken, Hen ]
+#       AllowedCreatures: []         # non-empty = ONLY these creatures
+#       AllowedBiomes: []            # non-empty = ONLY these biomes
+#
+# Power semantics: effective power = BasePower + PerlevelPower * level. For
+# damage affixes (Fire, Frost, ElementalChaos, ...) that is a fraction of the
+# hit added as that element; for resists it is the damage reduction; for
+# SoulEater/LifeLink/Splitter it drives their growth/split/link strength.
+# Some modifiers read extra keys from Config (e.g. the drain modifiers accept
+# BlockReduction / ParryReduction / DodgeReduction), and BossSummoner uses
+# BiomeObjects to pick its summons per biome:
+#
+#   BossModifiers:
+#     BossSummoner:
+#       SelectionWeight: 10
+#       Config:
+#         BasePower: 10              # max concurrent summons
+#         PerlevelPower: 120         # seconds between summon waves
+#         BiomeObjects:
+#           Meadows: [ Greyling ]
+#           Plains: [ Goblin, GoblinShaman ]
+#
+# --- ModifierGlobalSettings ---
+#   ModifierGlobalSettings:
+#     GlobalIgnorePrefabList: [ piece_TrainingDummy ]   # never roll modifiers
+#
+# The console command sls-mod-give applies a modifier to nearby creatures for
+# testing.
 #################################################";
 
         private const string RaidSettingsHeader = @"#################################################
 # Star Level System Expanded - Raid Settings
+#
+# Defines the SLS raid events that replace vanilla random events. Per-player:
+# the server checks each player's progression keys and cooldowns and starts
+# raids on eligible players. Set UseVanillaRaidConfiguration in the main .cfg
+# to true to disable all of this and keep vanilla events.
+#
+# SERVER AUTHORITATIVE: the server's copy is synced to clients; editing this
+# on a client does nothing. Edits apply live.
+#
+# --- GlobalSettings ---
+#   GlobalSettings:
+#     DisableAllRaids: false
+#     PlayerBasedRaids: true         # raids target individual players
+#     GlobalRaidIntervalScalar: 1    # >1 = raids less often, <1 = more often
+#     GlobalRaidChanceScalar: 1      # scales every raid's activation chance
+#
+# --- Raids ---
+# Each raid: what unlocks it, how it announces itself, and what it spawns.
+#
+#   Raids:
+#   - Name: my_swamp_raid            # unique; also used for cooldown tracking
+#     Duration: 120                  # seconds of active spawning
+#     RaidActiveTillDefeated: true   # raid only ends once its creatures die
+#     RaidCoolDownMinutes: 120       # per-player cooldown for THIS raid
+#     EventRange: 96                 # radius of the event circle
+#     StartMessage: $SLS_my_raid_start   # localization tokens or plain text
+#     EndMessage: $SLS_my_raid_end
+#     ForceEnvironment: SwampRain    # weather while the raid runs
+#     ForceMusic: ZCombatEventL2     # combat music layer
+#     Activation:
+#       Chance: 25                   # 0-100, rolled each raid check
+#       RequiredGlobalKeys: [ defeated_gdking ]    # world progression gates
+#       RequiredPlayerKeys: [ KilledTroll ]        # per-player keys (all needed)
+#       AnyRequiredPlayerKeys: []    # any one of these is enough
+#       NotRequiredGlobalKeys: []    # blocks the raid when present
+#       NearBaseOnly: false
+#       PauseIfNoPlayerInArea: true
+#     Spawns:
+#     - PrefabName: Draugr
+#       SpawnInterval: 10            # seconds between spawn waves
+#       SpawnChance: 100             # chance per wave
+#       SpawnGroupSize: 2            # creatures per wave
+#       MaxSpawned: 6                # cap on this entry's living creatures
+#       MaxSpawnTriggers: 0          # 0 = unlimited waves during the duration
+#       InitalSpawnDelay: 0
+#       CreatureAI: HuntPlayer       # HuntPlayer, Alerted or AgitatedByBuild
+#       Faction: Undead
+#       LevelMin: 3
+#       LevelMax: 10
+#       UseRaidLevelSystem: true     # roll levels from the tables below
+#       CustomCreatureLevelUpChance: { 3: 100, 5: 50, 10: 5 }
+#       LevelupGeneratorRefs: []     # or reference LevelSettings generators
+#       RequiredModifiers: { Fire: Major }
+#       ModifiersNotAllowed: [ Splitter ]
+#
+# Raid start/end messages support localization tokens ($...), and the shipped
+# raids are a good reference for working key/environment/music values.
 #################################################";
 
         private const string NemesisSettingsHeader = @"#################################################
 # Star Level System Expanded - Nemesis Settings
+#
+# The Nemesis system reacts to how each player is doing: a hidden per-player
+# score rises as they fight well and falls when they die, and score-gated
+# events (stronger spawns, ambushes, minibosses) trigger against players who
+# are doing too well. Needs EnableNemesisSystem in the main .cfg. Server
+# authoritative; edits apply live.
+#
+# DO NOT edit NemesisVersion: a version that does not match this build resets
+# the whole file to the defaults on load.
+#
+# NOTE: AvailableMiniBosses is written by the SERVER at runtime - minibosses
+# created from player killers are added and spawned ones are removed, and the
+# file is rewritten each time. Treat that section as state, not hand-config.
+#
+# --- ScoreSystem ---
+# How the hidden score moves. Score decays toward NeutralScore over time.
+#
+#   ScoreSystem:
+#     MinScore: 0
+#     NeutralScore: 600
+#     MaxScore: 1000
+#     ScoreIntervalSeconds: 30       # how often the score recalculates
+#     DecayPerUpdate: 30
+#     MeleeDamageDealtFactor: 0.5    # score gained per point of damage dealt
+#     RangedDamageDealtFactor: 0.25
+#     MagicDamageDealtFactor: 0.3
+#     DamageTakenFactor: 1           # score LOST per point of damage taken
+#     BossKillBonus: 250
+#     DeathScoreReduction: 500
+#     NearbyPlayerRadius: 25         # players near each other share score drift
+#     NearbyAveragingWeight: 0.05
+#
+# --- ChanceChanges ---
+# Named, chance-based ops evaluated when a creature spawns near a player and
+# the action cooldown allows. Actions: ChangeLevel, AddModifier,
+# RemoveModifier, Spawn, SpawnMiniboss.
+#
+#   ChanceChanges:
+#     CreatureOps:
+#       Ocean Serpent Attack:
+#         Enabled: true
+#         Action: Spawn
+#         Chance: 0.3                          # 0-1 roll each opportunity
+#         ScoreThreshold: 7000                 # only above this score
+#         RequiredGlobalKeys: [ defeated_gdking ]
+#         AllowedBiomes: [ Ocean ]
+#         ScoreChange: -1000                   # applied when the op fires
+#         ExtraCooldownSeconds: 300
+#         PlayerReqs:                          # optional player-state gates
+#           PlayerCurrentBiome: Ocean
+#           MinBiomeHistory: 2                 # time spent recently in that biome
+#         SpawnConfig:
+#         - Prefab: Serpent
+#           CreatureAI: HuntPlayer
+#           Faction: SeaMonsters
+#           SpawnGroupSize: 1
+#
+# --- GaurenteedChanges ---
+#   GaurenteedChanges:
+#     FirstBossSetLevel: true        # the first time a player meets a boss...
+#     FirstBossLevel: 0              # ...force it to this level (0 = base)
+#
+# --- Miniboss creation ---
+# CreateMinibossFromPlayerKiller turns the creature that kills a player into a
+# named miniboss added to the pool; NemesisMinionTemplatesByBiome defines the
+# escorts spawned with a miniboss, per biome.
+#
+# --- RemoteSpawning ---
+# Server-driven ambient minibosses placed around the world (also gated by the
+# EnableNemesisRemoteSpawning setting in the main .cfg):
+#
+#   RemoteSpawning:
+#     Enabled: true
+#     CheckIntervalMinutes: 30       # placement cycle
+#     MaxSpawnsPerInterval: 3
+#     MaxConcurrentTotal: 10
+#     TargetPerBiome: { Meadows: 1, Plains: 2 }
+#     MaxConcurrentPerBiome: { Meadows: 2 }
+#     BossCandidatesByBiome:         # archetypes used when the pool is empty
+#       Plains:
+#       - Prefab: GoblinBrute
+#         ForcedLevel: 12
+#         SelectionWeight: 1
+#     ShowMapPin: true
+#     PinShowsBossName: true
+#
+# NemesisBossLootTables adds biome-keyed bonus loot to remote bosses and their
+# minions, using the same drop blocks as LootSettings.yaml. The console command
+# sls-nemesis-spawn places a remote boss for testing, and sls-nemesis-score
+# inspects or sets a player's score.
 #################################################";
 
         private const string LocationResetHeader = @"#################################################

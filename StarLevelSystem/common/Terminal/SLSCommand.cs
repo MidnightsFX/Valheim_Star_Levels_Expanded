@@ -6,7 +6,7 @@ using UnityEngine;
 namespace StarLevelSystem.common
 {
     // Which family a command belongs to. Only used to group the sls-help listing.
-    internal enum CommandArea { Meta, Loc, Zone, Nemesis, Modifier, Loot, Creature, Player }
+    internal enum CommandArea { Meta, Loc, Zone, Nemesis, Modifier, Loot, Creature, Player, Raid }
 
     // Severity of one line of command output. Deliberately separate from the text: colour is applied
     // where the line is displayed, so markup never reaches the BepInEx log, the chunk log, or the wire.

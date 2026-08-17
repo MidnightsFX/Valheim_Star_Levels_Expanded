@@ -722,6 +722,7 @@ client setting if you prefer plain text).
 - `sls-zone-rebuild` - regenerates the zone map from the world and redraws the minimap overlay. Resets zone kill counts and levels
 - `sls-nemesis-spawn [biome]` - force-scouts and places one remote Nemesis boss
 - `sls-nemesis-score [value]` - sets your local Nemesis score
+- `sls-raid-spawn [raid_name] [x] [z]` - force-starts a raid, ignoring every cooldown and activation requirement (biome, keys, player base). Tab-completes the raid names from your `RaidSettings.yaml`. Defaults to your own position; pass an `x` and `z` to start it somewhere else. The raid does not consume the target player's raid cooldown, so it will not delay their next natural raid. Works on raids that are disabled or while `DisableAllRaids` is set, so you can test one before turning it on
 
 Location Reset commands (server authoritative):
 - `sls-loc-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
@@ -732,7 +733,7 @@ Location Reset commands (server authoritative):
 
 #### Running the server commands from a client
 
-The Location Reset commands and `sls-nemesis-spawn` act on world state only the server owns. A
+The Location Reset commands, `sls-nemesis-spawn` and `sls-raid-spawn` act on world state only the server owns. A
 dedicated server has no console of its own, so an **admin** can now run them from a connected client:
 the request goes to the server, the server runs it, and its output is streamed back into your console
 as well as being written to the server's log. `sls-loc-reset` and `sls-loc-audit` centre on **your**

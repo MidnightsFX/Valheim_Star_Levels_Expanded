@@ -3,6 +3,7 @@
  ```
 - Modifies the quick configuration system to add support for more mods
 - Every yaml config file now contains full documentation in-file
+- New command `sls-raid-spawn [raid_name] [x] [z]` force-starts a specific raid
 - Creature modifier fixes:
 	- LifeLink now uses a per-creature cooldown
 	- Summoner bosses now work for every summoner

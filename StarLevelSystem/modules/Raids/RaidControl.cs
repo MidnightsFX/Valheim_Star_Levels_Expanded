@@ -53,23 +53,34 @@ namespace StarLevelSystem.modules.Raids
             raidRun.StartRaid(targetRaid, Player.m_localPlayer);
         }
 
-        // Shared start sequence for a forced raid (e.g. console 'event' command or vanilla SetRandomEvent passthrough).
-        internal static void DispatchForcedRaid(RaidDefinition targetRaid, Vector3 pos) {
+        // Shared start sequence for a forced raid (e.g. console 'event' command, sls-raid-spawn, or the
+        // vanilla SetRandomEvent passthrough). Returns whether a raid runner was actually dispatched, so a
+        // caller with somewhere to report can say so rather than leaving a warning in the log as the only trace.
+        //
+        // skipCooldown tags the raid so FinalizeRaidCommit leaves the target player's raid schedule alone;
+        // see MarkForcedRaid. The eligibility/cooldown checks on the way in are skipped regardless, since this
+        // path never consults GetValidRaidsForPlayer.
+        internal static bool DispatchForcedRaid(RaidDefinition targetRaid, Vector3 pos, bool skipCooldown = false) {
             // Special case for when the server itself tries to start a raid, as it does not have a player.
             if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
-                if (StartNetworkedRaidRunner(targetRaid, pos) == false) {
+                if (StartNetworkedRaidRunner(targetRaid, pos, skipCooldown) == false) {
                     Logger.LogWarning($"Networked raid dispatch failed for '{targetRaid.Name}' at {pos}; event will be skipped this cycle.");
+                    return false;
                 }
-                return;
+                return true;
             }
 
+            if (skipCooldown) {
+                MarkForcedRaid(SLSExtensions.GetLocalUserPlatformAndID(), targetRaid.Name);
+            }
             StartRaidRunner(targetRaid, pos);
             if (Player.m_localPlayer) {
                 Player.m_localPlayer.ShowTutorial("randomevent", false);
             }
+            return true;
         }
 
-        internal static bool StartNetworkedRaidRunner(RaidDefinition targetRaid, Vector3 pos) {
+        internal static bool StartNetworkedRaidRunner(RaidDefinition targetRaid, Vector3 pos, bool skipCooldown = false) {
             ZNetPeer peer = SLSExtensions.GetNearestReadyPeer(pos);
             if (peer == null) {
                 Logger.LogWarning($"Unable to start raid {targetRaid.Name}; no ready peers were available for the client-side raid runner.");
@@ -82,6 +93,16 @@ namespace StarLevelSystem.modules.Raids
             }
 
             if (StartNetworkedRaidForPeer(targetRaid, raidPosition, peer) == false) { return false; }
+            // Tag after dispatch succeeded, and only once the peer that will actually own the raid is known --
+            // that peer is who reports the commit back, so it is who the exemption has to be keyed against.
+            if (skipCooldown) {
+                PlatformUserID peerPlatformUserID = SLSExtensions.GetPeerPlatformUserID(peer);
+                if (peerPlatformUserID.IsValid) {
+                    MarkForcedRaid(peerPlatformUserID.ToString(), targetRaid.Name);
+                } else {
+                    Logger.LogWarning($"Force-started raid '{targetRaid.Name}' was sent to {peer.m_playerName}, but their platform ID could not be resolved; their raid cooldown will be set as normal when it commits.");
+                }
+            }
             ForceMusicForClientsInArea(targetRaid.ForceMusic, raidPosition, targetRaid.EventRange * 1.5f);
             return true;
         }
@@ -198,6 +219,32 @@ namespace StarLevelSystem.modules.Raids
             playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60);
         }
 
+        // Raids force-started by sls-raid-spawn. FinalizeRaidCommit consumes the entry instead of writing the
+        // player's cooldown, so an admin/debug raid never eats into their natural raid schedule. Entries expire
+        // so a forced raid that never commits cannot silently exempt a later natural raid of the same name for
+        // the same player.
+        private static readonly Dictionary<string, double> forcedRaidCommits = new Dictionary<string, double>();
+        private const double ForcedRaidCommitWindowSeconds = 300d;
+
+        private static string ForcedRaidKey(string playerPlatformID, string raidName) => $"{playerPlatformID}|{raidName}";
+
+        internal static void MarkForcedRaid(string playerPlatformID, string raidName) {
+            if (ZNet.instance == null || string.IsNullOrEmpty(playerPlatformID) || string.IsNullOrEmpty(raidName)) { return; }
+            forcedRaidCommits[ForcedRaidKey(playerPlatformID, raidName)] = ZNet.instance.GetTimeSeconds() + ForcedRaidCommitWindowSeconds;
+            Logger.LogRaid($"Raid '{raidName}' force-started for {playerPlatformID}; their cooldown will be left untouched when it commits.");
+        }
+
+        private static bool ConsumeForcedRaid(string playerPlatformID, string raidName) {
+            if (forcedRaidCommits.Count == 0 || ZNet.instance == null) { return false; }
+            double now = ZNet.instance.GetTimeSeconds();
+            // A forced raid that aborted before committing leaves its entry behind forever otherwise, and would
+            // then exempt whichever natural raid of that name happened to commit next.
+            foreach (string stale in forcedRaidCommits.Where(entry => entry.Value <= now).Select(entry => entry.Key).ToList()) {
+                forcedRaidCommits.Remove(stale);
+            }
+            return forcedRaidCommits.Remove(ForcedRaidKey(playerPlatformID, raidName));
+        }
+
         // Server-side commit, invoked once the owning client confirms its raid started (directly on an integrated
         // host, or via RaidCommittedRPC from a networked client). Sets the full cooldown and broadcasts combat music
         // to nearby clients — both deferred from dispatch so an aborted raid produces no visible side effects.
@@ -208,6 +255,14 @@ namespace StarLevelSystem.modules.Raids
             }
             if (RaidsData.RaidsByName.TryGetValue(raidName, out RaidDefinition raidDef) == false) {
                 Logger.LogWarning($"Raid commit received for unknown raid '{raidName}', ignoring.");
+                return;
+            }
+            // Checked before the registry lookup below, so a force-started raid for an otherwise untracked player
+            // does not create an entry for them as a side effect. Music still plays -- that is a the-raid-is-here
+            // effect, not cooldown bookkeeping -- but nothing is written, so there is nothing to flush.
+            if (ConsumeForcedRaid(playerPlatformID, raidName)) {
+                Logger.LogRaid($"Raid '{raidName}' for {playerPlatformID} was force-started; leaving their raid cooldown untouched.");
+                ForceMusicForClientsInArea(raidDef.ForceMusic, pos, raidDef.EventRange * 1.5f);
                 return;
             }
             if (ServerPlayerRaidData.TryGetValue(playerPlatformID, out PlayerRaidData playerData) == false) {

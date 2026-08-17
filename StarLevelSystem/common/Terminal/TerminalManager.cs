@@ -32,6 +32,7 @@ namespace StarLevelSystem.common
             RegisterLocationCommands();
             RegisterZoneCommands();
             RegisterNemesisCommands();
+            RegisterRaidCommands();
             RegisterModifierCommands();
             RegisterLootCommands();
             RegisterCreatureCommands();

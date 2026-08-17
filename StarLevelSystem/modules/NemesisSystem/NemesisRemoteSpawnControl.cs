@@ -119,11 +119,16 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         // Re-add any dormant spawner ZDOs (placed but missing from the in-memory registry, e.g. after a
         // registry-file loss) so their reserved slots are still counted against the caps.
-        internal static void ReconcileFromSpawnerZDOs() {
-            if (ZDOMan.instance == null) { return; }
+        // Coroutine: GetAllZDOsWithPrefabIterative is designed to be pumped one slice per frame -
+        // draining it in a tight loop walked the entire world ZDO table in a single frame, a
+        // multi-hundred-millisecond hitch on mature worlds.
+        internal static IEnumerator ReconcileFromSpawnerZDOs() {
+            if (ZDOMan.instance == null) { yield break; }
             List<ZDO> zdos = new List<ZDO>();
             int index = 0;
-            while (!ZDOMan.instance.GetAllZDOsWithPrefabIterative(SpawnerPrefabName, zdos, ref index)) { }
+            while (!ZDOMan.instance.GetAllZDOsWithPrefabIterative(SpawnerPrefabName, zdos, ref index)) {
+                yield return null;
+            }
             foreach (ZDO zdo in zdos) {
                 if (zdo == null || !zdo.IsValid()) { continue; }
                 string pinId = zdo.GetString(SLS_NEMESIS_PIN, "");

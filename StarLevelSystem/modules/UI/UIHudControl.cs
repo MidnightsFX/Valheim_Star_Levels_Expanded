@@ -38,6 +38,12 @@ namespace StarLevelSystem.modules.UI {
 
             public List<string> DisplayedMods { get; set; } = new List<string>();
 
+            // Last values actually written to the hud, so per-frame updates can skip the TMP text
+            // assignment (which re-runs layout) and the star SetActive calls when nothing changed.
+            public int LastHealthShown { get; set; } = -1;
+            public int LastMaxHealthShown { get; set; } = -1;
+            public int DisplayedStarLevel { get; set; } = 0;
+
             // Raw SLS_MODSV2 ZDO string the DisplayedMods/CreatureModifiers were last built from.
             // Used to skip the YAML deserialize when nothing has changed - this runs per visible
             // creature per frame off EnemyHud.UpdateHuds.
@@ -119,6 +125,17 @@ namespace StarLevelSystem.modules.UI {
                 hud.CachedModifiers = mods;
             }
             return mods;
+        }
+
+        // Allocation-free replacement for Keys.ToList() + the double-Except CompareListContents on the
+        // per-frame hud path: same set-equality answer without building any intermediate collections.
+        private static bool ModsMatchDisplayed(Dictionary<string, ModifierType> mods, List<string> displayed) {
+            if (displayed == null) { return mods.Count == 0; }
+            if (mods.Count != displayed.Count) { return false; }
+            for (int i = 0; i < displayed.Count; i++) {
+                if (mods.ContainsKey(displayed[i]) == false) { return false; }
+            }
+            return true;
         }
 
         public static void InvalidateCacheEntry(Character chara) {
@@ -320,7 +337,15 @@ namespace StarLevelSystem.modules.UI {
             }
 
             if (hud.HealthText.gameObject.activeSelf == false) { hud.HealthText.gameObject.SetActive(true); }
-            hud.HealthText.text = $"{chara.GetHealth():N0}/{chara.GetMaxHealth():N0}";
+            // Skip the string build + TMP assignment (which re-runs text layout) when the displayed
+            // values have not changed - this runs per visible creature per frame.
+            int health = Mathf.RoundToInt(chara.GetHealth());
+            int maxHealth = Mathf.RoundToInt(chara.GetMaxHealth());
+            if (hud.LastHealthShown != health || hud.LastMaxHealthShown != maxHealth) {
+                hud.LastHealthShown = health;
+                hud.LastMaxHealthShown = maxHealth;
+                hud.HealthText.text = $"{health:N0}/{maxHealth:N0}";
+            }
         }
 
         public static void UpdateHudForAllLevels(EnemyHud.HudData ehud) {
@@ -331,9 +356,6 @@ namespace StarLevelSystem.modules.UI {
             // Logger.LogInfo($"Creature Level {level}");
             ZDOID czid = ehud.m_character.GetZDOID();
             if (czid == ZDOID.None) { return; }
-            StarLevelHud extended_hud = new StarLevelHud {
-                Level = level
-            };
             // GetCreatureModifiers returns null when the ZDO value is missing or fails to deserialize;
             // treat that as "no modifiers" so the staleness comparison below can't NRE inside the
             // transpiled UpdateHuds (which would abort the hud update for every other creature too).
@@ -342,10 +364,11 @@ namespace StarLevelSystem.modules.UI {
             characterExtendedHuds.TryGetValue(czid, out StarLevelHud known_hud);
             Dictionary<string, ModifierType> mods = GetModifiersCached(known_hud, ehud.m_character);
             if (mods == null) { mods = new Dictionary<string, ModifierType>(); }
+            StarLevelHud extended_hud;
             if (characterExtendedHuds.ContainsKey(czid)) {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
-                extended_hud = characterExtendedHuds[czid];
+                extended_hud = known_hud;
                 if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null) {
                     Logger.LogDebug($"UI Cache Invalid for {czid}, removing.");
                     RemoveExtendedHudFromCache(czid);
@@ -357,13 +380,12 @@ namespace StarLevelSystem.modules.UI {
                 // modifier cache, so a creature SLS has not resolved yet must still show real numbers.
                 UpdateHealthText(extended_hud, ehud.m_character);
 
-                List<string> currentMods = mods.Keys.ToList();
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(czid);
                 int levelCheck = ehud.m_character.GetLevel();
                 // NameResolved is part of this check because the mod list and level can both already match
                 // while the name is still the unresolved fallback - without it the hud goes quiet and keeps
                 // rendering the prefab name next to a modifier icon.
-                if (currentMods.CompareListContents(extended_hud.DisplayedMods) == false || cce == null || levelCheck != extended_hud.Level || extended_hud.NameResolved == false) {
+                if (ModsMatchDisplayed(mods, extended_hud.DisplayedMods) == false || cce == null || levelCheck != extended_hud.Level || extended_hud.NameResolved == false) {
                     // A creature whose level/modifiers have not replicated yet fails this check every frame.
                     // Rebuilding the cache is expensive, so back off between attempts instead of thrashing.
                     if (Time.time < extended_hud.NextResolveAttempt) { return; }
@@ -383,9 +405,15 @@ namespace StarLevelSystem.modules.UI {
                     return;
                 }
 
-                extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
+                // Only assign when changed: a TMP text write re-runs layout even for an identical string.
+                if (extended_hud.HudLink.m_name.text != extended_hud.CreatureNameLocalized) {
+                    extended_hud.HudLink.m_name.text = extended_hud.CreatureNameLocalized;
+                }
             } else {
-                extended_hud.HudLink = ehud;
+                extended_hud = new StarLevelHud {
+                    Level = level,
+                    HudLink = ehud
+                };
                 // if (mods == null) { return; }
                 Logger.LogDebug($"Creating new hud for {ehud.m_character} with level {level}");
 
@@ -425,7 +453,11 @@ namespace StarLevelSystem.modules.UI {
             }
             // Show the creatures health value
 
-            // Set star level, this can change if the characters level gets modified
+            // Set star level, this can change if the characters level gets modified. Only touch the
+            // star GameObjects when the displayed level actually changed - SetActive is a
+            // managed->native call and this method runs per visible creature per frame.
+            if (extended_hud.DisplayedStarLevel == level) { return; }
+            extended_hud.DisplayedStarLevel = level;
             switch (level) {
                 case 2:
                     extended_hud.Starlevel[2].SetActive(true);
@@ -693,6 +725,11 @@ namespace StarLevelSystem.modules.UI {
         // so widths are only rewritten when needed, not every frame.
         internal static void StackBossHuds(EnemyHud instance) {
             if (instance == null || BossHudRoot == null) { return; }
+
+            // Cheap out for the common case: no boss huds tracked and none displayed last pass.
+            // Without this the m_huds walk below (virtual IsBoss calls per entry) ran on every frame
+            // of ordinary combat just to recount zero.
+            if (BossHudConfigDirty == false && lastBossHudCount == 0 && CurrentBossHuds.Count == 0) { return; }
 
             int count = 0;
             foreach (KeyValuePair<Character, EnemyHud.HudData> kv in instance.m_huds) {

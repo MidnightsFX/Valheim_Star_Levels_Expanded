@@ -215,12 +215,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //    if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
                 //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
                 //}
-                if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count()) {
+                if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count) {
                     selected_level = kvp.Key;
                     if (ValConfig.EnableDebugOutputLevelRolls.Value) {
-                        if (index == LevelUpWithBonus.Count()) {
-                            selected_level += 1; // Because we would normally select the NEXT key as our actual level (accounting for the N+1 level system)
-                        }
                         float bonus = 0;
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                         float baseval = 0;
@@ -288,7 +285,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //Logger.LogDebug($"Biome all config checked");
                 bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
                 if (biome_setting_check && biome_all_setting_check) {
-                    biome_settings = SLSExtensions.MutatingMergeBiomeConfigs(biomeConfig, allBiomeConfig);
+                    biome_settings = SLSExtensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig);
                 } else if (biome_setting_check) {
                     biome_settings = biomeConfig;
                 }
@@ -320,6 +317,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 };
                 drops.Add(LvlUpDrop);
             }
+            // Without this assignment the scaled list was built and thrown away, making
+            // PerLevelTreeLootScale a silent no-op.
+            tree.m_dropWhenDestroyed.m_drops = drops;
             Physics.SyncTransforms();
 
             yield break;

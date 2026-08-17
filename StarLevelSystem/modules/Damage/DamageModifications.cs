@@ -11,8 +11,27 @@ using DamageType = StarLevelSystem.common.DataObjects.DamageType;
 namespace StarLevelSystem.modules.Damage {
     internal static class DamageModifications {
 
+        // Hits SLS itself synthesized (LifeLink damage transfers). The source hit already carried the
+        // attacker's damage bonuses when it first went through Character.Damage, so the attacker-side
+        // prefixes must skip these when the synthetic hit re-enters Character.Damage - otherwise the
+        // bonuses (and ElementalChaos) get applied a second time.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HitData, object> SynthesizedHits = new System.Runtime.CompilerServices.ConditionalWeakTable<HitData, object>();
+        private static readonly object SynthesizedMarker = new object();
+
+        internal static void MarkSynthesized(HitData hit) {
+            if (hit == null) { return; }
+            SynthesizedHits.Remove(hit);
+            SynthesizedHits.Add(hit, SynthesizedMarker);
+        }
+
+        internal static bool IsSynthesized(HitData hit) {
+            return hit != null && SynthesizedHits.TryGetValue(hit, out _);
+        }
+
         public static void ForceUpdateDamageMod(Character creature, float increase_dmg_by) {
-            float current_dmg_bonus = creature.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER);
+            // Default must match the reader in DamagePatches (GetFloat(SLS_DAMAGE_MODIFIER, 1)):
+            // the value is a multiplier, so an unset key means 1, not 0.
+            float current_dmg_bonus = creature.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1f);
             creature.m_nview.GetZDO().Set(SLS_DAMAGE_MODIFIER, current_dmg_bonus + increase_dmg_by);
         }
 
@@ -34,61 +53,35 @@ namespace StarLevelSystem.modules.Damage {
         }
 
         internal static void ApplyDamageModifiers(HitData hit, Character chara, Dictionary<DamageType, float> damageMods) {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"Applying damage recieved mods for {chara.m_name}");
-            if (hit.m_damage.m_blunt > 0 && damageMods.ContainsKey(DamageType.Blunt)) {
-                sb.Append($"  {DamageType.Blunt}: {hit.m_damage.m_blunt} * {damageMods[DamageType.Blunt]}");
-                hit.m_damage.m_blunt *= damageMods[DamageType.Blunt];
-                sb.Append($" = {hit.m_damage.m_blunt}\n");
-            }
-            if (hit.m_damage.m_pierce > 0 && damageMods.ContainsKey(DamageType.Pierce)) {
-                sb.Append($"  {DamageType.Pierce}: {hit.m_damage.m_pierce} * {damageMods[DamageType.Pierce]}");
-                hit.m_damage.m_pierce *= damageMods[DamageType.Pierce];
-                sb.Append($" = {hit.m_damage.m_pierce}\n");
-            }
-            if (hit.m_damage.m_slash > 0 && damageMods.ContainsKey(DamageType.Slash)) {
-                sb.Append($"  {DamageType.Slash}: {hit.m_damage.m_slash} * {damageMods[DamageType.Slash]}");
-                hit.m_damage.m_slash *= damageMods[DamageType.Slash];
-                sb.Append($" = {hit.m_damage.m_slash}\n");
-            }
-            if (hit.m_damage.m_fire > 0 && damageMods.ContainsKey(DamageType.Fire)) {
-                sb.Append($"  {DamageType.Fire}: {hit.m_damage.m_fire} * {damageMods[DamageType.Fire]}");
-                hit.m_damage.m_fire *= damageMods[DamageType.Fire];
-                sb.Append($" = {hit.m_damage.m_fire}\n");
-            }
-            if (hit.m_damage.m_frost > 0 && damageMods.ContainsKey(DamageType.Frost)) {
-                sb.Append($"  {DamageType.Fire}: {hit.m_damage.m_frost} * {damageMods[DamageType.Frost]}");
-                hit.m_damage.m_frost *= damageMods[DamageType.Frost];
-                sb.Append($" = {hit.m_damage.m_frost}\n");
-            }
-            if (hit.m_damage.m_lightning > 0 && damageMods.ContainsKey(DamageType.Lightning)) {
-                sb.Append($"  {DamageType.Lightning}: {hit.m_damage.m_lightning} * {damageMods[DamageType.Lightning]}");
-                hit.m_damage.m_lightning *= damageMods[DamageType.Lightning];
-                sb.Append($" = {hit.m_damage.m_lightning}\n");
-            }
-            if (hit.m_damage.m_poison > 0 && damageMods.ContainsKey(DamageType.Poison)) {
-                sb.Append($"  {DamageType.Poison}: {hit.m_damage.m_poison} * {damageMods[DamageType.Poison]}");
-                hit.m_damage.m_poison *= damageMods[DamageType.Poison];
-                sb.Append($" = {hit.m_damage.m_poison}\n");
-            }
-            if (hit.m_damage.m_spirit > 0 && damageMods.ContainsKey(DamageType.Spirit)) {
-                sb.Append($"  {DamageType.Spirit}: {hit.m_damage.m_spirit} * {damageMods[DamageType.Spirit]}");
-                hit.m_damage.m_spirit *= damageMods[DamageType.Spirit];
-                sb.Append($" = {hit.m_damage.m_spirit}\n");
-            }
-            if (hit.m_damage.m_chop > 0 && damageMods.ContainsKey(DamageType.Chop)) {
-                sb.Append($"  {DamageType.Spirit}: {hit.m_damage.m_chop} * {damageMods[DamageType.Chop]}");
-                hit.m_damage.m_chop *= damageMods[DamageType.Chop];
-                sb.Append($" = {hit.m_damage.m_chop}\n");
-            }
-            if (hit.m_damage.m_pickaxe > 0 && damageMods.ContainsKey(DamageType.Pickaxe)) {
-                sb.Append($"  {DamageType.Pickaxe}: {hit.m_damage.m_pickaxe} * {damageMods[DamageType.Pickaxe]}");
-                hit.m_damage.m_pickaxe *= damageMods[DamageType.Pickaxe];
-                sb.Append($" = {hit.m_damage.m_pickaxe}\n");
-            }
+            // Only build the debug report when it will actually be logged - this runs on every hit
+            // against every creature, and the StringBuilder + interpolations were previously built
+            // unconditionally and thrown away.
+            StringBuilder sb = null;
             if (ValConfig.EnableDebugOutputForDamage.Value) {
+                sb = new StringBuilder();
+                sb.AppendLine($"Applying damage recieved mods for {chara.m_name}");
+            }
+            ApplyDamageMod(ref hit.m_damage.m_blunt, DamageType.Blunt, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_pierce, DamageType.Pierce, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_slash, DamageType.Slash, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_fire, DamageType.Fire, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_frost, DamageType.Frost, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_lightning, DamageType.Lightning, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_poison, DamageType.Poison, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_spirit, DamageType.Spirit, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_chop, DamageType.Chop, damageMods, sb);
+            ApplyDamageMod(ref hit.m_damage.m_pickaxe, DamageType.Pickaxe, damageMods, sb);
+            if (sb != null) {
                 Logger.LogInfo(sb.ToString());
             }
+        }
+
+        private static void ApplyDamageMod(ref float damageValue, DamageType type, Dictionary<DamageType, float> damageMods, StringBuilder sb) {
+            if (damageValue <= 0) { return; }
+            if (!damageMods.TryGetValue(type, out float multiplier)) { return; }
+            if (sb != null) { sb.Append($"  {type}: {damageValue} * {multiplier}"); }
+            damageValue *= multiplier;
+            if (sb != null) { sb.Append($" = {damageValue}\n"); }
         }
 
         internal static float GetTotalDamageOptions(this HitData hit, bool include_poison = false, bool include_spirit = false, bool include_pickaxe_and_chop = false) {

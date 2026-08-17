@@ -41,20 +41,22 @@ namespace StarLevelSystem
             Log = this.Logger;
             cfg = new ValConfig(Config);
             cfg.SetupConfigRPCs();
-            cfg.LoadYamlConfigs();
             TaskRunner.Setup();
             Compatibility.CheckModCompat();
 
             EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
             Compatibility.ApplyConditionalPatches(HarmonyInstance);
-            Colorization.Init();
-            LevelSystemData.Init();
-            LootSystemData.Init();
-            CreatureModifiersData.Init();
-            RaidsData.Init();
-            NemesisSystemData.Init();
-            LocationResetData.Init();
+            // The seven per-file Init() calls are gone: Common/Config registers every config file, writes
+            // any that are missing, loads them and wires their sync in one pass. Must run after the
+            // ValConfig constructor (it reads cfgFolder and the poll/apply intervals) and before anything
+            // that reads a settings static.
+            //
+            // These two were startup-only work inside LevelSystemData.Init that had no equivalent in its
+            // reload path, so they would have been silently dropped by the move.
+            Colorization.UpdateMapColorSelection();
+            Colorization.UpdateZoneOverlayColorSelection();
+            YamlConfigManager.Init();
             QuickConfigureTool.Init();
             LocalizationLoader.AddLocalizations();
             PrefabManager.OnVanillaPrefabsAvailable += CreatureModifiersData.LoadPrefabs;
@@ -66,14 +68,14 @@ namespace StarLevelSystem
             MinimapManager.OnVanillaMapDataLoaded += ZoneScaleSystem.Initialize;
             MinimapManager.OnVanillaMapDataLoaded += NemesisMinimap.OnMapReady;
             PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
-            SynchronizationManager.OnConfigurationSynchronized += (sender, args) => ValConfig.HasServerUpdates();
+            // ConfigNetwork tracks the sync flag itself now, and patches ZNet.Shutdown to reset it -- the
+            // reset used to be a manual call in LevelScalingPatches that was easy to forget.
             UIHudControl.LoadAssets();
             RaidControl.LoadAssets();
             TerminalManager.Init();
             NemesisSystem.Initialize();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
             //DocumentationUpdater.UpdateDocumentation();
-            common.ConfigFileWatcher.Initialize();
         }
     }
 }

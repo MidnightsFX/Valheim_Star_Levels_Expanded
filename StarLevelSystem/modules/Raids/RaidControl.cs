@@ -121,7 +121,14 @@ namespace StarLevelSystem.modules.Raids
                 return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count));
             }
 
-            return ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.ElementAt(UnityEngine.Random.Range(0, ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids.Count));
+            // A tracked player whose available-raid list hasn't been computed yet (or matched nothing)
+            // would throw on the index below; fall back to a random raid like the untracked case.
+            List<RaidDefinition> availableRaids = ServerPlayerRaidData[playerPlatformID].PlayerAvailableRaids;
+            if (availableRaids == null || availableRaids.Count == 0) {
+                Logger.LogWarning($"Player {playerPlatformID} has no available raids computed, a random one will be selected.");
+                return RaidsData.SLE_Raid_Settings.Raids.ElementAt(UnityEngine.Random.Range(0, RaidsData.SLE_Raid_Settings.Raids.Count));
+            }
+            return availableRaids.ElementAt(UnityEngine.Random.Range(0, availableRaids.Count));
         }
 
         internal static void UpdateOrAddPlayerPrivateKeys(string playerPlatformID, List<string> privatekeys) {
@@ -150,8 +157,22 @@ namespace StarLevelSystem.modules.Raids
             } else {
                 ServerPlayerRaidData.Add(playerPlatformID, new DataObjects.PlayerRaidData() { PlayerPrivatekeys = privatekeys });
             }
-            //Logger.LogDebug("Player Private key data updated, preparing to persist to disk.");
-            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
+            // Mark for the next periodic flush instead of writing here: this fires on every
+            // Player.AddUniqueKey/RemoveUniqueKey, and each write serializes the whole registry to
+            // disk on the main thread.
+            MarkPlayerRaidDataDirty();
+        }
+
+        private static bool playerRaidDataDirty = false;
+
+        internal static void MarkPlayerRaidDataDirty() { playerRaidDataDirty = true; }
+
+        // Serializes + writes the registry. force writes regardless; otherwise only when dirty.
+        // Flushed from RaidManager's periodic tick, raid dispatch/commit, and teardown.
+        internal static void FlushPlayerRaidData(bool force = false) {
+            if (force == false && playerRaidDataDirty == false) { return; }
+            playerRaidDataDirty = false;
+            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(ServerPlayerRaidData));
         }
 
         internal static void UpdatePlayerRaidHistory(PlayerRaidData playerRaidData, RaidDefinition raidDef, string key) {
@@ -196,7 +217,7 @@ namespace StarLevelSystem.modules.Raids
             Logger.LogRaid($"Finalizing raid commit '{raidName}' for {playerPlatformID} at {pos}");
             UpdatePlayerRaidHistory(playerData, raidDef, raidDef.Name);
             ForceMusicForClientsInArea(raidDef.ForceMusic, pos, raidDef.EventRange * 1.5f);
-            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(ServerPlayerRaidData));
+            FlushPlayerRaidData(force: true);
         }
 
         // The vanilla m_eventIntervalMin, captured before SLS scales it. ApplyRaidConfiguration runs on every
@@ -535,6 +556,12 @@ namespace StarLevelSystem.modules.Raids
 
             if (spawn_locations.Count < numTargets) {
                 Logger.LogWarning($"Unable to find the requested number of spawn points. Found {spawn_locations.Count} spawn locations");
+            }
+            // The runner that started this coroutine can be destroyed while it runs (raid aborted,
+            // world unload); writing through its ZNetProperties would then throw on a dead ZNetView.
+            if (resultset.IsHostValid() == false || pointsReady.IsHostValid() == false) {
+                Logger.LogRaid("Raid spawn-point search finished after its runner was destroyed; discarding results.");
+                yield break;
             }
             resultset.ForceSet(spawn_locations);
             pointsReady.ForceSet(true);

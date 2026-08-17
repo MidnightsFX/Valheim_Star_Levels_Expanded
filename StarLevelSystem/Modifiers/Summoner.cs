@@ -9,12 +9,12 @@ namespace StarLevelSystem.Modifiers
     internal class Summoner
     {
         public static void Setup(Character creature = null, CreatureModConfig config = null, CharacterCacheEntry ccache = null) {
-            if (ccache == null) { return; }
+            if (creature == null || config == null || ccache == null) { return; }
             SLSSummoner summoningScript = creature.GetComponent<SLSSummoner>();
             Logger.LogDebug($"Setting up Summoner for {creature.name} summon script {summoningScript}");
             if (summoningScript == null) {
                 SLSSummoner summoner = creature.gameObject.AddComponent<SLSSummoner>();
-                if (config.BiomeObjects.ContainsKey(ccache.Biome)) {
+                if (config.BiomeObjects != null && config.BiomeObjects.ContainsKey(ccache.Biome)) {
                     summoner.SetupSummoner(creature, config.BiomeObjects[ccache.Biome], Mathf.RoundToInt(config.BasePower), config.PerlevelPower);
                 }
             }
@@ -23,12 +23,20 @@ namespace StarLevelSystem.Modifiers
         public class SLSSummoner : MonoBehaviour {
             List<GameObject> summonableCreatures = new List<GameObject>();
             ZNetView creature_znet = null;
-            static List<ZDOID> spawned = new List<ZDOID>();
-            static int maxSummoned = 10;
-            static int summonBatchSize = 2;
-            static float timeBetweenSummons = 30;
-            static Character bossCharacter;
-            static bool started = false;
+            // All per-boss state. These were static, which meant only the FIRST summoner in a session
+            // ever scheduled its spawn loop ('started' was never reset), every summoner's minions
+            // spawned at the most recently created summoner ('bossCharacter' was shared), and the
+            // summon cap pooled across every summoner in the world.
+            readonly List<ZDOID> spawned = new List<ZDOID>();
+            int maxSummoned = 10;
+            int summonBatchSize = 2;
+            float timeBetweenSummons = 30;
+            Character bossCharacter;
+            bool started = false;
+
+            public void OnDestroy() {
+                CancelInvoke();
+            }
 
             public void SpawnCreaturesBatch() {
                 summonBatchSize.Times(() => SpawnCreatureRandomly());

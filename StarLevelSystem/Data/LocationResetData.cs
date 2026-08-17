@@ -169,22 +169,6 @@ namespace StarLevelSystem.Data {
             Vegetation = new Dictionary<string, LocationResetEntry>(),
         };
 
-        internal static void Init() {
-            SLE_LocationReset_Settings = DefaultConfiguration;
-            try {
-                if (File.Exists(ValConfig.locationResetFilePath)) {
-                    UpdateYamlConfig(File.ReadAllText(ValConfig.locationResetFilePath));
-                } else {
-                    Rebuild();
-                }
-            }
-            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Location Reset values, defaults will be used. Exception: {e}"); }
-        }
-
-        public static string YamlDefaultConfig() {
-            return DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
-        }
-
         // Append a batch of chunk records to the Location Reset action log. Same shape as
         // NemesisSystemData.UpdateNemesisLog: the caller buffers and hands over a whole batch, and the
         // file is truncated rather than rotated once it gets large. The cap is well below the Nemesis
@@ -206,18 +190,15 @@ namespace StarLevelSystem.Data {
             }
         }
 
-        public static bool UpdateYamlConfig(string yaml) {
-            try {
-                Logger.LogDebug("Loaded new Location Reset settings...");
-                SLE_LocationReset_Settings = DataObjects.yamlDeserializer.Deserialize<LocationResetConfiguration>(yaml);
-                if (SLE_LocationReset_Settings == null) { SLE_LocationReset_Settings = DefaultConfiguration; }
-                Rebuild();
-            }
-            catch (Exception ex) {
-                StarLevelSystem.Log.LogError($"Failed to parse LocationResetSettings YAML: {ex.Message}");
-                return false;
-            }
-            return true;
+        // Apply hook for LocationResetSettings.yaml.
+        //
+        // Rebuild also runs again from LocationResetControl.OnZoneSystemReady, and must keep doing so:
+        // $Mineable / $Pickable group tokens cannot expand before ZNetScene exists, so the pass done here
+        // at load time is necessarily incomplete on a cold start.
+        internal static void ApplyLoaded(LocationResetConfiguration parsed) {
+            Logger.LogDebug("Loaded new Location Reset settings...");
+            SLE_LocationReset_Settings = parsed ?? DefaultConfiguration;
+            Rebuild();
         }
 
         // Flatten the config into the hash-keyed lookups the sweep uses, applying Defaults for any

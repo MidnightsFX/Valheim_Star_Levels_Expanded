@@ -38,7 +38,10 @@ namespace StarLevelSystem.modules.LevelSystem {
             ZoneScaleSystem.ResetForWorldChange();
             DistanceScaleSystem.ResetForWorldChange();
             LocationReset.LocationResetControl.OnWorldUnload();
-            ValConfig.ResetServerSyncState();
+            // Nemesis pin registry is static; without this, pin entries from world A leak into
+            // world B and RemovePin silently no-ops on their dead references.
+            NemesisSystem.NemesisMinimap.ClearAll();
+            ConfigNetwork.ResetServerSyncState();
         }
 
         [HarmonyPatch(typeof(ZNet), nameof(ZNet.Shutdown))]

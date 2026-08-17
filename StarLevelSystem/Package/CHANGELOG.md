@@ -1,3 +1,41 @@
+**1.6.0**
+ ---
+ ```
+- Modifies the quick configuration system to add support for more mods
+- Creature modifier fixes:
+	- LifeLink now uses a per-creature cooldown
+	- Summoner bosses now work for every summoner
+	- PoisonNova and FireNova can fire from the same creature
+	- ElementalChaos can now also roll Poison
+	- Splitter spawns are capped and spread across frames instead of instantiating every split synchronously in the death frame
+	- Modifiers added via the console command or the API now actually apply their stat changes
+- Level and loot fixes:
+	- PerLevelTreeLootScale sub-logs use their spawn point's rotation as vanilla does
+	- SpawnMultiplicationAppliesToTames was inverted
+	- Distance level bonuses now use the starter temple as their center on dedicated-server clients even with map rings disabled
+	- The over-level correction now uses the same biome-aware max level as the roll gate
+- Raid fixes:
+	- A raid wave with an invalid prefab name now logs and skips it
+	- Fixed a startup error when no saved raid registry exists yet
+- Nemesis fixes:
+	- Nemesis map pins are cleared on logout so they can't leak into the next world
+	- Fixed a player-death score update that could throw before any score data existed, and minibosses defined without minions no longer throw when spawning
+- Config fixes:
+	- World state files (location reset stamps, zone data, raid registry, Nemesis remote state) are now stored per-world; switching worlds previously overwrote one world's state with another's. Existing files migrate automatically
+	- Hand-editing the main cfg from the main menu is now picked up
+- PAPI Changes:
+	- AddNewModifierToSLS now wired up
+- Performance improvements:
+	- Creature, tree and HUD caches are now evicted more reliably
+	- The per-hit damage modifier path no longer builds its debug report unless the damage debug flag is on
+	- The enemy HUD no longer allocates unless names/modifiers have changed
+	- Hover names for SLS-renamed creatures are localized once
+	- Size updates skip the global physics sync when the scale is unchanged
+	- Nearby-creature queries use the game's character registry instead of an unfiltered physics sphere
+	- Attack damage factors read the creature cache
+	- Terrain resets batch all craters in a chunk
+ ```
+
 **1.5.4**
  ---
  ```

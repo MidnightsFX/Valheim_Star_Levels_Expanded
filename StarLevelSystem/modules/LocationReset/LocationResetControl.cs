@@ -95,11 +95,11 @@ namespace StarLevelSystem.modules.LocationReset {
                     Logger.LogLocationResetWarning($"Added reset group '{kvp.Key}' ({kvp.Value.ResetHours ?? 0f:0.#}h, " +
                         $"{kvp.Value.Members.Count} members, enabled). It does nothing until EnableLocationReset is on.");
                 }
-                // Through ValConfig rather than a bare File.WriteAllText: the latter dropped the
+                // Through the config manager rather than a bare File.WriteAllText: the latter dropped the
                 // explanatory comment block on every rewrite, which is most of what makes the file
-                // approachable.
-                ValConfig.RewriteConfigFileWithHeader(ValConfig.locationResetFilePath,
-                    DataObjects.yamlSerializer.Serialize(current));
+                // approachable. WriteCurrentToDisk keeps it, and re-stamps the watcher so this write is not
+                // mistaken for a hand edit.
+                YamlConfigManager.WriteCurrentToDisk(YamlConfigManager.LocationResetSettings);
                 LocationResetData.Rebuild();
             } catch (Exception e) {
                 Logger.LogLocationResetWarning($"Could not backfill the default reset groups: {e.Message}");

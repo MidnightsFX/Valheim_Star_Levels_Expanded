@@ -8,6 +8,11 @@ namespace StarLevelSystem {
     {
         public static LogLevel Level = LogLevel.Info;
 
+        // Guard for hot-path LogDebug call sites: LogDebug takes an already-built string, so the
+        // interpolation at the call site runs even when debug is off. Cheap check to skip that work
+        // where the call sits on a per-hit / per-frame path.
+        public static bool IsDebugEnabled => Level >= LogLevel.Debug;
+
         public static void EnableDebugLogging(object sender, EventArgs e)
         {
             if (ValConfig.EnableDebugMode.Value) {

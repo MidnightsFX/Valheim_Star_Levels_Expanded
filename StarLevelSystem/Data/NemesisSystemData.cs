@@ -723,20 +723,6 @@ namespace StarLevelSystem.Data
             }
         };
 
-        internal static void Init() {
-            SLE_Nemesis_Settings = DefaultConfiguration;
-            try {
-                if (File.Exists(ValConfig.nemesisFilePath)) {
-                    UpdateYamlConfig(File.ReadAllText(ValConfig.nemesisFilePath));
-                }
-            }
-            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Nemesis values, defaults will be used. Exception: {e}"); }
-        }
-
-        public static string YamlDefaultConfig() {
-            return DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
-        }
-
         internal static void UpdateNemesisLog(string data) {
             Logger.LogNemesis($"Updating Nemesis Action Log: {ValConfig.nemesisLogFilePath}");
             ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
@@ -750,21 +736,32 @@ namespace StarLevelSystem.Data
             File.AppendAllText(ValConfig.nemesisLogFilePath, data);
         }
 
-        public static bool UpdateYamlConfig(string yaml) {
-            try {
-                Logger.LogNemesis("Loaded new Nemesis settings...");
-                SLE_Nemesis_Settings = DataObjects.yamlDeserializer.Deserialize<NemesisConfiguration>(yaml);
-                if (SLE_Nemesis_Settings.NemesisVersion != DefaultConfiguration.NemesisVersion) {
-                    Logger.LogInfo("Nemesis Config version outdated, resetting to default.");
-                    SLE_Nemesis_Settings = DefaultConfiguration;
-                    File.WriteAllText(ValConfig.nemesisFilePath, YamlDefaultConfig());
-                }
-            }
-            catch (Exception ex) {
-                StarLevelSystem.Log.LogWarning($"Failed to parse NemesisSettings.yaml, defaults will be used. Error: {ex.Message}");
-                return false;
-            }
-            return true;
+        // Apply hook for NemesisSettings.yaml. The version check that used to live here is now the
+        // framework's SchemaVersion/Migrate pair on the registration -- which fixes two things it got
+        // wrong: it wrote with a bare File.WriteAllText (destroying the documented header), and because
+        // this same method is the client's receive path, a version-mismatched server payload made the
+        // CLIENT overwrite its own local file.
+        internal static void ApplyLoaded(NemesisConfiguration parsed) {
+            Logger.LogNemesis("Loaded new Nemesis settings...");
+            SLE_Nemesis_Settings = parsed;
+        }
+
+        internal static int GetSchemaVersion(NemesisConfiguration config) {
+            return config != null ? config.NemesisVersion : 0;
+        }
+
+        internal static void SetSchemaVersion(NemesisConfiguration config, int version) {
+            if (config != null) { config.NemesisVersion = version; }
+        }
+
+        // Any version other than the current one is replaced wholesale -- the original check was != rather
+        // than <, so a newer file was discarded too, and that behaviour is preserved deliberately.
+        internal static NemesisConfiguration MigrateToCurrent(NemesisConfiguration parsed) {
+            Logger.LogInfo("Nemesis config version does not match this build, resetting it to the defaults.");
+            // Fresh copy: returning the shared DefaultConfiguration would make it the live, runtime-mutated
+            // settings object, and the migration path also writes the returned object over the user's file.
+            return YamlFormat.Default.Deserializer.Deserialize<NemesisConfiguration>(
+                YamlFormat.Default.Serializer.Serialize(DefaultConfiguration));
         }
     }
 }

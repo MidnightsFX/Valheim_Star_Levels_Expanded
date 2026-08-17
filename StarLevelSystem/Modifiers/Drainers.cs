@@ -68,17 +68,17 @@ namespace StarLevelSystem.Modifiers
             float drain = ctx.BaseDamage * power * (1f - reduction);
             if (drain <= 0f)
             {
-                Logger.LogDebug($"{modName}: outcome {ctx.Outcome} -> no drain");
+                if (Logger.IsDebugEnabled) { Logger.LogDebug($"{modName}: outcome {ctx.Outcome} -> no drain"); }
                 return;
             }
             if (stamina)
             {
-                Logger.LogDebug($"Draining Stamina from target {drain} (outcome {ctx.Outcome})");
+                if (Logger.IsDebugEnabled) { Logger.LogDebug($"Draining Stamina from target {drain} (outcome {ctx.Outcome})"); }
                 target.UseStamina(drain);
             }
             else
             {
-                Logger.LogDebug($"Draining Eitr from target {drain} (outcome {ctx.Outcome})");
+                if (Logger.IsDebugEnabled) { Logger.LogDebug($"Draining Eitr from target {drain} (outcome {ctx.Outcome})"); }
                 target.UseEitr(drain);
             }
         }

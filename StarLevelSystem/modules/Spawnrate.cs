@@ -20,7 +20,7 @@ namespace StarLevelSystem.modules
                 return false;
             }
             bool isTame = chara.IsTamed();
-            if (isTame && ValConfig.SpawnMultiplicationAppliesToTames.Value) {
+            if (isTame && ValConfig.SpawnMultiplicationAppliesToTames.Value == false) {
                 return false;
             }
             if (chara.m_nview.GetZDO().GetBool(SLS_SPAWN_MULT, false) == true) { return false; }
@@ -53,7 +53,7 @@ namespace StarLevelSystem.modules
                         if (isTame && spawnedChara != null) {
                             spawnedChara.SetTamed(true);
                         }
-                        Logger.LogDebug($"Spawn Multiplier| {spawnrate} Spawned {spawnedCreature.gameObject} at {position}");
+                        if (Logger.IsDebugEnabled) { Logger.LogDebug($"Spawn Multiplier| {spawnrate} Spawned {spawnedCreature.gameObject} at {position}"); }
                         // Spawned creatures do not count towards spawn multipliers- otherwise this is exponential
                         CreatureSetupControl.CreatureSetup(spawnedChara, multiply: false);
                         spawnedChara.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
@@ -74,7 +74,7 @@ namespace StarLevelSystem.modules
                 //Logger.LogDebug($"Checking for spawn rate reduction {randv} >= {spawnrate}");
                 // Chance to reduce spawnrate, if triggered this creature will be queued for deletion
                 if (randv >= spawnrate) {
-                    Logger.LogDebug($"Spawn Reducer| Selecting {ccEntry.RefCreatureName} for deletion.");
+                    if (Logger.IsDebugEnabled) { Logger.LogDebug($"Spawn Reducer| Selecting {ccEntry.RefCreatureName} for deletion."); }
                     ZNetScene.instance.Destroy(chara.gameObject);
                     return true;
                 }

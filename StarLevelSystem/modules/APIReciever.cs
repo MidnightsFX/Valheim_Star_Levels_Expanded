@@ -27,7 +27,9 @@ namespace StarLevelSystem.modules
             if (chara == null) { return false; }
             CharacterCacheEntry ccd = CompositeLazyCache.GetCacheEntry(chara);
             if (ccd == null) { return false; }
-            ccd.Colorization = Colorization.DetermineCharacterColorization(chara, chara.m_level);
+            // Apply the caller's colorization - this previously ignored all four arguments and just
+            // recomputed the level-based default.
+            ccd.Colorization = new ColorDef(hue, sat, value, emission);
             CompositeLazyCache.UpdateCharacterCacheEntry(chara, ccd);
             Colorization.ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
             return true;
@@ -181,11 +183,7 @@ namespace StarLevelSystem.modules
             if (chara == null) { return false; }
             CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
-            if (!cdc.CreatureDamageBonus.ContainsKey((DamageType)attribute)) {
-                cdc.CreatureDamageBonus[(DamageType)attribute] = value;
-            } else {
-                cdc.CreatureDamageBonus.Add((DamageType)attribute, value);
-            }
+            cdc.CreatureDamageBonus[(DamageType)attribute] = value;
             return true;
         }
 
@@ -352,7 +350,10 @@ namespace StarLevelSystem.modules
                 clientConfig.AllowedBiomes = allowed_biomes;
             }
 
-            ClearProbabilityCaches();
+            // Register the definition + configuration into the active modifier set. Building them and
+            // only clearing the probability caches (as this method previously did) discarded both and
+            // made the API a silent no-op.
+            CreatureModifiersData.RegisterAPIModifier(modifier_name, newMod, clientConfig);
 
             return true;
         }

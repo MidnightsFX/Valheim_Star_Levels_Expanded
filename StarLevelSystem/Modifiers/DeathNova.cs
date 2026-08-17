@@ -16,60 +16,42 @@ namespace StarLevelSystem.Modifiers
         public static class DeathNovaOnDeathPatch
         {
             private static void Prefix(Character __instance) {
-                if (__instance == null || __instance.IsPlayer() || __instance.m_nview.IsOwner() == false) {
+                if (__instance == null || __instance.IsPlayer() || __instance.m_nview == null || __instance.m_nview.IsOwner() == false) {
                     return;
                 }
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                 if (mods == null) { return; }
-                if (mods.Keys.Contains(ModifierNames.FireNova.ToString())) {
-                    CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.FireNova.ToString(), mods[ModifierNames.FireNova.ToString()]);
-                    if (cmdef == null) { return; }
-                    GameObject go = CreatureModifiers.ApplySecondaryVFX(ModifierDefinitions[ModifierNames.FireNova.ToString()].SecondaryEffect, __instance.transform.position, __instance.transform.rotation);
-                    if (go == null) { return; }
-                    go.SetActive(false);
-                    Aoe aoe = go.GetComponent<Aoe>();
-                    // Configure damage
-                    float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
-                    if (aoe) {
-                        float characterdmg = SLSExtensions.EstimateCharacterDamage(__instance, DamageEstimateType.Average);
-                        if (characterdmg <= 0) {
-                            characterdmg = 10 * __instance.m_level; // fallback to a base damage if for some reason we can't get an estimate
-                        }
-                        aoe.m_damage.m_blunt = Mathf.Clamp((characterdmg * dmgmod) * 0.25f, 0f, 5000f);
-                        aoe.m_damage.m_fire = Mathf.Clamp((characterdmg * dmgmod) * 0.5f, 0f, 5000f); // Fire is applied multiple times so we need to ensure this is a dimished return
-                        Logger.LogDebug($"Activating FireNova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)} | blunt: {aoe.m_damage.m_blunt} fire: {aoe.m_damage.m_fire}");
+                // Each nova resolves independently: an unconfigured FireNova must not stop a PoisonNova
+                // on the same creature (the old early-returns did exactly that).
+                TriggerNova(__instance, mods, ModifierNames.FireNova.ToString(), bluntFraction: 0.25f, fireFraction: 0.5f, poisonFraction: 0f);
+                // Fire is applied multiple times so its fraction is a diminished return
+                TriggerNova(__instance, mods, ModifierNames.PoisonNova.ToString(), bluntFraction: 0.16f, fireFraction: 0f, poisonFraction: 1f);
+                // FrostNova / LightningNova: not yet implemented
+            }
+
+            private static void TriggerNova(Character chara, Dictionary<string, ModifierType> mods, string novaName, float bluntFraction, float fireFraction, float poisonFraction) {
+                if (mods.TryGetValue(novaName, out ModifierType modType) == false) { return; }
+                CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(novaName, modType);
+                if (cmdef == null || cmdef.Config == null) { return; }
+                if (ModifierDefinitions.TryGetValue(novaName, out var novaDef) == false) { return; }
+                GameObject go = CreatureModifiers.ApplySecondaryVFX(novaDef.SecondaryEffect, chara.transform.position, chara.transform.rotation);
+                if (go == null) { return; }
+                go.SetActive(false);
+                Aoe aoe = go.GetComponent<Aoe>();
+                // Configure damage
+                float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * chara.m_level);
+                if (aoe) {
+                    float characterdmg = SLSExtensions.EstimateCharacterDamage(chara, DamageEstimateType.Average);
+                    if (characterdmg <= 0) {
+                        characterdmg = 10 * chara.m_level; // fallback to a base damage if for some reason we can't get an estimate
                     }
-                    
-                    go.SetActive(true);
+                    if (bluntFraction > 0) { aoe.m_damage.m_blunt = Mathf.Clamp((characterdmg * dmgmod) * bluntFraction, 0f, 5000f); }
+                    if (fireFraction > 0) { aoe.m_damage.m_fire = Mathf.Clamp((characterdmg * dmgmod) * fireFraction, 0f, 5000f); }
+                    if (poisonFraction > 0) { aoe.m_damage.m_poison = Mathf.Clamp((characterdmg * dmgmod) * poisonFraction, 0f, 5000f); }
+                    Logger.LogDebug($"Activating {novaName} m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
                 }
-                //if (cDetails.Modifiers.Keys.Contains(ModifierNames.FrostNova)) {
 
-                //}
-                //if (cDetails.Modifiers.Keys.Contains(ModifierNames.LightningNova))
-                //{
-
-                //}
-                if (mods.Keys.Contains(ModifierNames.PoisonNova.ToString())) {
-                    CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(ModifierNames.PoisonNova.ToString(), mods[ModifierNames.PoisonNova.ToString()]);
-                    if (cmdef == null) { return; }
-                    GameObject go = CreatureModifiers.ApplySecondaryVFX(ModifierDefinitions[ModifierNames.PoisonNova.ToString()].SecondaryEffect, __instance.transform.position, __instance.transform.rotation);
-                    if (go == null) { return; }
-                    go.SetActive(false);
-                    Aoe aoe = go.GetComponent<Aoe>();
-                    // Configure damage
-                    float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * __instance.m_level);
-                    if (aoe) {
-                        float characterdmg = SLSExtensions.EstimateCharacterDamage(__instance, DamageEstimateType.Average);
-                        if (characterdmg <= 0) {
-                            characterdmg = 10 * __instance.m_level; // fallback to a base damage if for some reason we can't get an estimate
-                        }
-                        aoe.m_damage.m_blunt = Mathf.Clamp((characterdmg * dmgmod) * 0.16f, 0f, 5000f);
-                        aoe.m_damage.m_poison = Mathf.Clamp((characterdmg * dmgmod), 0f, 5000f);
-                        Logger.LogDebug($"Activating Poison Nova m:{dmgmod} x c:{characterdmg} = {(characterdmg * dmgmod)}");
-                    }
-
-                    go.SetActive(true);
-                }
+                go.SetActive(true);
             }
         }
     }

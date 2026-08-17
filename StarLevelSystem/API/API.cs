@@ -51,12 +51,12 @@ namespace StarLevelSystem
             UpdateCreatureColorization = APIReciever.GetMethod("UpdateCreatureColorization",  BindingFlags.Public | BindingFlags.Static);
             GetBaseAttributeValue = APIReciever.GetMethod("GetBaseAttributeValue",  BindingFlags.Public | BindingFlags.Static);
             UpdateCreatureBaseAttributes = APIReciever.GetMethod("UpdateCreatureBaseAttributes",  BindingFlags.Public | BindingFlags.Static);
-            GetAllBaseAttributeValues = APIReciever.GetMethod("GetAllBaseAttributeValues", BindingFlags.Public | BindingFlags.Static);
-            SetAllBaseAttributeValues = APIReciever.GetMethod("SetAllBaseAttributeValues", BindingFlags.Public | BindingFlags.Static);
+            GetAllBaseAttributeValues = APIReciever.GetMethod("GetAllBaseAttributes", BindingFlags.Public | BindingFlags.Static);
+            SetAllBaseAttributeValues = APIReciever.GetMethod("SetAllBaseAttributes", BindingFlags.Public | BindingFlags.Static);
             GetPerLevelAttributeValue = APIReciever.GetMethod("GetPerLevelAttributeValue", BindingFlags.Public | BindingFlags.Static);
             UpdateCreaturePerLevelAttributes = APIReciever.GetMethod("UpdateCreaturePerLevelAttributes", BindingFlags.Public | BindingFlags.Static);
-            GetAllPerLevelAttributeValues = APIReciever.GetMethod("GetAllPerLevelAttributeValues", BindingFlags.Public | BindingFlags.Static);
-            SetAllPerLevelAttributeValues = APIReciever.GetMethod("SetAllPerLevelAttributeValues", BindingFlags.Public | BindingFlags.Static);
+            GetAllPerLevelAttributeValues = APIReciever.GetMethod("GetAllPerLevelAttributes", BindingFlags.Public | BindingFlags.Static);
+            SetAllPerLevelAttributeValues = APIReciever.GetMethod("SetAllPerLevelAttributes", BindingFlags.Public | BindingFlags.Static);
             GetCreatureDamageRecievedModifier = APIReciever.GetMethod("GetCreatureDamageRecievedModifier", BindingFlags.Public | BindingFlags.Static);
             UpdateCreatureDamageRecievedModifier = APIReciever.GetMethod("UpdateCreatureDamageRecievedModifier", BindingFlags.Public | BindingFlags.Static);
             GetAllDamageRecievedModifiers = APIReciever.GetMethod("GetAllDamageRecievedModifiers", BindingFlags.Public | BindingFlags.Static);

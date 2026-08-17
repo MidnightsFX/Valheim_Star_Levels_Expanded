@@ -1,4 +1,4 @@
-﻿using JetBrains.Annotations;
+using JetBrains.Annotations;
 using Jotunn.Entities;
 using Jotunn.Managers;
 using MonoMod.Utils;
@@ -306,14 +306,17 @@ namespace StarLevelSystem.common
 
         public class LevelGenerator {
             public string PrefabName { get; set; }
+            // [DefaultValue] and the initializer have to agree. Where they did not, the serializer omitted
+            // the value an admin had written and the initializer supplied a different one on the next read
+            // -- NightMultiplier was the worst of them, round-tripping a written 1 back to 0.
             [DefaultValue(1)]
-            public int MaxLevel { get; set; }
+            public int MaxLevel { get; set; } = 1;
             [DefaultValue(1)]
-            public int MinLevel { get; set; }
+            public int MinLevel { get; set; } = 1;
             [DefaultValue(0f)]
             public float LevelUpChance { get; set; }
             [DefaultValue(1f)]
-            public float NightMultiplier { get; set; }
+            public float NightMultiplier { get; set; } = 1f;
             [DefaultValue(LevelupCalculationStyle.Linear)]
             public LevelupCalculationStyle LevelupCalculationStyle { get; set; } = LevelupCalculationStyle.Linear;
             [DefaultValue(0f)]
@@ -569,6 +572,7 @@ namespace StarLevelSystem.common
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; }
 
             [Description("Spawn rate modifier for this creature. 1.0 = no change, 2.0 = 2x spawns, 0.5 = 50% reduced spawns.")]
+            [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
 
             [Description("Night-time specific settings for this creature.")]
@@ -1142,6 +1146,7 @@ namespace StarLevelSystem.common
             public bool RaidActiveTillDefeated { get; set; } = true;
             [DefaultValue(12)]
             public int SpawnPoints { get; set; } = 12;
+            [DefaultValue(120f)]
             public float RaidCoolDownMinutes { get; set; } = 120f;
             public RaidActivation Activation { get; set; } = new RaidActivation();
             public List<RaidSpawnEntry> Spawns { get; set; } = new List<RaidSpawnEntry>();
@@ -1201,7 +1206,10 @@ namespace StarLevelSystem.common
         [Serializable]
         public class RaidActivation {
             public List<Heightmap.Biome> Biomes { get; set; }
-            [DefaultValue(true)]
+            // Was [DefaultValue(true)] against a false initializer, which inverted it: a written
+            // "NearBaseOnly: true" was dropped on the next rewrite and came back false, and every raid
+            // block carried a pointless "NearBaseOnly: false".
+            [DefaultValue(false)]
             public bool NearBaseOnly { get; set; } = false;
             [DefaultValue(true)]
             public bool PauseIfNoPlayerInArea { get; set; } = true;
@@ -1217,6 +1225,7 @@ namespace StarLevelSystem.common
         [Serializable]
         public class RaidSpawnEntry {
             public string PrefabName { get; set; }
+            [DefaultValue(AI.Alerted)]
             public AI CreatureAI { get; set; } = AI.Alerted;
             [DefaultValue(10f)]
             public float SpawnInterval { get; set; } = 10f;
@@ -1235,6 +1244,7 @@ namespace StarLevelSystem.common
             [DefaultValue(1)]
             public int LevelMin { get; set; } = 1;
             public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;
+            [DefaultValue(true)]
             public bool UseRaidLevelSystem { get; set; } = true;
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
             public List<string> ModifiersNotAllowed { get; set; } = null;
@@ -1277,11 +1287,17 @@ namespace StarLevelSystem.common
             public float NemesisActionCooldownSeconds { get; set; } = 10f;
             [DefaultValue(300f)]
             public float NemesisInfluenceRadius { get; set; } = 300f;
+            [DefaultValue(20f)]
             public float NemesisMinSpawnDistance { get; set; } = 20f;
+            [DefaultValue(true)]
             public bool CreateMinibossFromPlayerKiller { get; set; } = true;
+            [DefaultValue(true)]
             public bool CreationRemovesSourceCreature { get; set; } = true;
+            [DefaultValue(0.1f)]
             public float NemesisBossChance { get; set; } = 0.1f;
+            [DefaultValue(0.40f)]
             public float NemesisBossMaxLevelBonus { get; set; } = 0.40f;
+            [DefaultValue(0.20f)]
             public float NemesisBossMinLevelBonus { get; set; } = 0.20f;
 
             public NemesisScore ScoreSystem { get; set; } = new NemesisScore();
@@ -1412,6 +1428,7 @@ namespace StarLevelSystem.common
             // Relative weight when this spawn is used as a remote boss archetype in BossCandidatesByBiome.
             [DefaultValue(1f)]
             public float SelectionWeight { get; set; } = 1f;
+            [DefaultValue(1)]
             public int SpawnGroupSize { get; set; } = 1;
             [DefaultValue("")]
             public string CustomName { get; set; } = "";
@@ -1434,6 +1451,7 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisGaurenteedChanges {
+            [DefaultValue(true)]
             public bool FirstBossSetLevel { get; set; } = true;
             public int FirstBossLevel { get; set; } = 0;
         }
@@ -1447,11 +1465,13 @@ namespace StarLevelSystem.common
         }
 
         public class NemesisScore {
-            [DefaultValue(0f)]
+            // These three were mismatched: NeutralScore: 0 and MaxScore: 0 were being dropped on write and
+            // read back as 600 and 1000.
+            [DefaultValue(600f)]
             public float NeutralScore { get; set; } = 600f;
             [DefaultValue(0f)]
             public float MinScore { get; set; } = 0f;
-            [DefaultValue(0f)]
+            [DefaultValue(1000f)]
             public float MaxScore { get; set; } = 1000f;
             [DefaultValue(500f)]
             public float DeathScoreReduction { get; set; } = 500f;
@@ -1475,7 +1495,8 @@ namespace StarLevelSystem.common
             public float BossKillBonus { get; set; } = 250f;
             [DefaultValue(100f)]
             public float BossKillRadius { get; set; } = 100f;
-            [DefaultValue(5f)]
+            // int, not float: 5f.Equals(5) is false, so this was never omitted.
+            [DefaultValue(5)]
             public int RecentBiomeHistoryLength { get; set; } = 5;
             [DefaultValue(3)]
             public int DamageScoreHistoryLength { get; set; } = 3;
@@ -1512,6 +1533,7 @@ namespace StarLevelSystem.common
             public string RefCreatureName { get; set; } = null;
             public ColorDef Colorization { get; set; } = null;
             public Heightmap.Biome Biome { get; set; }
+            [DefaultValue(1f)]
             public float SpawnRateModifier { get; set; } = 1f;
             public bool RunOnceDone { get; set; } = false;
             public Dictionary<string, ModifierType> CreatureModifiers { get; set; } = new Dictionary<string, ModifierType>();
@@ -1562,6 +1584,10 @@ namespace StarLevelSystem.common
         {
             // Use fractional scaling for decaying drop increases
             public Drop Drop { get; set; }
+            // Resolved at load by AttachLootPrefabs, never written by an admin, and it reaches a live
+            // Unity object. Without [YamlIgnore] any re-serialization of the LOADED settings -- a restore
+            // to defaults, or answering a client's initial sync -- would try to walk a Unity object graph.
+            [YamlIgnore]
             public CharacterDrop.Drop GameDrop { get; private set; }
             [DefaultValue(0f)]
             public float AmountScaleFactor { get; set; } = 0f;
@@ -1584,6 +1610,8 @@ namespace StarLevelSystem.common
         [DataContract]
         public class ExtendedObjectDrop {
             public Drop Drop { get; set; }
+            // See ExtendedCharacterDrop.GameDrop -- resolved at load, holds a Unity object, never serialized.
+            [YamlIgnore]
             public GameObject DropGo { get; private set; }
             public float AmountScaleFactor { get; set; } = 0f;
             [DefaultValue(0f)]
@@ -1686,6 +1714,14 @@ namespace StarLevelSystem.common
                 Key = key;
                 DefaultValue = defaultValue;
                 this.zNetView = zNetView;
+            }
+
+            // Whether the backing ZNetView still exists and holds a ZDO. Long-running coroutines
+            // (raid spawn-point search) must check this before writing: their host object can be
+            // destroyed while they run, and Set/ForceSet against a dead view throws.
+            public bool IsHostValid()
+            {
+                return zNetView != null && zNetView.IsValid();
             }
 
             private void ClaimOwnership()

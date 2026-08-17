@@ -123,6 +123,8 @@ namespace StarLevelSystem.modules.Modifiers {
                     //Logger.LogDebug($"Setting up new visual effect holder for {character.name} {character.GetZDOID().ID}");
                     if (VisualEffectHolder == null || character.gameObject == null) { return; }
                     visualHolder = GameObject.Instantiate(VisualEffectHolder, character.transform).transform;
+                    // The SetVisible toggle may already have cached "no holder" for this creature.
+                    Visible_Toggle.InvalidateVisualsCache(character);
                 }
                 //Logger.LogDebug($"Adding visual effects for {character.name}");
                 GameObject vfxAdd = GameObject.Instantiate(effectPrefab, visualHolder);
@@ -265,7 +267,9 @@ namespace StarLevelSystem.modules.Modifiers {
             Dictionary<string, ModifierType> selectedMods = new Dictionary<string, ModifierType>();
 
             //Logger.LogDebug($"Check if creature {creatureName} is in the modifier ignored list [{string.Join(",", CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList)}].");
-            if (creatureName != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList.Contains(character.name))
+            // Compare against the cleaned prefab name - character.name on a live instance is
+            // "Prefab(Clone)", which never matched the configured list.
+            if (creatureName != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList != null && CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings.GlobalIgnorePrefabList.Contains(creatureName))
             {
                 Logger.LogDebug($"Creature {creatureName} is in the global ignore prefab list, skipping modifier assignment.");
                 if (!selectedMods.ContainsKey(NoMods)) { selectedMods.Add(NoMods, ModifierType.Minor); }
@@ -404,13 +408,11 @@ namespace StarLevelSystem.modules.Modifiers {
             // Note the character name needs to be rerolled
             UIHudControl.InvalidateCacheEntry(character);
 
-            // Not applying the update immediately
-            if (applyChanges == false) {
+            if (applyChanges) {
                 SpeedModifications.ApplySpeedModifications(character, scd);
                 DamageModifications.ApplyDamageModification(character, scd);
                 SizeModifications.SetSizeModification(character.gameObject, character.m_nview, scd, true);
                 HealthModifications.ForceApplyHealthModifications(character, scd);
-                return true;
             }
 
             return true;

@@ -30,6 +30,37 @@ namespace StarLevelSystem.modules.Raids {
 
         private bool networkReady;
         private double Endtime = 0;
+
+        // ZDO-backed values cached against the ZDO's DataRevision. Every BinaryFormatter-based
+        // ZNetProperty.Get() is a full deserialize, and Update used to run several of them on every
+        // machine on every frame for the whole raid duration (plus an unconditional Set that
+        // re-replicated the spawner list to all peers at frame rate). The revision only changes when
+        // something was actually written, so these stay in sync at a fraction of the cost.
+        private uint cachedDataRevision = uint.MaxValue;
+        private RaidDefinition raidCache;
+        private string raidEnvNameCache;
+        private bool raidStartedCache;
+        private double windDownStartCache;
+        private double raidStartTimeCache;
+        private bool spawnPointsReadyCache;
+        private bool spawnPointsGeneratingCache;
+        private List<SerializableVector3> spawnPointsCache;
+        private List<RaidMonitor> activeSpawnsCache = new List<RaidMonitor>();
+
+        private void RefreshZDataCache() {
+            ZDO zdo = Znet.GetZDO();
+            if (zdo == null || zdo.DataRevision == cachedDataRevision) { return; }
+            cachedDataRevision = zdo.DataRevision;
+            raidCache = RunningRaid.Get();
+            raidEnvNameCache = raidCache != null ? raidCache.ForceEnvironment.ToString() : null;
+            raidStartedCache = RaidStarted.Get();
+            windDownStartCache = RaidWindDownStart.Get();
+            raidStartTimeCache = RaitStartTime.Get();
+            spawnPointsReadyCache = RaidSpawnPointsReady.Get();
+            spawnPointsGeneratingCache = RaidSpawnPointsGenerating.Get();
+            spawnPointsCache = RaidSpawnPoints.Get();
+            activeSpawnsCache = ActiveRaidSpawns.Get();
+        }
         // Set when a wind-down completes with stragglers intentionally left to despawn on their own, so OnDestroy
         // skips the force-delete cleanup. Hard teardowns (admin reset, shutdown) leave this false and still clean up.
         private bool skipCreatureCleanup = false;
@@ -54,17 +85,19 @@ namespace StarLevelSystem.modules.Raids {
         public void Update() {
             if (ValConfig.UseVanillaRaidConfiguration.Value == true || RunningRaid == null || Znet.IsValid() == false) { return; }
 
+            RefreshZDataCache();
+            RaidDefinition raid = raidCache;
+
             // Force the raid environment only once the raid has actually committed, so an aborted raid (e.g. no
             // valid spawn points) never flips the weather and then snaps it back.
-            RaidDefinition raid = RunningRaid.Get();
             // While the raid runs, force its environment for all in-range clients. Once it winds down, hand the
             // override back (mirrors OnDestroy) so the weather returns to normal immediately instead of lingering
             // until the runner is finally destroyed at the end of the wind-down window.
-            if (RaidStarted.Get()) {
+            if (raidStartedCache) {
                 if (IsWindingDown()) {
                     ReleaseForcedEnvironment();
                 } else {
-                    ForceEnvironment(raid.ForceEnvironment.ToString());
+                    ForceEnvironment(raidEnvNameCache);
                 }
             }
 
@@ -73,24 +106,27 @@ namespace StarLevelSystem.modules.Raids {
             // Network data is required before we start performing actions
             if (networkReady == false) { ConnectZData(); }
 
+            // Wait until the raid definition has replicated.
+            if (raid == null) { return; }
+
             // Re-assert active-raid registration each owner tick while the raid is running (idempotent). Covers the
             // owner-handoff/reconnect case where a new owner picks up an already-committed raid.
-            if (RaidStarted.Get() && IsWindingDown() == false) { RaidControl.RegisterActiveRaid(this); }
+            if (raidStartedCache && IsWindingDown() == false) { RaidControl.RegisterActiveRaid(this); }
 
             // TODO: fallback for if/when the owner who starts generating points exits the game immediately etc
-            if (RaidSpawnPointsReady.Get() == false && RaidSpawnPointsGenerating.Get() == false) {
-                TaskRunner.Run().StartCoroutine(RaidControl.DetermineRemoteSpawnLocations(this.transform.position, RaidSpawnPoints, RunningRaid.Get().SpawnPoints, RaidSpawnPointsReady, RunningRaid.Get().EventRange));
+            if (spawnPointsReadyCache == false && spawnPointsGeneratingCache == false) {
+                TaskRunner.Run().StartCoroutine(RaidControl.DetermineRemoteSpawnLocations(this.transform.position, RaidSpawnPoints, raid.SpawnPoints, RaidSpawnPointsReady, raid.EventRange));
                 RaidSpawnPointsGenerating.Set(true);
                 return;
             }
 
             // Wait until raid positions are identified.
-            if (RaidSpawnPointsReady.Get() == false && RaidSpawnPointsGenerating.Get() == true) {
+            if (spawnPointsReadyCache == false && spawnPointsGeneratingCache == true) {
                 return;
             }
 
-            if (RaidSpawnPointsReady.Get()) {
-                List<SerializableVector3> determinedSpawnPoints = RaidSpawnPoints.Get();
+            if (spawnPointsReadyCache) {
+                List<SerializableVector3> determinedSpawnPoints = spawnPointsCache;
                 if (determinedSpawnPoints == null || determinedSpawnPoints.Count == 0) {
                     Logger.LogRaid($"Raid failed to find any valid spawn points, stopping raid.");
                     RemoveExistingMapPins();
@@ -100,13 +136,14 @@ namespace StarLevelSystem.modules.Raids {
             }
 
             // Raid is resuming, reconnecting or continuing to run
-            if (ActiveRaidSpawns.Get().Count > 0) {
-                if (Endtime == 0) { Endtime = RaitStartTime.Get() + RunningRaid.Get().Duration; }
-                if (RaidSpawners.Count != ActiveRaidSpawns.Get().Count) {
-                    RaidSpawners = ActiveRaidSpawns.Get();
+            if (activeSpawnsCache.Count > 0) {
+                if (Endtime == 0) { Endtime = raidStartTimeCache + raid.Duration; }
+                if (RaidSpawners.Count != activeSpawnsCache.Count) {
+                    RaidSpawners = activeSpawnsCache;
                 }
 
                 bool spawnWindowClosed = Endtime < ZNet.instance.GetTimeSeconds();
+                bool spawnersDirty = false;
 
                 // Spawn creatures
                 foreach (RaidMonitor rmonitor in RaidSpawners) {
@@ -121,15 +158,20 @@ namespace StarLevelSystem.modules.Raids {
 
                     Logger.LogRaid($"Checking {rmonitor.RaidSpawnDef.PrefabName} spawn timer: {rmonitor.NextSpawn} < {ZNet.instance.GetTimeSeconds()}");
                     rmonitor.NextSpawn = ZNet.instance.GetTimeSeconds() + rmonitor.RaidSpawnDef.SpawnInterval;
+                    spawnersDirty = true;
                     // Update/remove null entries in the tracked ZDOIDs
                     List<ZDOID> connectedSpawns = rmonitor.GetSpawnedZDOIDs().Where(x => ZDOMan.instance.GetZDO(x) != null).ToList();
                     Logger.LogRaid($"Found {connectedSpawns.Count} alive creatures");
 
-                    if (connectedSpawns.Count <= rmonitor.RaidSpawnDef.MaxSpawned) {
-                        List<SerializableVector3> spawnPoints = RaidSpawnPoints.Get();
+                    // Strict comparison: <= let a group start while already AT the cap, so the
+                    // effective ceiling was MaxSpawned + SpawnGroupSize (and MaxSpawned 0 still
+                    // spawned one group).
+                    if (connectedSpawns.Count < rmonitor.RaidSpawnDef.MaxSpawned) {
+                        List<SerializableVector3> spawnPoints = spawnPointsCache;
                         GameObject creaturePrefab = PrefabManager.Instance.GetPrefab(rmonitor.RaidSpawnDef.PrefabName);
                         if (creaturePrefab == null) {
                             Logger.LogWarning($"The creature defined for this wave is invalid and will be skipped. |{rmonitor.RaidSpawnDef.PrefabName}|");
+                            continue;
                         }
 
                         // Check spawn chance
@@ -139,7 +181,7 @@ namespace StarLevelSystem.modules.Raids {
                             continue;
                         }
                         rmonitor.TriggerCount += 1;
-                        Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count - 1)];
+                        Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count)];
                         // Do custom level if custom level chances are set. Level generators (inline or referenced)
                         // take precedence and overwrite the spawn's configured levelup chances when present.
                         SortedDictionary<int, float> levelupChance = LevelGeneratorResolver.BuildLevelupChance(rmonitor.RaidSpawnDef.LevelupGenerators, rmonitor.RaidSpawnDef.LevelupGeneratorRefs)
@@ -174,12 +216,14 @@ namespace StarLevelSystem.modules.Raids {
                     }
                 }
 
-                // Persist any per-spawner state mutations (NextSpawn, TriggerCount) so they survive owner-handoff
-                ActiveRaidSpawns.Set(RaidSpawners);
+                // Persist per-spawner state mutations (NextSpawn, TriggerCount, tracked ZDOIDs) so they
+                // survive owner-handoff - but only when something actually changed. An unconditional Set
+                // here rewrote and re-replicated the whole spawner list to every peer on every owner frame.
+                if (spawnersDirty) { ActiveRaidSpawns.Set(RaidSpawners); }
 
                 // Raid is over (or waiting on defeat)
                 if (spawnWindowClosed) {
-                    bool raidComplete = !RunningRaid.Get().RaidActiveTillDefeated;
+                    bool raidComplete = !raid.RaidActiveTillDefeated;
                     bool spawnedMaxOnce = false;
                     foreach (RaidMonitor raidspawn in RaidSpawners) {
                         if (raidspawn.RaidSpawnDef.MaxSpawnTriggers > 0 && raidspawn.TriggerCount >= raidspawn.RaidSpawnDef.MaxSpawnTriggers) {
@@ -206,8 +250,9 @@ namespace StarLevelSystem.modules.Raids {
             }
 
             // Spawn is setup, let the raid commence
-            RaitStartTime.Set(ZNet.instance.GetTimeSeconds());
-            Endtime = RaitStartTime.Get() + raid.Duration;
+            double startTime = ZNet.instance.GetTimeSeconds();
+            RaitStartTime.Set(startTime);
+            Endtime = startTime + raid.Duration;
             AddMapPins(this.transform.position, raid);
             Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.StartMessage);
 
@@ -255,9 +300,10 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         // Whether the raid has finished and entered its wind-down phase (creatures dispersing). ZDO-backed so it is
-        // consistent across owner-handoff and readable by all in-range clients.
+        // consistent across owner-handoff and readable by all in-range clients. Reads the DataRevision-gated
+        // cache; BeginWindDown's Set bumps the revision, so the transition is picked up on the next Update.
         private bool IsWindingDown() {
-            return RaidWindDownStart != null && RaidWindDownStart.Get() > 0;
+            return windDownStartCache > 0;
         }
 
         // Called once when the raid completes. Performs the player-facing teardown (message, pins, music, weather) and
@@ -300,13 +346,20 @@ namespace StarLevelSystem.modules.Raids {
         // (when disabled) leave them to despawn on their own.
         private void UpdateWindDown() {
             // Prune despawned creatures so the tracked set shrinks as vanilla MoveAwayAndDespawn removes them.
+            // Only write the pruned list back when something was actually removed - this runs every owner
+            // frame during wind-down, and each Set re-replicates the whole spawner list to every peer.
             int remaining = 0;
+            bool pruned = false;
             foreach (RaidMonitor rmonitor in RaidSpawners) {
-                List<ZDOID> stillAlive = rmonitor.GetSpawnedZDOIDs().Where(x => ZDOMan.instance.GetZDO(x) != null).ToList();
-                rmonitor.StoreZDOIDS(stillAlive);
+                List<ZDOID> tracked = rmonitor.GetSpawnedZDOIDs();
+                List<ZDOID> stillAlive = tracked.Where(x => ZDOMan.instance.GetZDO(x) != null).ToList();
+                if (stillAlive.Count != tracked.Count) {
+                    rmonitor.StoreZDOIDS(stillAlive);
+                    pruned = true;
+                }
                 remaining += stillAlive.Count;
             }
-            ActiveRaidSpawns.Set(RaidSpawners);
+            if (pruned) { ActiveRaidSpawns.Set(RaidSpawners); }
 
             if (remaining == 0) {
                 // Everything wandered off and despawned on its own; nothing left to clean up.
@@ -316,7 +369,7 @@ namespace StarLevelSystem.modules.Raids {
                 return;
             }
 
-            double windDownDeadline = RaidWindDownStart.Get() + ValConfig.RaidWindDownSeconds.Value;
+            double windDownDeadline = windDownStartCache + ValConfig.RaidWindDownSeconds.Value;
             if (ZNet.instance.GetTimeSeconds() <= windDownDeadline) { return; }
 
             if (ValConfig.RaidForceDeleteStragglers.Value) {

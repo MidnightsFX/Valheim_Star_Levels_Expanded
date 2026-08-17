@@ -14,11 +14,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
         private const string KeyPlaced = "SLS_NRS_PLACED";
 
         // Updates the owner waits after the area is ready before spawning (lets ground/objects settle).
-        private const int WarmupTicks = 120;
+        // Time-based: the old frame-count waits (120/240 ticks) ran 4x longer on a 15fps server
+        // than on a 60fps client.
+        private const float WarmupSeconds = 2f;
         // A non-owner that has the area loaded waits longer, giving the authoritative owner (if any) first
         // chance; if the ZDO is ownerless (owner released after the placer moved away) it then claims + spawns.
-        private const int NonOwnerClaimTicks = 240;
-        private int warmup = 0;
+        private const float NonOwnerClaimSeconds = 4f;
+        private float warmup = 0f;
         private int diagTick = 0;
 
         public void Awake() {
@@ -52,9 +54,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
             // Not the owner: give the authoritative owner a grace period, then take over and claim it so the
             // machine that actually loaded this area drives the spawn (covers an ownerless ZDO after recreation).
             if (!znv.IsOwner()) {
-                if (warmup < NonOwnerClaimTicks) {
-                    if (warmup == 0) { Logger.LogInfo($"[NemesisRemote] spawner loaded but not owner at {transform.position} (owner={znv.GetZDO()?.GetOwner()}); grace period before claiming."); }
-                    warmup++;
+                if (warmup < NonOwnerClaimSeconds) {
+                    if (warmup == 0f) { Logger.LogInfo($"[NemesisRemote] spawner loaded but not owner at {transform.position} (owner={znv.GetZDO()?.GetOwner()}); grace period before claiming."); }
+                    warmup += Time.deltaTime;
                     return;
                 }
                 Logger.LogInfo($"[NemesisRemote] spawner claiming ownership at {transform.position} (owner was {znv.GetZDO()?.GetOwner()}).");
@@ -63,9 +65,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
             }
 
             //if (znv.GetZDO().GetBool(KeyPlaced, false)) { DestroySelf(); return; }
-            if (warmup < WarmupTicks) {
-                if (warmup == 0) { Logger.LogInfo($"[NemesisRemote] spawner ready (owner + area ready) at {transform.position}, warming up {WarmupTicks} ticks."); }
-                warmup++;
+            if (warmup < WarmupSeconds) {
+                if (warmup == 0f) { Logger.LogInfo($"[NemesisRemote] spawner ready (owner + area ready) at {transform.position}, warming up {WarmupSeconds} seconds."); }
+                warmup += Time.deltaTime;
                 return;
             }
             Logger.LogInfo($"[NemesisRemote] spawner warmup complete at {transform.position}, spawning boss now.");

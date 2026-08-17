@@ -1219,6 +1219,10 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
             try {
+                // Batch every crater into one TerrainResetter pass: the per-node form re-ran the full
+                // per-compiler vertex sweep and TerrainComp.Save() once per node, all in this frame.
+                List<Vector3> resetCenters = new List<Vector3>();
+                List<float> resetRadii = new List<float>();
                 for (int i = 0; i < ghosts.Count; i++) {
                     GameObject ghost = ghosts[i];
                     if (ghost == null) { continue; }
@@ -1226,8 +1230,10 @@ namespace StarLevelSystem.modules.LocationReset {
                     if (LocationResetData.TryGetVegetationEntry(hash, out LocationResetData.ResolvedResetEntry entry) == false) { continue; }
                     if (entry.ResetTerrain == false) { continue; }
                     float radius = entry.TerrainRadius > 0f ? entry.TerrainRadius : 8f;
-                    report.TerrainModificationsUndone += TerrainResetter.Reset(ghost.transform.position, radius);
+                    resetCenters.Add(ghost.transform.position);
+                    resetRadii.Add(radius);
                 }
+                report.TerrainModificationsUndone += TerrainResetter.ResetBatch(resetCenters, resetRadii);
             } finally {
                 ZoneLoader.DestroyTerrainObjects(terrainObjects);
             }

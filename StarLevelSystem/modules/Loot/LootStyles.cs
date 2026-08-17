@@ -258,7 +258,10 @@ namespace StarLevelSystem.modules.Loot {
                 int drop_base_amount = drop_min;
                 if (drop_min != drop_max) {
                     if (loot.ScalebyMaxLevel) {
-                        drop_base_amount = ((drop_max - drop_min) / ValConfig.MaxLevel.Value) * level;
+                        // Float math: the old integer division truncated to 0 whenever the drop range
+                        // was smaller than MaxLevel, so scaled drops produced nothing at every level.
+                        int maxLevel = Mathf.Max(1, ValConfig.MaxLevel.Value);
+                        drop_base_amount = Mathf.RoundToInt((drop_max - drop_min) / (float)maxLevel * level);
                     } else {
                         drop_base_amount = UnityEngine.Random.Range(drop_min, drop_max);
                     }
@@ -392,7 +395,7 @@ namespace StarLevelSystem.modules.Loot {
                     DropTable.DropData newDrop = drop;
                     newDrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + (mod * level)));
                     newDrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + (mod * level)));
-                    Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {newDrop.m_stackMin}-{newDrop.m_stackMax} for level {level}.");
+                    if (Logger.IsDebugEnabled) { Logger.LogDebug($"Scaling drop {drop.m_item} from {drop.m_stackMin}-{drop.m_stackMax} to {newDrop.m_stackMin}-{newDrop.m_stackMax} for level {level}."); }
                     dropReplacement.Add(newDrop);
                 }
                 newDropTable.m_drops = dropReplacement;

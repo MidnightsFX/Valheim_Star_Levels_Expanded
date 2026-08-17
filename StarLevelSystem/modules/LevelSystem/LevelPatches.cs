@@ -21,6 +21,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (ValConfig.UseDeterministicTreeScaling.Value) {
                     storedLevel = CompositeLazyCache.GetOrAddCachedTreeEntry(__instance.m_nview);
                 } else {
+                    if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) { return; }
                     storedLevel = __instance.m_nview.GetZDO().GetInt(SLS_TREE, 0);
                     if (storedLevel == 0) {
                         LevelSelection.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
@@ -52,7 +53,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {
                     foreach (Transform transform in __instance.m_subLogPoints) {
-                        Quaternion logRotation = __instance.m_useSubLogPointRotation ? __instance.transform.rotation : __instance.transform.rotation;
+                        // Matches vanilla TreeLog.Destroy: the sub log point's own rotation when the
+                        // flag is set (both ternary branches used to read the parent's rotation).
+                        Quaternion logRotation = __instance.m_useSubLogPointRotation ? transform.rotation : __instance.transform.rotation;
                         Logger.LogDebug($"Spawning Treelog at point {transform.position} rot:{logRotation}");
                         SetupTreeLog(__instance, transform, logRotation);
                     }
@@ -118,6 +121,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static class RandomFlyingBirdExtension {
             public static void Postfix(RandomFlyingBird __instance) {
                 if (ValConfig.EnableScalingBirds.Value == false) { return; }
+                if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) { return; }
                 int storedLevel = __instance.m_nview.GetZDO().GetInt(SLS_BIRD, 0);
                 if (storedLevel == 0) {
                     LevelSelection.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
@@ -346,7 +350,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         [HarmonyPatch(typeof(Procreation), nameof(Procreation.ReadyForProcreation))]
         public static class ProcreationPrevention {
             public static void Postfix(Procreation __instance, ref bool __result) {
-                if (__instance.m_character != null && __instance.m_character.m_nview != null && __instance.m_character.m_nview.GetZDO() != null && __result == true) {
+                // Guard the SAME nview that is dereferenced below: the old check validated the
+                // Character's nview but then read through the Procreation component's own.
+                if (__result == true && __instance.m_nview != null && __instance.m_nview.GetZDO() != null) {
                     if (__instance.m_nview.GetZDO().GetBool(SLS_INFERTILE, false)) {
                         __result = false;
                         Logger.LogDebug($"Preventing procreation because child is infertile.");
@@ -357,10 +363,16 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         [HarmonyPatch(typeof(Tameable), nameof(Tameable.GetHoverText))]
         public static class ProcreationPreventionDisplay {
+            // Resolved once: this postfix runs every frame while hovering a tame, and the suffix
+            // is a constant. (A language switch mid-session picks it up on next game start.)
+            private static string infertileHoverSuffix;
+
             public static void Postfix(Tameable __instance, ref string __result) {
-                if (__instance.m_character != null && __instance.m_character.m_nview != null && __instance.m_character.m_nview.GetZDO() != null) {
+                // Guard the SAME nview that is dereferenced below (see ProcreationPrevention).
+                if (__instance.m_nview != null && __instance.m_nview.GetZDO() != null) {
                     if (__instance.m_nview.GetZDO().GetBool(SLS_INFERTILE, false)) {
-                        __result += Localization.instance.Localize("\n<color=red>$SLS_infertile</color>");
+                        if (infertileHoverSuffix == null) { infertileHoverSuffix = Localization.instance.Localize("\n<color=red>$SLS_infertile</color>"); }
+                        __result += infertileHoverSuffix;
                     }
                 }
             }

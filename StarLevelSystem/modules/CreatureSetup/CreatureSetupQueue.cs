@@ -38,6 +38,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
         // prepares the cache, and runs CharacterSetup. Retries up to FallbackDelayBeforeCreatureSetup
         // attempts before giving up.
         private static IEnumerator ProcessEntry(Character chara, ZDOID id, int levelOverride, bool spawnMultiply, float delay, Dictionary<string, ModifierType> requiredModifiers, List<string> notAllowedModifiers) {
+            try {
             if (delay > 0f) {
                 yield return new WaitForSeconds(delay);
             }
@@ -90,11 +91,13 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     if (attempts == maxAttempts - 1) {
                         // Fallback - force a fresh cache, and (only as the roller) the ZOwner routine, then setup.
                         CharacterCacheEntry fallback = CompositeLazyCache.GetAndSetLocalCache(chara, levelOverride, requiredModifiers, notAllowedModifiers, updateCache: true);
-                        if (isRoller) {
-                            CompositeLazyCache.StartZOwnerCreatureRoutines(chara, fallback, spawnMultiply);
+                        if (fallback != null) {
+                            if (isRoller) {
+                                CompositeLazyCache.StartZOwnerCreatureRoutines(chara, fallback, spawnMultiply);
+                            }
+                            success = CreatureSetupControl.RunCharacterSetup(chara, fallback);
+                            if (success) { Logger.LogDebug($"{fallback.RefCreatureName} running delayed setup."); }
                         }
-                        success = CreatureSetupControl.RunCharacterSetup(chara, fallback);
-                        if (success) { Logger.LogDebug($"{fallback.RefCreatureName} running delayed setup."); }
                     }
                     if (attempts >= maxAttempts) { break; }
                     if (success == false) {
@@ -102,8 +105,12 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     }
                 }
             }
-
-            if (id != ZDOID.None) { InProgress.Remove(id); }
+            } finally {
+                // Always release tracking: a throw anywhere in the setup above (or this coroutine
+                // being stopped) would otherwise leave the ZDOID in InProgress forever, and the
+                // creature could never be enqueued for setup again this session.
+                if (id != ZDOID.None) { InProgress.Remove(id); }
+            }
         }
     }
 }

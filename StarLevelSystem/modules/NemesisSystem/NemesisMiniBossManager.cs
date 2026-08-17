@@ -22,16 +22,17 @@ namespace StarLevelSystem.modules.NemesisSystem {
             StringBuilder sb = new StringBuilder();
             // Small chance to add a prefix to the creatures name
             if (include_prefix && UnityEngine.Random.Range(0, 1f) < 0.10f) {
-                int prefix_idx = UnityEngine.Random.Range(1, NumNemesisPrefixes);
+                // int Range is max-exclusive; +1 keeps the highest-numbered localization key reachable
+                int prefix_idx = UnityEngine.Random.Range(1, NumNemesisPrefixes + 1);
                 sb.Append("$SLS_Miniboss_Prefix" + prefix_idx + " ");
             }
-            
-            int name_idx = UnityEngine.Random.Range(1, NumNemesisNames);
+
+            int name_idx = UnityEngine.Random.Range(1, NumNemesisNames + 1);
             sb.Append("$SLS_Miniboss_Name" + name_idx);
 
             // Chance to include the player name reference
             if (include_postfix && UnityEngine.Random.Range(0,1f) < 0.25f) {
-                int postfix_idx = UnityEngine.Random.Range(1, NumNemesisPostfixes);
+                int postfix_idx = UnityEngine.Random.Range(1, NumNemesisPostfixes + 1);
                 sb.Append(" $SLS_Miniboss_postfix" + postfix_idx + " " + playername);
             }
             return sb.ToString();
@@ -58,7 +59,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             if (NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome != null
                 && NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome.TryGetValue(biome, out List<NemesisMinion> biomeMinions)
                 && biomeMinions.Count > 0) {
-                int numMinions = UnityEngine.Random.Range(minGroups, maxGroups);
+                int numMinions = UnityEngine.Random.Range(minGroups, maxGroups + 1);
                 while (numMinions > 0) {
                     numMinions--;
                     NemesisMinion nm = biomeMinions[UnityEngine.Random.Range(0, biomeMinions.Count)];
@@ -70,7 +71,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                             Faction = Character.Faction.Boss,
                             CustomName = $"$SLS_minion {mchara.m_name}",
                             Prefab = nm.PrefabName,
-                            SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount),
+                            SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount + 1),
                             CreatureBaseValueModifiers = nm.CreatureBaseValueModifiers,
                             CreaturePerLevelValueModifiers = nm.CreaturePerLevelValueModifiers
                         });

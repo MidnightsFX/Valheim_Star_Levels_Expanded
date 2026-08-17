@@ -1,3 +1,4 @@
+using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
@@ -6,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
@@ -82,67 +84,73 @@ namespace StarLevelSystem.modules.UI {
         private static Text bossExampleText;
         private static StagedConfig staged;
 
-        private static GameObject mainMenuButton;
-        private static GameObject pauseMenuButton;
+        private const string LauncherEntry = "Star Level System";
 
         internal static void Init() {
-            GUIManager.OnCustomGUIAvailable += OnCustomGUIAvailable;
             DistanceExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("distance_rings");
             ZoneExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("region_zones");
+
+            // The corner button, the main-menu hook and the pause-menu patch all used to live here. They
+            // now belong to the shared launcher in common/ConfigUI, so several mods share one button
+            // instead of stacking one each in the same corner. See its README for the cross-assembly
+            // contract.
+            ConfigUILauncher.Init();
+            ApplyRegistration();
         }
 
-        // Create the custom GUI for the start menu
-        private static void OnCustomGUIAvailable() {
-            try {
-                if (GUIManager.IsHeadless() || GUIManager.Instance == null) { return; }
-                if (FejdStartup.instance != null) { CreateMainMenuButton(); }
-            } catch (Exception e) {
-                Logger.LogWarning($"QuickConfigureTool failed to set up main menu button: {e.Message}");
-            }
-        }
-
-        // Create custom GUI for game pause
-        internal static void CreatePauseMenuButton(Menu menu) {
-            try {
-                if (GUIManager.IsHeadless() || GUIManager.Instance == null) { return; }
-                if (menu == null || menu.m_root == null) { return; }
-                if (pauseMenuButton != null) { return; }
-                pauseMenuButton = CreateCornerButton(menu.m_root);
-                pauseMenuButton.SetActive(ValConfig.ShowQuickConfigureButton.Value && SynchronizationManager.Instance.PlayerIsAdmin);
-            } catch (Exception e) {
-                Logger.LogWarning($"QuickConfigureTool failed to set up pause menu button: {e.Message}");
-            }
-        }
-
-        // SettingChanged handler for the client toggle - shows/hides any already-created buttons live.
+        // SettingChanged handler for the client toggle.
         public static void OnShowButtonChanged(object s, EventArgs e) {
-            bool show = ValConfig.ShowQuickConfigureButton.Value;
-            if (mainMenuButton != null) { mainMenuButton.SetActive(show); }
-            if (pauseMenuButton != null) { pauseMenuButton.SetActive(show && SynchronizationManager.Instance.PlayerIsAdmin); }
+            ApplyRegistration();
         }
 
-        private static void CreateMainMenuButton() {
-            if (mainMenuButton != null) { return; }
-            if (GUIManager.CustomGUIFront == null) { return; }
-            mainMenuButton = CreateCornerButton(GUIManager.CustomGUIFront.transform);
-            mainMenuButton.SetActive(ValConfig.ShowQuickConfigureButton.Value);
+        private static void ApplyRegistration() {
+            if (ValConfig.ShowQuickConfigureButton.Value == false) {
+                ConfigUILauncher.Unregister(LauncherEntry);
+                return;
+            }
+
+            // Off-host, this tool can only half work: ApplyAndSave writes ~25 BepInEx ConfigEntry values,
+            // and Jotunn only pushes a remote admin's changed entries from SynchronizeChangedConfig, which
+            // is internal and fires when the ConfigurationManager window closes -- not from here. If that
+            // method cannot be reached, do not offer the button off-host at all. Better to be missing than
+            // to look like it worked.
+            if (IsOwner() == false && CanPushRemoteConfig() == false) {
+                ConfigUILauncher.Unregister(LauncherEntry);
+                return;
+            }
+
+            ConfigUILauncher.Register(LauncherEntry, OpenPanel);
         }
 
-        // A small button anchored to the bottom-right corner of the screen
-        private static GameObject CreateCornerButton(Transform parent) {
-            GameObject go = GUIManager.Instance.CreateButton(
-                text: "SLS Config",
-                parent: parent,
-                anchorMin: new Vector2(1f, 0f),
-                anchorMax: new Vector2(1f, 0f),
-                position: new Vector2(-20f, 20f),
-                width: 150f,
-                height: 38f);
-            RectTransform rt = (RectTransform)go.transform;
-            rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-20f, 20f);
-            go.GetComponent<Button>().onClick.AddListener(OpenPanel);
-            return go;
+        private static bool IsOwner() {
+            return ZNet.instance == null || ZNet.instance.IsServer();
+        }
+
+        private static MethodInfo syncChangedConfig;
+        private static bool syncChangedConfigResolved;
+
+        private static bool CanPushRemoteConfig() {
+            if (syncChangedConfigResolved == false) {
+                syncChangedConfigResolved = true;
+                syncChangedConfig = AccessTools.Method(typeof(SynchronizationManager), "SynchronizeChangedConfig");
+                if (syncChangedConfig == null) {
+                    Logger.LogWarning("Jotunn's SynchronizeChangedConfig could not be found, so a remote admin " +
+                        "cannot push config changes. The quick configure button will not be offered off-host.");
+                }
+            }
+            return syncChangedConfig != null;
+        }
+
+        // Reflection into a private Jotunn method, knowingly: it is the only way a remote admin's
+        // ConfigEntry edits reach the server without opening the ConfigurationManager window. Guarded, and
+        // the registration above declines to offer the button at all when it is missing.
+        private static void PushRemoteConfigChanges() {
+            if (IsOwner() || CanPushRemoteConfig() == false) { return; }
+            try {
+                syncChangedConfig.Invoke(SynchronizationManager.Instance, null);
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not push config changes to the server: {e.Message}");
+            }
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -184,7 +192,7 @@ namespace StarLevelSystem.modules.UI {
                 height: PanelH, 
                 draggable: true);
 
-            titleText = AddText(
+            titleText = ConfigUI.AddText(
                 parent: panel.transform,
                 x: Margin,
                 y: 18f,
@@ -198,7 +206,7 @@ namespace StarLevelSystem.modules.UI {
             // Build out the page skeletons
             pageRoots = new GameObject[PageCount];
             for (int i = 0; i < PageCount; i++) {
-                pageRoots[i] = NewRect(
+                pageRoots[i] = ConfigUI.NewRect(
                     name: "Page" + i, 
                     parent: panel.transform,
                     x: Margin,
@@ -214,10 +222,10 @@ namespace StarLevelSystem.modules.UI {
             BuildNemesisPage(pageRoots[4].transform);
 
             float navY = PanelH - 56f;
-            backBtn = AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1));
-            cancelBtn = AddButton(panel.transform, Margin + 150f, navY, 130f, "Cancel", ClosePanel);
-            nextBtn = AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Next >", () => ShowPage(currentPage + 1));
-            applyBtn = AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Apply & Save", ApplyAndSave);
+            backBtn = ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1));
+            cancelBtn = ConfigUI.AddButton(panel.transform, Margin + 150f, navY, 130f, "Cancel", ClosePanel);
+            nextBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Next >", () => ShowPage(currentPage + 1));
+            applyBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Apply & Save", ApplyAndSave);
         }
 
         // Moves to the current page
@@ -249,8 +257,8 @@ namespace StarLevelSystem.modules.UI {
 
             // Build each row as its own container, collect them in order, then space the column out in one pass.
             List<GameObject> column = new List<GameObject> {
-                AddHeaderRow(parent, LeftColW, "$sls_cfg_scaling_selection_header", TextAnchor.MiddleCenter),
-                AddTextRow(parent, ColWidth, 34f, "Here are some high level configurations from the mod, many more things can be customized within the yaml configuration.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter),
+                ConfigUI.AddHeaderRow(parent, LeftColW, "$sls_cfg_scaling_selection_header", TextAnchor.MiddleCenter),
+                ConfigUI.AddTextRow(parent, ColWidth, 34f, "Here are some high level configurations from the mod, many more things can be customized within the yaml configuration.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter),
                 AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
                     DistanceExample,
                     "$sls_cfg_distance_scale_header",
@@ -260,7 +268,7 @@ namespace StarLevelSystem.modules.UI {
                     "$sls_cfg_distance_overlay_toggle",
                     staged.enableDistanceOverlay,
                     v => staged.enableDistanceOverlay = v),
-                AddDividerRow(parent, ColWidth),
+                ConfigUI.AddDividerRow(parent, ColWidth),
                 AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
                     ZoneExample,
                     "$sls_cfg_zone_scale_header",
@@ -270,13 +278,13 @@ namespace StarLevelSystem.modules.UI {
                     "$sls_cfg_zone_overlay_toggle",
                     staged.enableZoneOverlay,
                     v => staged.enableZoneOverlay = v),
-                AddDividerRow(parent, ColWidth),
-                AddToggleRow(parent, ColWidth, 360f, "$sls_cfg_conditional_scale_header", staged.enableConditional, v => staged.enableConditional = v, true),
-                AddTextRow(parent, ColWidth, 24f, "$sls_cfg_conditional_scale_desc", 13, GUIManager.Instance.ValheimBeige),
+                ConfigUI.AddDividerRow(parent, ColWidth),
+                ConfigUI.AddToggleRow(parent, ColWidth, 360f, "$sls_cfg_conditional_scale_header", staged.enableConditional, v => staged.enableConditional = v, true),
+                ConfigUI.AddTextRow(parent, ColWidth, 24f, "$sls_cfg_conditional_scale_desc", 13, GUIManager.Instance.ValheimBeige),
             };
             // Center the column within the page root so it isn't left-biased (page root is PanelW - 2*Margin wide).
             float colOffsetX = Mathf.Max(0f, (PanelW - 2 * Margin - ColWidth) * 0.5f);
-            LayoutColumn(column, colOffsetX, 4f);
+            ConfigUI.LayoutColumn(column, colOffsetX, 4f);
         }
 
         private static void BuildStatsPage(Transform parent) {
@@ -292,65 +300,65 @@ namespace StarLevelSystem.modules.UI {
             // Left column - stat multipliers and multiplayer scaling. A full-width divider separates the
             // creature stats (above) from the boss stats (below).
             List<GameObject> left = new List<GameObject> {
-                AddHeaderRow(parent, LeftColWidth, "Per-level stats"),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature HP / level", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature dmg / level", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level (stars)", 1f, 200f, staged.maxLevel, true, v => { staged.maxLevel = (int)v; UpdateExampleMath(); }),
-                AddDividerRow(parent, PanelW - 2 * Margin, DividerH),   // spans both columns, between creature and boss sections
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss HP / level", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss dmg / level", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max boss level", 1f, 200f, staged.maxBossLevel, true, v => { staged.maxBossLevel = (int)v; UpdateExampleMath(); }),
-                AddSpacerRow(parent, LeftColWidth, 4f),
-                AddHeaderRow(parent, LeftColWidth, "Multiplayer scaling"),
-                AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain HP with more players", staged.mpHealth, v => staged.mpHealth = v),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "HP per extra player", 0f, 0.99f, staged.mpHealthMod, false, v => staged.mpHealthMod = v),
-                AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain dmg with more players", staged.mpDamage, v => staged.mpDamage = v),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Dmg per extra player", 0f, 2f, staged.mpDamageMod, false, v => staged.mpDamageMod = v),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Players needed nearby", 1f, 20f, staged.mpRequiredPlayers, true, v => staged.mpRequiredPlayers = (int)v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Per-level stats"),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature HP / level", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature dmg / level", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level (stars)", 1f, 200f, staged.maxLevel, true, v => { staged.maxLevel = (int)v; UpdateExampleMath(); }),
+                ConfigUI.AddDividerRow(parent, PanelW - 2 * Margin, DividerH),   // spans both columns, between creature and boss sections
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss HP / level", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss dmg / level", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max boss level", 1f, 200f, staged.maxBossLevel, true, v => { staged.maxBossLevel = (int)v; UpdateExampleMath(); }),
+                ConfigUI.AddSpacerRow(parent, LeftColWidth, 4f),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Multiplayer scaling"),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain HP with more players", staged.mpHealth, v => staged.mpHealth = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "HP per extra player", 0f, 0.99f, staged.mpHealthMod, false, v => staged.mpHealthMod = v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain dmg with more players", staged.mpDamage, v => staged.mpDamage = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Dmg per extra player", 0f, 2f, staged.mpDamageMod, false, v => staged.mpDamageMod = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Players needed nearby", 1f, 20f, staged.mpRequiredPlayers, true, v => staged.mpRequiredPlayers = (int)v),
             };
-            LayoutColumn(left, 0f, StartY);
+            ConfigUI.LayoutColumn(left, 0f, StartY);
 
             // Right column - example previews aligned to the matching left-column stat rows: the creature (Troll)
             // example sits beside the Creature HP/dmg sliders, the boss (The Elder) example beside the Boss HP/dmg
             // sliders. The default level generator is laid out below them.
             const float RowPitch = RowHeight + RowGap;
-            GameObject exHeader = AddHeaderRow(parent, RightColWidth, "Example scaling preview");
-            PositionRow(exHeader, RightColumnX, StartY);
+            GameObject exHeader = ConfigUI.AddHeaderRow(parent, RightColWidth, "Example scaling preview");
+            ConfigUI.PositionRow(exHeader, RightColumnX, StartY);
 
-            GameObject creatureEx = AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
+            GameObject creatureEx = ConfigUI.AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
             creatureExampleText = creatureEx.GetComponentInChildren<Text>();
-            PositionRow(creatureEx, RightColumnX, StartY + RowPitch);          // aligns with "Creature HP / level"
+            ConfigUI.PositionRow(creatureEx, RightColumnX, StartY + RowPitch);          // aligns with "Creature HP / level"
 
             // The divider between the creature and boss sections pushes the boss rows down by its height + gap;
             // keep the boss example (and the generator below it) aligned to that shift.
             float bossShift = DividerH + RowGap;
-            GameObject bossEx = AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
+            GameObject bossEx = ConfigUI.AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
             bossExampleText = bossEx.GetComponentInChildren<Text>();
-            PositionRow(bossEx, RightColumnX, StartY + 4 * RowPitch + bossShift);   // aligns with "Boss HP / level"
+            ConfigUI.PositionRow(bossEx, RightColumnX, StartY + 4 * RowPitch + bossShift);   // aligns with "Boss HP / level"
 
             // Default level generator below the previews. The Gaussian offset row is tracked so it can be shown
             // only when the Gaussian curve style is selected.
             float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
             GameObject gaussianRow = null;
             List<GameObject> gen = new List<GameObject> {
-                AddHeaderRow(parent, RightColWidth, "Default level generator"),
-                AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => staged.generator.MinLevel = (int)v),
-                AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => staged.generator.MaxLevel = (int)v),
-                AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v)
+                ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator"),
+                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => staged.generator.MinLevel = (int)v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => staged.generator.MaxLevel = (int)v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v)
             };
-            gen.Add(AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
+            gen.Add(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
                 if (gaussianRow != null) {
                     gaussianRow.SetActive((LevelupCalculationStyle)i == LevelupCalculationStyle.Gaussian);
-                    LayoutColumn(gen, RightColumnX, genStartY);
+                    ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
                 }
             }));
-            gaussianRow = AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => staged.generator.GaussianOffset = v);
+            gaussianRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => staged.generator.GaussianOffset = v);
             gen.Add(gaussianRow);
-            gen.Add(AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
+            gen.Add(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
 
             gaussianRow.SetActive(staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Gaussian);
-            LayoutColumn(gen, RightColumnX, genStartY);
+            ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
 
             UpdateExampleMath();
         }
@@ -363,29 +371,29 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             // Full-width header + intro across the top.
-            GameObject header = AddHeaderRow(parent, FullWidth, "Raids", TextAnchor.MiddleCenter);
-            PositionRow(header, 0f, StartY);
-            GameObject intro = AddTextRow(parent, FullWidth, 40f, "StarLevelSystem replaces vanilla raids with its own configurable raids. Detailed per-raid settings live in RaidSettings.yaml.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
-            PositionRow(intro, 0f, StartY + RowHeight + RowGap);
+            GameObject header = ConfigUI.AddHeaderRow(parent, FullWidth, "Raids", TextAnchor.MiddleCenter);
+            ConfigUI.PositionRow(header, 0f, StartY);
+            GameObject intro = ConfigUI.AddTextRow(parent, FullWidth, 40f, "StarLevelSystem replaces vanilla raids with its own configurable raids. Detailed per-raid settings live in RaidSettings.yaml.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
+            ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
             float colStartY = StartY + RowHeight + RowGap + 40f + 8f;
 
             // Left column - global raid settings.
             List<GameObject> left = new List<GameObject> {
-                AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", 0.1f, 10f, staged.raidEventRate, false, v => staged.raidEventRate = v),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v),
-                AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", 1f, 20f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", 0.1f, 10f, staged.raidEventRate, false, v => staged.raidEventRate = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", 1f, 20f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v),
             };
-            LayoutColumn(left, 0f, colStartY);
+            ConfigUI.LayoutColumn(left, 0f, colStartY);
 
             // Right side - scrollable list of every configured raid, each with an enable/disable toggle.
             // Disabled raids keep their config in RaidSettings.yaml and are simply marked Enabled = false.
             const float ScrollX = 446f;
             const float ScrollW = 402f;
             const float ScrollH = 398f;
-            AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "Enable / disable raids", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            GameObject scrollHolder = NewRect("RaidScrollHolder", parent, ScrollX, colStartY + RowHeight, ScrollW, ScrollH);
+            ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "Enable / disable raids", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            GameObject scrollHolder = ConfigUI.NewRect("RaidScrollHolder", parent, ScrollX, colStartY + RowHeight, ScrollW, ScrollH);
             GameObject scrollCanvas = GUIManager.Instance.CreateScrollView(
                 scrollHolder.transform, false, true, 8f, 4f,
                 GUIManager.Instance.ValheimScrollbarHandleColorBlock, new Color(0f, 0f, 0f, 0.5f),
@@ -408,7 +416,7 @@ namespace StarLevelSystem.modules.UI {
 
         // A single raid line: enable toggle on the left, prettified name + a brief spawn summary to its right.
         private static void AddRaidEntry(Transform content, float width, RaidDefinition raid, bool enabled, Action<bool> onChange) {
-            GameObject row = NewLayoutRow(content, width, 44f);
+            GameObject row = ConfigUI.NewLayoutRow(content, width, 44f);
             GameObject tgo = GUIManager.Instance.CreateToggle(row.transform, 22f, 22f);
             tgo.transform.SetParent(row.transform, false);
             RectTransform trt = (RectTransform)tgo.transform;
@@ -420,10 +428,10 @@ namespace StarLevelSystem.modules.UI {
             tg.onValueChanged.AddListener(b => onChange(b));
 
             const float TextX = 32f;
-            AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, PrettifyRaidName(raid.Name), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
+            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, PrettifyRaidName(raid.Name), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
             int types = raid.Spawns != null ? raid.Spawns.Select(sp => sp.PrefabName).Distinct().Count() : 0;
             string sub = $"{types} creature type{(types == 1 ? "" : "s")}  ·  {raid.Duration:0}s";
-            AddText(row.transform, TextX, 20f, width - TextX - 4f, 24f, sub, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            ConfigUI.AddText(row.transform, TextX, 20f, width - TextX - 4f, 24f, sub, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
         }
 
         // "army_eikthyr" -> "Army Eikthyr", "gjall_ambush" -> "Gjall Ambush".
@@ -441,32 +449,32 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             // Full-width intro describing the system.
-            GameObject intro = AddTextRow(parent, PanelW - 2 * Margin, 40f, "The Nemesis system is a personal game manager that can tune up or down the world around you or your group.", 14, GUIManager.Instance.ValheimBeige);
-            PositionRow(intro, 0f, StartY);
+            GameObject intro = ConfigUI.AddTextRow(parent, PanelW - 2 * Margin, 40f, "The Nemesis system is a personal game manager that can tune up or down the world around you or your group.", 14, GUIManager.Instance.ValheimBeige);
+            ConfigUI.PositionRow(intro, 0f, StartY);
             float colStartY = StartY + 44f;
 
             // Left column - core nemesis settings.
             List<GameObject> left = new List<GameObject> {
-                AddHeaderRow(parent, LeftColWidth, "Nemesis settings"),
-                AddToggleRow(parent, LeftColWidth, LeftLabelWidth + 60f, "Enable Nemesis system", staged.enableNemesis, v => staged.enableNemesis = v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Action cooldown (sec)", 0f, 120f, staged.nemCooldown, false, v => staged.nemCooldown = v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Influence radius (m)", 0f, 1000f, staged.nemInfluence, false, v => staged.nemInfluence = v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Min spawn distance (m)", 0f, 500f, staged.nemMinSpawn, false, v => staged.nemMinSpawn = v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Nemesis settings"),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, LeftLabelWidth + 60f, "Enable Nemesis system", staged.enableNemesis, v => staged.enableNemesis = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Action cooldown (sec)", 0f, 120f, staged.nemCooldown, false, v => staged.nemCooldown = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Influence radius (m)", 0f, 1000f, staged.nemInfluence, false, v => staged.nemInfluence = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Min spawn distance (m)", 0f, 500f, staged.nemMinSpawn, false, v => staged.nemMinSpawn = v),
             };
-            LayoutColumn(left, 0f, colStartY);
+            ConfigUI.LayoutColumn(left, 0f, colStartY);
 
             // Right column - core subset of the score system.
             List<GameObject> right = new List<GameObject> {
-                AddHeaderRow(parent, RightColWidth, "Score system"),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Neutral score", 0f, 20000f, staged.neutralScore, true, v => staged.neutralScore = v),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Min score", 0f, 20000f, staged.minScore, true, v => staged.minScore = v),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Max score", 0f, 20000f, staged.maxScore, true, v => staged.maxScore = v),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Decay per update", 0f, 2000f, staged.decayPerUpdate, true, v => staged.decayPerUpdate = v),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Score interval (sec)", 1f, 120f, staged.scoreInterval, true, v => staged.scoreInterval = v),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Boss-kill bonus", 0f, 5000f, staged.bossKillBonus, true, v => staged.bossKillBonus = v),
-                AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Death score reduction", 0f, 5000f, staged.deathReduction, true, v => staged.deathReduction = v),
+                ConfigUI.AddHeaderRow(parent, RightColWidth, "Score system"),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Neutral score", 0f, 20000f, staged.neutralScore, true, v => staged.neutralScore = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Min score", 0f, 20000f, staged.minScore, true, v => staged.minScore = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Max score", 0f, 20000f, staged.maxScore, true, v => staged.maxScore = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Decay per update", 0f, 2000f, staged.decayPerUpdate, true, v => staged.decayPerUpdate = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Score interval (sec)", 1f, 120f, staged.scoreInterval, true, v => staged.scoreInterval = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Boss-kill bonus", 0f, 5000f, staged.bossKillBonus, true, v => staged.bossKillBonus = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Death score reduction", 0f, 5000f, staged.deathReduction, true, v => staged.deathReduction = v),
             };
-            LayoutColumn(right, RightColumnX, colStartY);
+            ConfigUI.LayoutColumn(right, RightColumnX, colStartY);
         }
 
         private static void BuildModifiersPage(Transform parent) {
@@ -478,30 +486,30 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             List<GameObject> left = new List<GameObject> {
-                AddHeaderRow(parent, LeftColWidth, "Creature modifiers"),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, 6f, staged.maxMajor, true, v => staged.maxMajor = (int)v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, 6f, staged.maxMinor, true, v => staged.maxMinor = (int)v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v),
-                AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Limit modifier count to star level", staged.limitToStarLevel, v => staged.limitToStarLevel = v),
-                AddHeaderRow(parent, LeftColWidth, "Boss modifiers"),
-                AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Bosses can have modifiers", staged.enableBossMods, v => staged.enableBossMods = v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, 6f, staged.maxBossMods, true, v => staged.maxBossMods = (int)v),
-                AddHeaderRow(parent, LeftColWidth, "Modifier display"),
-                AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max name prefixes", 0f, 6f, staged.prefixLimit, true, v => staged.prefixLimit = (int)v),
-                AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Minor modifiers first in name", staged.minorFirst, v => staged.minorFirst = v),
-                AddEnumCycleRow(parent, LeftColWidth, LeftLabelWidth, 150f, "Icon display style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Creature modifiers"),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, 6f, staged.maxMajor, true, v => staged.maxMajor = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, 6f, staged.maxMinor, true, v => staged.maxMinor = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Limit modifier count to star level", staged.limitToStarLevel, v => staged.limitToStarLevel = v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Boss modifiers"),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Bosses can have modifiers", staged.enableBossMods, v => staged.enableBossMods = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, 6f, staged.maxBossMods, true, v => staged.maxBossMods = (int)v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Modifier display"),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max name prefixes", 0f, 6f, staged.prefixLimit, true, v => staged.prefixLimit = (int)v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Minor modifiers first in name", staged.minorFirst, v => staged.minorFirst = v),
+                ConfigUI.AddEnumCycleRow(parent, LeftColWidth, LeftLabelWidth, 150f, "Icon display style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i),
             };
-            LayoutColumn(left, 0f, StartY);
+            ConfigUI.LayoutColumn(left, 0f, StartY);
 
             // Right side - scrollable list of every modifier defined in Modifiers.yaml, grouped by category,
             // each with an enable/disable toggle and a brief description.
             const float ScrollX = 446f;
             const float ScrollW = 400f;
             const float ScrollH = 478f;
-            AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "Enable / disable modifiers", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            GameObject scrollHolder = NewRect("ModScrollHolder", parent, ScrollX, StartY + RowHeight, ScrollW, ScrollH);
+            ConfigUI.AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "Enable / disable modifiers", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            GameObject scrollHolder = ConfigUI.NewRect("ModScrollHolder", parent, ScrollX, StartY + RowHeight, ScrollW, ScrollH);
             GameObject scrollCanvas = GUIManager.Instance.CreateScrollView(
                 scrollHolder.transform, false, true, 8f, 4f,
                 GUIManager.Instance.ValheimScrollbarHandleColorBlock, new Color(0f, 0f, 0f, 0.5f),
@@ -530,13 +538,13 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private static void AddModifierCategoryHeader(Transform content, float width, string label) {
-            GameObject row = NewLayoutRow(content, width, 30f);
-            AddText(row.transform, 2f, 4f, width - 4f, 24f, label, 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            GameObject row = ConfigUI.NewLayoutRow(content, width, 30f);
+            ConfigUI.AddText(row.transform, 2f, 4f, width - 4f, 24f, label, 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
         }
 
         // A single modifier line: enable toggle on the left, prettified name + brief description to its right.
         private static void AddModifierEntry(Transform content, float width, string name, bool enabled, Action<bool> onChange) {
-            GameObject row = NewLayoutRow(content, width, 48f);
+            GameObject row = ConfigUI.NewLayoutRow(content, width, 48f);
             GameObject tgo = GUIManager.Instance.CreateToggle(row.transform, 22f, 22f);
             tgo.transform.SetParent(row.transform, false);
             RectTransform trt = (RectTransform)tgo.transform;
@@ -548,28 +556,9 @@ namespace StarLevelSystem.modules.UI {
             tg.onValueChanged.AddListener(b => onChange(b));
 
             const float TextX = 32f;
-            AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, Prettify(name), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
+            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, Prettify(name), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
             string desc = ModifierDescriptions.TryGetValue(name, out string d) ? d : "";
-            AddText(row.transform, TextX, 20f, width - TextX - 4f, 26f, desc, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-        }
-
-        // A row sized by a LayoutElement so the scroll view's VerticalLayoutGroup stacks it correctly.
-        private static GameObject NewLayoutRow(Transform content, float width, float height) {
-            GameObject row = new GameObject("ModRow", typeof(RectTransform), typeof(LayoutElement)) {
-                layer = GUIManager.UILayer
-            };
-            RectTransform rt = row.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.SetParent(content, false);
-            rt.sizeDelta = new Vector2(width, height);
-            LayoutElement le = row.GetComponent<LayoutElement>();
-            le.minHeight = height;
-            le.preferredHeight = height;
-            le.minWidth = width;
-            le.preferredWidth = width;
-            return row;
+            ConfigUI.AddText(row.transform, TextX, 20f, width - TextX - 4f, 26f, desc, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
         }
 
         // "ResistPierce" -> "Resist Pierce", "BossSummoner" -> "Boss Summoner".
@@ -634,28 +623,43 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.MinorModifiersFirstInName.Value = staged.minorFirst;
                 ValConfig.ModifierIconDisplayStyle.Value = staged.displayStyle.ToString();
 
-                // Write out the level settings
-                CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
-                if (settings != null) {
+                // Write out the level settings.
+                //
+                // Through a deserialized copy, not the live object: SLE_Level_Settings can BE the shared
+                // static default (LevelSystemData re-points it there whenever a parse fails), so mutating
+                // it in place would corrupt the defaults for the rest of the session. Raids and nemesis
+                // below already did this; levels and modifiers did not.
+                if (LevelSystemData.SLE_Level_Settings != null) {
+                    CreatureLevelSettings settings = DataObjects.yamlDeserializer.Deserialize<CreatureLevelSettings>(
+                        DataObjects.yamlSerializer.Serialize(LevelSystemData.SLE_Level_Settings));
                     settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
                     settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
                     string yaml = DataObjects.yamlSerializer.Serialize(settings);
-                    File.WriteAllText(ValConfig.levelsFilePath, yaml);
-                    LevelSystemData.UpdateYamlConfig(yaml);
+                    // Through ValConfig rather than File.WriteAllText: a bare write drops the documented
+                    // header block, which is the only in-file explanation these settings have.
+                    // One call: validate, apply, write with the header intact, broadcast. It refuses and
+                    // reports rather than half-writing, which the old three-step sequence could not do.
+                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.LevelSettings, yaml, out string levelMessage) == false) {
+                        Logger.LogWarning($"Level settings were not saved: {levelMessage}");
+                    }
                 }
 
                 // Persist modifier enable/disable changes (only if a toggle actually changed, so we don't
                 // rewrite the modifier YAML when the user only touched the sliders). Disabled modifiers keep
                 // their config in the file and are simply marked Enabled = false.
                 if (ModifiersChanged()) {
-                    CreatureModifierCollection src = staged.modifierSource;
+                    // Deserialized copy, same reason as the level settings above.
+                    CreatureModifierCollection src = DataObjects.yamlDeserializer.Deserialize<CreatureModifierCollection>(
+                        DataObjects.yamlSerializer.Serialize(staged.modifierSource));
                     ApplyEnabledFlags(src.BossModifiers, staged.modifierOn[ModifierType.Boss]);
                     ApplyEnabledFlags(src.MajorModifiers, staged.modifierOn[ModifierType.Major]);
                     ApplyEnabledFlags(src.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
                     string modifiersYaml = DataObjects.yamlSerializer.Serialize(src);
-                    File.WriteAllText(ValConfig.creatureModifierFilePath, modifiersYaml);
-                    CreatureModifiersData.UpdateModifierConfig(modifiersYaml);
-                    CreatureModifiersData.ClearProbabilityCaches();
+                    // ClearProbabilityCaches is part of the Apply hook now, so it happens on every route
+                    // rather than only when saving from this panel.
+                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.ModifierSettings, modifiersYaml, out string modifierMessage) == false) {
+                        Logger.LogWarning($"Modifier settings were not saved: {modifierMessage}");
+                    }
                 }
 
                 // Raids - plain BepInEx ConfigEntries; "Enable SLS Raids" is the inverse of vanilla raids.
@@ -675,8 +679,9 @@ namespace StarLevelSystem.modules.UI {
                         raid.Enabled = staged.raidsOn.Contains(raid.Name);
                     }
                     string raidYaml = DataObjects.yamlSerializer.Serialize(raidCFG);
-                    File.WriteAllText(ValConfig.raidsFilePath, raidYaml);
-                    RaidsData.UpdateYamlConfig(raidYaml);
+                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.RaidSettings, raidYaml, out string raidMessage) == false) {
+                        Logger.LogWarning($"Raid settings were not saved: {raidMessage}");
+                    }
                 }
 
                 // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
@@ -698,15 +703,23 @@ namespace StarLevelSystem.modules.UI {
                     nemesisCFG.ScoreSystem.BossKillBonus = staged.bossKillBonus;
                     nemesisCFG.ScoreSystem.DeathScoreReduction = staged.deathReduction;
                     string nemesisYaml = DataObjects.yamlSerializer.Serialize(nemesisCFG);
-                    File.WriteAllText(ValConfig.nemesisFilePath, nemesisYaml);
-                    NemesisSystemData.UpdateYamlConfig(nemesisYaml);
+                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.NemesisSettings, nemesisYaml, out string nemesisMessage) == false) {
+                        Logger.LogWarning($"Nemesis settings were not saved: {nemesisMessage}");
+                    }
                 }
 
+                // A remote admin's ConfigEntry writes above are local-only until Jotunn is told to push
+                // them. On a host this is a no-op.
+                PushRemoteConfigChanges();
+
                 Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
+                ClosePanel();
             } catch (Exception e) {
+                // ClosePanel is deliberately NOT in a finally: a mid-apply failure leaves configuration
+                // half-written, and closing the window over it is how an admin ends up believing the save
+                // landed. Leave the panel up with their edits intact.
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
             }
-            ClosePanel();
         }
 
         // True if any modifier's staged enable state differs from its current Enabled flag.
@@ -759,145 +772,6 @@ namespace StarLevelSystem.modules.UI {
             return false;
         }
 
-        // ------------------------------------------------------------------------------------------------
-        //  UI builder helpers (top-left origin: anchor + pivot (0,1), positions measured down from the top)
-        // ------------------------------------------------------------------------------------------------
-
-        private static GameObject NewRect(string name, Transform parent, float x, float y, float w, float h) {
-            GameObject go = new GameObject(name, typeof(RectTransform)) {
-                layer = GUIManager.UILayer
-            };
-            RectTransform rt = go.GetComponent<RectTransform>();
-            rt.SetParent(parent, false);
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(w, h);
-            rt.anchoredPosition = new Vector2(x, -y);
-            return go;
-        }
-
-        private static Text AddText(Transform parent, float x, float y, float w, float h, string text, int fontSize, TextAnchor anchor, Color? color = null) {
-            GameObject go = GUIManager.Instance.CreateText(
-                text: Localization.instance.Localize(text),
-                parent: parent,
-                anchorMin: new Vector2(0f, 1f),
-                anchorMax: new Vector2(0f, 1f),
-                position: new Vector2(x, -y),
-                font: GUIManager.Instance.AveriaSerifBold,
-                fontSize: fontSize,
-                color: color ?? GUIManager.Instance.ValheimBeige,
-                outline: true,
-                outlineColor: Color.black,
-                width: w,
-                height: h,
-                addContentSizeFitter: false);
-            Text t = go.GetComponent<Text>();
-            RectTransform rt = t.rectTransform;
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(x, -y);
-            t.alignment = anchor;
-            t.horizontalOverflow = HorizontalWrapMode.Wrap;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
-            return t;
-        }
-
-        // Each configuration row lives in its own container GameObject so it can be referenced (e.g. to toggle
-        // visibility) and so a whole column is laid out in one pass instead of tracking a running Y per entry.
-        private static GameObject NewRow(Transform parent, float width, float height) {
-            GameObject go = new GameObject("Row", typeof(RectTransform)) {
-                layer = GUIManager.UILayer
-            };
-            RectTransform rt = go.GetComponent<RectTransform>();
-            rt.SetParent(parent, false);
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(width, height);
-            rt.anchoredPosition = new Vector2(0f, 0f);
-            return go;
-        }
-
-        // Positions each active row of a column top-to-bottom, advancing by the row's own height + gap.
-        // Inactive rows are skipped so a hidden row collapses
-        private static void LayoutColumn(List<GameObject> rows, float x, float startY) {
-            float y = startY;
-            foreach (GameObject row in rows) {
-                if (row == null || !row.activeSelf) { continue; }
-                RectTransform rt = (RectTransform)row.transform;
-                rt.anchoredPosition = new Vector2(x, -y);
-                y += rt.sizeDelta.y + RowGap;
-            }
-        }
-
-        // Positions a single row at an explicit (x, y) within its column, for rows placed outside a LayoutColumn pass.
-        private static void PositionRow(GameObject row, float x, float y) {
-            ((RectTransform)row.transform).anchoredPosition = new Vector2(x, -y);
-        }
-
-        private static GameObject AddHeaderRow(Transform parent, float colWidth, string text, TextAnchor anchor = TextAnchor.MiddleLeft) {
-            GameObject row = NewRow(parent, colWidth, RowHeight);
-            AddText(row.transform, 0f, 0f, colWidth, RowHeight, text, 18, anchor, GUIManager.Instance.ValheimYellow);
-            return row;
-        }
-
-        // Thin horizontal rule used to separate sections within a column.
-        private static GameObject AddDividerRow(Transform parent, float colWidth, float height = 12f) {
-            GameObject row = NewRow(parent, colWidth, height);
-            GameObject line = NewUI("Divider", row.transform, typeof(Image));
-            RectTransform rt = (RectTransform)line.transform;
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(colWidth, 2f);
-            rt.anchoredPosition = new Vector2(0f, -(height * 0.5f - 1f));   // vertically centered in the row
-            Image img = line.GetComponent<Image>();
-            img.color = new Color(0.6f, 0.5f, 0.35f, 0.6f);
-            img.raycastTarget = false;
-            return row;
-        }
-
-        private static GameObject AddTextRow(Transform parent, float colWidth, float height, string text, int fontSize, Color color, TextAnchor anchor = TextAnchor.UpperLeft) {
-            GameObject row = NewRow(parent, colWidth, height);
-            AddText(row.transform, 0f, 0f, colWidth, height, text, fontSize, anchor, color);
-            return row;
-        }
-
-        private static GameObject AddSpacerRow(Transform parent, float colWidth, float height) {
-            return NewRow(parent, colWidth, height);
-        }
-
-        private static GameObject AddButton(Transform parent, float x, float y, float w, string text, UnityEngine.Events.UnityAction onClick) {
-            GameObject go = GUIManager.Instance.CreateButton(text, parent,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, -y), w, 40f);
-            RectTransform rt = (RectTransform)go.transform;
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(x, -y);
-            go.GetComponent<Button>().onClick.AddListener(onClick);
-            return go;
-        }
-
-        private static GameObject AddToggleRow(Transform parent, float colWidth, float labelW, string label, bool value, Action<bool> onChange, bool toggleOnLeft = false) {
-            const float ToggleSize = 26f;
-            const float ToggleGap = 8f;
-            GameObject row = NewRow(parent, colWidth, RowHeight);
-            float toggleX = toggleOnLeft ? 0f : labelW + 6f;
-            float labelX = toggleOnLeft ? ToggleSize + ToggleGap : 0f;
-            AddText(row.transform, labelX, 0f, labelW, RowHeight, label, 15, TextAnchor.MiddleLeft);
-            GameObject tgo = GUIManager.Instance.CreateToggle(row.transform, ToggleSize, ToggleSize);
-            tgo.transform.SetParent(row.transform, false);
-            RectTransform rt = (RectTransform)tgo.transform;
-            rt.localScale = Vector3.one;
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(toggleX, -3f);
-            Toggle t = tgo.GetComponent<Toggle>();
-            t.isOn = value;
-            t.onValueChanged.AddListener(b => onChange(b));
-            return row;
-        }
-
         // Row based dual config, for scalars
         private static GameObject AddScalingFeatureRow(Transform parent, float colWidth, float imgW, float imgH, Sprite sprite, string mainLabel, string description, bool mainValue, Action<bool> onMain, string subLabel, bool subValue, Action<bool> onSub) {
             const float SubIndent = 24f;
@@ -906,10 +780,10 @@ namespace StarLevelSystem.modules.UI {
             const float ToggleGap = 8f;   // gap between a toggle and the title to its right
             const float DescH = 72f;      // up to ~4 wrapped lines; the row is tall so the description has room
             float leftColW = colWidth - imgW;   // configuration area to the left of the example image
-            GameObject row = NewRow(parent, colWidth, imgH);
+            GameObject row = ConfigUI.NewRow(parent, colWidth, imgH);
 
             // Example image on the right
-            GameObject go = NewUI("Image", row.transform, typeof(Image));
+            GameObject go = ConfigUI.NewUI("Image", row.transform, typeof(Image));
             RectTransform rt = (RectTransform)go.transform;
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
@@ -937,11 +811,11 @@ namespace StarLevelSystem.modules.UI {
             mt.onValueChanged.AddListener(b => onMain(b));
 
             float mainLabelX = MainToggleSize + ToggleGap;
-            AddText(row.transform, mainLabelX, topY, leftColW - mainLabelX - 12f, RowHeight, mainLabel, 18, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
+            ConfigUI.AddText(row.transform, mainLabelX, topY, leftColW - mainLabelX - 12f, RowHeight, mainLabel, 18, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
 
             // Description directly under the main label (full left column up to the image)
             float descY = topY + RowHeight + 2f;
-            AddText(row.transform, 0f, descY, leftColW - 12f, DescH, description, 14, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            ConfigUI.AddText(row.transform, 0f, descY, leftColW - 12f, DescH, description, 14, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
 
             // Sub toggle (smaller, indented, below the description), directly to the left of its title
             float subY = descY + DescH + 4f;
@@ -956,134 +830,11 @@ namespace StarLevelSystem.modules.UI {
             st.onValueChanged.AddListener(b => onSub(b));
 
             float subLabelX = SubIndent + SubToggleSize + ToggleGap;
-            AddText(row.transform, subLabelX, subY, leftColW - subLabelX - 12f, SubRowHeight, subLabel, 14, TextAnchor.MiddleLeft);
+            ConfigUI.AddText(row.transform, subLabelX, subY, leftColW - subLabelX - 12f, SubRowHeight, subLabel, 14, TextAnchor.MiddleLeft);
 
             return row;
         }
 
-        private static GameObject AddSliderRow(Transform parent, float colWidth, float labelW, float sliderW, float valueW, string label, float min, float max, float value, bool wholeNumbers, Action<float> onChange) {
-            GameObject row = NewRow(parent, colWidth, RowHeight);
-            AddText(row.transform, 0f, 0f, labelW, RowHeight, label, 15, TextAnchor.MiddleLeft);
-            Slider s = BuildSlider(row.transform, labelW, 7f, sliderW, min, max, value, wholeNumbers);
-
-            // Editable value box, kept in sync with the slider both ways.
-            float boxX = labelW + sliderW + 10f;
-            GameObject inputGO = GUIManager.Instance.CreateInputField(
-                parent: row.transform,
-                anchorMin: new Vector2(0f, 1f),
-                anchorMax: new Vector2(0f, 1f),
-                position: new Vector2(boxX, -3f),
-                contentType: wholeNumbers ? InputField.ContentType.IntegerNumber : InputField.ContentType.DecimalNumber,
-                placeholderText: null,
-                fontSize: 15,
-                width: valueW,
-                height: 28f);
-            RectTransform inputRT = (RectTransform)inputGO.transform;
-            inputRT.pivot = new Vector2(0f, 1f);
-            inputRT.anchoredPosition = new Vector2(boxX, -3f);
-            InputField vt = inputGO.GetComponent<InputField>();
-            vt.SetTextWithoutNotify(Fmt(value, wholeNumbers));
-
-            s.onValueChanged.AddListener(v => {
-                if (wholeNumbers) { v = Mathf.Round(v); }
-                vt.SetTextWithoutNotify(Fmt(v, wholeNumbers));   // reflect the slider without re-triggering edits
-                onChange(v);
-            });
-            // Commit typed values on enter/focus-loss: clamp, normalize the box, then drive the slider.
-            vt.onEndEdit.AddListener(str => {
-                if (!float.TryParse(str, out float v)) { v = s.value; }
-                v = Mathf.Clamp(v, min, max);
-                if (wholeNumbers) { v = Mathf.Round(v); }
-                vt.SetTextWithoutNotify(Fmt(v, wholeNumbers));
-                if (s.value != v) { s.value = v; }   // slider's listener runs onChange; otherwise invoke it directly
-                else { onChange(v); }
-            });
-            return row;
-        }
-
-        private static GameObject AddEnumCycleRow(Transform parent, float colWidth, float labelW, float ctrlW, string label, string[] options, int currentIndex, Action<int> onChange) {
-            GameObject row = NewRow(parent, colWidth, RowHeight);
-            AddText(row.transform, 0f, 0f, labelW, RowHeight, label, 15, TextAnchor.MiddleLeft);
-            int idx = Mathf.Clamp(currentIndex, 0, options.Length - 1);
-            GameObject bgo = GUIManager.Instance.CreateButton(options[idx], row.transform,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(labelW + 6f, -2f), ctrlW, 28f);
-            RectTransform rt = (RectTransform)bgo.transform;
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(labelW + 6f, -2f);
-            Text bt = bgo.GetComponentInChildren<Text>();
-            bgo.GetComponent<Button>().onClick.AddListener(() => {
-                idx = (idx + 1) % options.Length;
-                bt.text = options[idx];
-                onChange(idx);
-            });
-            return row;
-        }
-
-        private static string Fmt(float v, bool whole) => whole ? ((int)Mathf.Round(v)).ToString() : v.ToString("0.00");
-
-        private static Slider BuildSlider(Transform parent, float x, float y, float width, float min, float max, float value, bool wholeNumbers) {
-            GameObject go = new GameObject("Slider", typeof(RectTransform), typeof(Slider)) {
-                layer = GUIManager.UILayer
-            };
-            RectTransform rt = go.GetComponent<RectTransform>();
-            rt.SetParent(parent, false);
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(x, -y);
-            rt.sizeDelta = new Vector2(width, 20f);
-
-            GameObject bg = NewUI("Background", go.transform, typeof(Image));
-            RectTransform bgRT = (RectTransform)bg.transform;
-            bgRT.anchorMin = new Vector2(0f, 0.25f); bgRT.anchorMax = new Vector2(1f, 0.75f);
-            bgRT.offsetMin = Vector2.zero; bgRT.offsetMax = Vector2.zero;
-            bg.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.5f);
-
-            GameObject fillArea = NewUI("Fill Area", go.transform);
-            RectTransform fillAreaRT = (RectTransform)fillArea.transform;
-            fillAreaRT.anchorMin = new Vector2(0f, 0.25f); fillAreaRT.anchorMax = new Vector2(1f, 0.75f);
-            fillAreaRT.offsetMin = new Vector2(5f, 0f); fillAreaRT.offsetMax = new Vector2(-15f, 0f);
-
-            GameObject fill = NewUI("Fill", fillArea.transform, typeof(Image));
-            RectTransform fillRT = (RectTransform)fill.transform;
-            fillRT.anchorMin = new Vector2(0f, 0f); fillRT.anchorMax = new Vector2(1f, 1f);
-            fillRT.offsetMin = Vector2.zero; fillRT.offsetMax = Vector2.zero;
-            fillRT.sizeDelta = new Vector2(10f, 0f);
-
-            GameObject handleArea = NewUI("Handle Slide Area", go.transform);
-            RectTransform hart = (RectTransform)handleArea.transform;
-            hart.anchorMin = new Vector2(0f, 0f); hart.anchorMax = new Vector2(1f, 1f);
-            hart.offsetMin = new Vector2(10f, 0f); hart.offsetMax = new Vector2(-10f, 0f);
-
-            GameObject handle = NewUI("Handle", handleArea.transform, typeof(Image));
-            ((RectTransform)handle.transform).sizeDelta = new Vector2(20f, 0f);
-            Image handleImg = handle.GetComponent<Image>();
-            handleImg.sprite = GUIManager.Instance.GetSprite("checkbox_marker");
-            handleImg.type = Image.Type.Sliced;
-            handleImg.color = Color.white;
-
-            Slider slider = go.GetComponent<Slider>();
-            slider.fillRect = fillRT;
-            slider.handleRect = (RectTransform)handle.transform;
-            slider.targetGraphic = handle.GetComponent<Image>();
-            slider.direction = Slider.Direction.LeftToRight;
-            slider.minValue = min;
-            slider.maxValue = max;
-            slider.wholeNumbers = wholeNumbers;
-            slider.value = value;
-            GUIManager.Instance.ApplySliderStyle(slider);
-            return slider;
-        }
-
-        private static GameObject NewUI(string name, Transform parent, params Type[] components) {
-            List<Type> comps = new List<Type> { typeof(RectTransform) };
-            if (components != null) { comps.AddRange(components); }
-            GameObject go = new GameObject(name, comps.ToArray()) {
-                layer = GUIManager.UILayer
-            };
-            go.transform.SetParent(parent, false);
-            return go;
-        }
 
         private class StagedConfig {
             public bool enableDistance, enableDistanceOverlay;

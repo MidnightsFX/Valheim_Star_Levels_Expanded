@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using HarmonyLib;
 using Jotunn.Extensions;
 using StarLevelSystem.common;
@@ -16,7 +16,7 @@ namespace StarLevelSystem.modules
     public static class Colorization
     {
         public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;
-        private static CreatureColorizationSettings defaultColorizationSettings = new CreatureColorizationSettings()
+        internal static CreatureColorizationSettings defaultColorizationSettings = new CreatureColorizationSettings()
         {
             CharacterSpecificColorization = ColorizationData.characterColorizationData,
             DefaultLevelColorization = ColorizationData.defaultColorizationData,
@@ -57,22 +57,11 @@ namespace StarLevelSystem.modules
             IsEmissive = false
         };
 
-        public static void Init() {
-            creatureColorizationSettings = defaultColorizationSettings;
-            try {
-                UpdateYamlConfig(File.ReadAllText(ValConfig.colorsFilePath));
-            } catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Color Level values, defaults will be used. Exception: {e}"); }
-        }
-
-        public static string YamlDefaultConfig() {
-            var yaml = DataObjects.yamlSerializer.Serialize(defaultColorizationSettings);
-            return yaml;
-        }
-
-        public static bool UpdateYamlConfig(string yaml) {
-            try {
-                //Logger.LogInfo($"Updating ColorizationSettings from YAML:\n{yaml}");
-                creatureColorizationSettings = DataObjects.yamlDeserializer.Deserialize<DataObjects.CreatureColorizationSettings>(yaml);
+        // Apply hook for ColorSettings.yaml -- everything that has to happen once new colours exist,
+        // whatever produced them.
+        internal static void ApplyLoaded(DataObjects.CreatureColorizationSettings parsed) {
+            {
+                creatureColorizationSettings = parsed;
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
                 foreach (var entry in defaultColorizationSettings.DefaultLevelColorization) {
                     if (!creatureColorizationSettings.DefaultLevelColorization.Keys.Contains(entry.Key)) {
@@ -103,13 +92,7 @@ namespace StarLevelSystem.modules
                     CompositeLazyCache.UpdateCharacterCacheEntry(chara, ccd);
                     ApplyColorizationWithoutLevelEffects(chara.gameObject, ccd.Colorization);
                 }
-            } catch (System.Exception ex) {
-                StarLevelSystem.Log.LogError($"Failed to parse ColorizationSettings YAML: {ex.Message}");
-                StarLevelSystem.Log.LogError($"Colorization will use internal defaults.");
-                creatureColorizationSettings = defaultColorizationSettings;
-                return false;
             }
-            return true;
         }
 
         // Don't run the vanilla level effects since we are managing all of that ourselves
@@ -127,7 +110,7 @@ namespace StarLevelSystem.modules
             if (charLevelEf == null || charLevelEf.m_levelSetups == null || charLevelEf.m_levelSetups.Count <= 0) { return; }
 
             // Randomly select level visualization
-            LevelSetup clevelset = charLevelEf.m_levelSetups[UnityEngine.Random.Range(0, charLevelEf.m_levelSetups.Count - 1)];
+            LevelSetup clevelset = charLevelEf.m_levelSetups[UnityEngine.Random.Range(0, charLevelEf.m_levelSetups.Count)];
             if (clevelset.m_enableObject != null) { clevelset.m_enableObject.SetActive(true); }
         }
 
@@ -145,6 +128,12 @@ namespace StarLevelSystem.modules
         }
 
 
+        // Suffix marking a material instance this mod already created for a renderer, so repeated
+        // colorization passes (setup retries, config reloads, size updates) recolor the existing
+        // instance instead of allocating a fresh Material each time. Unity materials created in
+        // code are native objects that live until scene unload, so the old per-pass copies leaked.
+        private const string SLSInstancedMaterialSuffix = " (SLSColor)";
+
         internal static void ApplyColorizationWithoutLevelEffects(GameObject cgo, ColorDef colorization) {
             if (ValConfig.EnableColorization.Value == false) { return; }
             if (colorization == null) { return; }
@@ -155,14 +144,20 @@ namespace StarLevelSystem.modules
                 {
                     Material[] sharedMaterials2 = smr.sharedMaterials;
                     if (sharedMaterials2.Length == 0) { continue; }
-                    sharedMaterials2[0] = new Material(sharedMaterials2[0]);
-                    sharedMaterials2[0].SetFloat("_Hue", genlvlup.m_hue);
-                    sharedMaterials2[0].SetFloat("_Saturation", genlvlup.m_saturation);
-                    sharedMaterials2[0].SetFloat("_Value", genlvlup.m_value);
-                    if (genlvlup.m_setEmissiveColor) {
-                        sharedMaterials2[0].SetColor("_EmissionColor", genlvlup.m_emissiveColor);
+                    Material target = sharedMaterials2[0];
+                    if (target == null) { continue; }
+                    if (target.name.EndsWith(SLSInstancedMaterialSuffix) == false) {
+                        target = new Material(target);
+                        target.name += SLSInstancedMaterialSuffix;
+                        sharedMaterials2[0] = target;
+                        smr.sharedMaterials = sharedMaterials2;
                     }
-                    smr.sharedMaterials = sharedMaterials2;
+                    target.SetFloat("_Hue", genlvlup.m_hue);
+                    target.SetFloat("_Saturation", genlvlup.m_saturation);
+                    target.SetFloat("_Value", genlvlup.m_value);
+                    if (genlvlup.m_setEmissiveColor) {
+                        target.SetColor("_EmissionColor", genlvlup.m_emissiveColor);
+                    }
                 }
             }
             catch (Exception e) {

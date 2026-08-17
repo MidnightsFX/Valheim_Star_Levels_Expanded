@@ -35,7 +35,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             } else {
 
                 // If not a boss, check player score and evaluate the random change based changes
-                if (NemesisSystem.NemesisManager != null && NemesisSystem.NemesisManager.ReadyForNextNemesisAction() && NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges != null && NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges != null) {
+                if (NemesisSystem.NemesisManager != null && NemesisSystem.NemesisManager.ReadyForNextNemesisAction() && NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges != null && NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps != null) {
 
                     // For all of the level changing Nemesis actions
                     foreach (KeyValuePair<string, NemesisChanceEntry> entry in NemesisSystemData.SLE_Nemesis_Settings.ChanceChanges.CreatureOps) {
@@ -178,7 +178,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
                     if (nemBoss != null) {
                         spawnedDetails += $"Selected NemesisBoss: {nemBoss.BossSpawn.CustomName} to spawn. ";
-                        NemesisCreatureSpawns = (List<NemesisSpawn>)(new List<NemesisSpawn>(nemBoss.Minions) ?? Enumerable.Empty<NemesisSpawn>());
+                        // Minions can be null for a miniboss deserialized from YAML with no Minions key -
+                        // the old `new List<>(nemBoss.Minions) ?? ...` threw ArgumentNullException before
+                        // the null-coalesce could ever apply.
+                        NemesisCreatureSpawns = nemBoss.Minions != null ? new List<NemesisSpawn>(nemBoss.Minions) : new List<NemesisSpawn>();
                         NemesisCreatureSpawns.Add(nemBoss.BossSpawn);
 
                         // Propagate the removal so this boss isn't drawn again. On a host we ARE the

@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Configuration;
 using Jotunn.Entities;
 using Jotunn.Managers;
@@ -31,26 +31,62 @@ namespace StarLevelSystem.common {
         internal const string NemesisSettingsFileName = "NemesisSettings.yaml";
         internal const string LocationResetSettingsFileName = "LocationResetSettings.yaml";
         internal const string StarLevelSystem = "StarLevelSystem";
+        // Read by Common/Config to resolve every config path. Same value as the const above; the framework
+        // just expects this name.
+        internal static readonly string cfgFolder = StarLevelSystem;
         internal const string ServerRaidSavedData = "ServerRaidSavedData.yaml";
         internal const string SavedData = "SavedData";
         internal const string NemesisLogFileName = "NemesisLog.log";
-        internal static String levelsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LevelSettingsFileName);
-        internal static String colorsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ColorSettingsFileName);
-        internal static String creatureLootFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LootSettingsFileName);
-        internal static String creatureModifierFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, ModifiersFileName);
-        internal static String raidsFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, RaidSettingsFileName);
-        internal static String nemesisFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, NemesisSettingsFileName);
         internal static String nemesisLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisLogFileName);
-        internal static String raidsServerSavedData = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ServerRaidSavedData);
+        // World-state files resolve per-world (basename.<world>.ext) - see PerWorldStatePath. With a
+        // single shared path, switching worlds silently overwrote world A's state with world B's.
+        internal static String raidsServerSavedData => PerWorldStatePath(ServerRaidSavedData);
         internal const string ZoneDataFileName = "ZoneData.yaml";
-        internal static String zoneDataSavedDataPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, ZoneDataFileName);
+        internal static String zoneDataSavedDataPath => PerWorldStatePath(ZoneDataFileName);
         internal const string NemesisRemoteStateFileName = "NemesisRemoteState.yaml";
-        internal static String nemesisRemoteStateFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, NemesisRemoteStateFileName);
-        internal static String locationResetFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, LocationResetSettingsFileName);
+        internal static String nemesisRemoteStateFilePath => PerWorldStatePath(NemesisRemoteStateFileName);
         // Per-zone reset stamps + prefab census. World state rather than config: binary, never watched,
         // never RPC'd, and flushed with the world save.
         internal const string LocationResetStateFileName = "LocationResetState.dat";
-        internal static String locationResetStatePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, LocationResetStateFileName);
+        internal static String locationResetStatePath => PerWorldStatePath(LocationResetStateFileName);
+
+        private static string perWorldCacheWorld;
+        private static readonly Dictionary<string, string> perWorldPathCache = new Dictionary<string, string>();
+
+        // Resolves a world-state file to a per-world path, seeding it once from the legacy shared
+        // file so pre-existing data carries over. Seeding every world with the legacy data is safe:
+        // the loaders validate the world name recorded inside the file and start fresh on a
+        // mismatch, so only the world the data belongs to keeps it.
+        internal static string PerWorldStatePath(string fileName) {
+            string dir = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData);
+            string world = ZNet.instance != null ? ZNet.instance.GetWorldName() : null;
+            if (string.IsNullOrEmpty(world)) {
+                // No world loaded yet (menu-time access): fall back to the legacy shared path.
+                return Path.Combine(dir, fileName);
+            }
+            if (perWorldCacheWorld != world) {
+                perWorldPathCache.Clear();
+                perWorldCacheWorld = world;
+            }
+            if (perWorldPathCache.TryGetValue(fileName, out string cached)) { return cached; }
+
+            string sanitized = world;
+            foreach (char c in Path.GetInvalidFileNameChars()) {
+                sanitized = sanitized.Replace(c, '_');
+            }
+            string suffixedPath = Path.Combine(dir, Path.GetFileNameWithoutExtension(fileName) + "." + sanitized + Path.GetExtension(fileName));
+            try {
+                string legacyPath = Path.Combine(dir, fileName);
+                if (File.Exists(suffixedPath) == false && File.Exists(legacyPath)) {
+                    Directory.CreateDirectory(dir);
+                    File.Copy(legacyPath, suffixedPath);
+                }
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not migrate {fileName} to a per-world file: {e.Message}");
+            }
+            perWorldPathCache[fileName] = suffixedPath;
+            return suffixedPath;
+        }
         internal const string LocationResetCatalogFileName = "LocationResetCatalog.yaml";
         internal static String locationResetCatalogPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, LocationResetCatalogFileName);
         // A human-readable record of every chunk the reset sweep touched, in the same shape as the
@@ -58,27 +94,9 @@ namespace StarLevelSystem.common {
         internal const string LocationResetLogFileName = "LocationResetLog.log";
         internal static String locationResetLogFilePath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, LocationResetLogFileName);
 
-        // A yaml config that can be recreated from the mod's built-in defaults. Serialize is deferred
-        // because some defaults (location reset) are only fully populated once ZoneSystem exists.
-        private class YamlConfigDefault {
-            internal string FileName;
-            internal string Header;
-            internal Func<string> Serialize;
-        }
-
-        // Keyed on the resolved full path so the watcher handlers can look a file up by the path they
-        // are handed. Populated at the end of LoadYamlConfigs, after path discovery has run.
-        private static readonly Dictionary<string, YamlConfigDefault> YamlDefaultsByPath = new Dictionary<string, YamlConfigDefault>();
-
-        internal static bool ServerConfigsSynced = false;
-
-        private static CustomRPC LevelSettingsRPC;
-        private static CustomRPC ColorSettingsRPC;
-        private static CustomRPC CreatureLootSettingsRPC;
-        private static CustomRPC ModifiersRPC;
-        private static CustomRPC RaidsRPC;
-        private static CustomRPC NemesisRPC;
-        private static CustomRPC LocationResetRPC;
+        // The seven config-file RPCs, their initial-sync providers and the sync-state flag now belong
+        // to Common/Config -- registrations in StarLevelConfigFiles.cs, wiring in ConfigNetwork.
+        // Everything below is RPC traffic that is NOT a config file.
         internal static CustomRPC ClientSendPlayerPrivateKeysRPC;
         internal static CustomRPC ClientStartRaidRPC;
         internal static CustomRPC RaidCommittedRPC;
@@ -238,6 +256,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> ShowQuickConfigureButton;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
+        public static ConfigEntry<float> ConfigApplyDelay;
 
         public ValConfig(ConfigFile cf)
         {
@@ -249,13 +268,6 @@ namespace StarLevelSystem.common {
         }
 
         public void SetupConfigRPCs() {
-            LevelSettingsRPC = NetworkManager.Instance.AddRPC("SLS_LevelsRPC", OnServerReceiveConfigs, OnClientReceiveLevelConfigs);
-            ColorSettingsRPC = NetworkManager.Instance.AddRPC("SLS_ColorsRPC", OnServerReceiveConfigs, OnClientReceiveColorConfigs);
-            CreatureLootSettingsRPC = NetworkManager.Instance.AddRPC("SLS_CreatureLootRPC", OnServerReceiveConfigs, OnClientReceiveCreatureLootConfigs);
-            ModifiersRPC = NetworkManager.Instance.AddRPC("SLS_ModifiersRPC", OnServerReceiveConfigs, OnClientReceiveModifiersConfigs);
-            RaidsRPC = NetworkManager.Instance.AddRPC("SLS_RaidsRPC", OnServerReceiveConfigs, OnClientReceiveRaidConfigs);
-            NemesisRPC = NetworkManager.Instance.AddRPC("SLS_NemesisRPC", OnServerReceiveConfigs, OnClientReceiveNemesisConfigs);
-            LocationResetRPC = NetworkManager.Instance.AddRPC("SLS_LocationResetRPC", OnServerReceiveConfigs, OnClientReceiveLocationResetConfigs);
             ClientSendPlayerPrivateKeysRPC = NetworkManager.Instance.AddRPC("SLS_SendPlayerKeysRPC", OnServerReceivePlayerPrivateKeys, OnClientReceiveRequestForPrivateKeys);
             ClientStartRaidRPC = NetworkManager.Instance.AddRPC("SLS_ClientStartRaidRPC", OnServerReceiveConfigs, OnClientReceiveRaidStart);
             // Owning (raided) client confirms its raid actually started; server then sets the cooldown and broadcasts music.
@@ -286,13 +298,6 @@ namespace StarLevelSystem.common {
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
-            SynchronizationManager.Instance.AddInitialSynchronization(LevelSettingsRPC, SendLevelsConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(ColorSettingsRPC, SendColorsConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(CreatureLootSettingsRPC, SendCreatureLootConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(ModifiersRPC, SendModifierConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(RaidsRPC, SendRaidConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(NemesisRPC, SendNemesisConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(LocationResetRPC, SendLocationResetConfigs);
             // Joining clients receive the current set of active remote-boss map pins.
             SynchronizationManager.Instance.AddInitialSynchronization(AddNemesisBossPinRPC, SendNemesisBossPins);
             // Give joining clients the current (non-default) zone levels for their overlay / level bonuses.
@@ -521,469 +526,26 @@ namespace StarLevelSystem.common {
             InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
             ConfigPollIntervalSeconds = BindServerConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);
+            // Read by ConfigChangeDebouncer. Most editors save by truncating and then writing, which the
+            // watcher sees as two separate changes; this collapses them into one reload.
+            ConfigApplyDelay = BindServerConfig("Misc", "ConfigApplyDelay", 1f, "Delay in seconds before a changed yaml config file is applied. Coalesces a burst of rapid edits into a single apply. Set to 0 to apply instantly.", true, 0f, 10f);
 
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
             OverrideCreatureModifiedHealth = BindServerConfig("ModCompat", "OverrideCreatureModifiedHealth", false, "When enabled, will always set creatures health based on the SLS settings for the creature. This overrides other mods changes to creatures.");
         }
 
-        internal static void HasServerUpdates() {
-            ServerConfigsSynced = true;
-        }
-
-        // Called on leaving a world. Without this the flag stays true for the rest of the process, so
-        // every later join to a dedicated server skips the sync wait loop (see CheckAndDrawMapRings)
-        // and draws from the previous server's values until the real sync lands.
-        internal static void ResetServerSyncState() {
-            ServerConfigsSynced = false;
-        }
-
-        internal void LoadYamlConfigs()
-        {
-            string externalConfigFolder = ValConfig.GetSecondaryConfigDirectoryPath();
-            string[] presentFiles = Directory.GetFiles(externalConfigFolder);
-
-            foreach (string configFile in presentFiles) {
-                if (configFile.Contains(LevelSettingsFileName))
-                {
-                    Logger.LogDebug($"Found level configuration: {configFile}");
-                    levelsFilePath = configFile;
-                }
-
-                if (configFile.Contains(ColorSettingsFileName))
-                {
-                    Logger.LogDebug($"Found color configuration: {configFile}");
-                    colorsFilePath = configFile;
-                }
-
-                if (configFile.Contains(LootSettingsFileName))
-                {
-                    Logger.LogDebug($"Found loot configuration: {configFile}");
-                    creatureLootFilePath = configFile;
-                }
-                if (configFile.Contains(ModifiersFileName))
-                {
-                    Logger.LogDebug($"Found modifier configuration: {configFile}");
-                    creatureModifierFilePath = configFile;
-                }
-                if (configFile.Contains(RaidSettingsFileName))
-                {
-                    Logger.LogDebug($"Found raid configuration: {configFile}");
-                    raidsFilePath = configFile;
-                }
-                if (configFile.Contains(NemesisSettingsFileName))
-                {
-                    Logger.LogDebug($"Found nemesis configuration: {configFile}");
-                    nemesisFilePath = configFile;
-                }
-                if (configFile.Contains(LocationResetSettingsFileName))
-                {
-                    Logger.LogDebug($"Found location reset configuration: {configFile}");
-                    locationResetFilePath = configFile;
-                }
-            }
-
-            // Register defaults against resolved paths so the watcher can look a file up by path.
-            YamlDefaultsByPath.Clear();
-            YamlDefaultsByPath[creatureModifierFilePath] = new YamlConfigDefault {
-                FileName = ModifiersFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Creature Modifier Configuration
-#################################################
-",
-                Serialize = () => CreatureModifiersData.GetModifierDefaultConfig(),
-            };
-            YamlDefaultsByPath[creatureLootFilePath] = new YamlConfigDefault {
-                FileName = LootSettingsFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Creature loot configuration
-#################################################
-",
-                Serialize = () => LootSystemData.YamlDefaultConfig(),
-            };
-            YamlDefaultsByPath[levelsFilePath] = new YamlConfigDefault {
-                FileName = LevelSettingsFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Level Settings
-#################################################
-",
-                Serialize = () => LevelSystemData.YamlDefaultConfig(),
-            };
-            YamlDefaultsByPath[colorsFilePath] = new YamlConfigDefault {
-                FileName = ColorSettingsFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Creature Level Color Settings
-#################################################
-",
-                Serialize = () => Colorization.YamlDefaultConfig(),
-            };
-            YamlDefaultsByPath[raidsFilePath] = new YamlConfigDefault {
-                FileName = RaidSettingsFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Raid Settings
-#################################################
-",
-                Serialize = () => RaidsData.YamlDefaultConfig(),
-            };
-            YamlDefaultsByPath[nemesisFilePath] = new YamlConfigDefault {
-                FileName = NemesisSettingsFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Nemesis Settings
-#################################################
-",
-                Serialize = () => NemesisSystemData.YamlDefaultConfig(),
-            };
-            YamlDefaultsByPath[locationResetFilePath] = new YamlConfigDefault {
-                FileName = LocationResetSettingsFileName,
-                Header = @"#################################################
-# Star Level System Expanded - Location Reset Settings
-#
-# Resets overworld locations, dungeons, vegetation, ores and pickables so they can be
-# looted again. Sweeps run server-side, in the background, only in zones with no players
-# nearby. Timers are in real-world hours. NOTHING resets until both the EnableLocationReset
-# BepInEx setting and the Enabled flag below are turned on.
-#
-# BACK UP YOUR WORLD before enabling this.
-#
-# --- Reset groups: start here ---
-# ResetGroups is where the work happens. A group both ENABLES a set of targets and gives them
-# their settings, in one block:
-#
-#   ResetGroups:
-#     Ores:
-#       Enabled: true
-#       ResetHours: 48
-#       ResetTerrain: true
-#       Members: [rock4_copper, MineRock_Tin, silvervein, rock3_silver, mudpile_beacon]
-#
-# Groups stand on their own - a member needs no entry anywhere else in this file. To turn a whole
-# category off, set its Enabled: false; to drop one target, remove it from Members. If two groups
-# claim the same prefab the shorter interval wins and the other is named in a warning. A member
-# name this world has nothing for is warned about at load, never fatal.
-#
-# A member can also be a category token, $Mineable or $Pickable, which expands to everything this
-# world PLACES carrying that component, and so covers modded content too. Unlike a named member a
-# token stops there: one-off pickups that only exist inside dungeons are not swept up by it, so
-# name those explicitly if you want them. Berry bushes are NOT Pickable_* prefabs, which is why
-# they are listed separately below.
-#
-# MinDistance / MaxDistance limit a group to a ring around spawn (MaxDistance 0 = no outer limit).
-# A scoped group applies only inside its range; outside it, its members fall back to whatever
-# unscoped group covers them.
-#
-# --- Locations and Vegetation: overrides only ---
-# Both ship EMPTY and can usually stay that way. Add a key only to override one target, or to
-# enable something no group covers. Values resolve entry -> group -> Defaults, so a per-prefab
-# setting always beats its group:
-#
-#   Locations:
-#     Eikthyrnir:
-#       ResetHours: 12      # BossAltars still enables it; this just retimes it
-#
-# For the full list of names this world can reset - including everything other mods add - run
-# the console command sls-loc-dump. It writes SavedData/LocationResetCatalog.yaml as a
-# reference; that file is a dump, not a config, and editing it does nothing.
-#
-# --- Scheduling: ResetHours or ResetSchedule ---
-# ResetHours is elapsed time since a target last reset, so a 24h timer drifts a little later
-# every cycle. ResetSchedule is a cron expression instead, for a fixed time of day:
-#
-#   ResetGroups:
-#     Ores:
-#       ResetSchedule: 0 3 * * *      # 03:00 every day
-#     Foraging:
-#       ResetSchedule: '*/30 * * * *' # every 30 minutes (quote anything starting with *)
-#
-# Fields are: minute hour day-of-month month day-of-week, with * , - and */n. Day-of-week is
-# 0-6 (0 = Sunday) or SUN-SAT; months are 1-12 or JAN-DEC. The macros @hourly, @daily,
-# @midnight, @weekly, @monthly and @yearly also work.
-#
-# Times are the SERVER'S LOCAL TIME, not UTC or in-game time. On the day the clocks go
-# forward, a schedule inside the skipped hour runs as soon as the hour ends; on the day they
-# go back it still runs once.
-#
-# Two gotchas worth knowing:
-#   - If BOTH day-of-month and day-of-week are restricted, a day matching EITHER one fires.
-#     0 0 1 * MON is the 1st of the month AND every Monday, not only Mondays that land on the
-#     1st. Every cron behaves this way.
-#   - BiomeRates and DistanceBands do NOT scale a cron schedule - there is no sensible way to
-#     halve 'every Tuesday at 3am'. A rate of 0 still excludes the chunk entirely.
-#
-# ResetHours and ResetSchedule resolve as one unit, entry -> group -> Defaults: the first
-# level that sets either one owns the timing, so a per-prefab ResetHours still overrides its
-# group's ResetSchedule. Where a single level sets both, the schedule wins and it is logged.
-# An invalid expression is logged and that target falls back to ResetHours.
-#
-# --- Targeting resets: BiomeRates and DistanceBands ---
-# Both are multipliers applied on top of each entry's own ResetHours, so 1.0 changes
-# nothing and they stack:  effective hours = ResetHours x biome rate x band rate.
-# Use them to focus resets on the areas players actually strip.
-#
-#   BiomeRates:
-#     Meadows: 0.5        # everything in the Meadows returns twice as fast
-#     Mistlands: 2.0      # ...and half as fast out in the Mistlands
-#   DistanceBands:
-#   - Inner: 0            # metres from spawn (or from world centre - see
-#     Outer: 3000         # DistanceBonusIsFromStarterTemple in the BepInEx config)
-#     Multiplier: 0.5     # the hub recovers twice as fast
-#
-# A rate of 0 EXCLUDES that biome or band from resets entirely - it does not mean
-# 'instantly'. Outer: 0 means the band has no outer limit. A chunk matching no band is
-# left at 1.0, so a partial band list never disables the rest of the world.
-#
-# --- Protection: the three actions ---
-# Every Protection category takes one of three actions:
-#
-#   Block     the whole chunk is left alone while the object is there. The safest, and the
-#             default for everything except dropped items
-#   Preserve  the object is kept, and the reset goes ahead around it
-#   Ignore    the object is ordinary resettable content and IS DELETED
-#
-# DroppedItem ships as Preserve, so loot a player left on the ground survives a reset without
-# holding the chunk back. If you ever see items piling up inside a location, set it to Ignore
-# and they will be cleared with everything else.
-#
-# --- Ignored prefabs ---
-# Each category can also list individual prefabs exempt from it. An ignored prefab neither
-# blocks a chunk from resetting nor survives one - IT IS DELETED. fire_pit ships ignored
-# because one abandoned campfire otherwise freezes a chunk (and its 8 neighbours) forever,
-# and a campfire sitting on an ore spawn stops that ore ever coming back.
-#
-#   Protection:
-#     PlayerBuiltPiece:
-#       Action: Block
-#       Ignored:
-#       - fire_pit
-#
-# Tombstones can never be ignored, and anything in ProtectedPrefabs wins over an ignore.
-# Tamed creatures are never deleted, whatever the categories or ignore lists say.
-#
-# --- ExtraTerrainRadius ---
-# Per location: metres of terrain reset BEYOND the location's own radius, for the ramps and
-# moats players dig around the outside. Clamped to 64m, which is as far as the protection
-# scan actually checks for player property.
-#
-# --- Advanced sections, omitted while unused ---
-# These four are left out of the generated file because their defaults are right for almost
-# every server. Add the section by hand to use one; anything you leave out keeps its default.
-#
-#   ProtectedPrefabs: [portal_wood]   # always block a reset, whatever category detection says
-#
-#   DistanceBands: []                 # see the section above
-#
-#   InPlaceRefresh:                   # tier 1: refresh ZDO state without loading the zone
-#     Pickables: true                 # regrow picked berries, mushrooms, flint
-#     MineRocks: true                 # restore mined ore deposits
-#     ContainerDefaultLoot: false     # re-roll chest loot. OFF: the one refresh that grants items
-#
-#   Throughput:                       # sweep pacing. Retune only if the server is struggling
-#     SweepBudgetMillisecondsPerFrame: 4    # primary throttle (LocationResetSweepBudgetMs wins)
-#     MaxZonesPerSecondFastLane: 200        # ZDO-only refreshes
-#     MaxZonesPerSecondSlowLane: 2          # resets that must load the zone
-#     AdaptiveBackoffFrameMs: 50            # over this frame time, halve the budget next tick
-#     ZdoGrowthTolerance: 0                 # ZDOs a reset may leak before it is reported in the log
-#################################################
-",
-                Serialize = () => DataObjects.yamlSerializer.Serialize(LocationResetData.BuildDefaultConfig()),
-            };
-
-            // Missing or empty files get defaults written to disk; populated files are left alone.
-            foreach (var entry in YamlDefaultsByPath) {
-                string path = entry.Key;
-                var def = entry.Value;
-
-                if (File.Exists(path) == false) {
-                    Logger.LogDebug($"{def.FileName} missing, recreating with defaults.");
-                    RestoreDefaultConfigFile(path, def);
-                    continue;
-                }
-
-                // Exists but might have no usable content
-                string text = File.ReadAllText(path);
-                if (HasNoUsableConfig(text)) {
-                    Logger.LogWarning($"Config file '{def.FileName}' was empty and has been overwritten with the default configuration. File: {path}");
-                    RestoreDefaultConfigFile(path, def);
-                }
-            }
-
-            ConfigFileWatcher.Register(colorsFilePath, UpdateColorSettings);
-            ConfigFileWatcher.Register(levelsFilePath, UpdateLevelSettings);
-            ConfigFileWatcher.Register(creatureModifierFilePath, UpdateModifierSettings);
-            ConfigFileWatcher.Register(creatureLootFilePath, UpdateLootSettings);
-            ConfigFileWatcher.Register(raidsFilePath, UpdateRaidSettings);
-            ConfigFileWatcher.Register(nemesisFilePath, UpdateNemesisSettings);
-            ConfigFileWatcher.Register(locationResetFilePath, UpdateLocationResetSettings);
-        }
-
-        // The Location Reset default config needs no game state -- reset groups carry the shipped
-        // targeting and Locations/Vegetation exist only for per-prefab overrides -- so this writes a
-        // complete file even at Awake. The exhaustive per-prefab catalogue is a separate artefact,
-        // written on request by sls-loc-dump.
-        internal static void WriteLocationResetDefaultFile() {
-            if (YamlDefaultsByPath.TryGetValue(locationResetFilePath, out var def)) {
-                RestoreDefaultConfigFile(locationResetFilePath, def);
-            } else {
-                // Fallback: the definition may not yet be registered if this is called before LoadYamlConfigs.
-                String header = @"#################################################
-# Star Level System Expanded - Location Reset Settings
-#
-# Resets overworld locations, dungeons, vegetation, ores and pickables so they can be
-# looted again. Sweeps run server-side, in the background, only in zones with no players
-# nearby. Reset groups do the targeting; nothing resets until both EnableLocationReset and
-# the Enabled flag below are on. Timers are in real-world hours.
-#
-# BACK UP YOUR WORLD before enabling this.
-#################################################
-";
-                using StreamWriter writetext = new StreamWriter(locationResetFilePath);
-                writetext.WriteLine(header);
-                writetext.WriteLine(DataObjects.yamlSerializer.Serialize(LocationResetData.BuildDefaultConfig()));
-            }
-        }
-
         // --- Empty-config fallback helpers ---
 
-        // Returns true when the text is null/whitespace or consists only of comments, blank lines,
-        // and bare YAML document markers.
-        internal static bool HasNoUsableConfig(string yamlText) {
-            if (string.IsNullOrWhiteSpace(yamlText)) return true;
-            foreach (var line in yamlText.Split('\n')) {
-                string trimmed = line.Trim();
-                if (trimmed.Length == 0 || trimmed.StartsWith("#") || trimmed == "---" || trimmed == "...") continue;
-                return false;
-            }
-            return true;
-        }
-
-        private static void RestoreDefaultConfigFile(string path, YamlConfigDefault def) {
-            using StreamWriter writetext = new StreamWriter(path);
-            writetext.WriteLine(def.Header);
-            writetext.WriteLine(def.Serialize());
-            ConfigFileWatcher.RefreshStamp(path);
-        }
-
-        // Overwrite a registered config file with already-serialized content, keeping the documented
-        // header block in front of it. Code that rewrites a config in place has to go through this
-        // rather than File.WriteAllText: the header is the only in-file documentation there is, and a
-        // bare write silently deletes it.
-        internal static void RewriteConfigFileWithHeader(string path, string serializedYaml) {
-            using StreamWriter writetext = new StreamWriter(path);
-            if (YamlDefaultsByPath.TryGetValue(path, out var def)) { writetext.WriteLine(def.Header); }
-            writetext.WriteLine(serializedYaml);
-            ConfigFileWatcher.RefreshStamp(path);
-        }
-
-        // Reads a config file; if it has a registered default and the content is unusable, restores
-        // defaults on disk and re-reads. Falls through to plain ReadAllText for unregistered paths.
-        internal static string ReadConfigOrRestoreDefaults(string path) {
-            string text = File.ReadAllText(path);
-            if (YamlDefaultsByPath.TryGetValue(path, out var def) && HasNoUsableConfig(text)) {
-                Logger.LogWarning($"Config file '{def.FileName}' was empty and has been overwritten with the default configuration. File: {path}");
-                RestoreDefaultConfigFile(path, def);
-                return File.ReadAllText(path);
-            }
-            return text;
-        }
-
-        // Push a changed yaml file out to the peers. The config file watcher is DontDestroyOnLoad and
-        // keeps polling in the main menu, where ZNet.instance is null; and on a client m_peers holds
-        // the server, so only the server is allowed to broadcast config. The local apply in each
-        // handler is deliberately left unguarded so yaml edits still take effect offline.
-        private static void BroadcastConfigFile(CustomRPC rpc, string fullFileName) {
-            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
-            rpc.SendPackage(ZNet.instance.m_peers, SendFileAsZPackage(fullFileName));
-        }
-
-        private static void UpdateColorSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Color Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            Colorization.UpdateYamlConfig(filetext);
-            BroadcastConfigFile(ColorSettingsRPC, fullFileName);
-        }
-
-        private static void UpdateLevelSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Level Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            LevelSystemData.UpdateYamlConfig(filetext);
-            BroadcastConfigFile(LevelSettingsRPC, fullFileName);
-        }
-
-        private static void UpdateLootSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Loot Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            LootSystemData.UpdateYamlConfig(filetext);
-            BroadcastConfigFile(CreatureLootSettingsRPC, fullFileName);
-        }
-
-        private static void UpdateModifierSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Modifiers Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            CreatureModifiersData.UpdateModifierConfig(filetext);
-            BroadcastConfigFile(ModifiersRPC, fullFileName);
-        }
-
-        private static void UpdateRaidSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Raid Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            RaidsData.UpdateYamlConfig(filetext);
-            BroadcastConfigFile(RaidsRPC, fullFileName);
-        }
-
-        private static void UpdateNemesisSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Nemesis Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            NemesisSystemData.UpdateYamlConfig(filetext);
-            BroadcastConfigFile(NemesisRPC, fullFileName);
-        }
-
-        private static void UpdateLocationResetSettings(string fullFileName) {
-            Logger.LogDebug("Triggering Location Reset Settings update.");
-            string filetext = ReadConfigOrRestoreDefaults(fullFileName);
-            LocationResetData.UpdateYamlConfig(filetext);
-            BroadcastConfigFile(LocationResetRPC, fullFileName);
-        }
-
         private static void OnMainConfigFileChanged(string _) {
-            if (ZNet.instance == null || ZNet.instance.IsServer() == false) {
+            // Apply in the main menu too (ZNet not up yet): the watcher deliberately keeps polling
+            // there, but requiring a live server connection meant menu-time hand-edits were never
+            // picked up. A connected pure client still defers to the server-synced values.
+            if (ZNet.instance != null && ZNet.instance.IsServer() == false) {
                 return;
             }
             Logger.LogInfo("Configuration file has been changed, reloading settings.");
             cfg.Reload();
-        }
-
-        private static ZPackage SendFileAsZPackage(string fp) {
-            string contents = File.ReadAllText(fp);
-            ZPackage package = new ZPackage();
-            package.Write(contents);
-            return package;
-        }
-
-        private static ZPackage SendLevelsConfigs() {
-            return SendFileAsZPackage(levelsFilePath);
-        }
-
-        private static ZPackage SendCreatureLootConfigs() {
-            return SendFileAsZPackage(creatureLootFilePath);
-        }
-
-        private static ZPackage SendColorsConfigs() {
-            return SendFileAsZPackage(colorsFilePath);
-        }
-
-        private static ZPackage SendModifierConfigs() {
-            return SendFileAsZPackage(creatureModifierFilePath);
-        }
-
-        private static ZPackage SendRaidConfigs() {
-            return SendFileAsZPackage(raidsFilePath);
-        }
-
-        private static ZPackage SendNemesisConfigs() {
-            return SendFileAsZPackage(nemesisFilePath);
-        }
-
-        private static ZPackage SendLocationResetConfigs() {
-            return SendFileAsZPackage(locationResetFilePath);
         }
 
         private static ZPackage SendRequestForPrivateKeys() {
@@ -1013,7 +575,9 @@ namespace StarLevelSystem.common {
         internal static void ApplyNemesisBossAdd(string yaml, long senderToExclude) {
             NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
             NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemesisBoss);
-            File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+            // Through the config manager: a bare File.WriteAllText dropped the documented header and left
+            // the watcher stamp stale, so the change reached peers only by accident on the next poll.
+            YamlConfigManager.WriteCurrentToDisk(YamlConfigManager.NemesisSettings);
             if (ZNet.instance == null) { return; }
             // Send the update to all of the other clients via the correct nemesis-add channel
             // (OnClientReceiveMiniBossAdd), not the private-keys RPC.
@@ -1032,7 +596,9 @@ namespace StarLevelSystem.common {
             int idx = FindMinibossIndex(yaml);
             if (idx >= 0) {
                 NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.RemoveAt(idx);
-                File.WriteAllText(ValConfig.nemesisFilePath, DataObjects.yamlSerializer.Serialize(NemesisSystemData.SLE_Nemesis_Settings));
+                // Through the config manager: a bare File.WriteAllText dropped the documented header and left
+            // the watcher stamp stale, so the change reached peers only by accident on the next poll.
+            YamlConfigManager.WriteCurrentToDisk(YamlConfigManager.NemesisSettings);
             }
             if (ZNet.instance == null) { return; }
             // Forward the removal to peers even if we had already removed it locally, so their pools converge.
@@ -1050,12 +616,25 @@ namespace StarLevelSystem.common {
         // reference — matching by the serialized form is required. Both sides are normalized through the
         // same deserialize→serialize round-trip so equal bosses compare equal regardless of incidental
         // formatting. Returns the index of the first match, or -1 if none / the yaml is unparseable.
+        // Serialized-form memo for pool entries: without it every FindMinibossIndex call re-serialized
+        // the WHOLE pool (N YAML serializations per miniboss add/remove, fanned out to every peer).
+        // Pool entries are never mutated once added, so the form can be computed once per instance;
+        // the weak table lets dropped entries be collected normally.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<NemesisMiniboss, string> minibossYamlCache = new System.Runtime.CompilerServices.ConditionalWeakTable<NemesisMiniboss, string>();
+
+        private static string SerializedMiniboss(NemesisMiniboss boss) {
+            if (minibossYamlCache.TryGetValue(boss, out string cached)) { return cached; }
+            string serialized = DataObjects.yamlSerializer.Serialize(boss);
+            minibossYamlCache.Add(boss, serialized);
+            return serialized;
+        }
+
         private static int FindMinibossIndex(string yaml) {
             string target;
             try { target = DataObjects.yamlSerializer.Serialize(DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml)); }
             catch { return -1; }
             return NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses
-                .FindIndex(b => DataObjects.yamlSerializer.Serialize(b) == target);
+                .FindIndex(b => SerializedMiniboss(b) == target);
         }
 
         // Initial-sync payload: the current set of active remote-boss map pins, derived by the server
@@ -1172,13 +751,6 @@ namespace StarLevelSystem.common {
             global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.RemovePin(id);
         }
 
-        private static IEnumerator OnClientReceiveLevelConfigs(long sender, ZPackage package) {
-            string levelsYaml = package.ReadString();
-            LevelSystemData.UpdateYamlConfig(levelsYaml);
-
-            yield return null;
-        }
-
         internal static IEnumerator NOOPReceive(long sender, ZPackage package) {
             yield break;
         }
@@ -1189,30 +761,6 @@ namespace StarLevelSystem.common {
             List<SerializableVector3> deaths = DataObjects.yamlDeserializer.Deserialize<List<SerializableVector3>>(package.ReadString());
             if (deaths == null) { yield break; }
             ZoneScaleSystemData.ApplyDeaths(deaths);
-            yield return null;
-        }
-
-        private static IEnumerator OnClientReceiveColorConfigs(long sender, ZPackage package) {
-            var colorsYaml = package.ReadString();
-            Colorization.UpdateYamlConfig(colorsYaml);
-
-            // Add in a check if we want to write the server config to disk or use it virtually
-            yield return null;
-        }
-
-        private static IEnumerator OnClientReceiveCreatureLootConfigs(long sender, ZPackage package) {
-            var colorsYaml = package.ReadString();
-            LootSystemData.UpdateYamlConfig(colorsYaml);
-
-            // Add in a check if we want to write the server config to disk or use it virtually
-            yield return null;
-        }
-
-        private static IEnumerator OnClientReceiveModifiersConfigs(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            CreatureModifiersData.UpdateModifierConfig(yaml);
-
-            // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
         }
 
@@ -1313,27 +861,6 @@ namespace StarLevelSystem.common {
             List<string> playerKeys = DataObjects.yamlDeserializer.Deserialize<List<string>>(yaml);
             RaidControl.UpdateOrAddPlayerPrivateKeys(sender, playerKeys);
             yield break;
-        }
-
-        private static IEnumerator OnClientReceiveRaidConfigs(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            RaidsData.UpdateYamlConfig(yaml);
-
-            yield return null;
-        }
-
-        private static IEnumerator OnClientReceiveLocationResetConfigs(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            LocationResetData.UpdateYamlConfig(yaml);
-
-            yield return null;
-        }
-
-        private static IEnumerator OnClientReceiveNemesisConfigs(long sender, ZPackage package) {
-            var yaml = package.ReadString();
-            NemesisSystemData.UpdateYamlConfig(yaml);
-
-            yield return null;
         }
 
         public static string GetSecondaryConfigDirectoryPath() {

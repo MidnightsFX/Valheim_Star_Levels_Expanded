@@ -1,4 +1,4 @@
-﻿using Jotunn.Managers;
+using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -44,7 +44,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // config is already synced, so this loop is skipped and the redraw happens immediately.
             if (ZNet.instance.IsCurrentServerDedicated()) {
                 int iterations = 0;
-                while (ValConfig.ServerConfigsSynced == false) {
+                while (ConfigNetwork.ServerConfigsSynced == false) {
                     Logger.LogDebug("Waiting for config sync to complete before drawing map rings on dedicated server.");
                     yield return new WaitForSeconds(5f);
                     iterations++;
@@ -102,8 +102,12 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         private static void CreateLevelBonusRingMapOverlays() {
-            if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
+            // Resolve the center even when the map rings are disabled: distance bonuses roll on
+            // whichever peer owns the creature, and a dedicated-server client with rings off
+            // previously kept center at (0,0,0) while the server used the temple position - so
+            // client-owned rolls disagreed with server-owned ones.
             SetRingCenter();
+            if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
             Logger.LogDebug("Creating Level Bonus Rings on Map");
             if (buildingMapRings == false) {
                 buildingMapRings = true;
@@ -157,6 +161,16 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (ZoneSystem.instance.FindClosestLocation("StartTemple", Vector3.zero, out ZoneSystem.LocationInstance closest)) {
                 center = closest.m_position;
                 return true;
+            }
+            // Dedicated-server client: location instances only exist on the server, but the synced
+            // location-icon table includes the temple (m_iconAlways), so resolve it from there.
+            Dictionary<Vector3, string> icons = new Dictionary<Vector3, string>();
+            ZoneSystem.instance.GetLocationIcons(icons);
+            foreach (KeyValuePair<Vector3, string> icon in icons) {
+                if (icon.Value == "StartTemple") {
+                    center = icon.Key;
+                    return true;
+                }
             }
             return false;
         }

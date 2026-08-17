@@ -1,8 +1,7 @@
-﻿using MonoMod.Utils;
+using MonoMod.Utils;
 using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using StarLevelSystem.Modifiers;
 using UnityEngine;
@@ -344,7 +343,7 @@ namespace StarLevelSystem.Data
 
         static CreatureModifierCollection CustomModifiers = new CreatureModifierCollection();
         static CreatureModifierCollection APIAdded = new CreatureModifierCollection();
-        static readonly CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
+        internal static readonly CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
             BossModifiers = new Dictionary<string, CreatureModifierConfiguration>() {
                 {ModifierNames.BossSummoner.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
@@ -774,9 +773,27 @@ namespace StarLevelSystem.Data
             if (APIAdded.BossModifiers == null && CustomModifiers.BossModifiers == null) { ActiveCreatureModifiers.BossModifiers.AddRange(DefaultModifiers.BossModifiers); }
         }
 
-        internal static string GetModifierDefaultConfig() {
-            var yaml = DataObjects.yamlSerializer.Serialize(DefaultModifiers);
-            return yaml;
+        // Registers a modifier added through the public API (definition + configuration), then
+        // re-merges the active set so the new modifier participates in selection immediately.
+        internal static void RegisterAPIModifier(string name, CreatureModifierDefinition definition, CreatureModifierConfiguration configuration, ModifierType type = ModifierType.Major) {
+            if (string.IsNullOrEmpty(name) || definition == null || configuration == null) { return; }
+            ModifierDefinitions[name] = definition;
+            switch (type) {
+                case ModifierType.Minor:
+                    if (APIAdded.MinorModifiers == null) { APIAdded.MinorModifiers = new Dictionary<string, CreatureModifierConfiguration>(); }
+                    APIAdded.MinorModifiers[name] = configuration;
+                    break;
+                case ModifierType.Boss:
+                    if (APIAdded.BossModifiers == null) { APIAdded.BossModifiers = new Dictionary<string, CreatureModifierConfiguration>(); }
+                    APIAdded.BossModifiers[name] = configuration;
+                    break;
+                default:
+                    if (APIAdded.MajorModifiers == null) { APIAdded.MajorModifiers = new Dictionary<string, CreatureModifierConfiguration>(); }
+                    APIAdded.MajorModifiers[name] = configuration;
+                    break;
+            }
+            UpdateModifiers();
+            ClearProbabilityCaches();
         }
 
         internal static void ClearProbabilityCaches(object s, EventArgs e)
@@ -790,23 +807,17 @@ namespace StarLevelSystem.Data
             biomeBossProbabilityList.Clear();
         }
 
-        internal static bool UpdateModifierConfig(string yaml)
-        {
-            try {
-                CreatureModifierCollection modcollection = DataObjects.yamlDeserializer.Deserialize<CreatureModifierCollection>(yaml);
-                UpdateModifiers(creatureMods: modcollection);
-                LoadPrefabs();
-                // Resolve all of the prefab references
-                Logger.LogDebug("Loading Modifier Configuration.");
-            }
-            catch (Exception ex)
-            {
-                UpdateModifiers(creatureMods: DefaultModifiers);
-                LoadPrefabs();
-                StarLevelSystem.Log.LogError($"Failed to parse Modifier YAML, reverting to defaults error: {ex.Message}");
-                return false;
-            }
-            return true;
+        // Apply hook for Modifiers.yaml.
+        //
+        // ClearProbabilityCaches was previously only called from the BepInEx SettingChanged handlers and
+        // by hand in QuickConfigureTool, so a watcher-driven reload of this file left the biome
+        // probability tables built from the PREVIOUS modifier set. Doing it here means every route that
+        // changes modifiers -- hand edit, server broadcast, in-game editor -- agrees.
+        internal static void ApplyLoaded(CreatureModifierCollection parsed) {
+            UpdateModifiers(creatureMods: parsed);
+            LoadPrefabs();
+            ClearProbabilityCaches();
+            Logger.LogDebug("Loading Modifier Configuration.");
         }
 
         internal static void LoadPrefabs() {
@@ -814,32 +825,50 @@ namespace StarLevelSystem.Data
                 Logger.LogDebug("Embedded asset bundle is unavailable (game exiting or world unloading); skipping modifier prefab load.");
                 return;
             }
-            if (ActiveCreatureModifiers.MinorModifiers != null) {
-                foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.MinorModifiers) {
-                    Logger.LogDebug($"Loading assets for: {mod}");
-                    ModifierDefinitions[mod.Key].LoadAndSetGameObjects();
+            LoadPrefabsFor(ActiveCreatureModifiers.MinorModifiers);
+            LoadPrefabsFor(ActiveCreatureModifiers.MajorModifiers);
+            LoadPrefabsFor(ActiveCreatureModifiers.BossModifiers);
+        }
+
+        // TryGetValue rather than the indexer. A modifier name this build does not define used to throw out
+        // of here, and that throw was what triggered the revert-to-defaults in UpdateModifierConfig. Now
+        // that this runs from the config framework's Apply hook, a throw would instead be swallowed as
+        // "the apply hook threw" with the file still counted as loaded and still broadcast -- so the
+        // unknown-name check belongs in ValidateModifiers, where it can refuse the file properly.
+        private static void LoadPrefabsFor(Dictionary<string, CreatureModifierConfiguration> modifiers) {
+            if (modifiers == null) { return; }
+            foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in modifiers) {
+                if (ModifierDefinitions.TryGetValue(mod.Key, out CreatureModifierDefinition definition) == false) {
+                    Logger.LogWarning($"No modifier named '{mod.Key}' is defined by this build; skipping its assets.");
+                    continue;
                 }
+                Logger.LogDebug($"Loading assets for: {mod}");
+                definition.LoadAndSetGameObjects();
             }
-            if (ActiveCreatureModifiers.MajorModifiers != null) {
-                foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.MajorModifiers) {
-                    Logger.LogDebug($"Loading assets for: {mod}");
-                    ModifierDefinitions[mod.Key].LoadAndSetGameObjects();
-                }
-            }
-            if (ActiveCreatureModifiers.BossModifiers != null) {
-                foreach (KeyValuePair<string, CreatureModifierConfiguration> mod in ActiveCreatureModifiers.BossModifiers) {
-                    Logger.LogDebug($"Loading assets for: {mod}");
-                    ModifierDefinitions[mod.Key].LoadAndSetGameObjects();
-                }
+        }
+
+        // Validate hook for Modifiers.yaml. An unknown modifier name is an ERROR rather than a warning:
+        // every consumer looks the name up in ModifierDefinitions, so a file full of names this build does
+        // not know produces a configuration that cannot do anything.
+        internal static ValidationReport ValidateModifiers(CreatureModifierCollection next, CreatureModifierCollection previous) {
+            ValidationReport report = new ValidationReport();
+            if (next == null) { return report.Error("it defines no modifiers"); }
+
+            CheckNames(next.MinorModifiers, "MinorModifiers", report);
+            CheckNames(next.MajorModifiers, "MajorModifiers", report);
+            CheckNames(next.BossModifiers, "BossModifiers", report);
+            return report;
+        }
+
+        private static void CheckNames(Dictionary<string, CreatureModifierConfiguration> modifiers, string section, ValidationReport report) {
+            if (modifiers == null) { return; }
+            foreach (string name in modifiers.Keys) {
+                if (ModifierDefinitions.ContainsKey(name)) { continue; }
+                report.Error($"{section} names '{name}', which this build does not define." +
+                    ConfigValidation.SuggestKey(name, ModifierDefinitions.Keys));
             }
         }
 
 
-        internal static void Init() {
-            try {
-                UpdateModifierConfig(File.ReadAllText(ValConfig.creatureModifierFilePath));
-            }
-            catch (Exception e) { Logger.LogWarning($"There was an error updating the Creature Modifier values, defaults will be used. Exception: {e}"); }
-        }
     }
 }

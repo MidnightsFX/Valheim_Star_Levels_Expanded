@@ -50,20 +50,35 @@ namespace StarLevelSystem.modules.NemesisSystem {
             float dealtRangedDamage = 0;
             float takenDamage = 0;
 
+            // The current interval is the newest sample. It used to be ignored here (the caller only
+            // inserts it into the history AFTER this runs), so each interval's damage was excluded
+            // from its own trend and double-counted into the next one.
+            int samples = 0;
+            if (dsd_recent != null) {
+                dealtMeleeDamage += dsd_recent.DamageDealtMelee;
+                dealtRangedDamage += dsd_recent.DamageDealtRanged;
+                takenDamage += dsd_recent.DamageTaken;
+                samples++;
+            }
+
             int index = 0;
-            while(historyLengthUsed > index && index < NemesisSystem.PlayerScore.DamageScoreHistory.Count) {
+            while(historyLengthUsed - 1 > index && index < NemesisSystem.PlayerScore.DamageScoreHistory.Count) {
                 DamageScoreData dsd = NemesisSystem.PlayerScore.DamageScoreHistory[index];
                 dealtMeleeDamage += dsd.DamageDealtMelee;
                 dealtRangedDamage += dsd.DamageDealtRanged;
                 takenDamage += dsd.DamageTaken;
 
+                samples++;
                 index++;
             }
 
-            // Average them out to get a per-update trend
-            if (dealtMeleeDamage > 0 && historyLengthUsed > 0) { dealtMeleeDamage /= historyLengthUsed; }
-            if (dealtRangedDamage > 0 && historyLengthUsed > 0) { dealtRangedDamage /= historyLengthUsed; }
-            if (takenDamage > 0 && historyLengthUsed > 0) { takenDamage /= historyLengthUsed; }
+            // Average over the samples actually summed - dividing by the configured history length
+            // made trends read low until the history filled up.
+            if (samples > 0) {
+                dealtMeleeDamage /= samples;
+                dealtRangedDamage /= samples;
+                takenDamage /= samples;
+            }
 
             return Tuple.Create(dealtMeleeDamage, dealtRangedDamage, takenDamage);
         }
@@ -154,7 +169,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         public static void PlayerDeathScoreChange(Player player) {
-            if (NemesisSystem.NemesisManager == null) { return; }
+            if (NemesisSystem.NemesisManager == null || NemesisSystem.PlayerScore == null || ZNet.instance == null) { return; }
             NemesisSystem.PlayerScore.LastDeath = ZNet.instance.GetTimeSeconds();
             SaveScoreData(player);
             SetScore(player, GetScore(player) - NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.DeathScoreReduction);

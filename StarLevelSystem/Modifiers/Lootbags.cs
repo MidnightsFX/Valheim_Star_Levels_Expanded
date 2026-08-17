@@ -36,7 +36,9 @@ namespace StarLevelSystem.Modifiers
                         int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(kvp.Key.GetComponent<ItemDrop>(), DropType.Item);
                         ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier), MaxAmountPerDrop = maxPerStack });
                     }
-                    LootPerformanceChanges.DropItemsPreferAsync(__instance.gameObject.transform.position, ExtraLoot, true);
+                    // Async: the extra loot is a bonus burst on top of the regular drops, and the
+                    // immediate path instantiated every item synchronously inside the death frame.
+                    LootPerformanceChanges.DropItemsPreferAsync(__instance.gameObject.transform.position, ExtraLoot);
                 }
             }
         }

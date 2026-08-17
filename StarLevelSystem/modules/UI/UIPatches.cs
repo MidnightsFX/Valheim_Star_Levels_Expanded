@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using TMPro;
@@ -161,24 +162,42 @@ namespace StarLevelSystem.modules.UI {
 
         [HarmonyPatch(typeof(Character), nameof(Character.GetHoverName))]
         public static class DisplayCreatureNameChanges {
+
+            private class HoverNameCache {
+                public string Source;
+                public string Localized;
+                public Tameable Tame;
+                public bool TameSearched;
+            }
+
+            // GetHoverName runs every frame while hovering (and from EnemyHud); memoize the Localize
+            // result per source string and the Tameable lookup per character. Entries die with the
+            // Character, so no eviction pass is needed.
+            private static readonly ConditionalWeakTable<Character, HoverNameCache> hoverNameCache = new ConditionalWeakTable<Character, HoverNameCache>();
+
             public static bool Prefix(Character __instance, ref string __result) {
                 CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(__instance);
                 if (cce == null || cce.CreatureNameLocalizable == null) { return true; }
-                __result = Localization.instance.Localize(cce.CreatureNameLocalizable);
-                Tameable component = __instance.gameObject.GetComponent<Tameable>();
-                if (component && __instance.IsTamed()) {
-                    __result = component.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, __result);
+                HoverNameCache cache = hoverNameCache.GetOrCreateValue(__instance);
+                if (cache.Source != cce.CreatureNameLocalizable) {
+                    cache.Source = cce.CreatureNameLocalizable;
+                    cache.Localized = Localization.instance.Localize(cce.CreatureNameLocalizable);
+                }
+                __result = cache.Localized;
+                if (cache.TameSearched == false) {
+                    cache.Tame = __instance.gameObject.GetComponent<Tameable>();
+                    cache.TameSearched = true;
+                }
+                if (cache.Tame && __instance.IsTamed() && cache.Tame.m_nview != null && cache.Tame.m_nview.GetZDO() != null) {
+                    __result = cache.Tame.m_nview.GetZDO().GetString(ZDOVars.s_tamedName, __result);
                 }
 
                 return false;
             }
         }
 
-        [HarmonyPatch(typeof(Menu), nameof(Menu.Start))]
-        public static class AddPauseMenuButton {
-            public static void Postfix(Menu __instance) {
-                QuickConfigureTool.CreatePauseMenuButton(__instance);
-            }
-        }
+        // The Menu.Start patch that used to add the pause-menu button lives in the shared launcher now
+        // (common/ConfigUI/QuickConfigBroker), which patches it once with a private Harmony instance
+        // keyed on the launcher object name -- so several mods carrying that folder cannot double-patch it.
     }
 }

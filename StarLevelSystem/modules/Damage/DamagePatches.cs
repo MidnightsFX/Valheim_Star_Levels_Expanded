@@ -22,7 +22,11 @@ namespace StarLevelSystem.modules.Damage {
 
             private static float DetermineDamageFactor(Character character) {
                 if (character.IsPlayer()) { return 1f; } // Players are not leveled, so return 1
-                CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(character);
+                // Read-only lookup: this runs per attack, and GetAndSetLocalCache re-ran the full
+                // cache build (FindBiome + config merges) on every call for a creature whose level
+                // hadn't resolved yet. The setup queue builds the entry; until then the config
+                // multipliers below are the correct fallback.
+                CharacterCacheEntry cce = CompositeLazyCache.GetCacheEntry(character);
                 int level = Mathf.Max(0, character.GetLevel() - 1);
                 float result = 1f;
                 if (character.IsBoss()) {
@@ -38,7 +42,10 @@ namespace StarLevelSystem.modules.Damage {
                         result += (level * ValConfig.EnemyDamageLevelMultiplier.Value);
                     }
                 }
-                float dmgMod = character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
+                float dmgMod = 1f;
+                if (character.m_nview != null && character.m_nview.GetZDO() != null) {
+                    dmgMod = character.m_nview.GetZDO().GetFloat(SLS_DAMAGE_MODIFIER, 1);
+                }
 
                 if (ValConfig.EnableDebugOutputForDamage.Value) {
                     Logger.LogDebug($"Setting {character.name} lvl {level} dmg factor to {result} * {dmgMod} = {result * dmgMod}");
@@ -87,10 +94,14 @@ namespace StarLevelSystem.modules.Damage {
         [HarmonyPatch(typeof(Character), nameof(Character.Damage))]
         public static class CharacterDamageModificationApply {
             private static void Prefix(HitData hit, Character __instance) {
+                if (hit == null) { return; }
                 CharacterCacheEntry attackerCharacter = CompositeLazyCache.GetCacheEntry(hit.GetAttacker());
                 CharacterCacheEntry damagedCharacter = CompositeLazyCache.GetCacheEntry(__instance);
 
-                if (attackerCharacter != null && attackerCharacter.CreatureDamageBonus != null && attackerCharacter.CreatureDamageBonus.Count > 0) {
+                // Attacker-side bonuses are skipped for hits SLS synthesized (LifeLink transfers):
+                // the source hit already carried them when it first went through Character.Damage.
+                if (attackerCharacter != null && attackerCharacter.CreatureDamageBonus != null && attackerCharacter.CreatureDamageBonus.Count > 0
+                    && DamageModifications.IsSynthesized(hit) == false) {
                     if (ValConfig.EnableDebugOutputForDamage.Value) {
                         Logger.LogDebug($"{__instance.name} Hit:{hit.GetTotalDamageOptions()} Adding {attackerCharacter.GetDamageBonusDescription()}");
                     }

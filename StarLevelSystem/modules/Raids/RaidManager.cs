@@ -42,6 +42,11 @@ namespace StarLevelSystem.modules.Raids {
             if (setup == false) { return; }
             if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+
+            // Persist any player-key registry changes accumulated since the last tick (key changes
+            // only mark the registry dirty rather than writing the file per event).
+            RaidControl.FlushPlayerRaidData();
+
             if (RaidsData.SLE_Raid_Settings.GlobalSettings.DisableAllRaids == true) { return; }
 
 
@@ -215,7 +220,7 @@ namespace StarLevelSystem.modules.Raids {
                 }
                 // Save player raid data after a set of raids has been run, this will have the most accurate cooldown information
                 forceRaidStart = false;
-                RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
+                RaidControl.FlushPlayerRaidData(force: true);
             }
         }
 
@@ -231,7 +236,9 @@ namespace StarLevelSystem.modules.Raids {
             if (loadedRaidData == null) {
                 Logger.LogWarning($"No saved player raid data was found ({ValConfig.raidsServerSavedData}), starting from an empty registry. Player data will be requested from connected clients.");
             }
-            RaidControl.ServerPlayerRaidData = loadedRaidData;
+            // Fall back to an empty registry: a missing/empty save deserializes to null, and assigning
+            // null here NRE'd on the very next dereference (and on every later registry access).
+            RaidControl.ServerPlayerRaidData = loadedRaidData ?? new Dictionary<string, PlayerRaidData>();
             setup = true;
             // Peer identity resolution is backend-dependent (see SLSExtensions.GetPeerPlatformUserID), so
             // naming the backend here makes any future raid-dispatch report self-identifying.
@@ -247,7 +254,7 @@ namespace StarLevelSystem.modules.Raids {
             // ServerRaidSavedData.yaml with whatever it happened to hold (often null, since Setup deserializes
             // an empty string on a client into null).
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
-            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(RaidControl.ServerPlayerRaidData));
+            RaidControl.FlushPlayerRaidData(force: true);
         }
     }
 }

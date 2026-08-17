@@ -25,15 +25,19 @@ namespace StarLevelSystem.Modifiers
                 }
                 
                 List<Character> characters = SLSExtensions.GetCharactersInRange(__instance.transform.position, 5);
+                string soulEaterKey = ModifierNames.SoulEater.ToString();
                 foreach (Character character in characters) {
                     // Logger.LogDebug($"Checking SoulEater on {character.name}");
-                    if (character == null || character.IsPlayer()) { continue; }
+                    if (character == null || character.IsPlayer() || character == __instance) { continue; }
                     CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(character);
-                    Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
-                    if (cDetails != null && mods != null && mods.Keys.Contains(ModifierNames.SoulEater.ToString())) {
-                        CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.SoulEater.ToString(), mods[ModifierNames.SoulEater.ToString()]);
+                    // The SoulEater modifier belongs to the SURVIVOR feeding on this death. Reading it
+                    // off __instance (the creature that died) buffed every bystander around a dying
+                    // SoulEater while a living SoulEater never grew.
+                    Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(character);
+                    if (cDetails != null && mods != null && mods.ContainsKey(soulEaterKey)) {
+                        CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(soulEaterKey, mods[soulEaterKey]);
                         float powerIncrease = cmcfg.PerlevelPower * character.m_level;
-                        Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}");
+                        if (Logger.IsDebugEnabled) { Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}"); }
                         DamageModifications.ForceUpdateDamageMod(character, powerIncrease);
                         int nearbyDeaths = character.m_nview.GetZDO().GetInt(SLS_SOULEATER, 0);
                         nearbyDeaths += 1;

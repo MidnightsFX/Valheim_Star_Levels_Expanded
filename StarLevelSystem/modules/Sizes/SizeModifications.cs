@@ -41,9 +41,13 @@ namespace StarLevelSystem.modules.Sizes {
 
             // Size setting exists and we are not updating it
             if (update == false && ForceUpdateSize == false && size != Vector3.zero) {
-                obj.transform.localScale = size;
-                UpdateRidingCreaturesForSizeScaling(obj, characterCache);
-                Physics.SyncTransforms();
+                // Physics.SyncTransforms is a GLOBAL engine sync; only pay for it (and the rider
+                // re-seat) when the scale is actually changing - this path runs on every setup pass.
+                if (obj.transform.localScale != size) {
+                    obj.transform.localScale = size;
+                    UpdateRidingCreaturesForSizeScaling(obj, characterCache);
+                    Physics.SyncTransforms();
+                }
                 return;
             }
 
@@ -56,11 +60,13 @@ namespace StarLevelSystem.modules.Sizes {
             // Set or update the size
             float scale = DetermineScaleMultiplier(characterCache, bonus);
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
-            obj.transform.localScale = creatureScale;
-            UpdateRidingCreaturesForSizeScaling(obj, characterCache);
+            if (obj.transform.localScale != creatureScale) {
+                obj.transform.localScale = creatureScale;
+                UpdateRidingCreaturesForSizeScaling(obj, characterCache);
+                //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
+                Physics.SyncTransforms();
+            }
             zview.m_zdo.Set(SLS_SIZE, creatureScale);
-            //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
-            Physics.SyncTransforms();
         }
 
         internal static Vector3 GetSizeReferenceForObject(string name) {
@@ -138,6 +144,7 @@ namespace StarLevelSystem.modules.Sizes {
 
         private static void UpdateAskavinCollider(GameObject go) {
             CapsuleCollider askCC = go.GetComponent<CapsuleCollider>();
+            if (askCC == null) { return; }
             askCC.radius = 0.842f;
         }
 

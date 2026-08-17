@@ -429,36 +429,17 @@ namespace StarLevelSystem.Data
             return "";
         }
 
-        internal static void Init() {
-            SLE_Raid_Settings = DefaultConfiguration;
-            try {
-                // ValConfig.LoadYamlConfigs restores this file from the defaults before Init runs, so a missing
-                // file here means something went wrong with that -- keep the built-in defaults rather than
-                // reading a file that isn't there. (This branch used to write ServerRaidSavedData.yaml, an
-                // unrelated file, and then read the still-absent raid settings.)
-                if (File.Exists(ValConfig.raidsFilePath)) {
-                    UpdateYamlConfig(File.ReadAllText(ValConfig.raidsFilePath));
-                } else {
-                    Jotunn.Logger.LogWarning($"No raid configuration was found at {ValConfig.raidsFilePath}, the built-in default raid configuration will be used.");
-                    UpdateYamlConfig(YamlDefaultConfig());
-                }
-            }
-            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Raid values, defaults will be used. Exception: {e}"); }
-        }
-
-        public static string YamlDefaultConfig() {
-            return DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
-        }
-
-        public static bool UpdateYamlConfig(string yaml) {
-            try {
+        // Apply hook for RaidSettings.yaml.
+        internal static void ApplyLoaded(RaidConfiguration parsed) {
+            {
                 Logger.LogDebug("Loaded new Raid settings...");
-                RaidConfiguration parsed = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(yaml);
 
-                // An empty or comment-only file deserializes to null without throwing, which would leave every
-                // SLE_Raid_Settings reader (RaidManager.CheckForRaidUpdate first) dereferencing null forever.
+                // A file with no Raids section would leave every SLE_Raid_Settings reader
+                // (RaidManager.CheckForRaidUpdate first) dereferencing null forever. The config framework
+                // already rejects an empty or comment-only document before this hook runs, and names the
+                // file when it does, so this only has to cover a structurally valid file with nothing in it.
                 if (parsed == null || parsed.Raids == null) {
-                    Logger.LogWarning($"The raid configuration was empty or unreadable ({ValConfig.raidsFilePath}), the built-in default raid configuration will be used instead.");
+                    Logger.LogWarning("The raid configuration defines no raids, the built-in default raid configuration will be used instead.");
                     parsed = DefaultConfiguration;
                 }
                 if (parsed.GlobalSettings == null) {
@@ -484,19 +465,6 @@ namespace StarLevelSystem.Data
 
                 RaidControl.ApplyRaidConfiguration(RandEventSystem.instance);
             }
-            catch (Exception ex) {
-                // Leave the system on a known-good configuration rather than whatever half-assigned state the
-                // throw produced -- RaidsByName may have been cleared partway through.
-                StarLevelSystem.Log.LogError($"Failed to parse RaidSettings YAML, the built-in default raid configuration will be used instead: {ex.Message}");
-                SLE_Raid_Settings = DefaultConfiguration;
-                RaidsByName.Clear();
-                foreach (RaidDefinition raid in DefaultConfiguration.Raids) {
-                    if (RaidsByName.ContainsKey(raid.Name)) { continue; }
-                    RaidsByName.Add(raid.Name, raid);
-                }
-                return false;
-            }
-            return true;
         }
     }
 }

@@ -16,8 +16,6 @@ namespace StarLevelSystem.Data
 {
     internal static class CompositeLazyCache
     {
-        public static readonly Vector2 Center = new Vector2(0, 0);
-
         // Add check to delete creature from Znet that removes the creature from the cache
         // Keyed by the full ZDOID: the bare ZDOID.ID (uint) is only unique per creator peer, so on a
         // dedicated server two creatures spawned by different players share low IDs (1,2,3,...) and
@@ -26,6 +24,11 @@ namespace StarLevelSystem.Data
 
         // Session tree cache, to avoid recalculating tree levels multiple times
         private static Dictionary<ZDOID, int> TreeSessionCache = new Dictionary<ZDOID, int>();
+
+        // Memoized SLS_MODSV2 parses: raw ZDO string -> parsed dictionary, per creature.
+        // GetCreatureModifiers is called per hit and per death, and the YAML deserialize only needs
+        // to re-run when the stored string actually changed. Evicted with the other per-ZDOID caches.
+        private static Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>> ModifierParseCache = new Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>>();
 
         public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
             if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
@@ -45,6 +48,10 @@ namespace StarLevelSystem.Data
         internal static void FlushCache() {
             Logger.LogDebug("Flushing creature cache...");
             SessionCache.Clear();
+            ModifierParseCache.Clear();
+            // Tree levels are recomputed deterministically, so flushing here is what lets
+            // TreeMaxLevel/EnableTreeScaling config changes apply without a relog.
+            TreeSessionCache.Clear();
         }
 
         // Safe check for zownership
@@ -78,6 +85,12 @@ namespace StarLevelSystem.Data
             // Check for cached creature data
             CharacterCacheEntry cacheEntry = RetrieveStoredCreatureFromCache(character);
             if (cacheEntry != null && updateCache == false) {
+                return cacheEntry;
+            }
+
+            // A creature without a live nview/ZDO cannot be built - callers can reach this during
+            // spawn/teardown windows where the view is already gone.
+            if (character == null || character.m_nview == null || character.m_nview.GetZDO() == null) {
                 return cacheEntry;
             }
 
@@ -195,8 +208,11 @@ namespace StarLevelSystem.Data
             // Reset character level if its overleveled.
             // Must use the exact same bound as LevelSelection.DetermineLevel's reroll gate - see the comment
             // on GetMaxCreatureLevel. If this bound is looser, over-level creatures re-roll forever without
-            // ever having their ZDO corrected.
-            int maxlevel = LevelSelection.GetMaxCreatureLevel(chara, characterEntry.CreatureSettings);
+            // ever having their ZDO corrected. That includes the biome settings: DetermineLevel resolves
+            // them for its gate, so omitting them here made the two bounds drift (and the HUD loop the
+            // invalidate/rebuild cycle) whenever a BiomeMaxLevelOverride was configured.
+            LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out _, out BiomeSpecificSetting overlevelBiomeSettings, out _);
+            int maxlevel = LevelSelection.GetMaxCreatureLevel(chara, characterEntry.CreatureSettings, overlevelBiomeSettings);
             if (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > maxlevel)
             {
                 // Rebuild level?
@@ -285,13 +301,23 @@ namespace StarLevelSystem.Data
         public static Dictionary<string, ModifierType> GetCreatureModifiers(Character character)
         {
             if (character == null || character.m_nview == null) { return null; }
-            string mods = character.m_nview.GetZDO().GetString(SLS_MODSV2, null);
+            ZDO zdo = character.m_nview.GetZDO();
+            if (zdo == null) { return null; }
+            string mods = zdo.GetString(SLS_MODSV2, null);
             // Priority storage of V2 Mod format
             if (mods != null) {
-                try {
-                    return DataObjects.yamlDeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+                ZDOID cid = zdo.m_uid;
+                if (ModifierParseCache.TryGetValue(cid, out KeyValuePair<string, Dictionary<string, ModifierType>> cached) && cached.Key == mods) {
+                    return cached.Value;
                 }
-                catch {  return null; }
+                Dictionary<string, ModifierType> parsed;
+                try {
+                    parsed = DataObjects.yamlDeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
+                }
+                catch { parsed = null; }
+                // A failed parse is cached too, so a malformed string doesn't re-parse on every hit.
+                ModifierParseCache[cid] = new KeyValuePair<string, Dictionary<string, ModifierType>>(mods, parsed);
+                return parsed;
             }
 
             CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
@@ -353,19 +379,21 @@ namespace StarLevelSystem.Data
             }
         }
 
-        [HarmonyPatch(typeof(ZNetScene), nameof(ZNetScene.Destroy))]
+        // Evict on ZNetView.ResetZDO: the single choke point every despawn path shares. Hooking
+        // ZNetScene.Destroy only covered explicit kills - distance unloading (RemoveObjects) and
+        // remote destruction (OnZDODestroyed) call Object.Destroy directly and never pass through
+        // ZNetScene.Destroy, so entries for every creature and tree that streamed out of the active
+        // area leaked for the whole session.
+        [HarmonyPatch(typeof(ZNetView), nameof(ZNetView.ResetZDO))]
         public static class CleanupDeletedCreatures {
-            private static void Prefix(ZNetScene __instance, GameObject go) {
-                ZNetView component = go.GetComponent<ZNetView>();
-                if (component == null || __instance == null || component.GetZDO() == null) { return; }
-                ZDOID id = component.GetZDO().m_uid;
-                if (SessionCache.ContainsKey(id)) {
-                    SessionCache.Remove(id);
-                    //Logger.LogDebug($"Removed deleted creature from cache {id}");
-                }
+            private static void Prefix(ZNetView __instance) {
+                if (__instance == null || __instance.m_zdo == null) { return; }
+                ZDOID id = __instance.m_zdo.m_uid;
+                SessionCache.Remove(id);
                 CreatureSetupQueue.RemoveTracking(id);
                 // Every other per-ZDOID cache has to be dropped here too, otherwise they grow for the
                 // whole session (trees/creature huds are never otherwise evicted on despawn).
+                ModifierParseCache.Remove(id);
                 RemoveTreeCacheEntry(id);
                 UIHudControl.RemoveExtendedHudFromCache(id);
             }

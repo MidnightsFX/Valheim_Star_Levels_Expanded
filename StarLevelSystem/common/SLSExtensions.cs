@@ -170,20 +170,18 @@ namespace StarLevelSystem.common
             if (keys.Count == 0) {
                 return new KeyValuePair<string, List<string>>(key: CreatureModifiers.NoMods, value: null);
             }
-            string key = keys[UnityEngine.Random.Range(0, keys.Count - 1)];
+            string key = keys[UnityEngine.Random.Range(0, keys.Count)];
             return new KeyValuePair<string, List<string>>(key: key, value: dict[key]);
         }
 
         public static List<Character> GetCharactersInRange(Vector3 position, float range)
         {
-            Collider[] objs_near = Physics.OverlapSphere(position, range);
-            List <Character> characters = new List<Character>();
-
-            foreach (var col in objs_near) {
-                var chara = col.GetComponentInChildren<Character>();
-                if (chara != null) { characters.Add(chara); }
-            }
-
+            // Vanilla's registry walk: no physics query, no component lookups, no duplicate hits from
+            // multi-collider creatures. The old Physics.OverlapSphere ran with no layer mask (touching
+            // terrain and props) and did a GetComponentInChildren walk per collider - on death paths
+            // like SoulEater and per-redirect paths like LifeLink.
+            List<Character> characters = new List<Character>();
+            Character.GetCharactersInRange(position, range, characters);
             return characters;
         }
 
@@ -253,11 +251,16 @@ namespace StarLevelSystem.common
                     break;
 
                 case DamageEstimateType.Lowest:
+                    // Track the minimum properly: comparing against a 0-initialized dmg meant no
+                    // non-negative weapon damage could ever be "lower", so Lowest always returned 0.
+                    float lowest = float.MaxValue;
                     foreach (var defweapon in noid.m_defaultItems) {
                         float wepdmg = defweapon.GetComponent<ItemDrop>().m_itemData.m_shared.m_damages.GetTotalDamageOptions(true, true, false, modElement: elementMod);
                         //Logger.LogDebug($"Checking damage of {defweapon.name} - dmg:{wepdmg}");
-                        if (wepdmg < dmg) { dmg = wepdmg; }
+                        if (wepdmg < lowest) { lowest = wepdmg; }
                     }
+                    // No default items: leave dmg at 0 so the current-weapon fallback below applies.
+                    if (lowest != float.MaxValue) { dmg = lowest; }
                     break;
             }
 
@@ -272,7 +275,7 @@ namespace StarLevelSystem.common
             }
             dmg = Mathf.Clamp(dmg, 0, 500f);
             if (float.IsNaN(dmg)) { dmg = 100f; }
-            Logger.LogDebug($"Estimated {chara.m_name} damage as: {dmg}");
+            if (Logger.IsDebugEnabled) { Logger.LogDebug($"Estimated {chara.m_name} damage as: {dmg}"); }
             return dmg;
         }
 
@@ -291,58 +294,33 @@ namespace StarLevelSystem.common
             return primaryDict;
         }
 
-        public static BiomeSpecificSetting MutatingMergeBiomeConfigs(BiomeSpecificSetting prioritycfg, BiomeSpecificSetting othercfg)
+        // Merges a biome-specific config over the Biome.All config into a FRESH instance: biome-specific
+        // values win where they are set, the All config fills the gaps, and neither input is modified.
+        // The previous version wrote the All values INTO the live biome-specific config (inverting the
+        // precedence and permanently polluting the loaded settings on every cache build) and returned an
+        // object sharing the All config's dictionary references.
+        public static BiomeSpecificSetting MergeBiomeConfigs(BiomeSpecificSetting prioritycfg, BiomeSpecificSetting othercfg)
         {
             BiomeSpecificSetting biomecfg = new BiomeSpecificSetting() {
-                BiomeMaxLevelOverride = othercfg.BiomeMaxLevelOverride,
-                BiomeMinLevelOverride = othercfg.BiomeMinLevelOverride,
-                CreatureBaseValueModifiers = othercfg.CreatureBaseValueModifiers,
-                CreaturePerLevelValueModifiers = othercfg.CreaturePerLevelValueModifiers,
-                CreatureSpawnsDisabled = othercfg.CreatureSpawnsDisabled,
-                CustomCreatureLevelUpChance = othercfg.CustomCreatureLevelUpChance,
-                DamageRecievedModifiers = othercfg.DamageRecievedModifiers,
-                DistanceScaleModifier = othercfg.DistanceScaleModifier,
-                SpawnRateModifier = othercfg.SpawnRateModifier,
+                BiomeMaxLevelOverride = prioritycfg.BiomeMaxLevelOverride != 0 ? prioritycfg.BiomeMaxLevelOverride : othercfg.BiomeMaxLevelOverride,
+                BiomeMinLevelOverride = prioritycfg.BiomeMinLevelOverride != 0 ? prioritycfg.BiomeMinLevelOverride : othercfg.BiomeMinLevelOverride,
+                DistanceScaleModifier = prioritycfg.DistanceScaleModifier != 1f ? prioritycfg.DistanceScaleModifier : othercfg.DistanceScaleModifier,
+                // Biome-specific spawn rate overrides the All-biome value only when explicitly changed.
+                SpawnRateModifier = prioritycfg.SpawnRateModifier != 1f ? prioritycfg.SpawnRateModifier : othercfg.SpawnRateModifier,
             };
-            if (prioritycfg.CustomCreatureLevelUpChance != null) { biomecfg.CustomCreatureLevelUpChance = prioritycfg.CustomCreatureLevelUpChance; }
-            biomecfg.BiomeMaxLevelOverride = prioritycfg.BiomeMaxLevelOverride;
-            biomecfg.DistanceScaleModifier = prioritycfg.DistanceScaleModifier;
-            // Biome-specific spawn rate overrides the All-biome value only when explicitly changed.
-            if (prioritycfg.SpawnRateModifier != 1f) {
-                biomecfg.SpawnRateModifier = prioritycfg.SpawnRateModifier;
-            }
-            if (biomecfg.CreatureBaseValueModifiers != null && prioritycfg.CreatureBaseValueModifiers != null)
-            {
-                biomecfg.CreatureBaseValueModifiers.ToList().ForEach(x => prioritycfg.CreatureBaseValueModifiers[x.Key] = x.Value);
-            }
-            else if (prioritycfg.CreatureBaseValueModifiers != null)
-            {
-                biomecfg.CreatureBaseValueModifiers = prioritycfg.CreatureBaseValueModifiers;
-            }
 
-            if (biomecfg.CreaturePerLevelValueModifiers != null && prioritycfg.CreaturePerLevelValueModifiers != null)
-            {
-                biomecfg.CreaturePerLevelValueModifiers.ToList().ForEach(x => prioritycfg.CreaturePerLevelValueModifiers[x.Key] = x.Value);
-            }
-            else if (prioritycfg.CreaturePerLevelValueModifiers != null)
-            {
-                biomecfg.CreaturePerLevelValueModifiers = prioritycfg.CreaturePerLevelValueModifiers;
-            }
+            SortedDictionary<int, float> levelupSource = prioritycfg.CustomCreatureLevelUpChance ?? othercfg.CustomCreatureLevelUpChance;
+            if (levelupSource != null) { biomecfg.CustomCreatureLevelUpChance = new SortedDictionary<int, float>(levelupSource); }
 
-            if (biomecfg.DamageRecievedModifiers != null && prioritycfg.DamageRecievedModifiers != null)
-            {
-                biomecfg.DamageRecievedModifiers.ToList().ForEach(x => prioritycfg.DamageRecievedModifiers[x.Key] = x.Value);
-            }
-            else if (prioritycfg.DamageRecievedModifiers != null)
-            {
-                biomecfg.DamageRecievedModifiers = prioritycfg.DamageRecievedModifiers;
-            }
+            biomecfg.CreatureBaseValueModifiers = MergeDictionaryPreferPriority(prioritycfg.CreatureBaseValueModifiers, othercfg.CreatureBaseValueModifiers);
+            biomecfg.CreaturePerLevelValueModifiers = MergeDictionaryPreferPriority(prioritycfg.CreaturePerLevelValueModifiers, othercfg.CreaturePerLevelValueModifiers);
+            biomecfg.DamageRecievedModifiers = MergeDictionaryPreferPriority(prioritycfg.DamageRecievedModifiers, othercfg.DamageRecievedModifiers);
 
-            if (prioritycfg.CreatureSpawnsDisabled != null) {
-                biomecfg.CreatureSpawnsDisabled = prioritycfg.CreatureSpawnsDisabled;
-                if (othercfg.CreatureSpawnsDisabled != null) {
-                    biomecfg.CreatureSpawnsDisabled = prioritycfg.CreatureSpawnsDisabled.Union(othercfg.CreatureSpawnsDisabled).ToList();
-                }
+            if (prioritycfg.CreatureSpawnsDisabled != null || othercfg.CreatureSpawnsDisabled != null) {
+                List<string> disabled = new List<string>();
+                if (othercfg.CreatureSpawnsDisabled != null) { disabled.AddRange(othercfg.CreatureSpawnsDisabled); }
+                if (prioritycfg.CreatureSpawnsDisabled != null) { disabled = disabled.Union(prioritycfg.CreatureSpawnsDisabled).ToList(); }
+                biomecfg.CreatureSpawnsDisabled = disabled;
             }
 
             if (prioritycfg.NightSettings != null || othercfg.NightSettings != null) {
@@ -373,6 +351,20 @@ namespace StarLevelSystem.common
                 biomecfg.NightSettings = null;
             }
             return biomecfg;
+        }
+
+        // Fresh dictionary containing the baseline entries with the priority entries overlaid on top.
+        // Null when both inputs are null, matching the "section not configured" convention.
+        private static Dictionary<TKey, float> MergeDictionaryPreferPriority<TKey>(Dictionary<TKey, float> priority, Dictionary<TKey, float> baseline) {
+            if (priority == null && baseline == null) { return null; }
+            Dictionary<TKey, float> merged = new Dictionary<TKey, float>();
+            if (baseline != null) {
+                foreach (KeyValuePair<TKey, float> kvp in baseline) { merged[kvp.Key] = kvp.Value; }
+            }
+            if (priority != null) {
+                foreach (KeyValuePair<TKey, float> kvp in priority) { merged[kvp.Key] = kvp.Value; }
+            }
+            return merged;
         }
 
         /// <summary>

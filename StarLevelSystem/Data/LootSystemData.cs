@@ -1,7 +1,6 @@
-﻿using StarLevelSystem.common;
+using StarLevelSystem.common;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Data
@@ -178,25 +177,6 @@ namespace StarLevelSystem.Data
             }
         };
 
-        internal static void Init()
-        {
-            // Load the default configuration
-            SLS_Drop_Settings = DefaultDropConfiguration;
-            try
-            {
-                UpdateYamlConfig(File.ReadAllText(ValConfig.creatureLootFilePath));
-            }
-            catch (Exception e) {
-                SLS_Drop_Settings = DefaultDropConfiguration;
-                Jotunn.Logger.LogWarning($"There was an error updating the Loot Level values, defaults will be used. Exception: {e}"); 
-            }
-        }
-        public static string YamlDefaultConfig()
-        {
-            var yaml = DataObjects.yamlSerializer.Serialize(DefaultDropConfiguration);
-            return yaml;
-        }
-
         internal static void AttachPrefabsWhenReady() {
             AttachLootPrefabs(SLS_Drop_Settings);
         }
@@ -220,20 +200,13 @@ namespace StarLevelSystem.Data
 
         }
 
-        public static bool UpdateYamlConfig(string yaml)
-        {
-            try {
-                SLS_Drop_Settings = DataObjects.yamlDeserializer.Deserialize<LootSettings>(yaml);
-                // Resolve all of the prefab references
-                AttachLootPrefabs(SLS_Drop_Settings);
-                Logger.LogDebug("Loaded new Creature loot configuration.");
-            }
-            catch (Exception ex)
-            {
-                StarLevelSystem.Log.LogError($"Failed to parse LootLevelSettings YAML: {ex.Message}");
-                return false;
-            }
-            return true;
+        // Apply hook for LootSettings.yaml. AttachLootPrefabs resolves prefab names against the live
+        // table, which does not exist during Awake -- OnPrefabsRegistered re-runs it (AttachPrefabsWhenReady).
+        internal static void ApplyLoaded(LootSettings parsed) {
+            SLS_Drop_Settings = parsed;
+            // Resolve all of the prefab references
+            AttachLootPrefabs(SLS_Drop_Settings);
+            Logger.LogDebug("Loaded new Creature loot configuration.");
         }
 
         // Persists a per-creature custom loot table onto the creature's ZDO so it survives

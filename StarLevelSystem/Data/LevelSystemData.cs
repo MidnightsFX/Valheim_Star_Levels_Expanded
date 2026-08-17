@@ -1,4 +1,4 @@
-﻿using Jotunn;
+using Jotunn;
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.modules;
@@ -11,7 +11,6 @@ using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -541,36 +540,31 @@ namespace StarLevelSystem.Data
         };
 
 
-        internal static void Init() {
-            // Load the default configuration
-            SLE_Level_Settings = DefaultConfiguration;
-            Colorization.UpdateMapColorSelection();
-            Colorization.UpdateZoneOverlayColorSelection();
-            try {
-                UpdateYamlConfig(File.ReadAllText(ValConfig.levelsFilePath));
+        // Everything that has to happen once new level settings exist, whatever produced them -- a hand
+        // edit, a server broadcast, or the in-game editor. Registered as the Apply hook for
+        // LevelSettings.yaml, so all three routes run identically.
+        internal static void ApplyLoaded(DataObjects.CreatureLevelSettings parsed) {
+            SLE_Level_Settings = parsed;
+            ApplyLevelupGenerators();
+            Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
+            DistanceScaleSystem.DelayedMinimapSetup();
+            CompositeLazyCache.FlushCache();
+            ConditionalScaleSystem.ResetCache();
+            // Coroutine rather than a straight loop: this walks every Character in the scene and is
+            // budgeted per frame. Harmless at startup, where the scene is empty.
+            // Character.GetAllCharacters() is the live registry - Resources.FindObjectsOfTypeAll also
+            // walked every loaded asset (including prefabs) synchronously on each reload.
+            // Only one pass runs at a time: two overlapping passes share the ForceUpdateHealth/Size
+            // flags, and whichever finished first cleared them mid-run for the other.
+            var runner = TaskRunner.Run();
+            if (runningAttributeUpdate != null) {
+                runner.StopCoroutine(runningAttributeUpdate);
+                runningAttributeUpdate = null;
             }
-            catch (Exception e) { Jotunn.Logger.LogWarning($"There was an error updating the Creature Level values, defaults will be used. Exception: {e}"); }
+            runningAttributeUpdate = runner.StartCoroutine(UpdateCreatureAttributes(new List<Character>(Character.GetAllCharacters())));
         }
-        public static string YamlDefaultConfig() {
-            var yaml = DataObjects.yamlSerializer.Serialize(DefaultConfiguration);
-            return yaml;
-        }
-        public static bool UpdateYamlConfig(string yaml) {
-            try {
-                SLE_Level_Settings = DataObjects.yamlDeserializer.Deserialize<DataObjects.CreatureLevelSettings>(yaml);
-                ApplyLevelupGenerators();
-                Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
-                DistanceScaleSystem.DelayedMinimapSetup();
-                CompositeLazyCache.FlushCache();
-                ConditionalScaleSystem.ResetCache();
-                TaskRunner.Run().StartCoroutine(UpdateCreatureAttributes(new List<Character>(Resources.FindObjectsOfTypeAll<Character>())));
-            }
-            catch (Exception ex) {
-                StarLevelSystem.Log.LogError($"Failed to parse CreatureLevelSettings YAML: {ex.Message}");
-                return false;
-            }
-            return true;
-        }
+
+        private static Coroutine runningAttributeUpdate;
 
         // Expands any configured level generators (inline or referenced via CustomLevelupGenerators) into the
         // levelup-chance tables of the default/biome/creature sections, overwriting the existing chances when
@@ -607,17 +601,23 @@ namespace StarLevelSystem.Data
             // Without this, SetSizeModification short-circuits on the persisted SLS_SIZE and a changed
             // Size/SizePerLevel would not apply to already-spawned creatures.
             SizeModifications.ForceUpdateSize = true;
-            foreach (var character in characters) {
-                if (i >= ValConfig.NumberOfCacheUpdatesPerFrame.Value) {
-                    yield return sleep;
-                    i = 0;
+            try {
+                foreach (var character in characters) {
+                    if (i >= ValConfig.NumberOfCacheUpdatesPerFrame.Value) {
+                        yield return sleep;
+                        i = 0;
+                    }
+                    if (character == null || character.m_nview == null || character.m_nview.IsValid() == false) { continue; }
+                    CreatureSetupControl.CreatureSetup(character, delay: 0);
+                    i++;
                 }
-                if (character == null || character.m_nview == null || character.m_nview.IsValid() == false) { continue; }
-                CreatureSetupControl.CreatureSetup(character, delay: 0);
-                i++;
+            } finally {
+                // Also runs when a newer config apply stops this coroutine mid-pass (iterator
+                // disposal executes finally blocks), so the force flags can't be left stuck on.
+                HealthModifications.ForceUpdateHealth = false;
+                SizeModifications.ForceUpdateSize = false;
+                runningAttributeUpdate = null;
             }
-            HealthModifications.ForceUpdateHealth = false;
-            SizeModifications.ForceUpdateSize = false;
         }
     }
 }

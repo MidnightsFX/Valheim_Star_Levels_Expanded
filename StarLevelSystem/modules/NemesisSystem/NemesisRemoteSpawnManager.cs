@@ -22,8 +22,12 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         public void Setup() {
-            NemesisRemoteSpawnControl.LoadState();
-            NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs();
+            // The registry and the ZDO reconcile are server-only state; a pure client never reads
+            // either, and previously paid a full-world ZDO scan at world load for nothing.
+            if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                NemesisRemoteSpawnControl.LoadState();
+                StartCoroutine(NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs());
+            }
             // Give players a couple of minutes after load before the first placement wave.
             if (ZNet.instance != null) {
                 nextCheckTime = ZNet.instance.GetTimeSeconds() + 120;
@@ -52,11 +56,17 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         private void RunSpawnCycle(RemoteNemesisSpawnSettings settings) {
-            // Re-add any dormant spawners missing from the in-memory registry so caps stay accurate.
-            NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs();
+            StartCoroutine(RunSpawnCycleAsync(settings));
+        }
 
-            if (NemesisRemoteSpawnControl.CountActiveTotal() + pendingScouts >= settings.MaxConcurrentTotal) { return; }
-            if (settings.TargetPerBiome == null || settings.TargetPerBiome.Count == 0) { return; }
+        private IEnumerator RunSpawnCycleAsync(RemoteNemesisSpawnSettings settings) {
+            // Re-add any dormant spawners missing from the in-memory registry so caps stay accurate.
+            // The reconcile pumps the world ZDO table one slice per frame; the rest of the cycle waits
+            // on it so the cap counts below are accurate.
+            yield return NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs();
+
+            if (NemesisRemoteSpawnControl.CountActiveTotal() + pendingScouts >= settings.MaxConcurrentTotal) { yield break; }
+            if (settings.TargetPerBiome == null || settings.TargetPerBiome.Count == 0) { yield break; }
 
             // Collect biomes that are below their target and cap.
             List<Heightmap.Biome> needy = new List<Heightmap.Biome>();
@@ -66,7 +76,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 if (settings.MaxConcurrentPerBiome != null && settings.MaxConcurrentPerBiome.TryGetValue(kv.Key, out int c)) { cap = c; }
                 if (active < kv.Value && active < cap) { needy.Add(kv.Key); }
             }
-            if (needy.Count == 0) { return; }
+            if (needy.Count == 0) { yield break; }
             needy = needy.ShuffleList();
 
             int budget = settings.MaxSpawnsPerInterval;

@@ -30,6 +30,19 @@ namespace StarLevelSystem.modules.LevelSystem {
             return max_level + 1;
         }
 
+        // Whether this creature's level may be rerolled/corrected when it is loaded above the maximum.
+        // Tames have their own gate so lowering the max level cannot strip stars from bred pets.
+        // Like the bound above, the reroll gate in DetermineLevel and the over-level correction in
+        // CompositeLazyCache.StartZOwnerCreatureRoutines MUST both use this same check: if the
+        // correction is gated off while the roll gate is not, an over-level creature re-rolls a fresh
+        // level on every cache build while nothing ever writes the correction back to its ZDO.
+        public static bool OverLevelRerollEnabled(Character character) {
+            if (character != null && character.m_nview != null && character.IsTamed()) {
+                return ValConfig.OverLevelTamesGetRerolledOnLoad.Value;
+            }
+            return ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value;
+        }
+
         public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, int leveloverride = 0, bool allowRoll = true) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
@@ -44,7 +57,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // Already includes the +1 star offset, so this is directly comparable to the stored ZDO level.
             int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings);
             //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > max_level}");
-            if (clevel <= 0 || (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > max_level)) {
+            if (clevel <= 0 || (OverLevelRerollEnabled(character) && clevel > max_level)) {
                 // Strict ZDO-owner authority: only the roller (the ZDO owner) ever rolls a level.
                 // A non-owner must never invent a value - it reads the synced ZDO and waits. Returning
                 // the synced level, or 0 when it hasn't replicated yet, signals "not ready" to the caller.

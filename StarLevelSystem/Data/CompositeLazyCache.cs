@@ -213,7 +213,7 @@ namespace StarLevelSystem.Data
             // invalidate/rebuild cycle) whenever a BiomeMaxLevelOverride was configured.
             LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out _, out BiomeSpecificSetting overlevelBiomeSettings, out _);
             int maxlevel = LevelSelection.GetMaxCreatureLevel(chara, characterEntry.CreatureSettings, overlevelBiomeSettings);
-            if (ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value && clevel > maxlevel)
+            if (LevelSelection.OverLevelRerollEnabled(chara) && clevel > maxlevel)
             {
                 // Rebuild level?
                 characterEntry = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);

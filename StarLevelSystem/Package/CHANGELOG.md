@@ -3,6 +3,8 @@
  ```
 - Adds options to ignore player built prefabs on a group-by-group basis for resets
 	- This allows forcing resets on high value locations, such as dungeons/ores (it still skips for players present and wards)
+- Adds a new config option OverLevelTamesGetRerolledOnLoad which defaults to false. This controls if tamed creatures which are over a biome or global max level limit get rerolled
+- Adds a new command sls-creature-setlevel, which sets the closest creatures level
  ```
 
 **1.6.0**

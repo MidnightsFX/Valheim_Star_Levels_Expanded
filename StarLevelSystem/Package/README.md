@@ -717,6 +717,7 @@ client setting if you prefer plain text).
 
 - `sls-help [area]` - lists the StarLevelSystem commands, optionally just one area
 - `sls-creature-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures
+- `sls-creature-setlevel [level] [range:64]` - sets the closest creature (within the search range) to the given level. Level 1 is no stars, 2 is one star, and so on; clamped to that creature's configured maximum
 - `sls-mod-give [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
 - `sls-loot-dump` - dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
 - `sls-zone-rebuild` - regenerates the zone map from the world and redraws the minimap overlay. Resets zone kill counts and levels

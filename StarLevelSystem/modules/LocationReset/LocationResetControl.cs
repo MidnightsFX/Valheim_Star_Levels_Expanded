@@ -321,7 +321,11 @@ namespace StarLevelSystem.modules.LocationReset {
                         continue;
                     }
 
-                    ZoneProtectionScan.ProtectionResult protection = ZoneProtectionScan.ScanZone(zone, null, true);
+                    // Same governing-entry rules as the background sweep: force bypasses timers, never
+                    // protection, and an admin testing a group's ignores wants force to behave the way
+                    // the sweep will.
+                    ZoneProtectionScan.ProtectionResult protection =
+                        ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
                     if (protection.Blocked) {
                         blocked++;
                         report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);

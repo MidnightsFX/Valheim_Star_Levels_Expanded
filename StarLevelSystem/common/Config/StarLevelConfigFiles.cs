@@ -525,8 +525,6 @@ namespace StarLevelSystem.common {
 # nearby. Timers are in real-world hours. NOTHING resets until both the EnableLocationReset
 # BepInEx setting and the Enabled flag below are turned on.
 #
-# BACK UP YOUR WORLD before enabling this.
-#
 # --- Reset groups: start here ---
 # ResetGroups is where the work happens. A group both ENABLES a set of targets and gives them
 # their settings, in one block:
@@ -640,10 +638,72 @@ namespace StarLevelSystem.common {
 # Tombstones can never be ignored, and anything in ProtectedPrefabs wins over an ignore.
 # Tamed creatures are never deleted, whatever the categories or ignore lists say.
 #
+# --- Per-group and per-entry Protection: scoped ignores ---
+# Protection can be set at three levels: Defaults (everywhere), a reset group (chunks
+# holding that group's content), and a single Locations/Vegetation entry (chunks holding
+# that one target). Rules resolve entry -> group -> Defaults per CATEGORY, and an override
+# replaces the whole rule for that category - Action AND Ignored list together. A group
+# that writes its own PlayerBuiltPiece rule therefore no longer inherits the fire_pit
+# ignore from Defaults in its chunks; re-list it if you still want it.
+#
+# An override applies to every protection decision for the chunks it governs: whether the
+# chunk is blocked from resetting at all, and what survives the reset when it runs. This is
+# how you stop player litter freezing a resource group without loosening protection
+# anywhere else. Both rule forms work here, same as in Defaults - a bare action, or a
+# mapping with an Ignored list:
+#
+#   ResetGroups:
+#     Ores:
+#       ResetHours: 48
+#       Members: [rock4_copper, MineRock_Tin]
+#       Protection:
+#         PlayerBuiltPiece: Ignore        # player builds neither block ore chunks nor
+#                                         #   survive their reset - they are DELETED by it
+#         Container:
+#           Action: Block                 # chests still block ore chunks...
+#           Ignored: [piece_chest_wood]   # ...except plain wood chests, which are deleted
+#
+#   Locations:
+#     TrollCave02:
+#       Protection:
+#         PlayerBuiltPiece: Ignore        # scoped to chunks holding this one location
+#
+# Which chunks a group governs is decided by CONTENT, not distance: a chunk is governed by
+# the location recorded in it plus every configured vegetation prefab the sweep has seen
+# there. A blocking object standing in a neighbouring chunk (within ProtectionRadius) is
+# judged by the rules of the chunk being reset, and a chunk holding nothing configured is
+# always judged by Defaults alone.
+#
+# Where the content of two groups shares a chunk, the stricter rule wins per object: an
+# ignore takes effect only when every governing target agrees, so relaxing the Ores group
+# can never expose a crypt that happens to share the chunk. A disabled target gets no vote.
+# And remember that only pieces a player actually BUILT block in the first place -
+# world-generated furniture never does - so these ignores exist for genuine player litter,
+# like the workbench abandoned on an ore spawn.
+#
+# Two categories never take a group or entry override: Ward (a player's explicit claim on
+# an area) and Tombstone (their dropped gear). Defaults alone govern those two, and an
+# override for either is dropped with a warning at load. ProtectedPrefabs also still wins
+# over every ignore, at every level.
+#
+# --- ProtectionRadius ---
+# How far from a chunk's centre a player build still protects that chunk, in metres.
+# Default 48. The scan always reads a chunk and its 8 neighbours, so 96 means the whole 3x3
+# block protects, and is the most it can ever see; values are clamped to 32-96.
+#
+# Lower it if too little is resetting: at the full 96m one forgotten chest protects nine
+# chunks, which is the usual reason a server's crypts never come back. Raise it if players
+# report builds near a chunk edge being cleared.
+#
+#   Defaults:
+#     ProtectionRadius: 48
+#
 # --- ExtraTerrainRadius ---
 # Per location: metres of terrain reset BEYOND the location's own radius, for the ramps and
-# moats players dig around the outside. Clamped to 64m, which is as far as the protection
-# scan actually checks for player property.
+# moats players dig around the outside. Clamped to ProtectionRadius minus 32m (so 32m at the
+# default), which is as far past a location's own footprint as the protection scan actually
+# checked for player property - resetting terrain further would flatten ground nobody looked
+# at. Raising ProtectionRadius raises this ceiling with it.
 #
 # --- Advanced sections, omitted while unused ---
 # These four are left out of the generated file because their defaults are right for almost

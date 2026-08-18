@@ -60,11 +60,31 @@ namespace StarLevelSystem.Data {
         // timed off the zone stamp rather than a resolved entry.
         internal static CronSchedule DefaultSchedule { get; private set; }
 
-        // Ceiling on ExtraTerrainRadius, and not an arbitrary number: ScanZone covers the chunk plus
-        // its 8 neighbours (+/-96m from the chunk centre) and a location sits within 32m of that
-        // centre, so 64m is the largest extra reach the protection scan provably covers. Past it we
-        // would be flattening ground that was never checked for player property.
-        internal const float MaxExtraTerrainRadius = 64f;
+        // Hard reach of the protection scan: the chunk plus its 8 neighbours is +/-96m from the chunk
+        // centre, so nothing beyond this can be seen no matter what the config asks for.
+        internal const float MaxProtectionRadius = 96f;
+        // Below this a location could not protect its own footprint -- a location sits within 32m of
+        // the chunk centre.
+        internal const float MinProtectionRadius = 32f;
+
+        // How far a player build protects from the chunk centre. See LocationResetDefaults.
+        internal static float ProtectionRadius {
+            get {
+                float configured = SLE_LocationReset_Settings?.Defaults?.ProtectionRadius ?? 48f;
+                // System.Math rather than Mathf: this file owns config and derived lookups and
+                // deliberately pulls in no UnityEngine.
+                return Math.Max(MinProtectionRadius, Math.Min(MaxProtectionRadius, configured));
+            }
+        }
+
+        // Ceiling on ExtraTerrainRadius, and not an arbitrary number: it is exactly how far past a
+        // location's own 32m footprint the protection scan reached. DERIVED from ProtectionRadius
+        // rather than fixed, because the two must move together -- resetting terrain further out than
+        // player property was checked for is flattening ground nobody looked at, which is the whole
+        // reason this ceiling exists.
+        internal static float MaxExtraTerrainRadius {
+            get { return ProtectionRadius - MinProtectionRadius; }
+        }
 
         // Set when a conflicting reset mod is installed. Hard-gates the sweep independently of the
         // yaml Enabled flag so nothing can turn it back on mid-session.
@@ -263,6 +283,7 @@ namespace StarLevelSystem.Data {
             if (MinEnabledIntervalSeconds == float.MaxValue) { MinEnabledIntervalSeconds = 0f; }
 
             WarnOnProtectionConflicts(cfg);
+            WarnOnUnoverridableProtection(cfg);
             WarnOnOversizedTerrainRadius();
 
             Logger.LogLocationReset($"Config rebuilt: {LocationsByHash.Values.Count(e => e.Enabled)} enabled locations, " +
@@ -286,16 +307,55 @@ namespace StarLevelSystem.Data {
             }
         }
 
-        private static void WarnOnOversizedTerrainRadius() {
-            foreach (ResolvedResetEntry entry in LocationsByHash.Values) {
-                if (entry.Enabled == false || entry.ExtraTerrainRadius <= MaxExtraTerrainRadius) { continue; }
-                Logger.LogLocationResetWarning($"'{entry.Name}' sets ExtraTerrainRadius {entry.ExtraTerrainRadius:0}m, " +
-                    $"above the {MaxExtraTerrainRadius:0}m limit the protection scan covers. It will be clamped to {MaxExtraTerrainRadius:0}m.");
+        // Ward and Tombstone protection is governed by Defaults alone; Resolve silently drops group
+        // and entry overrides for them (see the comment there for why). This is the one warning per
+        // offending group or entry -- warning inside Resolve would repeat it once per group member.
+        private static void WarnOnUnoverridableProtection(LocationResetConfiguration cfg) {
+            if (cfg.ResetGroups != null) {
+                foreach (KeyValuePair<string, LocationResetGroup> kvp in cfg.ResetGroups) {
+                    WarnIfUnoverridable(kvp.Value?.Protection, $"Group '{kvp.Key}'");
+                }
+            }
+            WarnEntriesUnoverridable(cfg.Locations);
+            WarnEntriesUnoverridable(cfg.Vegetation);
+        }
+
+        private static void WarnEntriesUnoverridable(Dictionary<string, LocationResetEntry> entries) {
+            if (entries == null) { return; }
+            foreach (KeyValuePair<string, LocationResetEntry> kvp in entries) {
+                WarnIfUnoverridable(kvp.Value?.Protection, $"'{kvp.Key}'");
             }
         }
 
-        // Default-path ignore lookup, for the zone-wide protection scan which runs before any specific
-        // location entry is known and therefore consults Defaults.Protection.
+        private static void WarnIfUnoverridable(Dictionary<ProtectionCategory, ProtectionRule> protection, string where) {
+            if (protection == null) { return; }
+            foreach (KeyValuePair<ProtectionCategory, ProtectionRule> rule in protection) {
+                if (rule.Value == null || IsUnoverridable(rule.Key) == false) { continue; }
+                Logger.LogLocationResetWarning($"{where} sets Protection for {rule.Key}, which only Defaults may govern: " +
+                    "wards and tombstones never stop blocking just because a reset group shares their chunk. The override is ignored.");
+            }
+        }
+
+        private static bool IsUnoverridable(ProtectionCategory category) {
+            return category == ProtectionCategory.Ward || category == ProtectionCategory.Tombstone;
+        }
+
+        private static void WarnOnOversizedTerrainRadius() {
+            // Names the ProtectionRadius it derives from, because the ceiling now moves when that is
+            // tuned: an admin who lowers ProtectionRadius and then finds their terrain radius clamped
+            // needs to see the two are connected rather than hunt for a limit that seems to have changed
+            // on its own.
+            float ceiling = MaxExtraTerrainRadius;
+            foreach (ResolvedResetEntry entry in LocationsByHash.Values) {
+                if (entry.Enabled == false || entry.ExtraTerrainRadius <= ceiling) { continue; }
+                Logger.LogLocationResetWarning($"'{entry.Name}' sets ExtraTerrainRadius {entry.ExtraTerrainRadius:0}m, " +
+                    $"above the {ceiling:0}m the protection scan covers at ProtectionRadius {ProtectionRadius:0}m. " +
+                    $"It will be clamped to {ceiling:0}m. Raise ProtectionRadius to reset terrain further out.");
+            }
+        }
+
+        // Default-path ignore lookup, for zones with no governing entries -- nothing configured lives
+        // there, so Defaults.Protection judges alone (see ZoneProtectionScan.ObjectBlocks).
         internal static bool DefaultIgnores(ProtectionCategory category, int prefabHash) {
             Dictionary<ProtectionCategory, ProtectionRule> defaults = SLE_LocationReset_Settings?.Defaults?.Protection;
             if (defaults != null && defaults.TryGetValue(category, out ProtectionRule rule) && rule != null) {
@@ -414,7 +474,9 @@ namespace StarLevelSystem.Data {
             return modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.ContainsKey(prefabHash);
         }
 
-        private static string ResolveKnownName(int prefabHash) {
+        // internal rather than private: the protection scan resolves a blocked chunk's LocationProxy
+        // through this so a skip line can name the location it is starving.
+        internal static string ResolveKnownName(int prefabHash) {
             if (KnownNames.TryGetValue(prefabHash, out string name)) { return name; }
             if (modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.TryGetValue(prefabHash, out string prefabName)) { return prefabName; }
             return null;
@@ -640,17 +702,26 @@ namespace StarLevelSystem.Data {
 
             // Whole-rule override per category, so an entry that customises an Action does not
             // silently inherit nothing for Ignored (and vice versa). Group sits between the two.
+            //
+            // Ward and Tombstone never take a group or entry override -- Defaults alone govern them.
+            // A group ignoring "player builds in general" is scoped to content in that group's chunks,
+            // but a ward is a player's explicit claim on an area and a tombstone holds their dropped
+            // gear; neither should stop protecting because an ore vein shares the chunk. Filtered
+            // silently here because Resolve runs once per member; WarnOnUnoverridableProtection warns
+            // once per offending group or entry at load.
             Dictionary<ProtectionCategory, ProtectionRule> protection =
                 new Dictionary<ProtectionCategory, ProtectionRule>(defaults.Protection);
             if (group?.Protection != null) {
                 foreach (KeyValuePair<ProtectionCategory, ProtectionRule> over in group.Protection) {
                     if (over.Value == null) { continue; }
+                    if (IsUnoverridable(over.Key)) { continue; }
                     protection[over.Key] = over.Value;
                 }
             }
             if (entry.Protection != null) {
                 foreach (KeyValuePair<ProtectionCategory, ProtectionRule> over in entry.Protection) {
                     if (over.Value == null) { continue; }
+                    if (IsUnoverridable(over.Key)) { continue; }
                     protection[over.Key] = over.Value;
                 }
             }

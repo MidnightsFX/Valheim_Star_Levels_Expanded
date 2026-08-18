@@ -1065,6 +1065,11 @@ namespace StarLevelSystem.common
             // around the OUTSIDE of a dungeon. Additive, and clamped at reset time.
             [DefaultValue(0f)]
             public float ExtraTerrainRadius { get; set; } = 0f;
+            // How far from a chunk's centre a player build has to be before it stops protecting that
+            // chunk, in metres. The scan always reads the chunk and its 8 neighbours, so 96m is the
+            // most it can ever see and anything at or above that means "the whole 3x3 block blocks".
+            [DefaultValue(64f)]
+            public float ProtectionRadius { get; set; } = 48f;
             public Dictionary<ProtectionCategory, ProtectionRule> Protection { get; set; } = DefaultProtection();
 
             public static Dictionary<ProtectionCategory, ProtectionRule> DefaultProtection() {

@@ -1,3 +1,10 @@
+**1.6.1**
+ ---
+ ```
+- Adds options to ignore player built prefabs on a group-by-group basis for resets
+	- This allows forcing resets on high value locations, such as dungeons/ores (it still skips for players present and wards)
+ ```
+
 **1.6.0**
  ---
  ```

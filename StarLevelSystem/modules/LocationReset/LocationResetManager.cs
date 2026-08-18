@@ -128,12 +128,31 @@ namespace StarLevelSystem.modules.LocationReset {
             }
         }
 
+        // Beyond this from the origin a zone is not terrain. Vanilla's world ends at
+        // WorldGenerator.waterEdge (10,500m), but this is deliberately an order of magnitude looser so
+        // a world-expansion mod is not silently cut off -- the thing it exists to exclude sits at
+        // 1,000,000m, another order of magnitude further out again.
+        private const float OffWorldDistance = 100000f;
+
         private void RefreshSnapshot() {
             zoneSnapshot.Clear();
             if (ZoneSystem.instance?.m_generatedZones != null) {
-                zoneSnapshot.AddRange(ZoneSystem.instance.m_generatedZones);
+                foreach (Vector2i zone in ZoneSystem.instance.m_generatedZones) {
+                    // m_generatedZones includes the sector Valheim parks position-less ZDOs in, at
+                    // x=1,000,000 z=1,000,000 (zones ~15623-15629). It is not terrain, but it IS
+                    // permanently "loaded", so every lap it produced a run of chunk evaluations that
+                    // could only ever end in "zone is already loaded" -- 337 evaluations and 100% of
+                    // that skip class in one 28h log, each retried twice before being written off.
+                    if (IsOffWorld(zone)) { continue; }
+                    zoneSnapshot.Add(zone);
+                }
             }
             cursor = 0;
+        }
+
+        private static bool IsOffWorld(Vector2i zone) {
+            Vector3 center = ZoneSystem.GetZonePos(zone);
+            return Mathf.Abs(center.x) > OffWorldDistance || Mathf.Abs(center.z) > OffWorldDistance;
         }
 
         internal enum ZoneWork {
@@ -219,7 +238,12 @@ namespace StarLevelSystem.modules.LocationReset {
                 // every cycle; a base built over a crypt simply keeps it. No short retry here on
                 // purpose: a structure is not going to move in fifteen minutes, and this scan is the
                 // expensive part of a tick.
-                ZoneProtectionScan.ProtectionResult protection = ZoneProtectionScan.ScanZone(zone, null, true);
+                //
+                // Judged against the zone's own governing entries rather than bare Defaults, so a
+                // reset group's Protection overrides -- "player builds do not block ore resets" --
+                // decide blocking for chunks holding that group's content.
+                ZoneProtectionScan.ProtectionResult protection =
+                    ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
                 if (protection.Blocked) {
                     ProtectionBlockedZones++;
                     LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));

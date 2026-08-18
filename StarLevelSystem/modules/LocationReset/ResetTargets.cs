@@ -578,10 +578,11 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Base radius plus the configured extra, clamped.
         //
-        // The clamp is not arbitrary: ScanZone covers the chunk and its 8 neighbours (+/-96m from the
-        // chunk centre) and a location sits within 32m of that centre, so 64m is the furthest reach
-        // the protection scan provably checked for player property. Past it we would be flattening
-        // ground nobody looked at.
+        // The clamp is not arbitrary: a location sits within 32m of the chunk centre and the
+        // protection scan checked out to Defaults.ProtectionRadius, so ProtectionRadius - 32m is the
+        // furthest extra reach it provably covered. Past it we would be flattening ground nobody
+        // looked at. Both move together by construction -- see LocationResetData.MaxExtraTerrainRadius
+        // -- so tightening ProtectionRadius to recover reset coverage cannot silently outrun it.
         private static float TerrainRadiusFor(LocationResetData.ResolvedResetEntry entry, float exteriorRadius) {
             float baseRadius = entry.TerrainRadius > 0f ? entry.TerrainRadius : exteriorRadius;
             float extra = Mathf.Clamp(entry.ExtraTerrainRadius, 0f, LocationResetData.MaxExtraTerrainRadius);
@@ -939,13 +940,16 @@ namespace StarLevelSystem.modules.LocationReset {
         // Whether the protection policy says this object survives the clear.
         //
         // Classifies properly rather than asking only about PlayerBuiltPiece behind a creator check,
-        // which is why Preserve never worked: TryClassify recognises Tombstone, Ward and DroppedItem
-        // with NO creator test, and a dropped item's creator is always 0, so every one of them fell
+        // which is why Preserve never worked: TryClassify recognises Tombstone and DroppedItem with
+        // NO creator test, and a dropped item's creator is always 0, so every one of them fell
         // through and was destroyed despite DroppedItem shipping as Preserve.
+        // (Ward used to be creator-free here too, which is what let world-generated
+        // dverger_guardstone block resets; it is gated on a creator now.)
         //
-        // This is also the only place a per-entry or per-group Protection override takes effect. The
-        // zone scan runs with entry: null (it is zone-wide, before any location is chosen), so it can
-        // only ever consult Defaults.
+        // Per-entry and per-group Protection overrides apply here AND at the zone gate: the zone scan
+        // judges against the zone's governing entries (ZoneProtectionScan.GoverningEntries), while
+        // this judges each object against the specific entry being cleared. The gate combines entries
+        // fail-closed, so the two can still disagree -- and the safe side wins there too.
         private static bool ShouldPreserve(ZDO zdo, LocationResetData.ResolvedResetEntry entry) {
             // Fails closed ahead of everything else, matching WarnOnProtectionConflicts' promise that
             // ProtectedPrefabs beats an ignore list.

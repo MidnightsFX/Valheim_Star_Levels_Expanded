@@ -1,5 +1,6 @@
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.UI;
 using System.Collections.Generic;
@@ -74,8 +75,18 @@ namespace StarLevelSystem.common
             // Same sequence the patched vanilla spawn command uses to force a level, but the target may
             // be owned by another peer, so claim it first or the ZDO write would not replicate.
             if (closest.m_nview.IsOwner() == false) { closest.m_nview.ClaimOwnership(); }
-            CompositeLazyCache.GetAndSetLocalCache(closest, level, updateCache: true);
             closest.m_nview.GetZDO().Set(ZDOVars.s_level, level);
+            // GetLevel() reads m_level, and the owner-side setup only assigns it to creatures still sitting
+            // at their spawn level. Without this write the hud stars, the name budget and the per-level
+            // health all keep scaling off the old level even though the ZDO and the cache hold the new one.
+            closest.m_level = level;
+            DataObjects.CharacterCacheEntry entry = CompositeLazyCache.GetAndSetLocalCache(closest, level, updateCache: true);
+            if (entry != null)
+            {
+                // Health has to go through the forced path: the normal one skips any creature whose max
+                // health was already moved off its base, which is every creature SLS has already set up.
+                HealthModifications.ForceApplyHealthModifications(closest, entry);
+            }
             CreatureSetupControl.CreatureSetup(closest, leveloverride: level, multiply: false, delay: 0.01f);
             // Force rebuild of the HUD showing this characters level, otherwise it will not display a change.
             UIHudControl.InvalidateCacheEntry(closest);

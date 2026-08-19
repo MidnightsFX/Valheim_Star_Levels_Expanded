@@ -109,6 +109,7 @@ namespace StarLevelSystem.Data
                         NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "summoner",
                         SetupEvent = Summoner.Setup,
+                        TeardownEvent = Summoner.Teardown,
                     }
                 },
                 { ModifierNames.SoulEater.ToString(), new CreatureModifierDefinition()
@@ -580,8 +581,8 @@ namespace StarLevelSystem.Data
                 {ModifierNames.StaminaDrain.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {
-                        PerlevelPower = 2.0f,
-                        BasePower = 3.0f,
+                        PerlevelPower = 0.5f,
+                        BasePower = 1.0f,
                         // Fraction of the drain removed when the player defends. Dodge fully negates by default.
                         Config = new Dictionary<string, float>() {
                             { "BlockReduction", 0.25f },
@@ -604,8 +605,8 @@ namespace StarLevelSystem.Data
                 {ModifierNames.EitrDrain.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {
-                        PerlevelPower = 4.0f,
-                        BasePower = 10.0f,
+                        PerlevelPower = 1.0f,
+                        BasePower = 5.0f,
                         // Fraction of the drain removed when the player defends. Dodge fully negates by default.
                         Config = new Dictionary<string, float>() {
                             { "BlockReduction", 0.25f },

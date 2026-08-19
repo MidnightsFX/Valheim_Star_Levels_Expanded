@@ -376,6 +376,12 @@ namespace StarLevelSystem.modules.Modifiers {
                 if (characterMods.Remove(modifier)) {
                     CompositeLazyCache.SetCreatureModifiers(character, characterMods);
                 }
+                // Some modifiers leave something running behind their Setup - BossSummoner attaches a
+                // component with a repeating invoke - and dropping the name from the ZDO does not stop it.
+                // TryGetValue because API-added and unknown modifier names both reach this path.
+                if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modifier, out CreatureModifierDefinition removedDef)) {
+                    removedDef.TeardownMethodCall(character);
+                }
                 UIHudControl.InvalidateCacheEntry(character);
             }
         }

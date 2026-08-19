@@ -7,9 +7,6 @@
 extends:  jotunn
 assembly: StarLevelSystem
 
-# Copy the build into this machine's mod manager profiles after every
-# build. Destinations live in /mnt/c/Users/carls/Documents/projects/Valheim_Stuff/mod-tools/.config/config.yml,
-# because they differ per machine.
 deploy:
   enabled: true
 

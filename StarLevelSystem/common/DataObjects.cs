@@ -61,6 +61,11 @@ namespace StarLevelSystem.common
         // sleep; this flag is what survives handoff and reload. See CreatureSleepPatches.
         public static readonly string SLS_NO_SLEEP = "SLS_NOSLEEP";
         public static readonly string SLS_MOD_CAP = "EffectCap";
+        // ZDOIDs of the minions a BossSummoner creature currently has alive, comma-joined "userID:id".
+        // Persisted so the summon cap survives ownership handoff and the creature streaming out and back
+        // in - it used to live only on the runtime SLSSummoner component, so every reload handed the boss
+        // a fresh empty list and let it summon another full batch. See Modifiers/Summoner.cs.
+        public static readonly string SLS_SUMMONED = "SLS_SUMMONED";
         // Unix seconds of the last Location Reset applied to a location, stored on its surviving
         // LocationProxy ZDO so the timer outlives the SavedData state file.
         public static readonly string SLS_LOC_RESET = "SLS_LOC_RESET";
@@ -661,6 +666,7 @@ namespace StarLevelSystem.common
             public VisualEffectStyle VisualEffectStyle { get; set; } = VisualEffectStyle.objectCenter;
             public Delegate SetupEvent { get; set; } = null;
             public Delegate RunOnceEvent { get; set; } = null;
+            public Delegate TeardownEvent { get; set; } = null;
             public bool FromAPI { get; set; } = false;
             public Sprite StarVisualAPI { get; set; }
             public GameObject VisualEffectAPI { get; set; }
@@ -719,6 +725,15 @@ namespace StarLevelSystem.common
             public void SetupMethodCall(Character chara, CreatureModConfig cfg, CharacterCacheEntry scd) {
                 if (SetupEvent == null) { return; }
                 SetupEvent.DynamicInvoke(chara, cfg, scd);
+            }
+
+            // Called when the modifier is taken off a creature, for modifiers whose Setup leaves something
+            // running behind (a component, an InvokeRepeating). Takes only the Character: teardown needs
+            // neither the config nor the cache entry, and making RemoveCreatureModifier resolve a config it
+            // does not otherwise need just to match the signature above only adds a way to fail.
+            public void TeardownMethodCall(Character chara) {
+                if (TeardownEvent == null) { return; }
+                TeardownEvent.DynamicInvoke(chara);
             }
         }
 

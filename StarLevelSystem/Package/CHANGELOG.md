@@ -1,3 +1,13 @@
+**1.6.2**
+ ---
+ ```
+- Stamina & EitrDrain, nerfed default draining ratios and per level increases 
+- BossSummoner fixes:
+	- Summoner now does a much better job tracking its spawned list
+	- Summoner now prevents overspawning of creatures better
+	- Summoner creatures inside a dungeon now spawn their summons in the dungeon, instead of on the surface below it
+ ```
+
 **1.6.1**
  ---
  ```

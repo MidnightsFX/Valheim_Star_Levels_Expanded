@@ -154,6 +154,43 @@ namespace StarLevelSystem.common
         }
 
 
+        /// <summary>
+        /// Pack a ZDOID list into a single ZDO-storable string: "userID:id" entries joined with ','.
+        /// Same encoding RaidMonitor already uses for its tracked spawns (DataObjects.StoreZDOIDS).
+        /// </summary>
+        public static string PackZDOIDs(List<ZDOID> ids) {
+            if (ids == null || ids.Count == 0) { return string.Empty; }
+            List<string> parts = new List<string>(ids.Count);
+            foreach (ZDOID id in ids) {
+                if (id == ZDOID.None) { continue; }
+                // ZDOID.ToString() renders "UserID:ID". UserID (the long) is the stable half - UserKey
+                // is only an index into a session-local table, so it must never be what gets written out.
+                parts.Add(id.ToString());
+            }
+            return string.Join(",", parts);
+        }
+
+        /// <summary>
+        /// Inverse of <see cref="PackZDOIDs"/>. Never throws: this value round-trips through the network and
+        /// the world save, so an unparseable entry is dropped rather than taking out the whole list (unlike
+        /// RaidMonitor.GetSpawnedZDOIDs, which uses bare long.Parse/uint.Parse).
+        /// </summary>
+        public static List<ZDOID> UnpackZDOIDs(string packed) {
+            List<ZDOID> ids = new List<ZDOID>();
+            if (string.IsNullOrEmpty(packed)) { return ids; }
+
+            foreach (string entry in packed.Split(',')) {
+                if (string.IsNullOrEmpty(entry)) { continue; }
+                int split = entry.IndexOf(':');
+                if (split <= 0 || split == entry.Length - 1) { continue; }
+                if (long.TryParse(entry.Substring(0, split), out long userID) == false) { continue; }
+                if (uint.TryParse(entry.Substring(split + 1), out uint id) == false) { continue; }
+                if (userID == 0L || id == 0U) { continue; }
+                ids.Add(new ZDOID(userID, id));
+            }
+            return ids;
+        }
+
         public static void Times(this int count, Action action)
         {
             for (int i = 0; i < count; i++)

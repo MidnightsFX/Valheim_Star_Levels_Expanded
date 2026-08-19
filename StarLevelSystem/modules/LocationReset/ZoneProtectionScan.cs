@@ -45,6 +45,12 @@ namespace StarLevelSystem.modules.LocationReset {
         // a terrain reset can see them, because TerrainModifier.GetAllInstances only reports live
         // components -- see ZoneLoader.CreateTerrainObjects.
         internal static readonly HashSet<int> TerrainModifierHashes = new HashSet<int>();
+        // A door that needs an item to open stays open forever once used: Door.CanInteract refuses
+        // every later interaction while m_keyItem is set and state != 0, so a player cannot close it
+        // again either. Only a fresh ZDO -- or an explicit write of state 0 -- re-seals one. Vanilla's
+        // are the Sunken Crypt entrance (sunken_crypt_gate) and the Queen's citadel
+        // (dungeon_queen_door); classified by component so a modded keyed entrance is covered too.
+        internal static readonly HashSet<int> KeyedDoorHashes = new HashSet<int>();
 
         private static bool prefabSetsBuilt = false;
 
@@ -104,6 +110,7 @@ namespace StarLevelSystem.modules.LocationReset {
             MineRockBaseHealth.Clear();
             CreatureSpawnerHashes.Clear();
             TerrainModifierHashes.Clear();
+            KeyedDoorHashes.Clear();
             PrefabNamesByHash.Clear();
 
             foreach (GameObject prefab in ZNetScene.instance.m_prefabs) {
@@ -123,6 +130,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (prefab.GetComponent<MineRock5>() != null) { MineRock5Hashes.Add(hash); }
                 if (prefab.GetComponent<CreatureSpawner>() != null) { CreatureSpawnerHashes.Add(hash); }
                 if (prefab.GetComponent<TerrainModifier>() != null) { TerrainModifierHashes.Add(hash); }
+                Door door = prefab.GetComponent<Door>();
+                if (door != null && door.m_keyItem != null) { KeyedDoorHashes.Add(hash); }
                 MineRock mineRock = prefab.GetComponent<MineRock>();
                 if (mineRock != null && mineRock.m_hitAreas != null) {
                     MineRockAreaCounts[hash] = mineRock.m_hitAreas.Length;
@@ -132,7 +141,8 @@ namespace StarLevelSystem.modules.LocationReset {
 
             prefabSetsBuilt = true;
             Logger.LogLocationReset($"Protection prefab sets built: {pieceHashes.Count} pieces, {tombstoneHashes.Count} tombstones, " +
-                $"{wardHashes.Count} wards, {portalHashes.Count} portals, {containerHashes.Count} containers, {itemDropHashes.Count} item drops.");
+                $"{wardHashes.Count} wards, {portalHashes.Count} portals, {containerHashes.Count} containers, " +
+                $"{itemDropHashes.Count} item drops, {KeyedDoorHashes.Count} keyed doors.");
         }
 
         internal static void ResetPrefabSets() {

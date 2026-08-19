@@ -6,6 +6,9 @@
 	- Summoner now does a much better job tracking its spawned list
 	- Summoner now prevents overspawning of creatures better
 	- Summoner creatures inside a dungeon now spawn their summons in the dungeon, instead of on the surface below it
+- Location reset fixes:
+	- A rebuilt dungeon now re-seals its keyed entrance
+	- A location that was not rebuilt now says why in the chunk log
  ```
 
 **1.6.1**

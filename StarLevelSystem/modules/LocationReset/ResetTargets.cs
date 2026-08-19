@@ -354,12 +354,22 @@ namespace StarLevelSystem.modules.LocationReset {
         private static void RegenerateLocation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
-            if (instance.m_location == null) { return; }
+            // No record for the miss above: most chunks in the world hold no location at all, and
+            // saying so on every one of them is noise. A registered instance with no definition is a
+            // different matter -- that is abnormal, and used to vanish without a trace.
+            if (instance.m_location == null) {
+                report.RecordLocation(null, ZoneResetReport.LocationOutcome.NoInstance);
+                return;
+            }
 
             int locationHash = instance.m_location.Hash;
             string locationName = instance.m_location.m_prefabName;
             if (LocationResetData.TryGetLocationEntry(locationHash, out LocationResetData.ResolvedResetEntry entry) == false) {
-                report.Detail($"location '{locationName}' is not in the reset configuration");
+                // Recorded, not Detail'd. This was the one outcome that could hide behind the debug
+                // flag, and the line an admin saw instead -- "no configured targets in this chunk" --
+                // reads as "there is nothing here", which is the opposite of what it means. A forced
+                // reset that does nothing to a named location has to say so.
+                report.RecordLocation(locationName, ZoneResetReport.LocationOutcome.NotConfigured);
                 return;
             }
             entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
@@ -486,6 +496,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
             }
 
+            report.DoorsSealed = SealKeyedDoors(zone, position, exteriorRadius);
             report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Rebuilt);
             report.LocationCleared = cleared;
         }
@@ -677,6 +688,55 @@ namespace StarLevelSystem.modules.LocationReset {
 
             for (int i = 0; i < doomed.Count; i++) { DestroyZdo(doomed[i]); }
             return doomed.Count;
+        }
+
+        // Force every world-generated keyed entrance in the location's footprint back to sealed.
+        //
+        // A Door with an m_keyItem is the one piece of location state a rebuild can silently carry
+        // forward. Door.CanInteract refuses every interaction once m_keyItem is set and state != 0,
+        // so an opened Sunken Crypt gate or Queen's citadel door can never be closed again by any
+        // in-game means -- only a fresh ZDO, or this write, re-seals it.
+        //
+        // Runs AFTER the respawn rather than in place of the clear, and is idempotent: a faithful
+        // clear+respawn already leaves a fresh door carrying no "state" key at all, so a healthy
+        // rebuild reports 0 here and any non-zero count is a stale door that outlived the clear.
+        //
+        // Same footprint rule as CollectClearable on purpose -- a door outside it belongs to
+        // something this reset is not responsible for. The creator gate matches RefreshContainerLoot:
+        // vanilla has no player-buildable keyed door, but a mod may, and a player's own lock is never
+        // ours to change.
+        private static int SealKeyedDoors(Vector2i zone, Vector3 center, float exteriorRadius) {
+            if (ZDOMan.instance == null || ZoneProtectionScan.KeyedDoorHashes.Count == 0) { return 0; }
+
+            int resealed = 0;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (ZoneProtectionScan.KeyedDoorHashes.Contains(zdo.m_prefab) == false) { continue; }
+                        if (zdo.GetLong(ZDOVars.s_creator, 0L) != 0L) { continue; }
+
+                        Vector3 origin = OriginOf(zdo);
+                        if (origin.y > ZoneProtectionScan.SkyThreshold) {
+                            if (ZoneSystem.GetZone(origin) != zone) { continue; }
+                        } else if (Utils.DistanceXZ(origin, center) > exteriorRadius) {
+                            continue;
+                        }
+
+                        if (zdo.GetInt(ZDOVars.s_state, 0) == 0) { continue; }
+                        TakeOwnership(zdo);
+                        zdo.Set(ZDOVars.s_state, 0);
+                        resealed++;
+                    }
+                }
+            }
+
+            zdoBuffer.Clear();
+            return resealed;
         }
 
         // Spawners the radius sweep above could not reach.

@@ -28,6 +28,13 @@ namespace StarLevelSystem.modules.LocationReset {
             NoProxy,
             // ResetInterior is off and this location has one, so it was left entirely alone.
             InteriorPreserved,
+            // ZoneSystem has a LocationInstance for this chunk but it carries no ZoneLocation, so
+            // there is nothing to identify or rebuild. Abnormal, and silent until now.
+            NoInstance,
+            // The chunk holds a location this world knows by name, but no reset group or Locations
+            // entry resolved for it. Recorded rather than left to the detail flag: "nothing reset"
+            // reads as "there is nothing here", which is the opposite of what this means.
+            NotConfigured,
         }
 
         internal Vector2i Zone;
@@ -82,6 +89,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // Objects destroyed by the clear, or terrain modifications undone in TerrainOnly mode.
         internal int LocationCleared;
         internal int LocationSpawned;
+        // Keyed entrances (Sunken Crypt gate, Queen's citadel door) forced back to state 0 after the
+        // rebuild. A faithful clear+respawn leaves a fresh, already-sealed door, so anything above 0
+        // means a stale one outlived the clear -- which is exactly what this counter is for.
+        internal int DoorsSealed;
 
         // Block ZDO totals either side of a regeneration; a faithful restore leaves them equal.
         // Interior is tracked apart from the surface because a regenerated dungeon legitimately comes
@@ -118,6 +129,7 @@ namespace StarLevelSystem.modules.LocationReset {
             get {
                 return PickablesRefreshed > 0 || MineRocksRefreshed > 0 || ContainersRefreshed > 0
                     || VegetationObjects > 0 || IgnoredPiecesCleared > 0 || TerrainModificationsUndone > 0
+                    || DoorsSealed > 0
                     || LocationResult == LocationOutcome.Rebuilt
                     || LocationResult == LocationOutcome.TerrainOnly;
             }
@@ -188,7 +200,8 @@ namespace StarLevelSystem.modules.LocationReset {
             switch (LocationResult) {
                 case LocationOutcome.Rebuilt:
                     string strays = SpawnersRemoved > 0 ? $", +{SpawnersRemoved} stray spawners" : "";
-                    return $"location '{name}' rebuilt (cleared {LocationCleared}{strays}, spawned {LocationSpawned}{DescribeTerrain()})";
+                    string resealed = DoorsSealed > 0 ? $", resealed {DoorsSealed}" : "";
+                    return $"location '{name}' rebuilt (cleared {LocationCleared}{strays}, spawned {LocationSpawned}{resealed}{DescribeTerrain()})";
                 case LocationOutcome.TerrainOnly:
                     return $"location '{name}' terrain-only ({LocationCleared} modifications undone{DescribeTerrain()})";
                 case LocationOutcome.NotDue:
@@ -203,6 +216,10 @@ namespace StarLevelSystem.modules.LocationReset {
                     return $"location '{name}' has no proxy to time from";
                 case LocationOutcome.InteriorPreserved:
                     return $"location '{name}' left alone (ResetInterior off; its interior would be rebuilt regardless)";
+                case LocationOutcome.NoInstance:
+                    return "this chunk's location instance carries no location definition";
+                case LocationOutcome.NotConfigured:
+                    return $"location '{name}' is not in the reset configuration (no group or Locations entry matched it)";
                 default:
                     return "";
             }

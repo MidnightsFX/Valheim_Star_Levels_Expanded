@@ -290,6 +290,16 @@ namespace StarLevelSystem.common {
             return next;
         }
 
+        // The same fire as NextAfter, already converted. Exists so callers that need a number rather
+        // than a wall-clock time do not re-implement the conversion: the walk returns
+        // DateTimeKind.Unspecified, and a plain ToUniversalTime on that quietly gets the
+        // spring-forward case wrong in the way ToUnixSeconds below exists to handle.
+        internal long? NextAfterUnix(long nowUnix) {
+            DateTime? next = NextAfter(nowUnix);
+            if (next.HasValue == false) { return null; }
+            return ToUnixSeconds(next.Value);
+        }
+
         // DateTimeKind.Unspecified from the walk above is treated as local, which is what it is.
         //
         // The matching walk works in wall-clock minutes, so on a spring-forward day it can land on a

@@ -4,6 +4,7 @@ using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.LocationReset;
 using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
 using System;
@@ -356,6 +357,224 @@ namespace StarLevelSystem.modules
             CreatureModifiersData.RegisterAPIModifier(modifier_name, newMod, clientConfig);
 
             return true;
+        }
+
+        ////////////////////////////////////////
+        /// Location Reset
+        ////////////////////////////////////////
+        //
+        // Everything here is server-side. Resetting world content means destroying and recreating
+        // ZDOs, which only the server may do -- LocationResetControl refuses off-server through its
+        // own gates, and the invoke methods below refuse early so a client-side caller gets a clean
+        // false instead of a silent no-op.
+        //
+        // Registration and the read-only queries deliberately do NOT check IsServer. A dependent
+        // mod's Awake can run long before ZNet exists, so gating registration on it would make
+        // whether a mod's targets register at all depend on BepInEx plugin load order. Registration
+        // only touches in-memory lookups and is inert on a client, where SweepAllowed is false
+        // anyway.
+
+        // Register a location or vegetation prefab as a reset target on behalf of another mod.
+        //
+        // resetHours 0 with no schedule means "say nothing about timing", which falls through to the
+        // config's Defaults exactly as an omitted ResetHours does in yaml.
+        public static bool RegisterLocationResetTarget(string prefabName, string sourceId, float resetHours,
+                string resetSchedule, int mode, bool resetTerrain, float terrainRadius, float extraTerrainRadius,
+                bool resetInterior, float minDistance, float maxDistance, bool enabled) {
+
+            // Clamped rather than rejected, matching how AddNewModifierToSLS treats its own enum-ish
+            // ints. Full is the safe direction: TerrainOnly would silently stop resetting contents.
+            if (mode > 1 || mode < 0) {
+                Logger.LogLocationResetWarning($"'{sourceId}' registered '{prefabName}' with mode {mode}; " +
+                    $"valid values are 0 (Full) and 1 (TerrainOnly). Using Full.");
+                mode = 0;
+            }
+
+            LocationResetEntry entry = new LocationResetEntry() {
+                Enabled = enabled,
+                ResetHours = resetHours > 0f ? (float?)resetHours : null,
+                ResetSchedule = string.IsNullOrWhiteSpace(resetSchedule) ? null : resetSchedule.Trim(),
+                Mode = (LocationResetMode)mode,
+                ResetTerrain = resetTerrain,
+                TerrainRadius = terrainRadius > 0f ? (float?)terrainRadius : null,
+                ExtraTerrainRadius = extraTerrainRadius > 0f ? (float?)extraTerrainRadius : null,
+                ResetInterior = resetInterior,
+                // Never set from the API. Protection policy is the server owner's alone: a mod must
+                // not be able to make wards or tombstones stop blocking a reset.
+                Protection = null,
+            };
+
+            return LocationResetData.RegisterAPIResetTarget(prefabName, sourceId, entry, minDistance, maxDistance);
+        }
+
+        public static bool UnregisterLocationResetTarget(string prefabName, string sourceId) {
+            return LocationResetData.UnregisterAPIResetTarget(prefabName, sourceId);
+        }
+
+        // sourceId null or empty returns every API-registered target, whoever owns it.
+        public static List<string> GetRegisteredLocationResetTargets(string sourceId) {
+            return LocationResetData.GetAPIRegisteredNames(sourceId);
+        }
+
+        // How a target actually resolved, whoever registered it. "source" is the layer that won:
+        // entry, group, api, defaults or none.
+        public static Dictionary<string, object> GetLocationResetTargetInfo(string prefabName) {
+            Dictionary<string, object> info = new Dictionary<string, object>() {
+                { "name", prefabName ?? "" },
+                { "known", false },
+                { "configured", false },
+                { "enabled", false },
+                { "source", "none" },
+            };
+            if (string.IsNullOrWhiteSpace(prefabName)) { return info; }
+
+            string name = prefabName.Trim();
+            int hash = name.GetStableHashCode();
+            info["name"] = name;
+            info["known"] = LocationResetData.IsKnownTargetName(hash);
+            info["source"] = LocationResetData.DescribeResolutionSource(name);
+            info["hardBlocked"] = LocationResetData.HardBlockedLocations.Contains(name);
+            info["registeredByAPI"] = LocationResetData.TryGetAPIRegistration(name, out LocationResetData.APIResetRegistration api);
+            info["registeredBy"] = api != null ? api.SourceId : "";
+
+            bool isLocation = LocationResetData.TryGetLocationEntry(hash, out LocationResetData.ResolvedResetEntry entry);
+            bool isVegetation = LocationResetData.TryGetVegetationEntry(hash, out LocationResetData.ResolvedResetEntry vegEntry);
+            if (entry == null) { entry = vegEntry; }
+            info["isLocation"] = isLocation;
+            info["isVegetation"] = isVegetation;
+            info["configured"] = entry != null;
+            if (entry == null) { return info; }
+
+            info["enabled"] = entry.Enabled;
+            info["groupName"] = entry.GroupName ?? "";
+            info["resetSeconds"] = entry.ResetSeconds;
+            info["schedule"] = entry.Schedule != null ? entry.Schedule.Expression : "";
+            info["mode"] = (int)entry.Mode;
+            info["resetTerrain"] = entry.ResetTerrain;
+            info["terrainRadius"] = entry.TerrainRadius;
+            info["extraTerrainRadius"] = entry.ExtraTerrainRadius;
+            info["resetInterior"] = entry.ResetInterior;
+            return info;
+        }
+
+        // Cheap pre-flight for a caller that wants to know whether an invoke would be accepted.
+        public static bool IsLocationResetReady() {
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return false; }
+            if (LocationResetData.BlockedByModConflict) { return false; }
+            return LocationResetControl.Ready;
+        }
+
+        public static Dictionary<string, object> GetLocationResetStatus() {
+            return new Dictionary<string, object>() {
+                { "available", true },
+                { "isServer", ZNet.instance != null && ZNet.instance.IsServer() },
+                { "ready", LocationResetControl.Ready },
+                { "sweepAllowed", LocationResetControl.SweepAllowed },
+                // The BepInEx master switch and the yaml one are separate gates and an admin can have
+                // either off, so both are reported rather than folded together.
+                { "masterSwitchEnabled", ValConfig.EnableLocationReset.Value },
+                { "configEnabled", LocationResetData.ConfigEnabled },
+                { "blockedByModConflict", LocationResetData.BlockedByModConflict },
+                { "resetRunning", LocationResetControl.ManualResetRunning },
+                { "trackedZones", LocationResetState.TrackedZoneCount },
+                { "generatedZones", ZoneSystem.instance != null ? ZoneSystem.instance.m_generatedZones.Count : 0 },
+                { "sweepFloorSeconds", LocationResetData.MinEnabledIntervalSeconds },
+                { "apiRegistrations", LocationResetData.APIAdded.Count },
+            };
+        }
+
+        public static bool IsKnownResetTargetName(string prefabName) {
+            if (string.IsNullOrWhiteSpace(prefabName)) { return false; }
+            return LocationResetData.IsKnownTargetName(prefabName.Trim().GetStableHashCode());
+        }
+
+        // Unix seconds UTC. -1 = no such location in range (or no proxy to read), 0 = never stamped.
+        public static long GetLocationLastReset(string locationName, Vector3 center, float radius) {
+            return LocationResetQuery.GetLocationLastReset(locationName, center, radius);
+        }
+
+        // -1 = unknown or not configured, 0 = due now.
+        public static double GetSecondsUntilLocationReset(string locationName, Vector3 center, float radius) {
+            return LocationResetQuery.GetSecondsUntilDue(locationName, center, radius);
+        }
+
+        public static Dictionary<string, object> GetLocationResetInfo(string locationName, Vector3 center, float radius) {
+            return LocationResetQuery.GetLocationInfo(locationName, center, radius);
+        }
+
+        // includePrefabs adds the per-prefab census for the chunk, which is a full ZDO pass.
+        public static Dictionary<string, object> GetChunkResetInfo(Vector3 position, bool includePrefabs) {
+            return LocationResetQuery.GetChunkInfo(position, includePrefabs);
+        }
+
+        // Reset the named location nearest `center` within `radius`.
+        //
+        // safety: 0 = Safe (wait for players to leave the target chunks, then reset; give up after
+        // safeWaitSeconds and touch nothing), 1 = Force (reset now, working on chunks that are
+        // already loaded around a player). The player-build protection scan runs in BOTH and is never
+        // bypassable.
+        //
+        // Safe is the default the shim passes because an API caller may be firing from a timer with
+        // nobody watching. The console command defaults to force instead, because an admin typing it
+        // is standing there on purpose -- see LocationCommands.
+        //
+        // Returns whether the request was accepted. A false return means nothing was started and
+        // onComplete will NEVER fire; the reason is written to the Location Reset log.
+        public static bool ResetNamedLocation(string locationName, Vector3 center, float radius, int safety,
+                bool resetAllMatches, float safeWaitSeconds, bool includeDetail,
+                Action<Dictionary<string, object>> onComplete) {
+
+            if (RefuseInvoke("ResetNamedLocation")) { return false; }
+            if (string.IsNullOrWhiteSpace(locationName)) {
+                Logger.LogLocationResetWarning("SLS-API: ResetNamedLocation was called with no location name.");
+                return false;
+            }
+
+            return LocationResetControl.RequestReset(new LocationResetControl.ResetRequest() {
+                Center = center,
+                Radius = radius,
+                Safety = ClampSafety(safety),
+                LocationName = locationName.Trim(),
+                ResetAllMatches = resetAllMatches,
+                SafeWaitSeconds = safeWaitSeconds,
+                IncludeDetail = includeDetail,
+                Source = $"API reset '{locationName.Trim()}'",
+            }, null, onComplete);
+        }
+
+        // Reset everything the configuration covers within `radius` of `center` -- the same shape as
+        // sls-loc-reset, with a safety mode and a result callback.
+        public static bool ResetLocationsInRadius(Vector3 center, float radius, int safety,
+                float safeWaitSeconds, bool includeDetail, Action<Dictionary<string, object>> onComplete) {
+
+            if (RefuseInvoke("ResetLocationsInRadius")) { return false; }
+
+            return LocationResetControl.RequestReset(new LocationResetControl.ResetRequest() {
+                Center = center,
+                Radius = radius,
+                Safety = ClampSafety(safety),
+                SafeWaitSeconds = safeWaitSeconds,
+                IncludeDetail = includeDetail,
+                Source = $"API reset r={radius:0}",
+            }, null, onComplete);
+        }
+
+        // Anything outside the known modes clamps to Safe. Fail-safe direction: an unrecognised value
+        // must never be read as "go ahead and reset under a player".
+        private static int ClampSafety(int safety) {
+            return safety == LocationResetControl.SafetyForce ? LocationResetControl.SafetyForce : LocationResetControl.SafetySafe;
+        }
+
+        // The one gate the invoke methods share. LocationResetControl refuses again on its own -- it
+        // has to, since the console commands reach it by another route -- but refusing here means a
+        // client-side caller gets an immediate, explained false rather than a coroutine that quietly
+        // does nothing.
+        private static bool RefuseInvoke(string method) {
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) {
+                Logger.LogLocationResetWarning($"SLS-API: {method} is server-side only and was called on a client. Ignored.");
+                return true;
+            }
+            return false;
         }
     }
 }

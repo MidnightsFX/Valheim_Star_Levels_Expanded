@@ -61,6 +61,11 @@ namespace StarLevelSystem.modules.LocationReset {
             smoothedFrameMs = Mathf.Lerp(smoothedFrameMs, Time.unscaledDeltaTime * 1000f, 0.05f);
 
             if (sweepRunning) { return; }
+            // Stand down while an admin or the API is resetting by hand. ZoneLoader.manuallyLoaded is
+            // one shared set, so a sweep tick and a manual reset working overlapping chunks can
+            // release each other's zones -- which tears the zone root out from under a live terrain
+            // compiler. Sweep intervals are hours long, so sitting out a few 5s ticks costs nothing.
+            if (LocationResetControl.ManualResetRunning) { return; }
             if (Time.realtimeSinceStartupAsDouble < nextTickTime) { return; }
             nextTickTime = Time.realtimeSinceStartupAsDouble + TickIntervalSeconds;
 
@@ -338,7 +343,10 @@ namespace StarLevelSystem.modules.LocationReset {
             return entry.IsDue(lastReset, LocationResetState.Now, rate);
         }
 
-        private static bool PlayersNearby(Vector2i zone, float radius) {
+        // internal rather than private: the Safe path of a manual reset polls on exactly this
+        // question, and re-implementing it there would let the two definitions of "somebody is
+        // standing here" drift apart.
+        internal static bool PlayersNearby(Vector2i zone, float radius) {
             if (ZNet.instance == null) { return false; }
             Vector3 center = ZoneSystem.GetZonePos(zone);
             float sqr = radius * radius;
@@ -383,6 +391,28 @@ namespace StarLevelSystem.modules.LocationReset {
         // False when every configured rate is 1.0, letting the per-chunk lookup skip its work
         // entirely. Computed here rather than per chunk because Capture runs once per tick.
         internal bool RatesActive;
+
+        // ---- request scope ----
+        //
+        // These two are NOT configuration. They are set only by a targeted reset -- the API's
+        // "reset this named location" call and sls-loc-reset-named -- and Capture leaves them unset,
+        // so every background sweep tick and every sls-loc-reset behaves exactly as before.
+        //
+        // They live here rather than as parameters because this object is already the immutable
+        // per-pass view threaded through RegenerateZone, RegenerateLocation, RefreshZoneInPlace and
+        // the vegetation tiers. Adding a parameter to each of those would touch every call site in
+        // the subsystem to express something all of them can already reach.
+
+        // Restrict this pass to one prefab. 0 = no restriction.
+        internal int TargetPrefabHash;
+
+        // An ad-hoc resolution for a named request against a location the config does not cover.
+        //
+        // Without this, a targeted reset would inherit the background sweep's answer for an
+        // unconfigured location -- NotConfigured -- which is right for a sweep deciding what to do
+        // on its own and wrong for a caller who named the location outright. Built through the same
+        // Resolve path as any other entry, so terrain and protection behave identically.
+        internal LocationResetData.ResolvedResetEntry TargetOverride;
 
         internal static LocationResetConfigSnapshot Capture() {
             LocationResetConfiguration cfg = LocationResetData.SLE_LocationReset_Settings;

@@ -35,6 +35,10 @@ namespace StarLevelSystem.modules.LocationReset {
                 ZDO zdo = zdoBuffer[i];
                 if (zdo == null || zdo.IsValid() == false) { continue; }
                 int prefab = zdo.m_prefab;
+                // A targeted reset refreshes only what it was aimed at. Without this a request to
+                // reset one crypt would also re-grow every berry bush and re-fill every ore vein
+                // sharing its chunk.
+                if (cfg.TargetPrefabHash != 0 && prefab != cfg.TargetPrefabHash) { continue; }
 
                 if (cfg.RefreshPickables && ZoneProtectionScan.PickableHashes.Contains(prefab)) {
                     if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.PickablesNotDue++; continue; }
@@ -185,7 +189,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // A location configured with ExtraTerrainRadius can reach past its own chunk, and terrain
             // only resets where a heightmap is live, so those neighbours have to come up too. Loading
             // is hoisted here because the regeneration tiers below are synchronous and cannot yield.
-            List<Vector2i> extraZones = ExtraTerrainZones(zone);
+            List<Vector2i> extraZones = ExtraTerrainZones(zone, cfg);
             if (extraZones != null) {
                 for (int i = 0; i < extraZones.Count; i++) {
                     yield return ZoneLoader.Load(extraZones[i], cfg.MaxZoneLoadWaitSeconds, force, null);
@@ -202,7 +206,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // reset. A deferral means the terrain shaping misses SnapToGround.SnappAll entirely, which
             // is precisely the floating-contents bug. Waiting has to happen here; RegenerateLocation
             // cannot yield.
-            yield return WaitForLocationPrefab(zone, cfg.MaxZoneLoadWaitSeconds);
+            yield return WaitForLocationPrefab(zone, cfg, cfg.MaxZoneLoadWaitSeconds);
 
             // Sampled here rather than at the top of the method: poke-loading a neighbour that was
             // never generated GENERATES it, and with a 3x3 footprint all of that vegetation would land
@@ -364,6 +368,22 @@ namespace StarLevelSystem.modules.LocationReset {
 
             int locationHash = instance.m_location.Hash;
             string locationName = instance.m_location.m_prefabName;
+
+            // A targeted reset walks a square of chunks to find its location, so most of the chunks
+            // it visits hold something else. Recorded rather than silent so the log shows the search
+            // actually looked here.
+            if (cfg.TargetPrefabHash != 0 && locationHash != cfg.TargetPrefabHash) {
+                report.RecordLocation(locationName, ZoneResetReport.LocationOutcome.NotTargeted);
+                return;
+            }
+
+            // An explicit request for this location by name overrides the configuration lookup. The
+            // caller named it, so "no group covers it" is not an answer -- see TargetOverride.
+            if (cfg.TargetPrefabHash == locationHash && cfg.TargetOverride != null) {
+                RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, cfg.TargetOverride);
+                return;
+            }
+
             if (LocationResetData.TryGetLocationEntry(locationHash, out LocationResetData.ResolvedResetEntry entry) == false) {
                 // Recorded, not Detail'd. This was the one outcome that could hide behind the debug
                 // flag, and the line an admin saw instead -- "no configured targets in this chunk" --
@@ -373,12 +393,28 @@ namespace StarLevelSystem.modules.LocationReset {
                 return;
             }
             entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
-            report.GroupName = entry.GroupName;
             if (entry.Enabled == false) {
+                report.GroupName = entry.GroupName;
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Disabled);
                 return;
             }
-            // Hard-blocked locations are never resettable, no matter the config or a force command.
+            RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, entry);
+        }
+
+        // The reset itself, once a governing entry has been settled on. Split out so an explicitly
+        // targeted request can supply its own resolution (cfg.TargetOverride) and still run through
+        // exactly this code -- the clear, the Full-mode respawn, the proxy carry-over and the ZDO
+        // bookkeeping below are where every hard-won invariant in this system lives, and a second
+        // copy of them for the targeted path would drift.
+        private static void RegenerateLocationWith(Vector2i zone, LocationResetConfigSnapshot cfg, bool force,
+                                                   ZoneResetReport report, ZoneSystem.LocationInstance instance,
+                                                   int locationHash,
+                                                   LocationResetData.ResolvedResetEntry entry) {
+            ZoneSystem zs = ZoneSystem.instance;
+            report.GroupName = entry.GroupName;
+
+            // Hard-blocked locations are never resettable, no matter the config, a force command, or
+            // an API caller naming one outright.
             if (LocationResetData.HardBlockedLocations.Contains(entry.Name)) {
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.HardBlocked);
                 return;
@@ -421,7 +457,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // Boss altars and similar: undo the crater players dug, leave the location itself alone.
             if (entry.Mode == LocationResetMode.TerrainOnly) {
-                int undone = ResetTerrainLive(zone, position, terrainRadius);
+                int undone = ResetTerrainLive(zone, cfg, position, terrainRadius);
                 TakeOwnership(proxy);
                 proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.TerrainOnly);
@@ -439,7 +475,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // Terrain is still honoured per config, unlike the TerrainOnly branch above which resets
             // it unconditionally: the admin asked to leave the dungeon alone, not to reshape ground.
             if (entry.ResetInterior == false && hasInterior) {
-                if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, position, terrainRadius); }
+                if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, cfg, position, terrainRadius); }
                 TakeOwnership(proxy);
                 proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.InteriorPreserved);
@@ -448,7 +484,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             ZDOID oldProxyId = proxy.m_uid;
             int cleared = ClearLocation(zone, position, rotation, exteriorRadius, instance.m_location, entry, report);
-            if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, position, terrainRadius); }
+            if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, cfg, position, terrainRadius); }
 
             int seed = WorldGenerator.instance.GetSeed() + (zone.x * 4271) + (zone.y * 9187);
 
@@ -541,13 +577,40 @@ namespace StarLevelSystem.modules.LocationReset {
         // Poll vanilla's own readiness gate for this chunk's location prefab. PokeCanSpawnLocation both
         // reports readiness and registers the load request, so calling it repeatedly is what drives the
         // load to completion. No-op for chunks with no configured location.
-        private static IEnumerator WaitForLocationPrefab(Vector2i zone, float maxWaitSeconds) {
+        // The entry that will actually govern this chunk's location on this pass, or false when
+        // nothing will touch it.
+        //
+        // Every pre-flight step -- waiting for the prefab, loading terrain neighbours -- has to reach
+        // the same verdict RegenerateLocation will, including the targeting filter and the ad-hoc
+        // override an explicitly named request supplies. Resolving it independently in each of them
+        // is how a targeted reset ends up skipping the prefab wait it needed, or poke-loading
+        // neighbours for a location it is about to pass over.
+        private static bool GoverningLocation(Vector2i zone, LocationResetConfigSnapshot cfg,
+                                              out ZoneSystem.LocationInstance instance,
+                                              out LocationResetData.ResolvedResetEntry entry) {
+            instance = default(ZoneSystem.LocationInstance);
+            entry = null;
+            if (ZoneSystem.instance == null) { return false; }
+            if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out instance) == false) { return false; }
+            if (instance.m_location == null) { return false; }
+
+            int hash = instance.m_location.Hash;
+            if (cfg.TargetPrefabHash != 0 && hash != cfg.TargetPrefabHash) { return false; }
+            if (cfg.TargetPrefabHash == hash && cfg.TargetOverride != null) {
+                entry = cfg.TargetOverride;
+                return true;
+            }
+
+            if (LocationResetData.TryGetLocationEntry(hash, out entry) == false) { return false; }
+            entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
+            if (entry.Enabled == false) { entry = null; return false; }
+            return true;
+        }
+
+        private static IEnumerator WaitForLocationPrefab(Vector2i zone, LocationResetConfigSnapshot cfg, float maxWaitSeconds) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs == null) { yield break; }
-            if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { yield break; }
-            if (instance.m_location == null) { yield break; }
-            if (LocationResetData.TryGetLocationEntry(instance.m_location.Hash, out LocationResetData.ResolvedResetEntry entry) == false) { yield break; }
-            if (entry.Enabled == false) { yield break; }
+            if (GoverningLocation(zone, cfg, out ZoneSystem.LocationInstance instance, out _) == false) { yield break; }
 
             float deadline = Time.realtimeSinceStartup + Mathf.Max(1f, maxWaitSeconds);
             while (Time.realtimeSinceStartup < deadline) {
@@ -567,8 +630,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // only sanctioned way to call TerrainResetter from the sweep. Synchronous by design: yielding
         // between create and destroy would let ZNetScene's 30Hz reaper tear the objects out from under
         // us mid-reset.
-        private static int ResetTerrainLive(Vector2i zone, Vector3 position, float radius) {
-            List<Vector2i> zones = TerrainZonesFor(zone);
+        private static int ResetTerrainLive(Vector2i zone, LocationResetConfigSnapshot cfg, Vector3 position, float radius) {
+            List<Vector2i> zones = TerrainZonesFor(zone, cfg);
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
 
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
@@ -580,9 +643,9 @@ namespace StarLevelSystem.modules.LocationReset {
         }
 
         // The chunk itself plus any neighbour an extra terrain radius reaches into.
-        private static List<Vector2i> TerrainZonesFor(Vector2i zone) {
+        private static List<Vector2i> TerrainZonesFor(Vector2i zone, LocationResetConfigSnapshot cfg) {
             List<Vector2i> zones = new List<Vector2i>() { zone };
-            List<Vector2i> extra = ExtraTerrainZones(zone);
+            List<Vector2i> extra = ExtraTerrainZones(zone, cfg);
             if (extra != null) { zones.AddRange(extra); }
             return zones;
         }
@@ -605,13 +668,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // (Heightmap.FindHeightmap and TerrainComp.FindTerrainCompiler both need live components), so
         // without this an extra radius that crosses a chunk boundary silently does nothing on the far
         // side. Empty in the common case, since ExtraTerrainRadius defaults to 0.
-        internal static List<Vector2i> ExtraTerrainZones(Vector2i zone) {
+        internal static List<Vector2i> ExtraTerrainZones(Vector2i zone, LocationResetConfigSnapshot cfg) {
             List<Vector2i> extra = null;
-            if (ZoneSystem.instance == null) { return null; }
-            if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return null; }
-            if (instance.m_location == null) { return null; }
-            if (LocationResetData.TryGetLocationEntry(instance.m_location.Hash, out LocationResetData.ResolvedResetEntry entry) == false) { return null; }
-            if (entry.Enabled == false) { return null; }
+            if (GoverningLocation(zone, cfg, out ZoneSystem.LocationInstance instance,
+                                  out LocationResetData.ResolvedResetEntry entry) == false) { return null; }
             // TerrainOnly always resets terrain; every other mode only does so when asked.
             if (entry.Mode != LocationResetMode.TerrainOnly && entry.ResetTerrain == false) { return null; }
             if (entry.ExtraTerrainRadius <= 0f) { return null; }
@@ -1064,7 +1124,7 @@ namespace StarLevelSystem.modules.LocationReset {
             Heightmap heightmap = zoneData.m_root.GetComponentInChildren<Heightmap>();
             if (heightmap == null) { return; }
 
-            List<ZoneSystem.ZoneVegetation> due = SelectDueVegetation(zone, force, report, out List<int> dueHashes);
+            List<ZoneSystem.ZoneVegetation> due = SelectDueVegetation(zone, cfg, force, report, out List<int> dueHashes);
             if (due.Count == 0) { return; }
 
             // Clear ignored pieces before placing anything. PlaceVegetation's block check treats any
@@ -1112,7 +1172,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 report.VegetationEntriesReset += due.Count;
                 // Only the kept ghosts: a rejected duplicate sits on a node that never went away, so
                 // re-flattening the ground under it would undo terrain nobody touched.
-                ApplyVegetationTerrainReset(zone, dueHashes, kept, report);
+                ApplyVegetationTerrainReset(zone, cfg, dueHashes, kept, report);
             }
 
             // Stamp only the time. The real per-prefab counts come from RecordBaseline once the reset
@@ -1220,13 +1280,18 @@ namespace StarLevelSystem.modules.LocationReset {
         // Clone the vegetation list with only the due entries enabled. Cloning matters because
         // PlaceVegetation reads m_enable off the shared entries; mutating the originals in place
         // would corrupt world generation.
-        private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2i zone, bool force, ZoneResetReport report, out List<int> dueHashes) {
+        private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2i zone, LocationResetConfigSnapshot cfg,
+                                                                           bool force, ZoneResetReport report, out List<int> dueHashes) {
             List<ZoneSystem.ZoneVegetation> due = new List<ZoneSystem.ZoneVegetation>();
             dueHashes = new List<int>();
 
             foreach (ZoneSystem.ZoneVegetation veg in ZoneSystem.instance.m_vegetation) {
                 if (veg?.m_prefab == null) { continue; }
                 int hash = veg.m_prefab.name.GetStableHashCode();
+                // A targeted reset regrows only what it named. Filtering here rather than skipping
+                // RegenerateVegetation wholesale is what lets a mod target a single vegetation
+                // prefab -- a berry bush, one ore type -- and not just a location.
+                if (cfg.TargetPrefabHash != 0 && hash != cfg.TargetPrefabHash) { continue; }
                 if (LocationResetData.TryGetVegetationEntry(hash, out LocationResetData.ResolvedResetEntry entry) == false) { continue; }
                 entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
                 if (entry.Enabled == false) { continue; }
@@ -1267,7 +1332,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Mining leaves a crater. For entries configured with ResetTerrain, flatten it back around
         // each regenerated node.
-        private static void ApplyVegetationTerrainReset(Vector2i zone, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
+        private static void ApplyVegetationTerrainReset(Vector2i zone, LocationResetConfigSnapshot cfg, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
             bool anyTerrain = false;
             for (int i = 0; i < dueHashes.Count; i++) {
                 if (LocationResetData.TryGetVegetationEntry(dueHashes[i], out LocationResetData.ResolvedResetEntry entry) && entry.ResetTerrain) {
@@ -1279,7 +1344,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // One create/destroy around the whole loop rather than per node: the terrain objects are
             // the same for every crater in this chunk, and the bracket has to stay yield-free anyway.
-            List<Vector2i> zones = TerrainZonesFor(zone);
+            List<Vector2i> zones = TerrainZonesFor(zone, cfg);
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
             try {

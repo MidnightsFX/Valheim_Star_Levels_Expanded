@@ -35,6 +35,10 @@ namespace StarLevelSystem.modules.LocationReset {
             // entry resolved for it. Recorded rather than left to the detail flag: "nothing reset"
             // reads as "there is nothing here", which is the opposite of what this means.
             NotConfigured,
+            // A targeted reset asked for a different location by name, and this chunk happens to
+            // hold another one. Not a problem, and distinct from every other skip here: nothing is
+            // wrong with the location, it simply was not what was asked for.
+            NotTargeted,
         }
 
         internal Vector2i Zone;
@@ -220,6 +224,8 @@ namespace StarLevelSystem.modules.LocationReset {
                     return "this chunk's location instance carries no location definition";
                 case LocationOutcome.NotConfigured:
                     return $"location '{name}' is not in the reset configuration (no group or Locations entry matched it)";
+                case LocationOutcome.NotTargeted:
+                    return $"location '{name}' is not the one this reset was aimed at";
                 default:
                     return "";
             }

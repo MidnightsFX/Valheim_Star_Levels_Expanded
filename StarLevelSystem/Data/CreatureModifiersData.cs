@@ -581,8 +581,8 @@ namespace StarLevelSystem.Data
                 {ModifierNames.StaminaDrain.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {
-                        PerlevelPower = 0.5f,
-                        BasePower = 1.0f,
+                        PerlevelPower = 0.1f,
+                        BasePower = 0.1f,
                         // Fraction of the drain removed when the player defends. Dodge fully negates by default.
                         Config = new Dictionary<string, float>() {
                             { "BlockReduction", 0.25f },
@@ -605,8 +605,8 @@ namespace StarLevelSystem.Data
                 {ModifierNames.EitrDrain.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
                     Config = new CreatureModConfig() {
-                        PerlevelPower = 1.0f,
-                        BasePower = 5.0f,
+                        PerlevelPower = 0.1f,
+                        BasePower = 0.2f,
                         // Fraction of the drain removed when the player defends. Dodge fully negates by default.
                         Config = new Dictionary<string, float>() {
                             { "BlockReduction", 0.25f },

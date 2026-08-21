@@ -724,6 +724,17 @@ namespace StarLevelSystem.common {
 #     MaxZonesPerSecondSlowLane: 2          # resets that must load the zone
 #     AdaptiveBackoffFrameMs: 50            # over this frame time, halve the budget next tick
 #     ZdoGrowthTolerance: 0                 # ZDOs a reset may leak before it is reported in the log
+#
+# --- Targets registered by other mods ---
+# Mods can register their own reset targets through the Star Level System API - a mod that adds
+# a custom dungeon can ask for it to be reset on a schedule. Those registrations never appear
+# in this file, and are not written to it. Run 'sls-loc-api' to list them: it shows the target,
+# which mod registered it, its schedule, and whether this file is overriding it.
+#
+# You always have the last word. Adding a Locations: or Vegetation: key for the same prefab
+# name takes manual control of that target and replaces the mod's registration outright - which
+# is how you turn one off, since you cannot edit another mod's registration the way you would
+# edit a group's member list. Protection rules are yours alone and cannot be set from the API.
 #################################################";
     }
 }

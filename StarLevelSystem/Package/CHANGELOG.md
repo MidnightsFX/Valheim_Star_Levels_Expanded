@@ -1,3 +1,21 @@
+**1.7.0**
+ ---
+ ```
+- The mod API can now drive Location Resets. See API/README.md
+	- Mods can register their own reset targets (a custom dungeon, a modded ore) with an interval or a cron schedule, and they join the normal background sweep
+	- Mods can reset a named location, or everything within a radius, and get a result summary back
+	- Mods can ask when a location or a map chunk was last reset, and when it is next due
+	- Registrations survive a config reload and a world reload, and never get written into your yaml
+	- Your LocationResetSettings.yaml always wins: adding a Locations:/Vegetation: key for the same prefab takes manual control. Protection rules cannot be set from the API at all
+	- Resets requested through the API default to waiting for players to leave the area; a mod has to opt in to forcing one
+- Adds sls-loc-reset-named, which resets a single named location near you - including one no reset group covers
+- Adds sls-loc-info, reporting when the chunk you are standing in was last examined, when its location was last reset, and what is blocking it
+- Adds sls-loc-api, listing reset targets other mods have registered
+- sls-loc-status now lists API-registered targets and whether your config is overriding them
+- Only one manual reset can run at a time now, and the background sweep stands down while one does. Two overlapping resets could previously tear down each other's zones
+- API/README.md documented a type name that does not exist (StarLevelSystemAPI); the class is StarLevelSystem.API
+ ```
+
 **1.6.2**
  ---
  ```

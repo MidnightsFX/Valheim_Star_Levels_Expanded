@@ -171,7 +171,37 @@ namespace StarLevelSystem.modules.LocationReset {
             }
             sb.AppendLine($"Last action        : {LocationResetManager.LastAction}");
             AppendTargetingReport(sb);
+            AppendAPIRegistrations(sb);
             return sb.ToString();
+        }
+
+        // Targets other mods registered through the API. They never appear in the yaml, so without
+        // this block a registration that lost a precedence fight -- or matched nothing in this world
+        // -- is invisible to the admin who has to explain why it is not resetting.
+        internal static void AppendAPIRegistrations(System.Text.StringBuilder sb) {
+            if (LocationResetData.APIAdded.Count == 0) { return; }
+
+            sb.AppendLine("--- API registrations ---");
+            foreach (KeyValuePair<string, LocationResetData.APIResetRegistration> kvp in LocationResetData.APIAdded) {
+                LocationResetData.APIResetRegistration api = kvp.Value;
+                string frequency = api.Entry.ResetSchedule != null ? api.Entry.ResetSchedule
+                    : api.Entry.ResetHours.HasValue ? $"{api.Entry.ResetHours.Value:0.#}h"
+                    : "default";
+                string scope = "";
+                if (api.MinDistance > 0f || api.MaxDistance > 0f) {
+                    string outer = api.MaxDistance > 0f ? $"{api.MaxDistance:0}m" : "unbounded";
+                    scope = $", {api.MinDistance:0}m-{outer}";
+                }
+
+                // Which layer actually won. "api" means the registration is in effect; anything else
+                // means the admin's file is overriding it, which is legitimate and worth seeing.
+                string source = LocationResetData.DescribeResolutionSource(kvp.Key);
+                string effective = source == "api" ? "in effect" : $"overridden by {source}";
+                bool known = LocationResetData.IsKnownTargetName(kvp.Key.GetStableHashCode());
+
+                sb.AppendLine($"  {kvp.Key,-24} {(api.Entry.Enabled ? "on " : "off")} {frequency}{scope} " +
+                    $"from '{api.SourceId}' ({effective}{(known ? "" : ", MATCHES NOTHING IN THIS WORLD")})");
+            }
         }
 
         // Makes "why is the Meadows never resetting" and "what is it allowed to delete" answerable
@@ -270,41 +300,230 @@ namespace StarLevelSystem.modules.LocationReset {
             return count;
         }
 
+        // Only one manual reset at a time, whoever asked for it.
+        //
+        // ZoneLoader.manuallyLoaded is a single shared set, so two overlapping routines can release
+        // each other's zones -- and releasing a zone another routine is halfway through destroys the
+        // zone root out from under its terrain compiler, which is the one failure this subsystem
+        // guards against everywhere else. The background sweep stands down on this flag too.
+        //
+        // Refused rather than queued: the bool a caller gets back has to mean something, and "your
+        // request was accepted and will start in an unknown number of minutes" is not an answer a
+        // mod can act on.
+        internal static bool ManualResetRunning { get; private set; }
+
+        // Safety modes, matching the API's int parameter.
+        internal const int SafetySafe = 0;
+        internal const int SafetyForce = 1;
+
+        // How often the Safe path re-checks whether players have cleared out, and how long it waits
+        // before giving up. Constants rather than yaml knobs, for the same reason
+        // LocationResetState's retry delays are: two more config keys would buy very little and cost
+        // the config file's readability.
+        //
+        // The poll interval matches the sweep's own tick, so Safe never reacts faster than the system
+        // it is standing in for.
+        private const float SafePollSeconds = 5f;
+        private const float DefaultSafeWaitSeconds = 300f;
+        private const float SafeWaitLogIntervalSeconds = 60f;
+
+        // One manual reset request. Built by the callers below, consumed by ResetZonesRoutine.
+        internal class ResetRequest {
+            internal Vector3 Center;
+            internal float Radius;
+            internal int Safety = SafetySafe;
+            // Empty for a whole-radius reset; set when a specific location was named.
+            internal string LocationName = "";
+            // Named resets take the nearest match by default. "Reset the crypt in front of me" is the
+            // common case, and a generous search radius should not quietly reset three of them.
+            internal bool ResetAllMatches;
+            internal float SafeWaitSeconds;
+            internal bool IncludeDetail;
+            // Log tag, so a chunk record says which route asked for it.
+            internal string Source = "manual";
+        }
+
         // Force an immediate reset of the zones around a point, ignoring timers and the
         // player-proximity rule (but never the protection scan). Admin escape hatch and the main way
         // to test a configuration without waiting hours.
+        //
+        // Signature unchanged: sls-loc-reset calls this directly. Force rather than Safe because an
+        // admin typing the command is standing there deliberately -- see the note on the API's
+        // opposite default in APIReciever.
         internal static void ForceResetAround(Vector3 center, float radius, TerminalOutput output) {
-            // Two mods resetting the same objects on their own timers corrupts both. The background
-            // sweep already refuses through SweepAllowed; the manual path has to refuse too.
-            if (LocationResetData.BlockedByModConflict) {
-                Announce(output, "Refusing: a conflicting reset mod (VentureValheim LocationReset) is installed.");
-                return;
-            }
-            if (Ready == false) {
-                Announce(output, "Not ready: no world loaded, or this is not the server.");
-                return;
+            bool accepted = RequestReset(new ResetRequest() {
+                Center = center,
+                Radius = radius,
+                Safety = SafetyForce,
+                Source = $"sls-loc-reset r={radius:0}",
+            }, output, null);
+            // On acceptance the routine flushes when it finishes. On a refusal nothing else will,
+            // and a remote admin would be left waiting on a batched line that never gets pushed.
+            if (accepted == false) { output?.Flush(); }
+        }
+
+        // The single entry point for every manual reset: the admin commands and both API invokes.
+        // Returns whether the request was accepted; a false return means nothing was started and the
+        // callback will never fire.
+        internal static bool RequestReset(ResetRequest request, TerminalOutput output,
+                                          Action<Dictionary<string, object>> onComplete) {
+            if (request == null) { return false; }
+
+            if (TryRefuse(request, output, out string refusal)) {
+                Announce(output, $"Refusing: {refusal}");
+                return false;
             }
             if (ValConfig.EnableLocationReset.Value == false) {
                 // Still allowed: this is the escape hatch admins use to test a configuration without
                 // switching the sweep on for the whole server.
                 Announce(output, "Note: EnableLocationReset is off, so the background sweep will not follow up on these chunks.");
             }
-            TaskRunner.Run().StartCoroutine(ForceResetRoutine(center, radius, output));
+
+            LocationResetConfigSnapshot cfg = LocationResetConfigSnapshot.Capture();
+            List<Vector2i> zones;
+
+            if (string.IsNullOrEmpty(request.LocationName) == false) {
+                int hash = request.LocationName.GetStableHashCode();
+                zones = FindNamedLocationZones(request.Center, request.Radius, hash);
+                if (zones.Count == 0) {
+                    Announce(output, $"No location named '{request.LocationName}' within {request.Radius:0}m.");
+                    return false;
+                }
+                // FindNamedLocationZones returns nearest first, so trimming to one is "the one the
+                // caller is looking at".
+                if (request.ResetAllMatches == false && zones.Count > 1) {
+                    Announce(output, $"{zones.Count} '{request.LocationName}' locations are within {request.Radius:0}m; " +
+                        $"resetting the nearest only.");
+                    zones = new List<Vector2i>() { zones[0] };
+                }
+                // Resolved once for the request rather than per chunk. Distance bands are thousands
+                // of metres wide and a targeted request spans a few hundred at most, so every matched
+                // chunk falls in the same band as the centre.
+                LocationResetData.ResolvedResetEntry target =
+                    LocationResetData.ResolveExplicitTarget(request.LocationName, ZoneRates.DistanceFor(ZoneSystem.GetZone(request.Center)));
+                if (target == null) {
+                    Announce(output, $"'{request.LocationName}' can never be reset.");
+                    return false;
+                }
+                cfg.TargetPrefabHash = hash;
+                cfg.TargetOverride = target;
+            } else {
+                zones = SquareOfZones(request.Center, request.Radius);
+            }
+
+            ManualResetRunning = true;
+            TaskRunner.Run().StartCoroutine(ResetZonesRoutine(zones, cfg, request, output, onComplete));
+            return true;
         }
 
-        private static System.Collections.IEnumerator ForceResetRoutine(Vector3 center, float radius, TerminalOutput output) {
-            LocationResetConfigSnapshot cfg = LocationResetConfigSnapshot.Capture();
+        // Every reason a manual reset cannot start, in the order a caller most needs to hear them.
+        private static bool TryRefuse(ResetRequest request, TerminalOutput output, out string reason) {
+            reason = null;
+            // Two mods resetting the same objects on their own timers corrupts both. The background
+            // sweep already refuses through SweepAllowed; the manual path has to refuse too.
+            if (LocationResetData.BlockedByModConflict) {
+                reason = "a conflicting reset mod (VentureValheim LocationReset) is installed.";
+                return true;
+            }
+            if (Ready == false || ZoneSystem.instance == null) {
+                reason = "not ready - no world loaded, or this is not the server.";
+                return true;
+            }
+            if (ManualResetRunning) {
+                reason = "another reset is already running. Wait for it to finish.";
+                return true;
+            }
+            return false;
+        }
+
+        internal static List<Vector2i> SquareOfZones(Vector3 center, float radius) {
+            List<Vector2i> zones = new List<Vector2i>();
             Vector2i centerZone = ZoneSystem.GetZone(center);
             int span = Mathf.Max(0, Mathf.CeilToInt(radius / 64f));
-            int done = 0;
-            int blocked = 0;
-            int ungenerated = 0;
-            int adopted = 0;
-            string source = $"sls-loc-reset r={radius:0}";
-
             for (int dx = -span; dx <= span; dx++) {
                 for (int dy = -span; dy <= span; dy++) {
-                    Vector2i zone = new Vector2i(centerZone.x + dx, centerZone.y + dy);
+                    zones.Add(new Vector2i(centerZone.x + dx, centerZone.y + dy));
+                }
+            }
+            return zones;
+        }
+
+        // Zones within `radius` of `center` holding a location of this name, nearest first.
+        //
+        // Deliberately NOT ZoneSystem.FindClosestLocation or FindLocations. Both walk every location
+        // instance in the world with no early-out, and both read m_location.m_prefab.Name with no
+        // null guard on m_location and no IsValid guard on the soft reference -- the same unguarded
+        // read LocationResetData.SafePrefabName exists to work around, because vanilla's disabled
+        // placeholder entries carry an all-zero AssetID whose lookup throws. Walking the chunk square
+        // and using m_locationInstances as the zone-keyed index it already is costs a dictionary hit
+        // per chunk and touches no soft references at all.
+        internal static List<Vector2i> FindNamedLocationZones(Vector3 center, float radius, int nameHash) {
+            List<KeyValuePair<float, Vector2i>> matches = new List<KeyValuePair<float, Vector2i>>();
+            if (ZoneSystem.instance == null) { return new List<Vector2i>(); }
+
+            List<Vector2i> candidates = SquareOfZones(center, radius);
+            for (int i = 0; i < candidates.Count; i++) {
+                Vector2i zone = candidates[i];
+                if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { continue; }
+                if (instance.m_location == null) { continue; }
+
+                int hash;
+                try {
+                    hash = instance.m_location.Hash;
+                } catch (Exception) {
+                    // A location definition whose prefab reference cannot be resolved. Nothing to
+                    // identify it by, so it cannot be what was asked for.
+                    continue;
+                }
+                if (hash != nameHash) { continue; }
+
+                // Measured from the location itself, not the chunk centre, so a tight radius does not
+                // sweep in a location most of a chunk away.
+                Vector3 delta = instance.m_position - center;
+                delta.y = 0f;
+                if (delta.magnitude > radius) { continue; }
+                matches.Add(new KeyValuePair<float, Vector2i>(delta.magnitude, zone));
+            }
+
+            matches.Sort((a, b) => a.Key.CompareTo(b.Key));
+            List<Vector2i> zones = new List<Vector2i>();
+            for (int i = 0; i < matches.Count; i++) { zones.Add(matches[i].Value); }
+            return zones;
+        }
+
+        // One driver for the admin command, the API radius reset and the API named reset. The only
+        // differences between them are the zone list and the snapshot's targeting fields.
+        private static System.Collections.IEnumerator ResetZonesRoutine(
+                List<Vector2i> zones, LocationResetConfigSnapshot cfg, ResetRequest request,
+                TerminalOutput output, Action<Dictionary<string, object>> onComplete) {
+
+            ResetSummary summary = new ResetSummary() {
+                IncludeDetail = request.IncludeDetail,
+                Target = request.LocationName ?? "",
+                Center = request.Center,
+                Radius = request.Radius,
+                Safety = request.Safety,
+            };
+            float startedAt = Time.realtimeSinceStartup;
+            string source = request.Source;
+
+            try {
+                if (request.Safety == SafetySafe) {
+                    bool clear = false;
+                    yield return WaitForPlayersToClear(zones, cfg, request, output, (ok) => { clear = ok; });
+                    summary.WaitedSeconds = Time.realtimeSinceStartup - startedAt;
+                    if (clear == false) {
+                        summary.Completed = false;
+                        summary.Outcome = "deferred";
+                        summary.Reason = $"a player stayed within {cfg.PlayerSafeRadius:0}m for " +
+                            $"{summary.WaitedSeconds:0}s. Nothing was reset.";
+                        Announce(output, summary.ToLine());
+                        yield break;
+                    }
+                }
+
+                for (int i = 0; i < zones.Count; i++) {
+                    Vector2i zone = zones[i];
                     ZoneResetReport report = ZoneResetReport.For(zone, true);
                     // Force means force: biome and band rates scale timers, and force already bypasses
                     // every timer, so the rate stays at 1 here. The description is still recorded so an
@@ -315,51 +534,135 @@ namespace StarLevelSystem.modules.LocationReset {
                         : ZoneRates.Describe(zone, cfg);
 
                     if (ZoneSystem.instance.IsZoneGenerated(zone) == false) {
-                        ungenerated++;
+                        summary.ZonesUngenerated++;
                         report.SkipReason = "never generated";
+                        summary.Add(report);
                         Announce(output, report, source);
                         continue;
                     }
 
                     // Same governing-entry rules as the background sweep: force bypasses timers, never
                     // protection, and an admin testing a group's ignores wants force to behave the way
-                    // the sweep will.
+                    // the sweep will. This holds in Safe mode too -- protection is not a timer.
                     ZoneProtectionScan.ProtectionResult protection =
                         ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
                     if (protection.Blocked) {
-                        blocked++;
+                        summary.ZonesBlocked++;
                         report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
+                        summary.Add(report);
                         Announce(output, report, source);
                         continue;
                     }
 
-                    // force: an admin asking for a reset now means now, so per-target timers and the
+                    // force: asking for a reset now means now, so per-target timers and the
                     // first-sight grace period are bypassed in BOTH the in-place refresh and the
                     // regeneration tiers, and a zone that is already loaded is worked on in place
                     // rather than skipped. Protection is never bypassed.
+                    //
+                    // Passed true in Safe mode as well. Safe is about not resetting the ground under
+                    // somebody's feet, which the wait above has already settled; splitting this bool
+                    // into "bypass timers" and "adopt a loaded zone" would touch seven call sites in
+                    // the most delicate code here to express something the gate already handles.
                     ResetTargets.RefreshZoneInPlace(zone, cfg, true, report);
                     bool ok = false;
                     yield return ResetTargets.RegenerateZone(zone, cfg, true, report, (r) => { ok = r; });
                     if (ok) {
                         LocationResetState.StampZone(zone);
                         ZoneProtectionScan.RecordBaseline(zone);
-                        done++;
-                        if (report.ZoneAdopted) { adopted++; }
+                        summary.ZonesReset++;
                     }
+                    summary.Add(report);
                     Announce(output, report, source);
                     yield return null;
                 }
-            }
 
-            LocationResetState.Save();
-            Announce(output, $"Forced reset complete: {done} chunks reset ({adopted} adopted while loaded), " +
-                $"{blocked} skipped as protected, {ungenerated} never generated.");
-            LocationResetLog.Note($"Forced reset around x={center.x:0} z={center.z:0} r={radius:0}: {done} reset, " +
-                $"{adopted} adopted, {blocked} protected, {ungenerated} ungenerated.", source);
-            LocationResetLog.Flush();
-            // This routine outlives the command call that started it, so the tail of the sweep would
-            // otherwise sit in the sink's buffer until something else pushed it out.
-            output?.Flush();
+                summary.Completed = true;
+                summary.Outcome = "completed";
+                LocationResetState.Save();
+                Announce(output, summary.ToLine());
+                LocationResetLog.Note($"Manual reset around x={request.Center.x:0} z={request.Center.z:0} " +
+                    $"r={request.Radius:0}: {summary.ToLine()}", source);
+            } finally {
+                // In a finally so a throw anywhere above cannot strand the flag and permanently wedge
+                // both the background sweep and every future manual request.
+                ManualResetRunning = false;
+                summary.ElapsedSeconds = Time.realtimeSinceStartup - startedAt;
+                LocationResetLog.Flush();
+                // This routine outlives the command call that started it, so the tail of the sweep
+                // would otherwise sit in the sink's buffer until something else pushed it out.
+                output?.Flush();
+                SafeInvoke(onComplete, summary);
+            }
+        }
+
+        // Wait until no player is standing in or near any target chunk. onResult receives false when
+        // the wait ran out, in which case nothing has been touched.
+        //
+        // Polls rather than borrowing LocationResetState.TryScheduleRetry. That is per-zone state the
+        // background sweep owns -- a two-attempt budget on 5 and 15 minute delays that EvaluateZone
+        // reads -- so waiting on it here would spend the sweep's retry budget for those chunks and
+        // leave them deferred for a full cycle afterwards. This wait belongs to the request, not the
+        // zone, so it lives and dies with the request.
+        private static System.Collections.IEnumerator WaitForPlayersToClear(
+                List<Vector2i> zones, LocationResetConfigSnapshot cfg, ResetRequest request,
+                TerminalOutput output, Action<bool> onResult) {
+
+            float limit = request.SafeWaitSeconds > 0f ? request.SafeWaitSeconds : DefaultSafeWaitSeconds;
+            float deadline = Time.realtimeSinceStartup + limit;
+            float nextLog = 0f;
+            bool announced = false;
+
+            while (true) {
+                Vector2i blocking = default(Vector2i);
+                bool blocked = false;
+                for (int i = 0; i < zones.Count; i++) {
+                    // Both halves matter. A player just outside the safe radius can still have the
+                    // chunk loaded, and a loaded chunk is one whose objects are live in somebody's
+                    // scene -- including the dungeon interior, which shares this chunk's coordinates
+                    // 5000m up.
+                    if (LocationResetManager.PlayersNearby(zones[i], cfg.PlayerSafeRadius) == false
+                            && ZoneSystem.instance.IsZoneLoaded(zones[i]) == false) { continue; }
+                    blocking = zones[i];
+                    blocked = true;
+                    break;
+                }
+
+                if (blocked == false) {
+                    if (announced) { Announce(output, "Players have cleared the area; starting the reset."); }
+                    onResult?.Invoke(true);
+                    yield break;
+                }
+
+                if (Time.realtimeSinceStartup >= deadline) {
+                    onResult?.Invoke(false);
+                    yield break;
+                }
+
+                // Once on entry, then at a slow interval: a five minute wait should be five or six
+                // lines, not sixty.
+                if (announced == false || Time.realtimeSinceStartup >= nextLog) {
+                    float remaining = deadline - Time.realtimeSinceStartup;
+                    Announce(output, $"Waiting: chunk {blocking.x},{blocking.y} is occupied or loaded. " +
+                        $"Retrying every {SafePollSeconds:0}s for up to {remaining:0}s more. " +
+                        $"Use force to reset anyway.");
+                    announced = true;
+                    nextLog = Time.realtimeSinceStartup + SafeWaitLogIntervalSeconds;
+                }
+
+                yield return new WaitForSeconds(SafePollSeconds);
+            }
+        }
+
+        // A consumer's callback runs inside our coroutine frame, so an exception in it would abort
+        // the rest of that frame -- which is the finally block that clears ManualResetRunning and
+        // flushes the log. Never let a third-party delegate reach any of that.
+        private static void SafeInvoke(Action<Dictionary<string, object>> onComplete, ResetSummary summary) {
+            if (onComplete == null) { return; }
+            try {
+                onComplete(summary.ToDictionary());
+            } catch (Exception e) {
+                Logger.LogLocationResetWarning($"A mod's location reset callback threw and was ignored: {e}");
+            }
         }
 
         // A manual command reports unconditionally: to the chunk log, to the BepInEx log, and to

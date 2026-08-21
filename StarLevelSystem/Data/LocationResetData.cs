@@ -101,6 +101,37 @@ namespace StarLevelSystem.Data {
             get { return ConfigEnabled && BlockedByModConflict == false; }
         }
 
+        // A target registered through the public API.
+        //
+        // Kept apart from SLE_LocationReset_Settings for two reasons, both load-bearing. Rebuild()
+        // clears every derived lookup and rebuilds from the yaml config alone, so anything living
+        // inside that config object is wiped by the next reload -- the same reason
+        // CreatureModifiersData keeps APIAdded apart from CustomModifiers. And that config object is
+        // what YamlConfigManager.WriteCurrentToDisk serializes, so a registration written into
+        // cfg.Locations would be persisted into the admin's file and outlive the mod that asked for it.
+        internal class APIResetRegistration {
+            internal string Name;
+            internal string SourceId;
+            // Reuses the yaml entry shape so Resolve needs no new field plumbing. Protection stays
+            // null forever: the API has no way to pass one, and must not be able to relax
+            // Ward/Tombstone. Protection policy is admin-only by construction.
+            internal LocationResetEntry Entry;
+            internal float MinDistance;
+            internal float MaxDistance;
+        }
+
+        // Registered targets, by prefab name. Never cleared by Rebuild, and never cleared on world
+        // unload either: a registration belongs to the registering mod's process lifetime, not to
+        // whichever world happens to be loaded.
+        internal static readonly Dictionary<string, APIResetRegistration> APIAdded =
+            new Dictionary<string, APIResetRegistration>(StringComparer.Ordinal);
+
+        // The floor a single registration may ask for. MinEnabledIntervalSeconds is a GLOBAL gate --
+        // it is what EvaluateZone compares every zone in the world against -- so one careless
+        // registration at five minutes would make the sweep re-examine the entire world every five
+        // minutes. Rejected rather than clamped so the mod author sees the problem immediately.
+        internal const float MinAPIResetHours = 0.25f;
+
         // A single target with its fallbacks already folded in.
         internal class ResolvedResetEntry {
             internal string Name;
@@ -256,7 +287,11 @@ namespace StarLevelSystem.Data {
                         }
                         continue;
                     }
-                    ResolvedResetEntry resolved = ResolveWithGroups(kvp.Key, kvp.Value, cfg.Defaults, membership);
+                    // Never pass null: a key written with no value under it ("Crypt2:" and nothing
+                    // else) deserializes to null, and Resolve reads a null entry as "the admin never
+                    // mentioned this name" -- which would let an API registration back in over a key
+                    // they wrote specifically to take control of it.
+                    ResolvedResetEntry resolved = ResolveWithGroups(kvp.Key, kvp.Value ?? new LocationResetEntry(), cfg.Defaults, membership);
                     LocationsByHash[resolved.PrefabHash] = resolved;
                     TrackInterval(resolved);
                 }
@@ -264,13 +299,14 @@ namespace StarLevelSystem.Data {
 
             if (cfg.Vegetation != null) {
                 foreach (KeyValuePair<string, LocationResetEntry> kvp in cfg.Vegetation) {
-                    ResolvedResetEntry resolved = ResolveWithGroups(kvp.Key, kvp.Value, cfg.Defaults, membership);
+                    ResolvedResetEntry resolved = ResolveWithGroups(kvp.Key, kvp.Value ?? new LocationResetEntry(), cfg.Defaults, membership);
                     VegetationByPrefabHash[resolved.PrefabHash] = resolved;
                     TrackInterval(resolved);
                 }
             }
 
             AddGroupOnlyTargets(cfg, membership);
+            AddAPIOnlyTargets(cfg, membership);
             membership.WarnOnUnmatchedMembers();
 
             if (cfg.ProtectedPrefabs != null) {
@@ -528,6 +564,61 @@ namespace StarLevelSystem.Data {
             }
         }
 
+        // Registrations that neither a Locations/Vegetation key nor a group already resolved. The two
+        // passes above fold the API layer in for anything the config names; this covers the rest, and
+        // is what lets a mod register a target the admin's file has never heard of.
+        //
+        // Mirrors AddGroupOnlyTargets, including its world-catalogue precondition.
+        private static void AddAPIOnlyTargets(LocationResetConfiguration cfg, GroupMembership membership) {
+            // The answer to "what happens to a registration that arrives before the catalogue is
+            // indexed": nothing, yet. A dependent mod's Awake can run before ZoneSystem and ZNetScene
+            // exist, and without the catalogue there is no way to tell a location from a vegetation
+            // prefab. The registration sits in APIAdded and the world-ready Rebuild picks it up --
+            // the same deferral $Mineable and $Pickable already rely on. Guessing here would classify
+            // every early registration wrongly and warn about all of them.
+            if (worldCatalogBuilt == false) { return; }
+
+            foreach (KeyValuePair<string, APIResetRegistration> kvp in APIAdded) {
+                string name = kvp.Key;
+                if (string.IsNullOrEmpty(name)) { continue; }
+                // Defence in depth: RegisterAPIResetTarget already refuses these, but a hard block is
+                // not something to enforce in exactly one place.
+                if (HardBlockedLocations.Contains(name)) { continue; }
+
+                int hash = name.GetStableHashCode();
+                bool isLocation = KnownLocationHashes.Contains(hash);
+                bool isVegetation = KnownVegetationHashes.Contains(hash);
+                if (isLocation == false && isVegetation == false) {
+                    // Neither placement list mentions it. A registration is a NAMED target by
+                    // definition -- there is no $token wildcard to worry about here -- so if a prefab
+                    // exists at all it is something like a dungeon-only pickable, which the sweep
+                    // finds by ZDO prefab hash. That is the vegetation lookup.
+                    if (modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.ContainsKey(hash) == false) { continue; }
+                    isVegetation = true;
+                }
+
+                bool needLocation = isLocation && LocationsByHash.ContainsKey(hash) == false;
+                bool needVegetation = isVegetation && VegetationByPrefabHash.ContainsKey(hash) == false;
+                if (needLocation == false && needVegetation == false) { continue; }
+
+                // Share one resolution across both catalogues, as AddGroupOnlyTargets does: a
+                // ResolvedResetEntry is immutable once built, and resolving twice would repeat any
+                // warning the resolution emits.
+                if (LocationsByHash.TryGetValue(hash, out ResolvedResetEntry resolved) == false
+                        && VegetationByPrefabHash.TryGetValue(hash, out resolved) == false) {
+                    resolved = ResolveWithGroups(name, null, cfg.Defaults, membership);
+                    // Without this the registration's interval never reaches
+                    // MinEnabledIntervalSeconds, so EvaluateZone keeps judging its chunks against
+                    // some other target's floor and a 6h registration sitting behind a 72h floor
+                    // simply never comes due -- silently, with nothing logged anywhere.
+                    TrackInterval(resolved);
+                }
+
+                if (needLocation) { LocationsByHash[hash] = resolved; }
+                if (needVegetation) { VegetationByPrefabHash[hash] = resolved; }
+            }
+        }
+
         // Category tokens usable in a group's Members list. They resolve from the component-derived
         // prefab sets the protection scan already builds, so they cover modded content that a
         // hand-written name list never would.
@@ -636,8 +727,17 @@ namespace StarLevelSystem.Data {
         private static ResolvedResetEntry ResolveWithGroups(string name, LocationResetEntry entry,
                                                             LocationResetDefaults defaults, GroupMembership membership) {
             int hash = name.GetStableHashCode();
+            // Looked up here rather than threaded in from the three call sites: every path that
+            // resolves a target comes through this method, so one lookup covers all of them.
+            APIAdded.TryGetValue(name, out APIResetRegistration api);
+            // A scoped registration contributes ONLY a variant, never the unscoped base -- see
+            // AddAPIScopedVariant. An unscoped one feeds both, and adds no variant.
+            APIResetRegistration baseApi = IsAPIScoped(api) ? null : api;
+
             if (membership.ByPrefab.TryGetValue(hash, out List<KeyValuePair<string, LocationResetGroup>> groups) == false) {
-                return Resolve(name, entry, null, defaults);
+                ResolvedResetEntry bare = Resolve(name, entry, null, baseApi, defaults);
+                AddAPIScopedVariant(bare, name, entry, api, defaults);
+                return bare;
             }
 
             List<KeyValuePair<string, LocationResetGroup>> unscoped = new List<KeyValuePair<string, LocationResetGroup>>();
@@ -656,24 +756,51 @@ namespace StarLevelSystem.Data {
 
             LocationResetGroup winner = unscoped.Count > 0 ? unscoped[0].Value : null;
             string winnerName = unscoped.Count > 0 ? unscoped[0].Key : null;
-            ResolvedResetEntry resolved = Resolve(name, entry, winner, defaults);
+            ResolvedResetEntry resolved = Resolve(name, entry, winner, baseApi, defaults);
             resolved.GroupName = winnerName;
 
             for (int i = 0; i < scoped.Count; i++) {
-                ResolvedResetEntry variant = Resolve(name, entry, scoped[i].Value, defaults);
+                ResolvedResetEntry variant = Resolve(name, entry, scoped[i].Value, baseApi, defaults);
                 variant.GroupName = scoped[i].Key;
                 variant.MinDistance = Math.Max(0f, scoped[i].Value.MinDistance ?? 0f);
                 variant.MaxDistance = Math.Max(0f, scoped[i].Value.MaxDistance ?? 0f);
                 if (resolved.Scoped == null) { resolved.Scoped = new List<ResolvedResetEntry>(); }
                 resolved.Scoped.Add(variant);
             }
+            AddAPIScopedVariant(resolved, name, entry, api, defaults);
             return resolved;
+        }
+
+        // A registration that carries a distance scope becomes one more variant on the resolved
+        // entry. Appended AFTER the scoped groups, because ForDistance takes the first variant whose
+        // range contains the chunk and the yaml layer has to win wherever the two overlap.
+        //
+        // The base entry is deliberately resolved with api: null by the caller in this case -- a
+        // scoped registration says "these settings within this range", and letting it also set the
+        // unscoped base would apply it to the whole world, which is the opposite of a scope.
+        private static void AddAPIScopedVariant(ResolvedResetEntry resolved, string name,
+                                                LocationResetEntry entry, APIResetRegistration api,
+                                                LocationResetDefaults defaults) {
+            if (api == null) { return; }
+            if (api.MinDistance <= 0f && api.MaxDistance <= 0f) { return; }
+
+            ResolvedResetEntry variant = Resolve(name, entry, null, api, defaults);
+            variant.GroupName = $"API:{api.SourceId}";
+            variant.MinDistance = Math.Max(0f, api.MinDistance);
+            variant.MaxDistance = Math.Max(0f, api.MaxDistance);
+            if (resolved.Scoped == null) { resolved.Scoped = new List<ResolvedResetEntry>(); }
+            resolved.Scoped.Add(variant);
         }
 
         private static bool IsScoped(LocationResetGroup group) {
             if (group == null) { return false; }
             return (group.MinDistance.HasValue && group.MinDistance.Value > 0f)
                 || (group.MaxDistance.HasValue && group.MaxDistance.Value > 0f);
+        }
+
+        private static bool IsAPIScoped(APIResetRegistration api) {
+            if (api == null) { return false; }
+            return api.MinDistance > 0f || api.MaxDistance > 0f;
         }
 
         // Most-frequent-first. A cron group is ranked by the tightest gap its expression can produce,
@@ -695,9 +822,21 @@ namespace StarLevelSystem.Data {
             return (group.ResetHours ?? defaults.ResetHours) * 3600f;
         }
 
-        // entry ?? group ?? defaults, per field. group is null when nothing claims this prefab.
+        // entry ?? group ?? api ?? defaults, per field. group is null when nothing claims this
+        // prefab; api is null when no mod registered it.
+        //
+        // The API sits BELOW both yaml levels on purpose. The admin's file is the final authority on
+        // their server, and a mod's registration has to be overridable by an owner who cannot patch
+        // that mod. A group in particular is an explicit admin statement about a named member list,
+        // so letting a registration outrank it would silently re-time the group and make the
+        // "--- reset groups ---" block in sls-loc-status lie about what is running.
         private static ResolvedResetEntry Resolve(string name, LocationResetEntry entry,
-                                                  LocationResetGroup group, LocationResetDefaults defaults) {
+                                                  LocationResetGroup group, APIResetRegistration api,
+                                                  LocationResetDefaults defaults) {
+            // Captured before the null-fill below, because "the admin wrote a key for this name" and
+            // "there is an entry object" stop being the same thing the moment we fabricate one -- and
+            // the first is what the Mode/ResetInterior/Enabled rules below turn on.
+            bool hadEntry = entry != null;
             if (entry == null) { entry = new LocationResetEntry(); }
 
             // Whole-rule override per category, so an entry that customises an Action does not
@@ -726,21 +865,33 @@ namespace StarLevelSystem.Data {
                 }
             }
 
-            PickFrequency(name, entry, group, defaults, out float hours, out CronSchedule schedule);
+            PickFrequency(name, entry, group, api, defaults, out float hours, out CronSchedule schedule);
 
             return new ResolvedResetEntry() {
                 Name = name,
                 PrefabHash = name.GetStableHashCode(),
                 // A group turns its members on. An entry can still enable something no group covers;
                 // to exclude one member, drop it from the group's Members list.
-                Enabled = entry.Enabled || (group != null && group.Enabled.GetValueOrDefault(true)),
+                //
+                // A registration can likewise enable a target nothing else covers, but only while the
+                // admin has stayed out of it: a Locations/Vegetation key for this name means they
+                // have taken manual control, and the API's vote is dropped. That is the ONLY way an
+                // admin can switch a mod's registration off, since unlike a group they cannot edit
+                // its member list.
+                Enabled = entry.Enabled
+                    || (group != null && group.Enabled.GetValueOrDefault(true))
+                    || (hadEntry == false && api != null && api.Entry.Enabled),
                 ResetSeconds = Math.Max(0f, hours) * 3600f,
                 Schedule = schedule,
-                Mode = entry.Mode,
-                ResetTerrain = entry.ResetTerrain ?? group?.ResetTerrain ?? defaults.ResetTerrain,
-                TerrainRadius = entry.TerrainRadius ?? group?.TerrainRadius ?? defaults.TerrainRadius,
-                ExtraTerrainRadius = Math.Max(0f, entry.ExtraTerrainRadius ?? group?.ExtraTerrainRadius ?? defaults.ExtraTerrainRadius),
-                ResetInterior = entry.ResetInterior,
+                // Mode and ResetInterior are the awkward pair: both are non-nullable with a
+                // [DefaultValue], so the schema has no "unset" state and entry.Mode cannot be told
+                // apart from "the admin never mentioned it". hadEntry is the only thing that can, so
+                // the API layer is consulted exactly when no yaml key exists.
+                Mode = hadEntry ? entry.Mode : (api?.Entry.Mode ?? LocationResetMode.Full),
+                ResetTerrain = entry.ResetTerrain ?? group?.ResetTerrain ?? api?.Entry.ResetTerrain ?? defaults.ResetTerrain,
+                TerrainRadius = entry.TerrainRadius ?? group?.TerrainRadius ?? api?.Entry.TerrainRadius ?? defaults.TerrainRadius,
+                ExtraTerrainRadius = Math.Max(0f, entry.ExtraTerrainRadius ?? group?.ExtraTerrainRadius ?? api?.Entry.ExtraTerrainRadius ?? defaults.ExtraTerrainRadius),
+                ResetInterior = hadEntry ? entry.ResetInterior : (api?.Entry.ResetInterior ?? true),
                 Protection = protection,
             };
         }
@@ -752,7 +903,8 @@ namespace StarLevelSystem.Data {
         //
         // Within a level, ResetSchedule wins over ResetHours.
         private static void PickFrequency(string name, LocationResetEntry entry, LocationResetGroup group,
-                                          LocationResetDefaults defaults, out float hours, out CronSchedule schedule) {
+                                          APIResetRegistration api, LocationResetDefaults defaults,
+                                          out float hours, out CronSchedule schedule) {
             if (entry.ResetSchedule != null || entry.ResetHours.HasValue) {
                 hours = entry.ResetHours ?? defaults.ResetHours;
                 schedule = ParseSchedule(entry.ResetSchedule, name, "entry");
@@ -763,6 +915,15 @@ namespace StarLevelSystem.Data {
                 hours = group.ResetHours ?? defaults.ResetHours;
                 schedule = ParseSchedule(group.ResetSchedule, name, "group");
                 WarnIfBoth(group.ResetSchedule, group.ResetHours.HasValue, name, "group", schedule);
+                return;
+            }
+            // Named for the registering mod rather than a bare "API", so a bad cron expression in a
+            // third-party plugin points at the plugin instead of at Star Level System.
+            if (api != null && (api.Entry.ResetSchedule != null || api.Entry.ResetHours.HasValue)) {
+                string level = $"API ({api.SourceId})";
+                hours = api.Entry.ResetHours ?? defaults.ResetHours;
+                schedule = ParseSchedule(api.Entry.ResetSchedule, name, level);
+                WarnIfBoth(api.Entry.ResetSchedule, api.Entry.ResetHours.HasValue, name, level, schedule);
                 return;
             }
             hours = defaults.ResetHours;
@@ -1000,6 +1161,175 @@ namespace StarLevelSystem.Data {
                 return count;
             }
             return 0;
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // API registration
+        // ------------------------------------------------------------------------------------------
+
+        // Register a reset target on behalf of another mod. Safe to call at any point in the plugin
+        // lifecycle -- before a world exists, before ZNetScene, or mid-session -- because resolution
+        // is always deferred to the next Rebuild.
+        internal static bool RegisterAPIResetTarget(string name, string sourceId, LocationResetEntry entry,
+                                                    float minDistance, float maxDistance) {
+            if (string.IsNullOrWhiteSpace(name)) {
+                Logger.LogLocationResetWarning("A mod tried to register a reset target with no name.");
+                return false;
+            }
+            if (entry == null) { return false; }
+            name = name.Trim();
+            if (string.IsNullOrWhiteSpace(sourceId)) { sourceId = "unknown"; }
+
+            if (HardBlockedLocations.Contains(name)) {
+                Logger.LogLocationResetWarning($"'{sourceId}' tried to register '{name}' for resets, which can never be reset. Ignored.");
+                return false;
+            }
+
+            // A registration below the floor would drag the GLOBAL sweep gate down with it, so this
+            // is a refusal rather than a clamp -- a mod author asking for a 5 minute reset has
+            // misunderstood what this costs, and silently giving them 15 minutes would hide that.
+            if (entry.ResetHours.HasValue && entry.ResetHours.Value > 0f && entry.ResetHours.Value < MinAPIResetHours) {
+                Logger.LogLocationResetWarning($"'{sourceId}' tried to register '{name}' at {entry.ResetHours.Value:0.###}h. " +
+                    $"The minimum is {MinAPIResetHours:0.##}h: this value becomes the sweep's global examination floor, " +
+                    $"so anything shorter makes the sweep re-examine every zone in the world that often. Ignored.");
+                return false;
+            }
+            // 0 means "say nothing about timing", which falls through to Defaults exactly as an
+            // omitted ResetHours does in yaml.
+            if (entry.ResetHours.HasValue && entry.ResetHours.Value <= 0f) { entry.ResetHours = null; }
+
+            // Same rule ParseSchedule follows for the yaml: a typo makes a reset slower, never more
+            // frequent, and never takes anything else down with it.
+            if (string.IsNullOrWhiteSpace(entry.ResetSchedule) == false
+                    && CronSchedule.TryParse(entry.ResetSchedule, out _, out string cronError) == false) {
+                Logger.LogLocationResetWarning($"'{sourceId}' registered '{name}' with ResetSchedule " +
+                    $"'{entry.ResetSchedule}', which is not a valid cron expression ({cronError}). " +
+                    $"Falling back to its interval.");
+                entry.ResetSchedule = null;
+            }
+
+            // Only meaningful once the catalogue exists; before that every name looks unknown, which
+            // is exactly the false alarm ExpandGroups guards against for group members.
+            if (worldCatalogBuilt && IsKnownTargetName(name.GetStableHashCode()) == false) {
+                Logger.LogLocationResetWarning($"'{sourceId}' registered '{name}' for resets, but this world has " +
+                    $"nothing by that name. The registration is kept and will do nothing.");
+            }
+
+            if (APIAdded.TryGetValue(name, out APIResetRegistration existing)
+                    && string.Equals(existing.SourceId, sourceId, StringComparison.Ordinal) == false) {
+                Logger.LogLocationResetWarning($"'{name}' was already registered for resets by '{existing.SourceId}'; " +
+                    $"'{sourceId}' has replaced that registration.");
+            }
+
+            APIAdded[name] = new APIResetRegistration() {
+                Name = name,
+                SourceId = sourceId,
+                Entry = entry,
+                MinDistance = Math.Max(0f, minDistance),
+                MaxDistance = Math.Max(0f, maxDistance),
+            };
+
+            RebuildForAPIChange();
+            Logger.LogLocationReset($"'{sourceId}' registered reset target '{name}'.");
+            return true;
+        }
+
+        // sourceId null or empty matches any owner, which is what the console tooling uses. A
+        // mismatched owner is refused so one mod cannot unregister another's target.
+        internal static bool UnregisterAPIResetTarget(string name, string sourceId) {
+            if (string.IsNullOrWhiteSpace(name)) { return false; }
+            name = name.Trim();
+            if (APIAdded.TryGetValue(name, out APIResetRegistration existing) == false) { return false; }
+
+            if (string.IsNullOrWhiteSpace(sourceId) == false
+                    && string.Equals(existing.SourceId, sourceId, StringComparison.Ordinal) == false) {
+                Logger.LogLocationResetWarning($"'{sourceId}' tried to unregister '{name}', which belongs to " +
+                    $"'{existing.SourceId}'. Ignored.");
+                return false;
+            }
+
+            APIAdded.Remove(name);
+            // LocationResetState is deliberately untouched. Zone stamps and census baselines describe
+            // the world, not the configuration, and stay valid whoever is or is not watching them.
+            RebuildForAPIChange();
+            Logger.LogLocationReset($"Unregistered reset target '{name}' (was registered by '{existing.SourceId}').");
+            return true;
+        }
+
+        // Rebuild so a registration participates immediately, the way RegisterAPIModifier re-merges
+        // the active modifier set. Skipped before a world exists: AddAPIOnlyTargets is a no-op until
+        // the catalogue is built, and OnZoneSystemReady rebuilds once for the whole batch -- which is
+        // what keeps twenty registrations in a dependent mod's Awake from costing twenty Rebuilds.
+        private static void RebuildForAPIChange() {
+            if (ZoneSystem.instance == null || ZNetScene.instance == null) { return; }
+            Rebuild();
+        }
+
+        internal static List<string> GetAPIRegisteredNames(string sourceId) {
+            List<string> names = new List<string>();
+            foreach (KeyValuePair<string, APIResetRegistration> kvp in APIAdded) {
+                if (string.IsNullOrWhiteSpace(sourceId) == false
+                        && string.Equals(kvp.Value.SourceId, sourceId, StringComparison.Ordinal) == false) { continue; }
+                names.Add(kvp.Key);
+            }
+            names.Sort(StringComparer.Ordinal);
+            return names;
+        }
+
+        internal static bool TryGetAPIRegistration(string name, out APIResetRegistration registration) {
+            registration = null;
+            if (string.IsNullOrWhiteSpace(name)) { return false; }
+            return APIAdded.TryGetValue(name.Trim(), out registration);
+        }
+
+        // Which layer a resolved target's settings actually came from, for sls-loc-api and the API's
+        // own info calls. A registration that lost a precedence fight is otherwise invisible.
+        internal static string DescribeResolutionSource(string name) {
+            if (string.IsNullOrWhiteSpace(name)) { return "none"; }
+            name = name.Trim();
+            LocationResetConfiguration cfg = SLE_LocationReset_Settings;
+            bool hasEntry = (cfg?.Locations != null && cfg.Locations.ContainsKey(name))
+                || (cfg?.Vegetation != null && cfg.Vegetation.ContainsKey(name));
+            if (hasEntry) { return "entry"; }
+
+            int hash = name.GetStableHashCode();
+            if (LocationsByHash.TryGetValue(hash, out ResolvedResetEntry resolved) == false) {
+                VegetationByPrefabHash.TryGetValue(hash, out resolved);
+            }
+            if (resolved != null && string.IsNullOrEmpty(resolved.GroupName) == false
+                    && resolved.GroupName.StartsWith("API:", StringComparison.Ordinal) == false) {
+                return "group";
+            }
+            if (APIAdded.ContainsKey(name)) { return "api"; }
+            return resolved != null ? "defaults" : "none";
+        }
+
+        // The entry to use when a caller names a location outright -- the API's targeted reset, or
+        // sls-loc-reset-named.
+        //
+        // A configured, enabled target resolves normally, so the admin's terrain, interior and
+        // protection settings are honoured exactly as the background sweep would honour them. A
+        // target that is unconfigured or switched off still resolves, against Defaults, with Enabled
+        // forced on: the sweep declining to touch it on its own says nothing about whether an
+        // operator may ask for it by name, and returning NotConfigured to somebody who typed the
+        // location's name is an answer to a question they did not ask.
+        //
+        // Returns null only for a hard-blocked location, which nothing may reset by any route.
+        internal static ResolvedResetEntry ResolveExplicitTarget(string name, float distance) {
+            if (string.IsNullOrWhiteSpace(name)) { return null; }
+            name = name.Trim();
+            if (HardBlockedLocations.Contains(name)) { return null; }
+
+            if (LocationsByHash.TryGetValue(name.GetStableHashCode(), out ResolvedResetEntry configured)) {
+                ResolvedResetEntry scoped = configured.ForDistance(distance);
+                if (scoped.Enabled) { return scoped; }
+            }
+
+            LocationResetDefaults defaults = SLE_LocationReset_Settings?.Defaults ?? new LocationResetDefaults();
+            if (defaults.Protection == null) { defaults.Protection = LocationResetDefaults.DefaultProtection(); }
+            ResolvedResetEntry adhoc = Resolve(name, new LocationResetEntry() { Enabled = true }, null, null, defaults);
+            adhoc.GroupName = "explicit request";
+            return adhoc;
         }
 
         internal static bool TryGetVegetationEntry(int prefabHash, out ResolvedResetEntry entry) {

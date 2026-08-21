@@ -42,7 +42,34 @@ namespace StarLevelSystem
 
         private static readonly MethodInfo AddNewModifierToSLS;
 
+        // Location Reset
+        private static readonly MethodInfo RegisterLocationResetTargetMethod;
+        private static readonly MethodInfo UnregisterLocationResetTargetMethod;
+        private static readonly MethodInfo GetRegisteredLocationResetTargetsMethod;
+        private static readonly MethodInfo GetLocationResetTargetInfoMethod;
+        private static readonly MethodInfo IsLocationResetReadyMethod;
+        private static readonly MethodInfo GetLocationResetStatusMethod;
+        private static readonly MethodInfo IsKnownResetTargetNameMethod;
+        private static readonly MethodInfo GetLocationLastResetMethod;
+        private static readonly MethodInfo GetSecondsUntilLocationResetMethod;
+        private static readonly MethodInfo GetLocationResetInfoMethod;
+        private static readonly MethodInfo GetChunkResetInfoMethod;
+        private static readonly MethodInfo ResetNamedLocationMethod;
+        private static readonly MethodInfo ResetLocationsInRadiusMethod;
+
+        /// <summary>
+        /// True when Star Level System is installed at all. This only proves the receiver TYPE
+        /// resolved - it says nothing about which methods that build actually has.
+        /// </summary>
         public static bool IsAvailable => APIReciever != null;
+
+        /// <summary>
+        /// True when the installed Star Level System is new enough to expose the Location Reset API.
+        /// Check this rather than IsAvailable before calling anything in that section: a consumer
+        /// shipping a newer copy of this file than the installed mod would otherwise call through a
+        /// null MethodInfo.
+        /// </summary>
+        public static bool SupportsLocationReset => ResetNamedLocationMethod != null;
 
         static API() {
             APIReciever = Type.GetType("StarLevelSystem.modules.APIReciever, StarLevelSystem");
@@ -70,6 +97,31 @@ namespace StarLevelSystem
             GetAllModifiersForCreature = APIReciever.GetMethod("GetAllModifiersForCreature", BindingFlags.Public | BindingFlags.Static);
             AddModifierToCreature = APIReciever.GetMethod("AddModifierToCreature", BindingFlags.Public | BindingFlags.Static);
             AddNewModifierToSLS = APIReciever.GetMethod("AddNewModifierToSLS", BindingFlags.Public | BindingFlags.Static);
+
+            RegisterLocationResetTargetMethod = APIReciever.GetMethod("RegisterLocationResetTarget", BindingFlags.Public | BindingFlags.Static);
+            UnregisterLocationResetTargetMethod = APIReciever.GetMethod("UnregisterLocationResetTarget", BindingFlags.Public | BindingFlags.Static);
+            GetRegisteredLocationResetTargetsMethod = APIReciever.GetMethod("GetRegisteredLocationResetTargets", BindingFlags.Public | BindingFlags.Static);
+            GetLocationResetTargetInfoMethod = APIReciever.GetMethod("GetLocationResetTargetInfo", BindingFlags.Public | BindingFlags.Static);
+            IsLocationResetReadyMethod = APIReciever.GetMethod("IsLocationResetReady", BindingFlags.Public | BindingFlags.Static);
+            GetLocationResetStatusMethod = APIReciever.GetMethod("GetLocationResetStatus", BindingFlags.Public | BindingFlags.Static);
+            IsKnownResetTargetNameMethod = APIReciever.GetMethod("IsKnownResetTargetName", BindingFlags.Public | BindingFlags.Static);
+            GetLocationLastResetMethod = APIReciever.GetMethod("GetLocationLastReset", BindingFlags.Public | BindingFlags.Static);
+            GetSecondsUntilLocationResetMethod = APIReciever.GetMethod("GetSecondsUntilLocationReset", BindingFlags.Public | BindingFlags.Static);
+            GetLocationResetInfoMethod = APIReciever.GetMethod("GetLocationResetInfo", BindingFlags.Public | BindingFlags.Static);
+            GetChunkResetInfoMethod = APIReciever.GetMethod("GetChunkResetInfo", BindingFlags.Public | BindingFlags.Static);
+            ResetNamedLocationMethod = APIReciever.GetMethod("ResetNamedLocation", BindingFlags.Public | BindingFlags.Static);
+            ResetLocationsInRadiusMethod = APIReciever.GetMethod("ResetLocationsInRadius", BindingFlags.Public | BindingFlags.Static);
+        }
+
+        // Invoke that degrades instead of throwing.
+        //
+        // The creature methods above call Invoke straight off the field, so a consumer shipping a
+        // NEWER copy of this file than the installed Star Level System gets a NullReferenceException
+        // at their own call site rather than a usable answer. Everything added from the Location
+        // Reset section onward routes through here and returns `fallback` instead.
+        private static object Call(MethodInfo method, object fallback, params object[] args) {
+            if (method == null) { return fallback; }
+            return method.Invoke(null, args);
         }
 
         /////////////////////
@@ -390,6 +442,201 @@ namespace StarLevelSystem
             List<Heightmap.Biome> allowed_biomes = null) {
             return (bool)AddNewModifierToSLS.Invoke(null, new object[] { modifierID, modifier_name, setupMethod, selectionWeight, basepower, perlevelpower, biomeConfig, namingStyle,
                 name_suffixes, name_prefixes, visualStyle, starIcon, visualEffect, allowed_creatures, unallowed_creatures, allowed_biomes });
+        }
+
+        ////////////////////////////////////////
+        /// LOCATION RESET
+        ////////////////////////////////////////
+        ///
+        /// Star Level System can restore looted locations, dungeons, ore, pickables and vegetation on
+        /// a schedule. This section lets your mod register its own targets for that sweep, ask for a
+        /// reset directly, and find out when something was last reset.
+        ///
+        /// Everything here is SERVER-SIDE. The invoke and query calls return a refusal on a client;
+        /// registration is accepted anywhere (so it is safe to call from your Awake regardless of
+        /// plugin load order) but only ever does anything on a server.
+        ///
+        /// Guard on SupportsLocationReset, not just IsAvailable.
+
+        /// <summary>
+        /// Register a location or vegetation prefab as a recurring reset target. It joins Star Level
+        /// System's normal background sweep exactly as a configured target would, timed off the
+        /// location's own world data, and survives config reloads and world reloads.
+        ///
+        /// Safe to call at any point, including before a world is loaded. The registration resolves
+        /// the next time the configuration is rebuilt.
+        ///
+        /// The server owner's LocationResetSettings.yaml always wins: if they add an entry for this
+        /// prefab name, their settings replace yours entirely. Protection rules (what player-built
+        /// content blocks a reset) are theirs alone and cannot be set from here.
+        /// </summary>
+        /// <param name="prefabName">Location or vegetation prefab name, e.g. "Crypt2"</param>
+        /// <param name="sourceId">Your plugin GUID. Used in logs and to scope UnregisterAll</param>
+        /// <param name="resetHours">Hours between resets. 0 uses the server's default interval. Minimum 0.25</param>
+        /// <param name="resetSchedule">A 5-field cron expression instead of an interval, e.g. "0 3 * * *". Wins over resetHours</param>
+        /// <param name="enabled">Whether the target is active</param>
+        /// <param name="mode">0 = Full (clear and rebuild), 1 = TerrainOnly (undo terraforming, leave the location)</param>
+        /// <param name="resetTerrain">Also revert player terraforming around the location</param>
+        /// <param name="terrainRadius">Terrain reset radius. 0 uses the location's own exterior radius</param>
+        /// <param name="extraTerrainRadius">Extra metres of terrain reset beyond that radius</param>
+        /// <param name="resetInterior">Whether a dungeon interior may be regenerated. False leaves such locations alone entirely</param>
+        /// <param name="minDistance">Only apply beyond this distance from the world's reset centre. 0 = no limit</param>
+        /// <param name="maxDistance">Only apply within this distance. 0 = no limit</param>
+        /// <returns>bool success</returns>
+        public static bool RegisterLocationReset(string prefabName, string sourceId,
+            float resetHours = 0f, string resetSchedule = null, bool enabled = true, int mode = 0,
+            bool resetTerrain = false, float terrainRadius = 0f, float extraTerrainRadius = 0f,
+            bool resetInterior = true, float minDistance = 0f, float maxDistance = 0f) {
+            return (bool)Call(RegisterLocationResetTargetMethod, false,
+                prefabName, sourceId, resetHours, resetSchedule, mode, resetTerrain, terrainRadius,
+                extraTerrainRadius, resetInterior, minDistance, maxDistance, enabled);
+        }
+
+        /// <summary>
+        /// Remove a target you registered. Refused if another mod owns that registration.
+        /// </summary>
+        /// <returns>bool success</returns>
+        public static bool UnregisterLocationReset(string prefabName, string sourceId) {
+            return (bool)Call(UnregisterLocationResetTargetMethod, false, prefabName, sourceId);
+        }
+
+        /// <summary>
+        /// Every prefab name registered through this API. Pass your plugin GUID to see only your own,
+        /// or null for all of them.
+        /// </summary>
+        public static List<string> GetRegisteredLocationResets(string sourceId = null) {
+            return (List<string>)Call(GetRegisteredLocationResetTargetsMethod, new List<string>(), sourceId);
+        }
+
+        /// <summary>
+        /// How a reset target actually resolved, whoever registered it. Keys include: name, known,
+        /// configured, enabled, source ("entry", "group", "api", "defaults", "none"), registeredBy,
+        /// hardBlocked, isLocation, isVegetation, resetSeconds, schedule, mode, resetTerrain,
+        /// terrainRadius, extraTerrainRadius, resetInterior.
+        ///
+        /// "source" is the one to check if your registration does not seem to be taking effect:
+        /// anything other than "api" means the server's config is overriding it.
+        /// </summary>
+        public static Dictionary<string, object> GetLocationResetTargetInfo(string prefabName) {
+            return (Dictionary<string, object>)Call(GetLocationResetTargetInfoMethod, null, prefabName);
+        }
+
+        /// <summary>
+        /// Whether a reset request would currently be accepted: this is the server, a world is
+        /// loaded, and no conflicting reset mod is installed.
+        /// </summary>
+        public static bool IsLocationResetReady() {
+            return (bool)Call(IsLocationResetReadyMethod, false);
+        }
+
+        /// <summary>
+        /// Location Reset state. Keys include: available, isServer, ready, sweepAllowed,
+        /// masterSwitchEnabled, configEnabled, blockedByModConflict, resetRunning, trackedZones,
+        /// generatedZones, sweepFloorSeconds, apiRegistrations.
+        /// </summary>
+        public static Dictionary<string, object> GetLocationResetStatus() {
+            return (Dictionary<string, object>)Call(GetLocationResetStatusMethod, null);
+        }
+
+        /// <summary>
+        /// Whether this world has any location, vegetation entry or prefab by that name. Use it to
+        /// catch a prefab name that a game update renamed out from under you.
+        /// </summary>
+        public static bool IsKnownLocationResetTarget(string prefabName) {
+            return (bool)Call(IsKnownResetTargetNameMethod, false, prefabName);
+        }
+
+        /// <summary>
+        /// When the named location nearest `center` was last reset, as Unix seconds UTC.
+        /// Returns -1 if no location of that name is within `radius` (or it has nothing to time
+        /// from), and 0 if it exists but has never been stamped.
+        /// </summary>
+        public static long GetLocationLastReset(string locationName, Vector3 center, float radius = 256f) {
+            return (long)Call(GetLocationLastResetMethod, -1L, locationName, center, radius);
+        }
+
+        /// <summary>
+        /// Seconds until the named location is next due for a reset. 0 means due now, -1 means
+        /// unknown - not found, never stamped, or nothing has it configured.
+        /// </summary>
+        public static double GetSecondsUntilLocationReset(string locationName, Vector3 center, float radius = 256f) {
+            return (double)Call(GetSecondsUntilLocationResetMethod, -1d, locationName, center, radius);
+        }
+
+        /// <summary>
+        /// Full reset state for the named location nearest `center`. Keys include: found, name,
+        /// zoneX, zoneZ, positionX/Y/Z, distance, configured, enabled, hardBlocked, source,
+        /// groupName, schedule, mode, resetTerrain, resetInterior, hasProxy, lastResetUnix,
+        /// secondsSinceReset, secondsUntilDue, dueNow, rateMultiplier, rateDescription.
+        ///
+        /// Always check "found" first.
+        /// </summary>
+        public static Dictionary<string, object> GetLocationResetInfo(string locationName, Vector3 center, float radius = 256f) {
+            return (Dictionary<string, object>)Call(GetLocationResetInfoMethod, null, locationName, center, radius);
+        }
+
+        /// <summary>
+        /// Reset state for the map chunk containing `position`. Keys include: zoneX, zoneZ, centerX,
+        /// centerZ, biome, generated, loaded, tracked, lastExaminedUnix, secondsSinceExamined,
+        /// deferredUntilUnix, retryAtUnix, retryCount, rateMultiplier, rateDescription,
+        /// protectionBlocked, protectionReason, locationName, locationLastResetUnix,
+        /// locationSecondsUntilDue.
+        ///
+        /// Note that lastExaminedUnix is when the sweep last LOOKED at this chunk, which is not the
+        /// same as anything in it having been reset - for that, read locationLastResetUnix or use
+        /// GetLocationLastReset. When the chunk has been deferred (a player build is blocking it, for
+        /// instance) lastExaminedUnix is 0 and deferredUntilUnix carries the time it comes back up.
+        /// </summary>
+        /// <param name="includePrefabs">Also return a "prefabs" list of per-prefab census rows
+        /// (name, lastResetUnix, baseline, live). This costs a full scan of the chunk</param>
+        public static Dictionary<string, object> GetChunkResetInfo(Vector3 position, bool includePrefabs = false) {
+            return (Dictionary<string, object>)Call(GetChunkResetInfoMethod, null, position, includePrefabs);
+        }
+
+        /// <summary>
+        /// Reset the named location nearest `center`, within `radius`.
+        ///
+        /// Unlike the background sweep this works on a location the server has not configured for
+        /// resets at all - you named it, so it is reset. Locations that can never be reset (the
+        /// starting temple) are still refused.
+        ///
+        /// SAFETY. safety 0 (Safe, the default) waits for players to leave the affected chunks before
+        /// touching anything, and gives up without resetting if they do not. safety 1 (Force) resets
+        /// immediately, working on chunks that are loaded around a player - use this when you want a
+        /// location restored before somebody walks back into it. Player-built structures block a
+        /// reset in BOTH modes and there is no way to override that.
+        ///
+        /// Be careful with Force on a dungeon somebody is inside: interiors are rebuilt from scratch
+        /// and a player standing in one will fall.
+        /// </summary>
+        /// <param name="locationName">Location prefab name, e.g. "Crypt2"</param>
+        /// <param name="center">World position to search around</param>
+        /// <param name="radius">Search radius in metres</param>
+        /// <param name="safety">0 = Safe (wait for players), 1 = Force (reset now)</param>
+        /// <param name="resetAllMatches">Reset every match in range rather than just the nearest</param>
+        /// <param name="safeWaitSeconds">How long Safe waits before giving up. 0 uses the default (300s)</param>
+        /// <param name="includeDetail">Include a per-chunk "zones" list in the result</param>
+        /// <param name="onComplete">Called when the reset finishes, with the result summary. NEVER
+        /// called if this method returns false</param>
+        /// <returns>bool - whether the request was accepted</returns>
+        public static bool ResetNamedLocation(string locationName, Vector3 center, float radius = 128f,
+            int safety = 0, bool resetAllMatches = false, float safeWaitSeconds = 0f,
+            bool includeDetail = false, Action<Dictionary<string, object>> onComplete = null) {
+            return (bool)Call(ResetNamedLocationMethod, false,
+                locationName, center, radius, safety, resetAllMatches, safeWaitSeconds, includeDetail, onComplete);
+        }
+
+        /// <summary>
+        /// Reset everything the server has configured for resets within `radius` of `center`. Same
+        /// safety rules as ResetNamedLocation.
+        /// </summary>
+        /// <param name="onComplete">Called when the reset finishes. NEVER called if this returns false</param>
+        /// <returns>bool - whether the request was accepted</returns>
+        public static bool ResetLocationsInRadius(Vector3 center, float radius = 128f, int safety = 0,
+            float safeWaitSeconds = 0f, bool includeDetail = false,
+            Action<Dictionary<string, object>> onComplete = null) {
+            return (bool)Call(ResetLocationsInRadiusMethod, false,
+                center, radius, safety, safeWaitSeconds, includeDetail, onComplete);
         }
     }
 }

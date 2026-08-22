@@ -193,6 +193,8 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> SplittersInheritLevel;
         public static ConfigEntry<int> LimitCreatureModifierPrefixes;
         public static ConfigEntry<bool> MinorModifiersFirstInName;
+        public static ConfigEntry<bool> EvolvingCanRollNewModifiers;
+        public static ConfigEntry<float> EolvingChanceToRollNewModifier;
 
         public static ConfigEntry<bool> EnableDistanceLevelScalingBonus;
         public static ConfigEntry<bool> EnableMultiplayerEnemyHealthScaling;
@@ -519,6 +521,8 @@ namespace StarLevelSystem.common {
             ModifierIconDisplayStyle = BindServerConfig("Modifiers", "ModifierIconDisplayStyle", ModifierDisplayStyle.Stars.ToString(), "Style to display modifiers as on the creature HUD. Icons = detailed modifier icons, Stars = star-shaped modifier icons, None = plain default stars.", new AcceptableValueList<string>(ModifierDisplayStyle.Icons.ToString(), ModifierDisplayStyle.Stars.ToString(), ModifierDisplayStyle.None.ToString()));
             CreatureModifiersData.ParseModifierDisplayStyle();
             ModifierIconDisplayStyle.SettingChanged += CreatureModifiersData.ModifierDisplayStyleChanged;
+            EvolvingCanRollNewModifiers = BindServerConfig("Modifiers", "EvolvingCanRollNewModifiers", false, "When enabled, evolving creatures have a chance to gain new modifiers when they evolve.");
+            EolvingChanceToRollNewModifier = BindServerConfig("Modifiers", "EolvingChanceToRollNewModifier", 0.15f, "Chance that an evolving creature will gain a new major, minor, or boss modifier (based on creature type), up to the configured modifier limit.", false, 0f, 1f);
 
             EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
             EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);

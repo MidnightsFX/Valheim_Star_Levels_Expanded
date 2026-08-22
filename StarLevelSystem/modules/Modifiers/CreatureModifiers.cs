@@ -411,6 +411,13 @@ namespace StarLevelSystem.modules.Modifiers {
             CreatureModifiersData.ModifierDefinitions[newModifier].RunOnceMethodCall(character, selectedMod.Config, scd);
             SetupCreatureVFX(character, CreatureModifiersData.ModifierDefinitions[newModifier]);
 
+            // Keep the cached name in step with the new modifier list. InvalidateCacheEntry below only rebuilds
+            // it when the creature currently has an extended hud, so without this the hover/hud name lagged
+            // behind until the next full cache rebuild.
+            if (scd != null) {
+                scd.CreatureNameLocalizable = BuildCreatureLocalizableName(character, savedMods);
+            }
+
             // Note the character name needs to be rerolled
             UIHudControl.InvalidateCacheEntry(character);
 
@@ -422,6 +429,105 @@ namespace StarLevelSystem.modules.Modifiers {
             }
 
             return true;
+        }
+
+        // Evolving modifier: called each time a creature gains a level from kills (see Modifiers/Evolve.cs).
+        // One roll against EolvingChanceToRollNewModifier; on success the creature gains exactly one new
+        // modifier of a single type, picked at random from the types still valid for it. Bosses (with boss
+        // modifiers enabled) only ever roll Boss, everything else rolls Major or Minor - mirroring
+        // SelectModifiersForCreature. A type is valid when the creature is under its cap for that type (the
+        // creature-specific override, else the global MaxXModifiers setting) and at least one selectable
+        // modifier of that type remains that the creature does not already carry. The
+        // LimitCreatureModifiersToCreatureStarLevel budget is honoured against the level just reached.
+        // Returns true when a modifier was added.
+        public static bool TryRollEvolutionModifier(Character character, CharacterCacheEntry cacheEntry, int newLevel)
+        {
+            if (character == null || cacheEntry == null || character.m_nview == null || character.m_nview.GetZDO() == null) { return false; }
+            if (ValConfig.EvolvingCanRollNewModifiers.Value == false) { return false; }
+            // Modifiers are ZDO-authoritative: only the roller writes them (same gate as CreatureSetupQueue).
+            if (CompositeLazyCache.IsZOwner(character) == false && ValConfig.ForceControlAllSpawns.Value == false) {
+                Logger.LogDebug($"Evolve modifier roll skipped for {cacheEntry.RefCreatureName}: not the ZDO owner.");
+                return false;
+            }
+
+            float chance = ValConfig.EolvingChanceToRollNewModifier.Value;
+            if (chance <= 0f) { return false; }
+            if (chance < 1f) {
+                float roll = UnityEngine.Random.value;
+                if (roll >= chance) {
+                    Logger.LogDebug($"Evolve modifier roll failed for {cacheEntry.RefCreatureName}: {roll} >= {chance}");
+                    return false;
+                }
+            }
+
+            string creatureName = cacheEntry.RefCreatureName;
+            GlobalModifierSettings globalSettings = CreatureModifiersData.ActiveCreatureModifiers.ModifierGlobalSettings;
+            if (creatureName != null && globalSettings != null && globalSettings.GlobalIgnorePrefabList != null && globalSettings.GlobalIgnorePrefabList.Contains(creatureName)) {
+                Logger.LogDebug($"Evolve modifier roll skipped for {creatureName}: in the global ignore prefab list.");
+                return false;
+            }
+
+            // Count what the creature already carries (skipping the "None" sentinel) - those are excluded from
+            // the roll along with anything the creature was spawned with as not-allowed.
+            Dictionary<string, ModifierType> currentMods = CompositeLazyCache.GetCreatureModifiers(character) ?? new Dictionary<string, ModifierType>();
+            int majorCount = 0, minorCount = 0, bossCount = 0;
+            List<string> exclusions = new List<string>();
+            foreach (KeyValuePair<string, ModifierType> kvp in currentMods) {
+                if (kvp.Key == NoMods || string.IsNullOrEmpty(kvp.Key)) { continue; }
+                exclusions.Add(kvp.Key);
+                switch (kvp.Value) {
+                    case ModifierType.Boss: bossCount++; break;
+                    case ModifierType.Major: majorCount++; break;
+                    case ModifierType.Minor: minorCount++; break;
+                }
+            }
+            if (cacheEntry.ModifiersNotAllowed != null) { exclusions.AddRange(cacheEntry.ModifiersNotAllowed); }
+
+            // Same budget as SelectCreatureModifiers / SetupModifiers: a level L creature carries at most L-1 modifiers.
+            int totalMods = majorCount + minorCount + bossCount;
+            if (ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value && totalMods + 1 >= newLevel) {
+                Logger.LogDebug($"Evolve modifier roll for {creatureName}: star level budget exhausted ({totalMods} modifiers at level {newLevel}).");
+                return false;
+            }
+
+            CreatureSpecificSetting settings = cacheEntry.CreatureSettings;
+            List<ModifierType> candidateTypes = new List<ModifierType>();
+            if (character.IsBoss() && ValConfig.EnableBossModifiers.Value) {
+                int maxBoss = ValConfig.MaxBossModifiersPerBoss.Value;
+                if (settings != null && settings.MaxBossModifiers > -1) { maxBoss = settings.MaxBossModifiers; }
+                if (bossCount < maxBoss) { candidateTypes.Add(ModifierType.Boss); }
+            } else {
+                int maxMajor = ValConfig.MaxMajorModifiersPerCreature.Value;
+                if (settings != null && settings.MaxMajorModifiers > -1) { maxMajor = settings.MaxMajorModifiers; }
+                if (majorCount < maxMajor) { candidateTypes.Add(ModifierType.Major); }
+                int maxMinor = ValConfig.MaxMinorModifiersPerCreature.Value;
+                if (settings != null && settings.MaxMinorModifiers > -1) { maxMinor = settings.MaxMinorModifiers; }
+                if (minorCount < maxMinor) { candidateTypes.Add(ModifierType.Minor); }
+            }
+
+            // Drop types with nothing left to offer this creature, so an exhausted pool of one type does not
+            // waste the roll while the other still has options.
+            Dictionary<ModifierType, List<ProbabilityEntry>> pools = new Dictionary<ModifierType, List<ProbabilityEntry>>();
+            foreach (ModifierType type in candidateTypes) {
+                List<ProbabilityEntry> probabilities = CreatureModifiersData.LazyCacheCreatureModifierSelect(creatureName, cacheEntry.Biome, type);
+                if (probabilities != null && probabilities.Any(p => p.SelectionWeight > 0 && exclusions.Contains(p.Name) == false)) {
+                    pools[type] = probabilities;
+                }
+            }
+            if (pools.Count == 0) {
+                Logger.LogDebug($"Evolve modifier roll for {creatureName}: no modifier type has room or options left (major {majorCount}, minor {minorCount}, boss {bossCount}).");
+                return false;
+            }
+
+            // Only one type is rolled per evolution.
+            List<ModifierType> validTypes = pools.Keys.ToList();
+            ModifierType selectedType = validTypes[UnityEngine.Random.Range(0, validTypes.Count)];
+            string newModifier = RandomSelect.RandomSelectFromWeightedListWithExclusions(pools[selectedType], exclusions);
+            if (string.IsNullOrEmpty(newModifier) || newModifier == NoMods) { return false; }
+
+            Logger.LogDebug($"Evolve: {creatureName} reached level {newLevel} and gained {selectedType} modifier {newModifier}.");
+            // applyChanges false: the evolve path re-applies speed/damage/size/health itself right after this.
+            return AddCreatureModifier(character, selectedType, newModifier, applyChanges: false);
         }
 
     }

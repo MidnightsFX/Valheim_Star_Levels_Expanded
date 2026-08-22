@@ -14,7 +14,10 @@ namespace StarLevelSystem.common
             float selection = UnityEngine.Random.Range(0, totalweight);
             float current_weight = 0f;
             //Logger.LogDebug($"Total weight is {totalweight}, random selection is {selection}");
-            foreach (var entry in listOfWeights) {
+            // Walk the filtered list: the total weight above was summed over it, and walking the unfiltered
+            // list here let an excluded entry catch the roll, so a creature could be handed a modifier it
+            // already had (the caller then discarded it, under-filling the creature's modifier slots).
+            foreach (var entry in possibleModifiers) {
                 current_weight += entry.SelectionWeight;
                 //Logger.LogDebug($"Current weight is {current_weight} >= {selection} for entry {entry.Name} - {entry.SelectionWeight}");
                 if (current_weight >= selection) {
@@ -24,7 +27,7 @@ namespace StarLevelSystem.common
             }
             // Fallback, realistically this is never used.
             // Logger.LogWarning($"Failed to select a random entry from the list, returning a random entry instead.");
-            return possibleModifiers.ToArray()[UnityEngine.Random.Range(0, listOfWeights.Count - 1)].Name;
+            return possibleModifiers[UnityEngine.Random.Range(0, possibleModifiers.Count)].Name;
         }
     }
 }

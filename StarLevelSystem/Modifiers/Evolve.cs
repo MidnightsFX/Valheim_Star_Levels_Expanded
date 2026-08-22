@@ -5,6 +5,7 @@ using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
+using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
@@ -34,15 +35,26 @@ namespace StarLevelSystem.Modifiers {
                     int levelup_req = Mathf.RoundToInt(cmcfg.BasePower + (cmcfg.PerlevelPower * level));
                     Logger.LogDebug($"Evolve check: {kills} >= {levelup_req}");
                     if (kills >= levelup_req) {
-                        chara.m_nview.GetZDO().Set(ZDOVars.s_level, level + 1);
+                        int newLevel = level + 1;
+                        chara.m_nview.GetZDO().Set(ZDOVars.s_level, newLevel);
+                        // Vanilla only copies s_level into m_level in Character.Awake, and GetAndSetLocalCache only
+                        // reconciles m_level for non-owners - so on the owning client the live level stayed behind
+                        // the ZDO, and everything reading it (speed/health scaling, the hud stars, the modifier
+                        // name/icon budget) lagged a level. Same pairing StartZOwnerCreatureRoutines uses.
+                        chara.m_level = newLevel;
                         kills = 1;
                         CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
+                        // Evolution modifier roll. Runs after the cache rebuild (the new modifier is set up against
+                        // the fresh entry) and before the stat re-apply below, which then picks up its changes.
+                        if (ValConfig.EvolvingCanRollNewModifiers.Value) {
+                            CreatureModifiers.TryRollEvolutionModifier(chara, scd, newLevel);
+                        }
                         SpeedModifications.ApplySpeedModifications(chara, scd);
                         DamageModifications.ApplyDamageModification(chara, scd);
                         SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
                         HealthModifications.ForceApplyHealthModifications(chara, scd);
                         chara.Heal(chara.GetMaxHealth() * 5f);
-                        Logger.LogDebug($"Evolve: {chara} level: {level} -> {level + 1}");
+                        Logger.LogDebug($"Evolve: {chara} level: {level} -> {newLevel}");
                     }
                     chara.m_nview.GetZDO().Set(SLS_EVOLVE, kills);
                 }

@@ -126,7 +126,8 @@ namespace StarLevelSystem.common
             args.Output.Info($"Resetting '{name}' within {radius:0}m ({(safe ? "safe - will wait for players to leave" : "force")})" +
                 $"{(all ? ", every match in range" : "")}. Player structures are protected either way.");
 
-            bool accepted = modules.LocationReset.LocationResetControl.RequestReset(
+            // Refusals announce and flush themselves inside RequestReset.
+            modules.LocationReset.LocationResetControl.RequestReset(
                 new modules.LocationReset.LocationResetControl.ResetRequest()
                 {
                     Center = args.Center,
@@ -138,8 +139,6 @@ namespace StarLevelSystem.common
                     ResetAllMatches = all,
                     Source = $"sls-loc-reset-named '{name.Trim()}'",
                 }, args.Output, null);
-
-            if (accepted == false) { args.Output.Flush(); }
         }
 
         private static void LocInfo(SLSCommandArgs args)

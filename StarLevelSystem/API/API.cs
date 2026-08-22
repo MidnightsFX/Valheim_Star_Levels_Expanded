@@ -452,9 +452,21 @@ namespace StarLevelSystem
         /// a schedule. This section lets your mod register its own targets for that sweep, ask for a
         /// reset directly, and find out when something was last reset.
         ///
-        /// Everything here is SERVER-SIDE. The invoke and query calls return a refusal on a client;
-        /// registration is accepted anywhere (so it is safe to call from your Awake regardless of
-        /// plugin load order) but only ever does anything on a server.
+        /// ALL OF IT WORKS FROM A CLIENT. The work happens on the server - it owns the world objects -
+        /// but calling from a client relays the request and brings the answer back, so an item that
+        /// resets a dungeon can run its logic on whoever used it.
+        ///
+        /// That is why every method here takes a callback and returns bool rather than returning the
+        /// answer directly: on a client the answer arrives over the network a moment later.
+        ///
+        /// THE CALLBACK ALWAYS FIRES, EXACTLY ONCE - on success, on a deferral, on a refusal, on a
+        /// timeout, and when there is no server to ask. Refusals arrive as a result carrying
+        /// "outcome" = "refused", a human-readable "reason" and a machine-readable "refusalCode", so
+        /// your follow-up logic lives in the callback and nowhere else. The bool return only tells
+        /// you whether the work started; when it is false the reason has already been delivered.
+        ///
+        /// On the server, and for anything refused before it leaves this machine, the callback runs
+        /// before the call returns.
         ///
         /// Guard on SupportsLocationReset, not just IsAvailable.
 
@@ -463,15 +475,16 @@ namespace StarLevelSystem
         /// System's normal background sweep exactly as a configured target would, timed off the
         /// location's own world data, and survives config reloads and world reloads.
         ///
-        /// Safe to call at any point, including before a world is loaded. The registration resolves
-        /// the next time the configuration is rebuilt.
+        /// Safe to call at any point, including before a world is loaded, if you are the server. From
+        /// a client this relays, so it needs a live server connection - register on connect rather
+        /// than in your Awake if your mod is client-side.
         ///
         /// The server owner's LocationResetSettings.yaml always wins: if they add an entry for this
         /// prefab name, their settings replace yours entirely. Protection rules (what player-built
         /// content blocks a reset) are theirs alone and cannot be set from here.
         /// </summary>
         /// <param name="prefabName">Location or vegetation prefab name, e.g. "Crypt2"</param>
-        /// <param name="sourceId">Your plugin GUID. Used in logs and to scope UnregisterAll</param>
+        /// <param name="sourceId">Your plugin GUID. Used in logs and to scope unregistration</param>
         /// <param name="resetHours">Hours between resets. 0 uses the server's default interval. Minimum 0.25</param>
         /// <param name="resetSchedule">A 5-field cron expression instead of an interval, e.g. "0 3 * * *". Wins over resetHours</param>
         /// <param name="enabled">Whether the target is active</param>
@@ -482,30 +495,33 @@ namespace StarLevelSystem
         /// <param name="resetInterior">Whether a dungeon interior may be regenerated. False leaves such locations alone entirely</param>
         /// <param name="minDistance">Only apply beyond this distance from the world's reset centre. 0 = no limit</param>
         /// <param name="maxDistance">Only apply within this distance. 0 = no limit</param>
-        /// <returns>bool success</returns>
+        /// <param name="onResult">Receives whether the server accepted the registration</param>
+        /// <returns>bool - whether the request was dispatched</returns>
         public static bool RegisterLocationReset(string prefabName, string sourceId,
             float resetHours = 0f, string resetSchedule = null, bool enabled = true, int mode = 0,
             bool resetTerrain = false, float terrainRadius = 0f, float extraTerrainRadius = 0f,
-            bool resetInterior = true, float minDistance = 0f, float maxDistance = 0f) {
+            bool resetInterior = true, float minDistance = 0f, float maxDistance = 0f,
+            Action<bool> onResult = null) {
             return (bool)Call(RegisterLocationResetTargetMethod, false,
                 prefabName, sourceId, resetHours, resetSchedule, mode, resetTerrain, terrainRadius,
-                extraTerrainRadius, resetInterior, minDistance, maxDistance, enabled);
+                extraTerrainRadius, resetInterior, minDistance, maxDistance, enabled, onResult);
         }
 
         /// <summary>
         /// Remove a target you registered. Refused if another mod owns that registration.
         /// </summary>
-        /// <returns>bool success</returns>
-        public static bool UnregisterLocationReset(string prefabName, string sourceId) {
-            return (bool)Call(UnregisterLocationResetTargetMethod, false, prefabName, sourceId);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool UnregisterLocationReset(string prefabName, string sourceId, Action<bool> onResult = null) {
+            return (bool)Call(UnregisterLocationResetTargetMethod, false, prefabName, sourceId, onResult);
         }
 
         /// <summary>
         /// Every prefab name registered through this API. Pass your plugin GUID to see only your own,
         /// or null for all of them.
         /// </summary>
-        public static List<string> GetRegisteredLocationResets(string sourceId = null) {
-            return (List<string>)Call(GetRegisteredLocationResetTargetsMethod, new List<string>(), sourceId);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetRegisteredLocationResets(string sourceId, Action<List<string>> onResult) {
+            return (bool)Call(GetRegisteredLocationResetTargetsMethod, false, sourceId, onResult);
         }
 
         /// <summary>
@@ -517,50 +533,57 @@ namespace StarLevelSystem
         /// "source" is the one to check if your registration does not seem to be taking effect:
         /// anything other than "api" means the server's config is overriding it.
         /// </summary>
-        public static Dictionary<string, object> GetLocationResetTargetInfo(string prefabName) {
-            return (Dictionary<string, object>)Call(GetLocationResetTargetInfoMethod, null, prefabName);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetLocationResetTargetInfo(string prefabName, Action<Dictionary<string, object>> onResult) {
+            return (bool)Call(GetLocationResetTargetInfoMethod, false, prefabName, onResult);
         }
 
         /// <summary>
-        /// Whether a reset request would currently be accepted: this is the server, a world is
-        /// loaded, and no conflicting reset mod is installed.
+        /// Whether a reset request would currently be accepted by the server: a world is loaded and
+        /// no conflicting reset mod is installed.
         /// </summary>
-        public static bool IsLocationResetReady() {
-            return (bool)Call(IsLocationResetReadyMethod, false);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool IsLocationResetReady(Action<bool> onResult) {
+            return (bool)Call(IsLocationResetReadyMethod, false, onResult);
         }
 
         /// <summary>
-        /// Location Reset state. Keys include: available, isServer, ready, sweepAllowed,
+        /// Location Reset state on the server. Keys include: available, isServer, ready, sweepAllowed,
         /// masterSwitchEnabled, configEnabled, blockedByModConflict, resetRunning, trackedZones,
-        /// generatedZones, sweepFloorSeconds, apiRegistrations.
+        /// generatedZones, sweepFloorSeconds, apiRegistrations, and the limits applied to client
+        /// requests: clientMaxRadius, clientMaxDistance, clientCooldownSeconds.
         /// </summary>
-        public static Dictionary<string, object> GetLocationResetStatus() {
-            return (Dictionary<string, object>)Call(GetLocationResetStatusMethod, null);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetLocationResetStatus(Action<Dictionary<string, object>> onResult) {
+            return (bool)Call(GetLocationResetStatusMethod, false, onResult);
         }
 
         /// <summary>
         /// Whether this world has any location, vegetation entry or prefab by that name. Use it to
         /// catch a prefab name that a game update renamed out from under you.
         /// </summary>
-        public static bool IsKnownLocationResetTarget(string prefabName) {
-            return (bool)Call(IsKnownResetTargetNameMethod, false, prefabName);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool IsKnownLocationResetTarget(string prefabName, Action<bool> onResult) {
+            return (bool)Call(IsKnownResetTargetNameMethod, false, prefabName, onResult);
         }
 
         /// <summary>
         /// When the named location nearest `center` was last reset, as Unix seconds UTC.
-        /// Returns -1 if no location of that name is within `radius` (or it has nothing to time
-        /// from), and 0 if it exists but has never been stamped.
+        /// The callback receives -1 if no location of that name is within `radius` (or it has nothing
+        /// to time from), and 0 if it exists but has never been reset.
         /// </summary>
-        public static long GetLocationLastReset(string locationName, Vector3 center, float radius = 256f) {
-            return (long)Call(GetLocationLastResetMethod, -1L, locationName, center, radius);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetLocationLastReset(string locationName, Vector3 center, float radius, Action<long> onResult) {
+            return (bool)Call(GetLocationLastResetMethod, false, locationName, center, radius, onResult);
         }
 
         /// <summary>
-        /// Seconds until the named location is next due for a reset. 0 means due now, -1 means
-        /// unknown - not found, never stamped, or nothing has it configured.
+        /// Seconds until the named location is next due for a reset. The callback receives 0 for due
+        /// now, and -1 for unknown - not found, never reset, or nothing has it configured.
         /// </summary>
-        public static double GetSecondsUntilLocationReset(string locationName, Vector3 center, float radius = 256f) {
-            return (double)Call(GetSecondsUntilLocationResetMethod, -1d, locationName, center, radius);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetSecondsUntilLocationReset(string locationName, Vector3 center, float radius, Action<double> onResult) {
+            return (bool)Call(GetSecondsUntilLocationResetMethod, false, locationName, center, radius, onResult);
         }
 
         /// <summary>
@@ -571,8 +594,10 @@ namespace StarLevelSystem
         ///
         /// Always check "found" first.
         /// </summary>
-        public static Dictionary<string, object> GetLocationResetInfo(string locationName, Vector3 center, float radius = 256f) {
-            return (Dictionary<string, object>)Call(GetLocationResetInfoMethod, null, locationName, center, radius);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetLocationResetInfo(string locationName, Vector3 center, float radius,
+            Action<Dictionary<string, object>> onResult) {
+            return (bool)Call(GetLocationResetInfoMethod, false, locationName, center, radius, onResult);
         }
 
         /// <summary>
@@ -589,8 +614,10 @@ namespace StarLevelSystem
         /// </summary>
         /// <param name="includePrefabs">Also return a "prefabs" list of per-prefab census rows
         /// (name, lastResetUnix, baseline, live). This costs a full scan of the chunk</param>
-        public static Dictionary<string, object> GetChunkResetInfo(Vector3 position, bool includePrefabs = false) {
-            return (Dictionary<string, object>)Call(GetChunkResetInfoMethod, null, position, includePrefabs);
+        /// <returns>bool - whether the request was dispatched</returns>
+        public static bool GetChunkResetInfo(Vector3 position, bool includePrefabs,
+            Action<Dictionary<string, object>> onResult) {
+            return (bool)Call(GetChunkResetInfoMethod, false, position, includePrefabs, onResult);
         }
 
         /// <summary>
@@ -608,6 +635,13 @@ namespace StarLevelSystem
         ///
         /// Be careful with Force on a dungeon somebody is inside: interiors are rebuilt from scratch
         /// and a player standing in one will fall.
+        ///
+        /// CALLING FROM A CLIENT. The server clamps the radius, refuses a position further away than
+        /// its configured limit, and rate-limits how often any one client may ask. Read
+        /// clientMaxRadius / clientMaxDistance / clientCooldownSeconds from GetLocationResetStatus to
+        /// size your requests. Every refusal reaches onComplete with a refusalCode - "too_far",
+        /// "cooldown", "no_such_location", "already_running" and so on - so a caller can retry,
+        /// explain, or refund without guessing why.
         /// </summary>
         /// <param name="locationName">Location prefab name, e.g. "Crypt2"</param>
         /// <param name="center">World position to search around</param>
@@ -616,9 +650,10 @@ namespace StarLevelSystem
         /// <param name="resetAllMatches">Reset every match in range rather than just the nearest</param>
         /// <param name="safeWaitSeconds">How long Safe waits before giving up. 0 uses the default (300s)</param>
         /// <param name="includeDetail">Include a per-chunk "zones" list in the result</param>
-        /// <param name="onComplete">Called when the reset finishes, with the result summary. NEVER
-        /// called if this method returns false</param>
-        /// <returns>bool - whether the request was accepted</returns>
+        /// <param name="onComplete">Called exactly once: with the result summary when the reset
+        /// finishes, or with a refusal carrying outcome/reason/refusalCode if it never ran</param>
+        /// <returns>bool - whether the reset started. False means onComplete has already been given
+        /// the reason</returns>
         public static bool ResetNamedLocation(string locationName, Vector3 center, float radius = 128f,
             int safety = 0, bool resetAllMatches = false, float safeWaitSeconds = 0f,
             bool includeDetail = false, Action<Dictionary<string, object>> onComplete = null) {
@@ -628,10 +663,9 @@ namespace StarLevelSystem
 
         /// <summary>
         /// Reset everything the server has configured for resets within `radius` of `center`. Same
-        /// safety rules as ResetNamedLocation.
+        /// safety rules and same client limits as ResetNamedLocation.
         /// </summary>
-        /// <param name="onComplete">Called when the reset finishes. NEVER called if this returns false</param>
-        /// <returns>bool - whether the request was accepted</returns>
+        /// <returns>bool - whether the request was dispatched</returns>
         public static bool ResetLocationsInRadius(Vector3 center, float radius = 128f, int safety = 0,
             float safeWaitSeconds = 0f, bool includeDetail = false,
             Action<Dictionary<string, object>> onComplete = null) {

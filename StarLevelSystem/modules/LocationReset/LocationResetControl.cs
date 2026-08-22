@@ -108,6 +108,9 @@ namespace StarLevelSystem.modules.LocationReset {
 
         internal static void OnWorldUnload() {
             Ready = false;
+            // Client side: fail any API call still waiting on this server rather than letting it time
+            // out into a world that no longer exists. Server side: forget per-peer request cooldowns.
+            LocationResetNetwork.Reset();
             // Flush before the state goes away so a shutdown never loses the last tick's chunk records.
             LocationResetLog.Clear();
             LocationResetState.ResetState();
@@ -351,26 +354,27 @@ namespace StarLevelSystem.modules.LocationReset {
         // admin typing the command is standing there deliberately -- see the note on the API's
         // opposite default in APIReciever.
         internal static void ForceResetAround(Vector3 center, float radius, TerminalOutput output) {
-            bool accepted = RequestReset(new ResetRequest() {
+            // Refusals flush their own output, so nothing to do with the return value here.
+            RequestReset(new ResetRequest() {
                 Center = center,
                 Radius = radius,
                 Safety = SafetyForce,
                 Source = $"sls-loc-reset r={radius:0}",
             }, output, null);
-            // On acceptance the routine flushes when it finishes. On a refusal nothing else will,
-            // and a remote admin would be left waiting on a batched line that never gets pushed.
-            if (accepted == false) { output?.Flush(); }
         }
 
         // The single entry point for every manual reset: the admin commands and both API invokes.
-        // Returns whether the request was accepted; a false return means nothing was started and the
-        // callback will never fire.
+        //
+        // Returns whether the reset was started. The callback fires either way, EXACTLY ONCE: a
+        // refusal delivers a full summary carrying the reason and a machine-readable refusalCode, so
+        // a caller's follow-up logic lives in one place instead of being split between an inline
+        // false branch and a callback.
         internal static bool RequestReset(ResetRequest request, TerminalOutput output,
                                           Action<Dictionary<string, object>> onComplete) {
             if (request == null) { return false; }
 
-            if (TryRefuse(request, output, out string refusal)) {
-                Announce(output, $"Refusing: {refusal}");
+            if (TryRefuse(request, out string refusalCode, out string refusal)) {
+                Refuse(request, output, onComplete, refusalCode, refusal);
                 return false;
             }
             if (ValConfig.EnableLocationReset.Value == false) {
@@ -386,7 +390,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 int hash = request.LocationName.GetStableHashCode();
                 zones = FindNamedLocationZones(request.Center, request.Radius, hash);
                 if (zones.Count == 0) {
-                    Announce(output, $"No location named '{request.LocationName}' within {request.Radius:0}m.");
+                    Refuse(request, output, onComplete, ResetSummary.CodeNoSuchLocation,
+                        $"no location named '{request.LocationName}' within {request.Radius:0}m.");
                     return false;
                 }
                 // FindNamedLocationZones returns nearest first, so trimming to one is "the one the
@@ -402,7 +407,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 LocationResetData.ResolvedResetEntry target =
                     LocationResetData.ResolveExplicitTarget(request.LocationName, ZoneRates.DistanceFor(ZoneSystem.GetZone(request.Center)));
                 if (target == null) {
-                    Announce(output, $"'{request.LocationName}' can never be reset.");
+                    Refuse(request, output, onComplete, ResetSummary.CodeHardBlocked,
+                        $"'{request.LocationName}' can never be reset.");
                     return false;
                 }
                 cfg.TargetPrefabHash = hash;
@@ -417,23 +423,38 @@ namespace StarLevelSystem.modules.LocationReset {
         }
 
         // Every reason a manual reset cannot start, in the order a caller most needs to hear them.
-        private static bool TryRefuse(ResetRequest request, TerminalOutput output, out string reason) {
+        private static bool TryRefuse(ResetRequest request, out string code, out string reason) {
+            code = ResetSummary.CodeNone;
             reason = null;
             // Two mods resetting the same objects on their own timers corrupts both. The background
             // sweep already refuses through SweepAllowed; the manual path has to refuse too.
             if (LocationResetData.BlockedByModConflict) {
+                code = ResetSummary.CodeModConflict;
                 reason = "a conflicting reset mod (VentureValheim LocationReset) is installed.";
                 return true;
             }
             if (Ready == false || ZoneSystem.instance == null) {
+                code = ResetSummary.CodeNotReady;
                 reason = "not ready - no world loaded, or this is not the server.";
                 return true;
             }
             if (ManualResetRunning) {
+                code = ResetSummary.CodeAlreadyRunning;
                 reason = "another reset is already running. Wait for it to finish.";
                 return true;
             }
             return false;
+        }
+
+        // Announce a refusal and hand the caller a full summary for it. Every refusal path goes
+        // through here so none of them can quietly skip the callback.
+        private static void Refuse(ResetRequest request, TerminalOutput output,
+                                   Action<Dictionary<string, object>> onComplete, string code, string reason) {
+            Announce(output, $"Refusing: {reason}");
+            output?.Flush();
+            ResetSummary summary = ResetSummary.Refused(code, reason, request.Center, request.Radius,
+                                                        request.Safety, request.LocationName);
+            SafeInvoke(onComplete, summary);
         }
 
         internal static List<Vector2i> SquareOfZones(Vector3 center, float radius) {
@@ -514,7 +535,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     summary.WaitedSeconds = Time.realtimeSinceStartup - startedAt;
                     if (clear == false) {
                         summary.Completed = false;
-                        summary.Outcome = "deferred";
+                        summary.Outcome = ResetSummary.OutcomeDeferred;
                         summary.Reason = $"a player stayed within {cfg.PlayerSafeRadius:0}m for " +
                             $"{summary.WaitedSeconds:0}s. Nothing was reset.";
                         Announce(output, summary.ToLine());
@@ -577,7 +598,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 summary.Completed = true;
-                summary.Outcome = "completed";
+                summary.Outcome = ResetSummary.OutcomeCompleted;
                 LocationResetState.Save();
                 Announce(output, summary.ToLine());
                 LocationResetLog.Note($"Manual reset around x={request.Center.x:0} z={request.Center.z:0} " +

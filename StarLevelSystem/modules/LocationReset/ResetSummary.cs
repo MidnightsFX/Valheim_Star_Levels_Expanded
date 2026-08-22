@@ -18,12 +18,36 @@ namespace StarLevelSystem.modules.LocationReset {
         // a few hundred dictionaries it never reads.
         internal bool IncludeDetail;
 
+        // Outcomes. Distinct from Completed because the three failures need different handling by the
+        // caller and all three leave the world untouched: a refusal will keep being refused until
+        // something changes, a deferral is worth retrying when players move, and a failure is a bug
+        // to report.
+        internal const string OutcomeCompleted = "completed";
+        internal const string OutcomeDeferred = "deferred";
+        internal const string OutcomeRefused = "refused";
+        internal const string OutcomeFailed = "failed";
+
+        // Machine-readable refusal reasons. A caller deciding what to do next should branch on these
+        // rather than on Reason, which is prose written for a human and will be reworded.
+        internal const string CodeNone = "";
+        internal const string CodeModConflict = "mod_conflict";
+        internal const string CodeNotReady = "not_ready";
+        internal const string CodeAlreadyRunning = "already_running";
+        internal const string CodeNoSuchLocation = "no_such_location";
+        internal const string CodeHardBlocked = "hard_blocked";
+        internal const string CodeTooFar = "too_far";
+        internal const string CodeCooldown = "cooldown";
+        internal const string CodeNoConnection = "no_connection";
+        internal const string CodeNoName = "no_name";
+        internal const string CodeTimeout = "timeout";
+        internal const string CodeDisconnected = "disconnected";
+        internal const string CodeServerError = "server_error";
+
         internal bool Completed;
-        // completed | deferred | failed. Distinct from Completed because "we waited and gave up" and
-        // "we tried and something broke" need different handling by the caller, and both leave the
-        // world untouched.
-        internal string Outcome = "completed";
+        internal string Outcome = OutcomeCompleted;
         internal string Reason = "";
+        // Empty unless Outcome is "refused".
+        internal string RefusalCode = CodeNone;
 
         internal string Target = "";
         internal Vector3 Center;
@@ -118,10 +142,40 @@ namespace StarLevelSystem.modules.LocationReset {
             };
         }
 
+        // A request that never started. It still gets a full summary rather than a bare error, because
+        // the callback is the one place a caller's follow-up logic lives: reading result["completed"]
+        // and result["refusalCode"] has to work the same whether the reset ran, waited and gave up,
+        // or was turned away at the door. Every counter is legitimately zero.
+        internal static ResetSummary Refused(string code, string reason, Vector3 center, float radius,
+                                             int safety, string target) {
+            return new ResetSummary() {
+                Completed = false,
+                Outcome = OutcomeRefused,
+                RefusalCode = code,
+                Reason = reason ?? "",
+                Center = center,
+                Radius = radius,
+                Safety = safety,
+                Target = target ?? "",
+            };
+        }
+
+        // The minimum every answer carries, so a caller can read the same four keys off a reset
+        // summary, a refused reset, and a query the server turned away.
+        internal static Dictionary<string, object> RefusalDictionary(string code, string reason) {
+            return new Dictionary<string, object>() {
+                { "completed", false },
+                { "outcome", OutcomeRefused },
+                { "refusalCode", code ?? CodeNone },
+                { "reason", reason ?? "" },
+            };
+        }
+
         internal Dictionary<string, object> ToDictionary() {
             return new Dictionary<string, object>() {
                 { "completed", Completed },
                 { "outcome", Outcome ?? "" },
+                { "refusalCode", RefusalCode ?? CodeNone },
                 { "reason", Reason ?? "" },
                 { "target", Target ?? "" },
                 { "centerX", Center.x },
@@ -161,7 +215,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // One line for a console caller, mirroring what ForceResetRoutine used to announce.
         internal string ToLine() {
             if (Completed == false) {
-                return $"Reset {Outcome}: {Reason}";
+                string code = string.IsNullOrEmpty(RefusalCode) ? "" : $" [{RefusalCode}]";
+                return $"Reset {Outcome}{code}: {Reason}";
             }
             string target = string.IsNullOrEmpty(Target) ? "" : $" of '{Target}'";
             return $"Reset{target} complete: {ZonesReset} chunks reset ({ZonesAdopted} adopted while loaded), " +

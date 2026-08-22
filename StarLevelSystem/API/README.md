@@ -50,6 +50,7 @@ StarLevelSystem.API.AddNewModifier(
 
 );
 ```
+
 ---
 
 ## Location Resets
@@ -67,15 +68,25 @@ if (StarLevelSystem.API.SupportsLocationReset) {
 }
 ```
 
-### Server-side only
+### Everything here works from a client
 
-Resetting world content means destroying and recreating ZDOs, which only the server may do. The
-invoke and query calls return a refusal on a client — there is no client-to-server relay.
+The work itself happens on the server, which owns the world objects. But calling from a client
+relays the request and brings the answer back, so an item that resets a dungeon can run its logic on
+whoever used it.
 
-**Registration is the exception and is safe to call anywhere, including from your `Awake`.** It only
-touches in-memory state, and it is deliberately not gated on `ZNet` existing: your plugin's `Awake`
-may run before Star Level System's, so gating it would make whether your targets register at all
-depend on BepInEx load order. A registration made before a world loads is applied when one does.
+That is why **every method takes a callback and returns `bool`**: on a client the answer arrives over
+the network a moment later, so a method that returned it directly would have to lie.
+
+```csharp
+// bool = "the work started", NOT the answer.
+bool started = StarLevelSystem.API.GetLocationLastReset("Crypt2", pos, 256f,
+    when => { /* the answer, later on a client, immediately on the server */ });
+```
+
+> **The callback always fires, exactly once** — on success, on a deferral, on a refusal, on a
+> timeout, and when there is no server to ask. Put your follow-up logic there and nowhere else; a
+> `false` return has already delivered the reason through it. On the server, and for anything
+> refused before it leaves the client, the callback runs before the call returns.
 
 ### Registering a target
 
@@ -85,7 +96,8 @@ StarLevelSystem.API.RegisterLocationReset(
     sourceId: MyPlugin.PluginGUID,   // used in logs, and to scope unregistration
     resetHours: 48f,                 // or use resetSchedule instead
     resetTerrain: true,
-    extraTerrainRadius: 16f);
+    extraTerrainRadius: 16f,
+    onResult: ok => { /* did the server accept it */ });
 
 // Cron works too, and wins over resetHours. Five fields, server local time.
 StarLevelSystem.API.RegisterLocationReset("MyBossArena", MyPlugin.PluginGUID,
@@ -96,6 +108,10 @@ The target then joins the normal background sweep. Its timer rides on the locati
 (the `LocationProxy` ZDO), so it survives losing the reset state file, and it is subject to the same
 biome and distance-band rate multipliers, the same protection scan, and the same throughput limits
 as anything the server owner configured by hand.
+
+If your mod is installed on the server, register whenever you like — including before a world loads.
+If it is client-side only, the registration has to relay, so **register once you are connected**
+rather than in your `Awake`.
 
 **The server owner always wins.** Settings resolve in the order:
 
@@ -113,7 +129,8 @@ A registration under 0.25 hours is refused: that value becomes the sweep's *glob
 floor, so an over-eager interval would make the server re-examine every zone in the world that often.
 
 `sls-loc-api` on the server console lists every API-registered target, who registered it, and
-whether the owner's config is overriding it.
+whether the owner's config is overriding it. A registration that arrived from a client is tagged with
+the peer it came from.
 
 ### Resetting on demand
 
@@ -132,10 +149,8 @@ still refused.
 
 `ResetLocationsInRadius` does the same for everything the owner *has* configured within a radius.
 
-Both return `bool` — whether the request was accepted. **A `false` return means nothing was started
-and `onComplete` will never fire**; the reason is written to the server's Location Reset log. Only
-one manual reset runs at a time, so a second request while one is in flight is refused rather than
-queued.
+Only one manual reset runs at a time, so a second request while one is in flight is refused rather
+than queued.
 
 ### Safety
 
@@ -152,17 +167,36 @@ Valheim keeps the chunks around every player loaded, so Safe would simply never 
 > **Be careful with Force on a dungeon somebody is inside.** Interiors are rebuilt from scratch, and
 > they sit 5000m above the surface — a player standing in one when it is reset will fall.
 
+### Limits on requests from a client
+
+A client's request is not admin-gated, so the server bounds it instead:
+
+| Limit | Server setting | Default |
+|---|---|---|
+| Largest radius it will accept (clamped, not refused) | `ClientLocationResetMaxRadius` | 256m |
+| How far from the requester the target may be | `ClientLocationResetMaxDistance` | 256m |
+| Minimum gap between resets or registrations from one client | `ClientLocationResetCooldownSeconds` | 30s |
+
+Read `clientMaxRadius`, `clientMaxDistance` and `clientCooldownSeconds` from `GetLocationResetStatus`
+to size your requests rather than discovering the limits by being clamped. Read-only queries are not
+rate-limited.
+
+A refused request still reaches your callback, with `outcome: "refused"` and a `refusalCode` — see
+below.
+
 ### Finding out when something was last reset
 
 ```csharp
-long when = StarLevelSystem.API.GetLocationLastReset("Crypt2", position);
-// -1 = no location of that name in range, 0 = never reset, otherwise Unix seconds UTC
+StarLevelSystem.API.GetLocationLastReset("Crypt2", position, 256f, when => {
+    // -1 = no location of that name in range, 0 = never reset, else Unix seconds UTC
+});
 
-double due = StarLevelSystem.API.GetSecondsUntilLocationReset("Crypt2", position);
-// 0 = due now, -1 = unknown or not configured
+StarLevelSystem.API.GetSecondsUntilLocationReset("Crypt2", position, 256f, due => {
+    // 0 = due now, -1 = unknown or not configured
+});
 
-var info  = StarLevelSystem.API.GetLocationResetInfo("Crypt2", position);
-var chunk = StarLevelSystem.API.GetChunkResetInfo(position);
+StarLevelSystem.API.GetLocationResetInfo("Crypt2", position, 256f, info => { });
+StarLevelSystem.API.GetChunkResetInfo(position, false, chunk => { });
 ```
 
 `GetLocationResetInfo` reports `found`, `lastResetUnix`, `secondsUntilDue`, `dueNow`, `enabled`,
@@ -184,8 +218,9 @@ var chunk = StarLevelSystem.API.GetChunkResetInfo(position);
 | Key | Type | Meaning |
 |---|---|---|
 | `completed` | bool | The reset ran to the end |
-| `outcome` | string | `completed`, `deferred` or `failed` |
-| `reason` | string | Empty on success, otherwise why it stopped |
+| `outcome` | string | `completed`, `deferred`, `refused` or `failed` |
+| `refusalCode` | string | Empty unless `outcome` is `refused`; see the table below |
+| `reason` | string | Empty on success, otherwise why it stopped, in prose |
 | `target` | string | The location name, empty for a radius reset |
 | `zonesConsidered` / `zonesReset` / `zonesBlocked` | int | Chunks looked at, reset, and refused by the protection scan |
 | `zonesUngenerated` / `zonesAdopted` | int | Never-generated chunks, and chunks worked on while loaded |
@@ -197,3 +232,68 @@ var chunk = StarLevelSystem.API.GetChunkResetInfo(position);
 | `zdoGrowth` | int | Net world-object change. A faithful restore is 0 |
 | `waitedSeconds` / `elapsedSeconds` | float | Time spent waiting in Safe mode, and in total |
 | `zones` | `List<Dictionary<string, object>>` | Per-chunk detail, only when `includeDetail: true` |
+
+Numeric values arrive as the type listed here whether the call was local or relayed.
+
+A refused request delivers the same shape with every counter at zero, so `result["completed"]` and
+`result["refusalCode"]` can be read without checking which kind of answer arrived first.
+
+### Refusal codes
+
+Branch on `refusalCode`, never on `reason` — the prose is written for humans and will be reworded.
+
+| Code | Meaning | Worth retrying? |
+|---|---|---|
+| `no_such_location` | Nothing of that name within the radius | Not without moving or widening |
+| `hard_blocked` | This location can never be reset (the starting temple) | No |
+| `already_running` | Another manual reset is in flight | Yes, shortly |
+| `cooldown` | This client asked too recently | Yes, after `clientCooldownSeconds` |
+| `too_far` | The position is beyond `clientMaxDistance` from you | Not from here |
+| `not_ready` | No world loaded on the server yet | Yes, shortly |
+| `mod_conflict` | A conflicting reset mod is installed | No |
+| `no_connection` | This client has no server to ask | Yes, once connected |
+| `no_name` | The call was made without a location name | No — fix the call |
+| `timeout` | The server did not answer in time | Yes |
+| `disconnected` | The world unloaded before the answer arrived | No |
+| `server_error` | The server threw handling the request | No — check the server log |
+
+An `outcome` of `deferred` is not a refusal and carries no code: Safe mode waited for players to
+leave, gave up, and changed nothing. That one is always worth retrying later.
+
+### Worked example: a reset-on-use item
+
+```csharp
+// Runs wherever the item was used - client or server, no branching needed.
+void OnRuneUsed(Player player) {
+    if (!StarLevelSystem.API.SupportsLocationReset) { return; }
+
+    StarLevelSystem.API.GetSecondsUntilLocationReset("Crypt2", player.transform.position, 64f, due => {
+        if (due != 0d) {
+            player.Message(MessageHud.MessageType.Center, "This place is not ready to renew.");
+            return;
+        }
+        StarLevelSystem.API.ResetNamedLocation("Crypt2", player.transform.position, 64f,
+            safety: 1,   // they are standing next to it, so the chunk is loaded
+            onComplete: result => {
+                // Fires whatever happened, so the item is consumed or refunded in one place.
+                if ((bool)result["completed"] && (int)result["locationsRebuilt"] > 0) {
+                    player.Message(MessageHud.MessageType.Center, "The crypt has been renewed.");
+                    return;
+                }
+                RefundRune(player);
+                switch ((string)result["refusalCode"]) {
+                    case "cooldown":
+                    case "already_running":
+                        player.Message(MessageHud.MessageType.Center, "The magic is still settling. Try again shortly.");
+                        break;
+                    case "":   // deferred, or a reset that ran but rebuilt nothing
+                        player.Message(MessageHud.MessageType.Center, (string)result["reason"]);
+                        break;
+                    default:
+                        player.Message(MessageHud.MessageType.Center, "This place resists renewal.");
+                        break;
+                }
+            });
+    });
+}
+```

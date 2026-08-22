@@ -735,6 +735,15 @@ namespace StarLevelSystem.common {
 # name takes manual control of that target and replaces the mod's registration outright - which
 # is how you turn one off, since you cannot edit another mod's registration the way you would
 # edit a group's member list. Protection rules are yours alone and cannot be set from the API.
+#
+# Mods can also ask for a reset, or register a target, from a CLIENT - so that an item which
+# renews a dungeon works for the player who used it. Those requests are not admin-gated, so the
+# server bounds them instead, with three settings in the BepInEx config (LocationReset section):
+# ClientLocationResetMaxRadius clamps how large an area one request may cover,
+# ClientLocationResetMaxDistance stops a client asking about ground it is not near, and
+# ClientLocationResetCooldownSeconds limits how often any one client may ask. Set the cooldown
+# very high to effectively switch client requests off. Player structures are protected from
+# every route regardless.
 #################################################";
     }
 }

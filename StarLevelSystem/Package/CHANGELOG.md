@@ -14,6 +14,11 @@
 - sls-loc-status now lists API-registered targets and whether your config is overriding them
 - Only one manual reset can run at a time now, and the background sweep stands down while one does. Two overlapping resets could previously tear down each other's zones
 - API/README.md documented a type name that does not exist (StarLevelSystemAPI); the class is StarLevelSystem.API
+- The Location Reset API works from a client as well as the server, over a new RPC pair, so a mod whose logic runs client-side (an item that renews a dungeon for the player who used it) works without a server-side counterpart
+	- Every Location Reset API method is callback-shaped and returns whether the request was dispatched; on the server the callback still runs immediately
+	- Client requests are not admin-gated, so the server bounds them: ClientLocationResetMaxRadius, ClientLocationResetMaxDistance and ClientLocationResetCooldownSeconds. Player structures are protected from every route regardless
+	- sls-loc-api tags registrations that arrived from a client with the peer they came from
+	- A Location Reset API callback always fires exactly once, including when the request is refused. A refusal arrives as a normal result with outcome 'refused', a reason, and a machine-readable refusalCode (too_far, cooldown, no_such_location, already_running, hard_blocked, ...), so a mod can retry, explain or refund from the one place instead of guessing
  ```
 
 **1.6.2**

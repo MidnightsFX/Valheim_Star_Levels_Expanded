@@ -110,6 +110,8 @@ namespace StarLevelSystem.common {
         internal static CustomRPC ClientPlaceNemesisSpawnerRPC;
         internal static CustomRPC ClientCommandRequestRPC;
         internal static CustomRPC CommandOutputRPC;
+        internal static CustomRPC LocationApiRequestRPC;
+        internal static CustomRPC LocationApiResultRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
 
@@ -239,6 +241,13 @@ namespace StarLevelSystem.common {
 
         public static ConfigEntry<bool> EnableLocationReset;
         public static ConfigEntry<float> LocationResetSweepBudgetMs;
+        // The envelope around client-issued Location Reset API requests. There is no permission gate
+        // on those by design (a mod that resets locations from gameplay has to work for the players
+        // using it), so these three are what bound them -- alongside the protection scan, which is
+        // never bypassable by any route.
+        public static ConfigEntry<float> ClientLocationResetMaxRadius;
+        public static ConfigEntry<float> ClientLocationResetMaxDistance;
+        public static ConfigEntry<float> ClientLocationResetCooldownSeconds;
         public static ConfigEntry<bool> EnableDebugLocationResetDetails;
         public static ConfigEntry<bool> EnableLocationResetLog;
 
@@ -291,6 +300,11 @@ namespace StarLevelSystem.common {
             // Console.instance.TryRunCommand and null-references headless, so it cannot be used here.
             ClientCommandRequestRPC = NetworkManager.Instance.AddRPC("SLS_ClientCommandRequestRPC", OnServerReceiveCommandRequest, NOOPReceive);
             CommandOutputRPC = NetworkManager.Instance.AddRPC("SLS_CommandOutputRPC", OnServerReceiveConfigs, OnClientReceiveCommandOutput);
+            // Client -> server: a Location Reset API call, and the typed answer back. Deliberately not
+            // carried on the command relay above: that speaks command names and lines of terminal text,
+            // which cannot express a result a mod's callback can read.
+            LocationApiRequestRPC = NetworkManager.Instance.AddRPC("SLS_LocationApiRequestRPC", modules.LocationReset.LocationResetNetwork.OnServerReceiveRequest, NOOPReceive);
+            LocationApiResultRPC = NetworkManager.Instance.AddRPC("SLS_LocationApiResultRPC", OnServerReceiveConfigs, modules.LocationReset.LocationResetNetwork.OnClientReceiveResult);
             // Server -> a chosen client: instantiate + own the dormant remote-boss placeholder. A dedicated
             // server can't own/drive it itself, so it delegates instantiation to the nearest ready peer.
             ClientPlaceNemesisSpawnerRPC = NetworkManager.Instance.AddRPC("SLS_ClientPlaceNemesisSpawnerRPC", OnServerReceiveConfigs, OnClientReceivePlaceNemesisSpawner);
@@ -465,6 +479,9 @@ namespace StarLevelSystem.common {
 
             EnableLocationReset = BindServerConfig("LocationReset", "EnableLocationReset", false, "Master switch for the background Location Reset sweep, which restores looted locations, dungeons, ores, pickables and vegetation so they can be gathered again. Per-target opt-in lives in LocationResetSettings.yaml. Back up your world before enabling.");
             EnableLocationReset.SettingChanged += LocationResetControl.OnMasterSwitchChanged;
+            ClientLocationResetMaxRadius = BindServerConfig("LocationReset", "ClientLocationResetMaxRadius", 256f, "Largest reset radius a connected client may ask for through the mod API. Requests above this are clamped, not refused. Client requests are not admin-gated, so this is one of the limits that bounds them.", true, 0f, 2048f);
+            ClientLocationResetMaxDistance = BindServerConfig("LocationReset", "ClientLocationResetMaxDistance", 256f, "How far from their own position a client may ask for a reset, in metres. Stops a client resetting content on the far side of the world. 0 disables the check.", true, 0f, 8192f);
+            ClientLocationResetCooldownSeconds = BindServerConfig("LocationReset", "ClientLocationResetCooldownSeconds", 30f, "Minimum seconds between reset or registration requests from any one client. Read-only queries are not affected. 0 disables the cooldown.", true, 0f, 3600f);
             LocationResetSweepBudgetMs = BindServerConfig("LocationReset", "LocationResetSweepBudgetMs", 4f, "Milliseconds of server frame time the reset sweep may consume per frame. This is the main throughput throttle: raise it to restore the world faster, lower it if the server is under strain. 0 uses the value from LocationResetSettings.yaml.", false, 0f, 33f);
 
             EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");

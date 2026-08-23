@@ -194,7 +194,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> LimitCreatureModifierPrefixes;
         public static ConfigEntry<bool> MinorModifiersFirstInName;
         public static ConfigEntry<bool> EvolvingCanRollNewModifiers;
-        public static ConfigEntry<float> EolvingChanceToRollNewModifier;
+        public static ConfigEntry<float> EvolvingChanceToRollNewModifier;
 
         public static ConfigEntry<bool> EnableDistanceLevelScalingBonus;
         public static ConfigEntry<bool> EnableMultiplayerEnemyHealthScaling;
@@ -522,7 +522,7 @@ namespace StarLevelSystem.common {
             CreatureModifiersData.ParseModifierDisplayStyle();
             ModifierIconDisplayStyle.SettingChanged += CreatureModifiersData.ModifierDisplayStyleChanged;
             EvolvingCanRollNewModifiers = BindServerConfig("Modifiers", "EvolvingCanRollNewModifiers", false, "When enabled, evolving creatures have a chance to gain new modifiers when they evolve.");
-            EolvingChanceToRollNewModifier = BindServerConfig("Modifiers", "EolvingChanceToRollNewModifier", 0.15f, "Chance that an evolving creature will gain a new major, minor, or boss modifier (based on creature type), up to the configured modifier limit.", false, 0f, 1f);
+            EvolvingChanceToRollNewModifier = BindServerConfig("Modifiers", "EvolvingChanceToRollNewModifier", 0.15f, "Chance that an evolving creature will gain a new major, minor, or boss modifier (based on creature type), up to the configured modifier limit.", false, 0f, 1f);
 
             EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
             EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);

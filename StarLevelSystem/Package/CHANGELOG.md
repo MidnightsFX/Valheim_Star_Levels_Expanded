@@ -1,3 +1,9 @@
+**1.7.1**
+ ---
+ ```
+	- Fix for being too tired and not including 1.7.0 in the package yesterday
+ ```
+
 **1.7.0**
  ---
  ```
@@ -19,7 +25,7 @@
 	- Client requests are not admin-gated, so the server bounds them: ClientLocationResetMaxRadius, ClientLocationResetMaxDistance and ClientLocationResetCooldownSeconds. Player structures are protected from every route regardless
 	- sls-loc-api tags registrations that arrived from a client with the peer they came from
 	- A Location Reset API callback always fires exactly once, including when the request is refused. A refusal arrives as a normal result with outcome 'refused', a reason, and a machine-readable refusalCode (too_far, cooldown, no_such_location, already_running, hard_blocked, ...), so a mod can retry, explain or refund from the one place instead of guessing
-- Evolving creatures can now gain modifiers as they level up: EvolvingCanRollNewModifiers (off by default) and EolvingChanceToRollNewModifier (0.15) in the Modifiers section
+- Evolving creatures can now gain modifiers as they level up: EvolvingCanRollNewModifiers (off by default) and EvolvingChanceToRollNewModifier (0.15) in the Modifiers section
 	- Each evolution makes one roll; on success the creature gains exactly one new modifier of a single type - Major or Minor (Boss for bosses) - chosen at random from the types that still have room under the creature's modifier limits, honouring LimitCreatureModifiersToCreatureStarLevel against the level just reached. A creature never gains a modifier it already has
 - Evolving creatures now apply their new level on the owning client as soon as they evolve
 - Improved weighted modifier selection list consistency

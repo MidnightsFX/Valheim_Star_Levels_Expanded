@@ -432,7 +432,7 @@ namespace StarLevelSystem.modules.Modifiers {
         }
 
         // Evolving modifier: called each time a creature gains a level from kills (see Modifiers/Evolve.cs).
-        // One roll against EolvingChanceToRollNewModifier; on success the creature gains exactly one new
+        // One roll against EvolvingChanceToRollNewModifier; on success the creature gains exactly one new
         // modifier of a single type, picked at random from the types still valid for it. Bosses (with boss
         // modifiers enabled) only ever roll Boss, everything else rolls Major or Minor - mirroring
         // SelectModifiersForCreature. A type is valid when the creature is under its cap for that type (the
@@ -450,7 +450,7 @@ namespace StarLevelSystem.modules.Modifiers {
                 return false;
             }
 
-            float chance = ValConfig.EolvingChanceToRollNewModifier.Value;
+            float chance = ValConfig.EvolvingChanceToRollNewModifier.Value;
             if (chance <= 0f) { return false; }
             if (chance < 1f) {
                 float roll = UnityEngine.Random.value;

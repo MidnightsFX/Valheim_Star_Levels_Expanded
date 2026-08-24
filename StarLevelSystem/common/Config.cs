@@ -136,6 +136,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> MinimumCreatureScale;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<float> PerLevelLootChanceScale;
+        public static ConfigEntry<float> ChanceBaseChancePerLevel;
         public static ConfigEntry<bool> ScaleAllLootByLevel;
         public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<string> LootDropCalculationType;
@@ -453,6 +454,7 @@ namespace StarLevelSystem.common {
             OffspringChanceToBeInfertile = BindServerConfig("LevelSystem", "OffspringChanceToBeInfertile", 0.5f, "When enabled, the chance that a creature produced from breeding will be infertile.", true, 0f, 1f);
 
             PerLevelLootScale = BindServerConfig("LootSystem", "PerLevelLootScale", 1f, "The amount of additional loot that a creature provides per each star level", false, 0f, 4f);
+            ChanceBaseChancePerLevel = BindServerConfig("LootSystem", "ChanceBaseChancePerLevel", 0.25f, "When using ChancePerLevel loot scaling, this is the base chance that any item will drop. Increased by the creatures level.");
             PerLevelLootChanceScale = BindServerConfig("LootSystem", "PerLevelLootChanceScale", 0.05f, "Under the PerLevel and ChancePerLevel loot styles: additional chance per level that a sub-100% loot drop will occur, added on top of any per-drop ChanceScaleFactor. Under ChancePerLevel it also grows vanilla drop-table chances. E.g. 0.05 = +5% drop chance per level. Has no effect on drops with a base Chance of 1.", false, 0f, 1f);
             LootDropCalculationType = BindServerConfig("LootSystem", "LootDropCalculationType", "PerLevel", "How loot amounts scale with level. PerLevel: amount scales linearly with level. Exponential: amount scales exponentially ((1 + PerLevelLootScale)^(level-1) for vanilla drop tables). ChancePerLevel: amounts scale linearly like PerLevel, and each sub-100% drop's chance to occur also grows with level (see PerLevelLootChanceScale).", LootStyles.AllowedLootFactors, false);
             LootStyles.ParseLootFactor();

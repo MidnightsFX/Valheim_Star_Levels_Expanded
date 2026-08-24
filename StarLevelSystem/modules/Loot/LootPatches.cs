@@ -138,7 +138,7 @@ namespace StarLevelSystem.modules.Loot {
                     // multiplier (see ChanceScaleOverride).
                     min = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
                     max = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
-                    chancePerLevelChanceMultiplier = 1f + ((ValConfig.PerLevelLootChanceScale.Value + distance_bonus.ChanceScaleFactorBonus) * char_level);
+                    chancePerLevelChanceMultiplier = ValConfig.ChanceBaseChancePerLevel.Value + ((ValConfig.PerLevelLootChanceScale.Value + distance_bonus.ChanceScaleFactorBonus) * char_level);
                 } else {
                     // Fallback just leveled loot scale without distance bonus
                     // With a min of 1 to prevent 0 drops

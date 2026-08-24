@@ -252,8 +252,8 @@ namespace StarLevelSystem.common {
 # Custom drop tables for creatures and world objects, with level-aware scaling
 # that replaces vanilla's doubling-per-star. Server authoritative; edits apply
 # live. How amounts grow with level is picked by LootDropCalculationType in the
-# main .cfg: PerLevel (linear), Exponential, or ChancePerLevel (base amount as
-# an all-or-nothing roll whose chance grows with level).
+# main .cfg: PerLevel (linear), Exponential, or ChancePerLevel (linear amounts,
+# and drop chances that grow with level).
 #
 # The console command sls-loot-dump writes the fully resolved loot tables for
 # this world out as a reference.
@@ -292,7 +292,8 @@ namespace StarLevelSystem.common {
 # AmountScaleFactor / ChanceScaleFactor / MaxScaledAmount.
 #
 # --- Distance scaling ---
-# Optional extra loot the further from the world center the drop happens:
+# Optional extra loot the further from the world center the drop happens.
+# ChanceScaleFactorBonus additionally raises sub-100% drop chances with distance:
 #
 #   EnableDistanceLootModifier: true
 #   DistanceLootModifier:

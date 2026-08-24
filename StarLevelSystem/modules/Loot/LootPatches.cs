@@ -55,23 +55,37 @@ namespace StarLevelSystem.modules.Loot {
                     new CodeMatch(OpCodes.Ldarg_0),
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop), nameof(CharacterDrop.m_character))),
                     new CodeMatch(OpCodes.Call)
-                ).Advance(2).RemoveInstructions(15).InsertAndAdvance(
-                    Transpilers.EmitDelegate(DetermineLootScale)
                 ).ThrowIfNotMatch("Unable to patch Character drop generator, level scaling.")
-                .MatchForward(false,
+                .Advance(2).RemoveInstructions(15).InsertAndAdvance(
+                    Transpilers.EmitDelegate(DetermineLootScale)
+                )
+                // Chance branch: `chance *= (float)num` -> `chance *= ChanceScaleOverride(num)`.
+                // Anchor on the first m_levelMultiplier load, then the unique `ldloc.1; conv.r4; mul`
+                // (num -> float -> multiply); Set replaces the conv.r4 in place, preserving labels.
+                .MatchStartForward(
                     new CodeMatch(OpCodes.Ldloc_3),
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop.Drop), nameof(CharacterDrop.Drop.m_levelMultiplier)))
-                ).Advance(1).MatchForward(false,
+                ).ThrowIfNotMatch("Unable to patch Character drop generator, chance branch anchor.")
+                .MatchStartForward(
+                    new CodeMatch(OpCodes.Ldloc_1),
+                    new CodeMatch(OpCodes.Conv_R4),
+                    new CodeMatch(OpCodes.Mul)
+                ).ThrowIfNotMatch("Unable to patch Character drop generator, chance multiplier.")
+                .Advance(1)
+                .Set(OpCodes.Call, AccessTools.Method(typeof(CalculateLootPerLevelStyle), nameof(ChanceScaleOverride)))
+                // Amount branch: the search resumes past the chance branch's m_levelMultiplier pair.
+                .MatchStartForward(
                     new CodeMatch(OpCodes.Ldloc_3),
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop.Drop), nameof(CharacterDrop.Drop.m_levelMultiplier)))
-                ).Advance(2).InsertAndAdvance(
+                ).ThrowIfNotMatch("Unable to patch Character drop generator, amount branch anchor.")
+                .Advance(2).InsertAndAdvance(
                     Transpilers.EmitDelegate(OverrideLootScalingEnabler)
                 ).MatchStartForward(
                     new CodeMatch(OpCodes.Ldloc_S),
                     new CodeMatch(OpCodes.Ldc_I4_S),
                     new CodeMatch(OpCodes.Ble)
-                ).Advance(3).RemoveInstructions(2)
-                .ThrowIfNotMatch("Unable to patch Character drop limit removal.");
+                ).ThrowIfNotMatch("Unable to patch Character drop limit removal.")
+                .Advance(3).RemoveInstructions(2);
 
                 return codeMatcher.Instructions();
             }
@@ -81,8 +95,24 @@ namespace StarLevelSystem.modules.Loot {
                 return defaultlootLevelMultiplier;
             }
 
+            // Chance multiplier for the vanilla chance branch, written by DetermineLootScale at the
+            // top of each GenerateDropList run and read per-drop by ChanceScaleOverride in that run.
+            private static float chancePerLevelChanceMultiplier = 1f;
+
+            // Replaces the (float)num cast in vanilla's `chance *= (float)num`. ChancePerLevel grows
+            // the chance by its own configurable ramp instead of the amount multiplier; every other
+            // style keeps vanilla semantics (chance scales by the same multiplier as amounts).
+            private static float ChanceScaleOverride(int amountMultiplier) {
+                if (LootStyles.SelectedLootFactor == LootFactorType.ChancePerLevel) {
+                    return chancePerLevelChanceMultiplier;
+                }
+                return amountMultiplier;
+            }
+
             // This determines the "level" that is used to generate loot multipled by level in vanilla configurations
             private static int DetermineLootScale(Character character) {
+                // Reset first so every early return leaves vanilla chance behavior in place.
+                chancePerLevelChanceMultiplier = 1f;
                 // A missing character, or a base (0-star, level 1) creature, scales to 1x. This matches the
                 // custom-loot path's level==1 short-circuit (MultiplyLootPerLevel/ExponentLootPerLevel) and
                 // avoids a null deref inside SelectCharacterLootSettings.
@@ -96,24 +126,34 @@ namespace StarLevelSystem.modules.Loot {
                     min = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
                     max = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
                 } else if (LootStyles.SelectedLootFactor == LootFactorType.Exponential) {
-                    min = Mathf.Pow((ValConfig.PerLevelLootScale.Value + distance_bonus.MinAmountScaleFactorBonus), char_level);
-                    max = Mathf.Pow((ValConfig.PerLevelLootScale.Value + distance_bonus.MaxAmountScaleFactorBonus), char_level);
+                    // Implicit 1x base plus the per-level scale, raised to the star count (level-1) so a
+                    // 0-star creature stays 1x. Matches ExponentLootPerLevel's effective base of
+                    // scale_factor(1) + PerLevelLootScale + bonus; defaults (scale 1.0) reproduce
+                    // vanilla's 2^(level-1) doubling.
+                    min = Mathf.Pow(1f + ValConfig.PerLevelLootScale.Value + distance_bonus.MinAmountScaleFactorBonus, char_level - 1);
+                    max = Mathf.Pow(1f + ValConfig.PerLevelLootScale.Value + distance_bonus.MaxAmountScaleFactorBonus, char_level - 1);
                 } else if (LootStyles.SelectedLootFactor == LootFactorType.ChancePerLevel) {
-                    // Vanilla drop tables have no per-drop chance fields to run the all-or-nothing lottery
-                    // against, so ChancePerLevel simply leaves their amounts unscaled (multiplier 1). The
-                    // lottery applies only to custom SLS loot entries (see LootStyles.ChancePerLevel).
-                    min = 1;
-                    max = 1;
+                    // Chance gate + linear amounts: drop amounts scale exactly like PerLevel, while the
+                    // chance branch multiplies by a configurable per-level ramp instead of the amount
+                    // multiplier (see ChanceScaleOverride).
+                    min = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                    max = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                    chancePerLevelChanceMultiplier = 1f + ((ValConfig.PerLevelLootChanceScale.Value + distance_bonus.ChanceScaleFactorBonus) * char_level);
                 } else {
                     // Fallback just leveled loot scale without distance bonus
                     // With a min of 1 to prevent 0 drops
                     min = char_level * ValConfig.PerLevelLootScale.Value;
                     max = char_level * ValConfig.PerLevelLootScale.Value;
                 }
+                // Clamp before rounding: Pow can reach float Infinity at very high max levels, and the
+                // vanilla body multiplies drop amounts by this value in int math.
+                min = Mathf.Min(min, LootStyles.MaxLootScaleResult);
+                max = Mathf.Min(max, LootStyles.MaxLootScaleResult);
                 int result = Mathf.RoundToInt(UnityEngine.Random.Range(min, max));
                 if (result < 1) { result = 1; }
                 if (ValConfig.EnableDebugLootDetails.Value) {
-                    Logger.LogDebug($"Loot Factor {LootStyles.SelectedLootFactor} | lvl {char_level} select {min} <-> {max} selected {result}.");
+                    string chanceDetail = LootStyles.SelectedLootFactor == LootFactorType.ChancePerLevel ? $" Chance multiplier {chancePerLevelChanceMultiplier}." : "";
+                    Logger.LogDebug($"Loot Factor {LootStyles.SelectedLootFactor} | lvl {char_level} select {min} <-> {max} selected {result}.{chanceDetail}");
                 }
                 return result;
             }

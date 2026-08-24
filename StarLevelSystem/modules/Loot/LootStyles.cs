@@ -16,6 +16,10 @@ namespace StarLevelSystem.modules.Loot {
 
         public static LootFactorType SelectedLootFactor = LootFactorType.PerLevel;
 
+        // Hard ceiling on any computed loot multiplier/amount; keeps Pow results out of float
+        // Infinity and the downstream int multiplies out of overflow at very high max levels.
+        internal const float MaxLootScaleResult = 1_000_000f;
+
         internal static readonly AcceptableValueList<string> AllowedLootFactors = new AcceptableValueList<string>(new string[] {
             LootFactorType.PerLevel.ToString(),
             LootFactorType.Exponential.ToString(),
@@ -73,9 +77,10 @@ namespace StarLevelSystem.modules.Loot {
                     if (eod.Drop.Chance < 1) {
                         float luck_roll = UnityEngine.Random.value;
                         float chance = eod.Drop.Chance;
-                        // Per-drop chance ramp, plus (PerLevel style only) the global per-level chance increase.
-                        float chanceScale = eod.ChanceScaleFactor;
-                        if (SelectedLootFactor == LootFactorType.PerLevel) { chanceScale += ValConfig.PerLevelLootChanceScale.Value; }
+                        // Per-drop chance ramp plus the distance chance bonus, plus (PerLevel and
+                        // ChancePerLevel styles) the global per-level chance increase.
+                        float chanceScale = eod.ChanceScaleFactor + distance_bonus.ChanceScaleFactorBonus;
+                        if (SelectedLootFactor == LootFactorType.PerLevel || SelectedLootFactor == LootFactorType.ChancePerLevel) { chanceScale += ValConfig.PerLevelLootChanceScale.Value; }
                         if (chanceScale > 0f) { chance *= 1 + (chanceScale * level); }
                         // check the chance for this to be rolled
                         if (luck_roll > chance) {
@@ -138,9 +143,9 @@ namespace StarLevelSystem.modules.Loot {
                             drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor, logloot ? sb : null);
                             break;
                         case LootFactorType.ChancePerLevel:
-                            // All-or-nothing lottery: base amount or nothing, chance scaled by level. The base
-                            // Drop.Chance gate (top of loop) still applies; this does not re-roll it.
-                            drop = ChancePerLevel(drop, level, distance_bonus, scale_factor, logloot ? sb : null);
+                            // Chance gate + linear amounts: occurrence chance grows in the gate at the
+                            // top of the loop; amounts scale exactly like PerLevel.
+                            drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor, logloot ? sb : null);
                             break;
                     }
 
@@ -232,9 +237,10 @@ namespace StarLevelSystem.modules.Loot {
                 if (loot.Drop.Chance < 1) {
                     float luck_roll = UnityEngine.Random.value;
                     float chance = loot.Drop.Chance;
-                    // Per-drop chance ramp, plus (PerLevel style only) the global per-level chance increase.
-                    float chanceScale = loot.ChanceScaleFactor;
-                    if (SelectedLootFactor == LootFactorType.PerLevel) { chanceScale += ValConfig.PerLevelLootChanceScale.Value; }
+                    // Per-drop chance ramp plus the distance chance bonus, plus (PerLevel and
+                    // ChancePerLevel styles) the global per-level chance increase.
+                    float chanceScale = loot.ChanceScaleFactor + distance_bonus.ChanceScaleFactorBonus;
+                    if (SelectedLootFactor == LootFactorType.PerLevel || SelectedLootFactor == LootFactorType.ChancePerLevel) { chanceScale += ValConfig.PerLevelLootChanceScale.Value; }
                     if (chanceScale > 0f) { chance *= 1 + (chanceScale * level); }
                     // check the chance for this to be rolled
                     if (luck_roll > chance) {
@@ -292,8 +298,9 @@ namespace StarLevelSystem.modules.Loot {
                             drop = ExponentLootPerLevel(drop, level, distance_bonus, scale_factor);
                             break;
                         case LootFactorType.ChancePerLevel:
-                            // All-or-nothing lottery: full base amount or nothing (0 is harmless downstream).
-                            drop = ChancePerLevel(drop, level, distance_bonus, scale_factor);
+                            // Chance gate + linear amounts: occurrence chance grows in the gate above;
+                            // amounts scale exactly like PerLevel.
+                            drop = MultiplyLootPerLevel(drop, level, distance_bonus, scale_factor);
                             break;
                     }
                     if (ValConfig.EnableDebugLootDetails.Value) {
@@ -362,28 +369,12 @@ namespace StarLevelSystem.modules.Loot {
             float min_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MinAmountScaleFactorBonus + scale_factor;
             float max_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MaxAmountScaleFactorBonus + scale_factor;
             float selectedMod = UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
-            float loot_scale_factor = Mathf.Pow(selectedMod, level);
-            int result = Mathf.RoundToInt(loot_scale_factor * lootDrop_amount);
-            AppendOrLog(detail, $"  ExponentLootPerLevel {result} = base {lootDrop_amount} * ({selectedMod}^lvl{level} = {loot_scale_factor}); mod picked from [{min_drop_scale}..{max_drop_scale}) = (factor:{scale_factor} + distance min:{damageMod.MinAmountScaleFactorBonus}/max:{damageMod.MaxAmountScaleFactorBonus} + PerLevelLootScale:{ValConfig.PerLevelLootScale.Value})");
+            // Star count (level-1) as the exponent keeps a 1-star creature at exactly one factor of
+            // growth; the clamp keeps huge Pow results out of int overflow.
+            float loot_scale_factor = Mathf.Pow(selectedMod, level - 1);
+            int result = Mathf.RoundToInt(Mathf.Min(loot_scale_factor * lootDrop_amount, MaxLootScaleResult));
+            AppendOrLog(detail, $"  ExponentLootPerLevel {result} = base {lootDrop_amount} * ({selectedMod}^{level - 1} = {loot_scale_factor}); mod picked from [{min_drop_scale}..{max_drop_scale}) = (factor:{scale_factor} + distance min:{damageMod.MinAmountScaleFactorBonus}/max:{damageMod.MaxAmountScaleFactorBonus} + PerLevelLootScale:{ValConfig.PerLevelLootScale.Value})");
             return result;
-        }
-
-        // All-or-nothing lottery: the drop's chance to appear scales with level (scale^level); on success the
-        // full base amount drops, on failure nothing drops. Level 1 (base creatures/objects) always drops the
-        // base amount, mirroring the level==1 short-circuit in MultiplyLootPerLevel/ExponentLootPerLevel.
-        private static int ChancePerLevel(int lootDrop_amount, int level, DistanceLootModifier damageMod, float scale_factor = 1, StringBuilder detail = null) {
-            if (level <= 1) {
-                if (detail != null) { detail.AppendLine($"  level 1: no per-level chance scaling, amount stays {lootDrop_amount}."); }
-                return lootDrop_amount;
-            }
-            float min_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MinAmountScaleFactorBonus + scale_factor;
-            float max_drop_scale = ValConfig.PerLevelLootScale.Value + damageMod.MaxAmountScaleFactorBonus + scale_factor;
-            float selectedMod = UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
-            float chance = Mathf.Pow(selectedMod, level);
-            float luck_roll = UnityEngine.Random.value;
-            bool won = luck_roll < chance;
-            AppendOrLog(detail, $"  ChancePerLevel roll {luck_roll} vs chance {chance} ({selectedMod}^lvl{level}) -> {(won ? $"win, amount {lootDrop_amount}" : "loss, amount 0")}; mod picked from [{min_drop_scale}..{max_drop_scale}) = (factor:{scale_factor} + distance min:{damageMod.MinAmountScaleFactorBonus}/max:{damageMod.MaxAmountScaleFactorBonus} + PerLevelLootScale:{ValConfig.PerLevelLootScale.Value})");
-            return won ? lootDrop_amount : 0;
         }
 
         internal static DropTable UpdateDropTableByLevel(DropTable dropTable, int level, float mod) {

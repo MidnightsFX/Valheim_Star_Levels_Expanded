@@ -118,8 +118,14 @@ namespace StarLevelSystem.modules.Loot {
                 // avoids a null deref inside SelectCharacterLootSettings.
                 if (character == null) { return 1; }
                 int char_level = character.GetLevel();
-                if (char_level <= 1) { return 1; }
                 LootStyles.SelectCharacterLootSettings(character, out DistanceLootModifier distance_bonus);
+
+                if (LootStyles.SelectedLootFactor == LootFactorType.ChancePerLevel) {
+                    chancePerLevelChanceMultiplier = ValConfig.ChanceBaseChancePerLevel.Value + ((ValConfig.PerLevelLootChanceScale.Value + distance_bonus.ChanceScaleFactorBonus) * char_level);
+                }
+
+                if (char_level <= 1) { return 1; }
+
                 float min;
                 float max;
                 if (LootStyles.SelectedLootFactor == LootFactorType.PerLevel) {
@@ -138,7 +144,6 @@ namespace StarLevelSystem.modules.Loot {
                     // multiplier (see ChanceScaleOverride).
                     min = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
                     max = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
-                    chancePerLevelChanceMultiplier = ValConfig.ChanceBaseChancePerLevel.Value + ((ValConfig.PerLevelLootChanceScale.Value + distance_bonus.ChanceScaleFactorBonus) * char_level);
                 } else {
                     // Fallback just leveled loot scale without distance bonus
                     // With a min of 1 to prevent 0 drops

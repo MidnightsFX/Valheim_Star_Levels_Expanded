@@ -1,4 +1,4 @@
-﻿**1.7.3**
+**1.7.3**
  ---
  ```
 - Location Reset no longer clears everything inside a location's radius, it is now more precise

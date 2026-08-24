@@ -124,6 +124,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // otherwise carry a stale owner into the next one.
             LocationOwnership.Disarm();
             SpawnerLinks.Clear();
+            ResetTargets.ResetVegetationDiagnostics();
         }
 
         // -----------------------------------------------------------------------------------

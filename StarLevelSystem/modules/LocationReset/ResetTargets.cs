@@ -1467,6 +1467,14 @@ namespace StarLevelSystem.modules.LocationReset {
         // Clone the vegetation list with only the due entries enabled. Cloning matters because
         // PlaceVegetation reads m_enable off the shared entries; mutating the originals in place
         // would corrupt world generation.
+        // Prefab hashes already reported as dormant, so the explanation is logged once per world rather
+        // than once per chunk across an eighty-thousand-chunk sweep.
+        private static readonly HashSet<int> LoggedDisabledVegetation = new HashSet<int>();
+
+        internal static void ResetVegetationDiagnostics() {
+            LoggedDisabledVegetation.Clear();
+        }
+
         private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2i zone, LocationResetConfigSnapshot cfg,
                                                                            bool force, ZoneResetReport report, out List<int> dueHashes) {
             List<ZoneSystem.ZoneVegetation> due = new List<ZoneSystem.ZoneVegetation>();
@@ -1479,6 +1487,25 @@ namespace StarLevelSystem.modules.LocationReset {
                 // RegenerateVegetation wholesale is what lets a mod target a single vegetation
                 // prefab -- a berry bush, one ore type -- and not just a location.
                 if (cfg.TargetPrefabHash != 0 && hash != cfg.TargetPrefabHash) { continue; }
+
+                // An entry vanilla ships DISABLED is one world generation never places, so there is
+                // nothing here to restore and anything we place is something this world has never had.
+                // ZoneSystem keeps such entries in m_vegetation as dormant data -- cut content, or
+                // content that moved into a location prefab -- and PlaceVegetation skips them on
+                // exactly this flag.
+                //
+                // This used to be overridden a few lines down (clone.m_enable = true), which turned
+                // every reset into a generator of prefabs the world was never meant to contain:
+                // GlowingMushroom scattered across the Mistlands, one full quota per chunk, in blocks
+                // that held none at all beforehand.
+                if (veg.m_enable == false) {
+                    if (LoggedDisabledVegetation.Add(hash)) {
+                        Logger.LogLocationReset($"Vegetation '{veg.m_prefab.name}' is disabled in this world's " +
+                            $"ZoneSystem, so world generation never places it; skipping it rather than creating it.");
+                    }
+                    continue;
+                }
+
                 if (LocationResetData.TryGetVegetationEntry(hash, out LocationResetData.ResolvedResetEntry entry) == false) { continue; }
                 entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
                 if (entry.Enabled == false) { continue; }
@@ -1502,8 +1529,10 @@ namespace StarLevelSystem.modules.LocationReset {
                     }
                 }
 
+                // Enabled by definition now -- only enabled entries reach here -- so the clone needs
+                // no m_enable write. It used to get one unconditionally, which is what resurrected
+                // vanilla's dormant entries; see the guard above.
                 ZoneSystem.ZoneVegetation clone = veg.Clone();
-                clone.m_enable = true;
                 // Without the block check vanilla would happily stack a fresh copy on top of the
                 // surviving one every single reset. Force it on rather than growing the world.
                 if (clone.m_blockCheck == false) {

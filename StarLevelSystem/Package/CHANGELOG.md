@@ -2,6 +2,8 @@
  ---
  ```
 - Location Reset no longer clears everything inside a location's radius, it is now more precise
+- Vegetation resets no longer create prefabs world generation never places
+	- Dormant entries are now skipped, and each one is named in the log once per world
 - Creatures are now linked to the spawner that made them, and the links are rebuilt at world load
 	- Covers SpawnArea (greydwarf nests, bone piles, EvilHearts) and TriggerSpawner
 	- Linked creatures are removed with their spawner wherever they have wandered

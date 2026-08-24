@@ -3,8 +3,8 @@
  ```
  - Fixes Exponential loot giving vanilla amounts for creatures with vanilla drop tables (the multiplier collapsed to 1x)
  - Exponential now scales as (1 + PerLevelLootScale)^(level-1) everywhere, so a 0-star creature is exactly 1x and the defaults match vanilla's doubling
- - Reworks ChancePerLevel, amounts now scale linearly like PerLevel, while sub-100% drop chances grow with level
- - PerLevelLootChanceScale now applies under ChancePerLevel, including to vanilla drop-table chances
+ - Reworks ChancePerLevel, amounts now scale linearly like PerLevel, with only a chance to drop at all
+	- PerLevelLootChanceScale and ChanceBaseChancePerLevel control the chance an item has to drop, impacts all creature drops when enabled
  - Fixes near infinite loot drops failing to spawn
  ```
 

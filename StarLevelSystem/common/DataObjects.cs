@@ -1,4 +1,4 @@
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
 using Jotunn.Entities;
 using Jotunn.Managers;
 using MonoMod.Utils;
@@ -69,6 +69,19 @@ namespace StarLevelSystem.common
         // Unix seconds of the last Location Reset applied to a location, stored on its surviving
         // LocationProxy ZDO so the timer outlives the SavedData state file.
         public static readonly string SLS_LOC_RESET = "SLS_LOC_RESET";
+        // Zone coordinates of the location that created this ZDO, packed as
+        // ((long)zone.x << 32) | (uint)zone.y. Written at ZDO birth for every object a location spawn
+        // produces, so a reset can destroy exactly its own content instead of everything standing in
+        // a radius. A ZDOID would not survive a reload and the LocationProxy is replaced on every
+        // reset, so the zone is the only stable identity a location has. See LocationOwnership.
+        public static readonly string SLS_LOC_OWNER = "SLS_LOC_OWNER";
+        // The spawner that created this creature. Two halves because neither survives alone: the ZDOID
+        // is the fast path within a session and is meaningless after a reload (raw ZDOIDs are
+        // session-scoped, which is why vanilla persists its own spawner links as ZDOConnectionHashData),
+        // while the position is the durable identity a spawner never loses because it never moves.
+        // Rebuilt into a live index by SpawnerLinks.ReconnectRoutine at world load.
+        public static readonly string SLS_SPAWNER = "SLS_SPAWNER";
+        public static readonly string SLS_SPAWNER_POS = "SLS_SPAWNER_POS";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,

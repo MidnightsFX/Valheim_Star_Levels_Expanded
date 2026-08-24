@@ -1,4 +1,4 @@
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -39,6 +39,10 @@ namespace StarLevelSystem.modules.LocationReset {
             // hold another one. Not a problem, and distinct from every other skip here: nothing is
             // wrong with the location, it simply was not what was asked for.
             NotTargeted,
+            // The world catalogue the clear judges vegetation against was not built yet, so the clear
+            // refused rather than fall back to destroying every tree in the radius. Transient by
+            // definition -- the next pass after ZoneSystem.Start finds it ready.
+            CatalogNotReady,
         }
 
         internal Vector2i Zone;
@@ -72,6 +76,29 @@ namespace StarLevelSystem.modules.LocationReset {
         // ones sitting outside the location's declared radius. Reported separately because a non-zero
         // count is the targeted pass earning its keep.
         internal int SpawnersRemoved;
+        // World-generated vegetation standing inside the location's radius that the clear left alone.
+        // Reported because it is the whole point of the guard: before it, this count was silently
+        // folded into LocationCleared and every one of those trees was gone for good.
+        internal int VegetationPreserved;
+        // Objects the clear took because they carry this location's ownership stamp, wherever they
+        // stood. Split out from LocationCleared because it measures the opposite thing to
+        // VegetationPreserved: content the old radius rule MISSED, chiefly CampRadial perimeter
+        // sections placed at a radius DungeonGenerator chose rather than the declared exterior one.
+        internal int OwnedCleared;
+        // Creatures taken because a doomed spawner made them, found through the SLS spawner link
+        // rather than through vanilla's one-per-ZDO connection. Non-zero means a SpawnArea nest --
+        // greydwarf, bone pile, EvilHeart -- had its creatures collected, which vanilla records
+        // nothing for and this reset therefore used to leave standing forever.
+        internal int LinkedCreaturesRemoved;
+        // Survivors the new rules spared that the rebuild then re-placed on the same spot. The spared
+        // copy is the one destroyed; see RejectSparedDuplicates. A non-zero count is the safety net
+        // working -- a count that is the SAME non-zero number every cycle is not, and means something
+        // is being spared and re-placed rather than matched.
+        internal int SparedDuplicatesRemoved;
+        // Objects skipped because they carry a DIFFERENT location's stamp. Two locations' 3x3 blocks
+        // overlap routinely, and a neighbour's content is never this reset's to destroy -- it cannot
+        // rebuild it, so destroying it loses it for good.
+        internal int ForeignOwnedSkipped;
 
         // Tier 1, split by family so a record shows which kind of content came back.
         internal int PickablesRefreshed, PickablesNotDue;
@@ -205,7 +232,16 @@ namespace StarLevelSystem.modules.LocationReset {
                 case LocationOutcome.Rebuilt:
                     string strays = SpawnersRemoved > 0 ? $", +{SpawnersRemoved} stray spawners" : "";
                     string resealed = DoorsSealed > 0 ? $", resealed {DoorsSealed}" : "";
-                    return $"location '{name}' rebuilt (cleared {LocationCleared}{strays}, spawned {LocationSpawned}{resealed}{DescribeTerrain()})";
+                    // Split out rather than folded into the cleared count, because they answer the two
+                    // questions an admin actually has about this change: did it stop eating the
+                    // surroundings, and is it still collecting the location's own content.
+                    string owned = OwnedCleared > 0 ? $" of which {OwnedCleared} stamped" : "";
+                    string linked = LinkedCreaturesRemoved > 0 ? $", +{LinkedCreaturesRemoved} linked creatures" : "";
+                    string spared = VegetationPreserved > 0 ? $", preserved {VegetationPreserved} vegetation" : "";
+                    string foreign = ForeignOwnedSkipped > 0 ? $", skipped {ForeignOwnedSkipped} owned elsewhere" : "";
+                    string dupes = SparedDuplicatesRemoved > 0 ? $", {SparedDuplicatesRemoved} spared duplicates dropped" : "";
+                    return $"location '{name}' rebuilt (cleared {LocationCleared}{owned}{strays}{linked}{spared}{foreign}, " +
+                        $"spawned {LocationSpawned}{dupes}{resealed}{DescribeTerrain()})";
                 case LocationOutcome.TerrainOnly:
                     return $"location '{name}' terrain-only ({LocationCleared} modifications undone{DescribeTerrain()})";
                 case LocationOutcome.NotDue:
@@ -226,6 +262,8 @@ namespace StarLevelSystem.modules.LocationReset {
                     return $"location '{name}' is not in the reset configuration (no group or Locations entry matched it)";
                 case LocationOutcome.NotTargeted:
                     return $"location '{name}' is not the one this reset was aimed at";
+                case LocationOutcome.CatalogNotReady:
+                    return $"location '{name}' left alone: the world catalogue is not indexed yet";
                 default:
                     return "";
             }

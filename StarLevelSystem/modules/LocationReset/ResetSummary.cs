@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace StarLevelSystem.modules.LocationReset {
@@ -136,6 +136,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 { "outcome", report.LocationResult.ToString() },
                 { "skipReason", report.SkipReason ?? "" },
                 { "cleared", report.LocationCleared },
+                { "ownedCleared", report.OwnedCleared },
+                { "vegetationPreserved", report.VegetationPreserved },
                 { "spawned", report.LocationSpawned },
                 { "terrain", report.TerrainModificationsUndone },
                 { "adopted", report.ZoneAdopted },

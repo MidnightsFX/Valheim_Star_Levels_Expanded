@@ -1,4 +1,4 @@
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -110,6 +110,13 @@ namespace StarLevelSystem.modules.LocationReset {
 
             ZDO proxy = ResetTargets.FindLocationProxy(zone, hash);
             info["hasProxy"] = proxy != null;
+            // Whether this location's content carries an ownership stamp yet, and how much of it does.
+            // The clear is precise only for stamped content; an unstamped location still gets the old
+            // radius rule for one cycle, so this is the difference between "reset will be surgical"
+            // and "reset will fall back". Without it the only way to tell is a save-file dump.
+            long ownerKey = LocationOwnership.KeyFor(zone);
+            info["owned"] = proxy != null && LocationOwnership.IsOwnedBy(proxy, ownerKey);
+            info["ownedZdos"] = CountOwnedZdos(zone, ownerKey);
             long last = proxy != null ? proxy.GetLong(DataObjects.SLS_LOC_RESET, NeverReset) : NotFound;
             info["lastResetUnix"] = last;
             info["secondsSinceReset"] = last > 0 ? (double)(now - last) : -1d;
@@ -120,6 +127,27 @@ namespace StarLevelSystem.modules.LocationReset {
                 ? -1d
                 : (dueNow ? 0d : SecondsUntilDue(entry, last, now, rate));
             return info;
+        }
+
+        // How many ZDOs across the location's 3x3 block carry its ownership stamp. The same footprint
+        // the clear sweeps, so the number an admin reads here is the number the next reset will act on.
+        private static int CountOwnedZdos(Vector2i zone, long ownerKey) {
+            if (ZDOMan.instance == null) { return 0; }
+
+            List<ZDO> buffer = new List<ZDO>();
+            int owned = 0;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    buffer.Clear();
+                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), buffer);
+                    for (int i = 0; i < buffer.Count; i++) {
+                        ZDO zdo = buffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (LocationOwnership.IsOwnedBy(zdo, ownerKey)) { owned++; }
+                    }
+                }
+            }
+            return owned;
         }
 
         // ---------------------------------------------------------------------------------------

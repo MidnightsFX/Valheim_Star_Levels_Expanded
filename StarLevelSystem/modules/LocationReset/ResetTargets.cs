@@ -1,4 +1,4 @@
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections;
 using System.Collections.Generic;
@@ -474,6 +474,11 @@ namespace StarLevelSystem.modules.LocationReset {
             //
             // Terrain is still honoured per config, unlike the TerrainOnly branch above which resets
             // it unconditionally: the admin asked to leave the dungeon alone, not to reshape ground.
+            //
+            // Ownership stamps do NOT unlock a surface-only reset here, however precisely they could
+            // now separate the interior from the exterior. The blocker was never identifying the
+            // interior; it is that SpawnLocation re-runs DungeonGenerator.Generate unconditionally, so
+            // any rebuild produces a second one whatever the clear did or did not touch.
             if (entry.ResetInterior == false && hasInterior) {
                 if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, cfg, position, terrainRadius); }
                 TakeOwnership(proxy);
@@ -483,7 +488,14 @@ namespace StarLevelSystem.modules.LocationReset {
             }
 
             ZDOID oldProxyId = proxy.m_uid;
-            int cleared = ClearLocation(zone, position, rotation, exteriorRadius, instance.m_location, entry, report);
+            // A zone hosts at most one location and never moves, so its coordinates are this
+            // location's identity -- the same key the spawn stamps onto everything it creates.
+            long ownerKey = LocationOwnership.KeyFor(zone);
+            int cleared = ClearLocation(zone, position, rotation, exteriorRadius, instance.m_location, entry, ownerKey, report);
+            // A negative count means the clear refused and destroyed nothing (see ClearLocation).
+            // Abandon before the terrain reset and the respawn, and leave the proxy un-stamped so the
+            // next pass retries -- clearing and rebuilding are one operation, never two.
+            if (cleared < 0) { return; }
             if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, cfg, position, terrainRadius); }
 
             int seed = WorldGenerator.instance.GetSeed() + (zone.x * 4271) + (zone.y * 9187);
@@ -502,6 +514,7 @@ namespace StarLevelSystem.modules.LocationReset {
             //
             // The trade is that these are real objects, not ghosts, so we own their teardown.
             HashSet<ZDO> before = SnapshotInstances();
+            List<ZDO> fresh = new List<ZDO>();
             try {
                 instance.m_location.m_prefab.Load();
                 zs.SpawnLocation(instance.m_location, seed, position, rotation, ZoneSystem.SpawnMode.Full, null);
@@ -509,9 +522,11 @@ namespace StarLevelSystem.modules.LocationReset {
                 // Nothing here should be ghost-initing, but the flag is a global static and a throw
                 // inside vanilla would otherwise turn every subsequent spawn in the game into a ghost.
                 ZNetView.FinishGhostInit();
-                report.LocationSpawned = DestroyNewInstances(before);
+                report.LocationSpawned = DestroyNewInstances(before, fresh);
                 instance.m_location.m_prefab.Release();
             }
+
+            report.SparedDuplicatesRemoved = RejectSparedDuplicates(zone, fresh, ownerKey);
 
             // SpawnLocation always creates its own LocationProxy, and ClearLocation deliberately
             // preserves the existing one (IsStructural), so without this every reset would leave two
@@ -523,6 +538,16 @@ namespace StarLevelSystem.modules.LocationReset {
             if (newProxy != null) {
                 TakeOwnership(newProxy);
                 newProxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+                // The proxy is created inside the bracketed spawn, so it should already carry the
+                // stamp. If it does not, the ownership context and this reset disagree about which
+                // zone the location is in -- and the consequence is silent: every future reset would
+                // find nothing stamped and quietly fall back to the radius rule. Say so, then repair
+                // it, so the failure shows up in the log rather than as tree loss creeping back.
+                if (LocationOwnership.IsOwnedBy(newProxy, ownerKey) == false) {
+                    Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y}: '{entry.Name}' respawned without " +
+                        "an ownership stamp; tagging it directly.");
+                    LocationOwnership.Tag(newProxy, ownerKey);
+                }
                 DestroyZdo(proxy);
             } else {
                 // No replacement appeared; keep the original as the timestamp carrier.
@@ -552,26 +577,108 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Destroy the GameObjects created since the snapshot, keeping their ZDOs. Returns the count,
         // which is what the location actually respawned.
-        private static int DestroyNewInstances(HashSet<ZDO> before) {
+        //
+        // fresh collects those surviving ZDOs. It is exactly the set the spawn produced, which is what
+        // RejectSparedDuplicates needs and what nothing else can reconstruct afterwards -- a location's
+        // children are indistinguishable from anything else in the sector index once the frame ends.
+        private static int DestroyNewInstances(HashSet<ZDO> before, List<ZDO> fresh) {
             if (ZNetScene.instance == null) { return 0; }
 
-            List<ZNetView> fresh = new List<ZNetView>();
+            List<ZNetView> views = new List<ZNetView>();
             foreach (KeyValuePair<ZDO, ZNetView> kvp in ZNetScene.instance.m_instances) {
                 if (before.Contains(kvp.Key)) { continue; }
-                if (kvp.Value != null) { fresh.Add(kvp.Value); }
+                if (kvp.Value != null) { views.Add(kvp.Value); }
             }
 
-            for (int i = 0; i < fresh.Count; i++) {
-                ZNetView view = fresh[i];
+            for (int i = 0; i < views.Count; i++) {
+                ZNetView view = views[i];
                 ZDO zdo = view.GetZDO();
                 // Vanilla's unload sequence: detach so the ZDO (and the position SnappAll just wrote
                 // into it) survives, then destroy the GameObject. The LocationProxy parents its
                 // client-spawned prefab tree, so that whole tree goes with it.
                 view.ResetZDO();
                 Object.Destroy(view.gameObject);
-                if (zdo != null) { ZNetScene.instance.m_instances.Remove(zdo); }
+                if (zdo != null) {
+                    ZNetScene.instance.m_instances.Remove(zdo);
+                    fresh.Add(zdo);
+                }
             }
-            return fresh.Count;
+            return views.Count;
+        }
+
+        // A survivor the new rules spared can be one the rebuild puts straight back: a world tree
+        // standing where the location's own tree child goes, or a stray the ownership stamp did not
+        // cover. Left alone, that pair accumulates one copy per reset cycle, forever -- the same
+        // failure mode RejectDuplicateGhosts exists to prevent for the vegetation replay.
+        //
+        // The FRESH copy wins here and the survivor is destroyed, which is the opposite of the
+        // vegetation replay's rule. Deliberate: a location reset exists to restore pristine content,
+        // so the pristine copy is the one to keep, while a vegetation replay is re-placing nodes that
+        // never went away and must leave the originals standing.
+        //
+        // Same 0.25m XZ epsilon and the same consume-the-match rule as TryConsumeSurvivingNodeAt, for
+        // the same reasons: SnapToGround rewrites y after placement while X and Z are exact, and
+        // without consuming, one survivor could absorb two fresh copies and leave a real duplicate.
+        private static int RejectSparedDuplicates(Vector2i zone, List<ZDO> fresh, long ownerKey) {
+            if (ZDOMan.instance == null || fresh.Count == 0) { return 0; }
+
+            HashSet<ZDO> spawned = new HashSet<ZDO>(fresh);
+            Dictionary<int, List<ZDO>> survivors = new Dictionary<int, List<ZDO>>();
+
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (spawned.Contains(zdo)) { continue; }
+                        if (IsStructural(zdo) || IsPlayer(zdo) || IsTamed(zdo)) { continue; }
+                        // A player's own copy is never a duplicate to collapse, whatever it sits on.
+                        if (zdo.GetLong(ZDOVars.s_creator, 0L) != 0L) { continue; }
+                        // Anything still carrying our stamp is a clear that failed, not a duplicate.
+                        // Destroying it here would hide that; leave it for the ZDO drift accounting.
+                        if (LocationOwnership.IsOwnedBy(zdo, ownerKey)) { continue; }
+
+                        if (survivors.TryGetValue(zdo.m_prefab, out List<ZDO> list) == false) {
+                            list = new List<ZDO>();
+                            survivors[zdo.m_prefab] = list;
+                        }
+                        list.Add(zdo);
+                    }
+                }
+            }
+            zdoBuffer.Clear();
+            if (survivors.Count == 0) { return 0; }
+
+            int removed = 0;
+            float sqrEpsilon = DuplicateNodeEpsilon * DuplicateNodeEpsilon;
+            for (int i = 0; i < fresh.Count; i++) {
+                ZDO copy = fresh[i];
+                if (copy == null || copy.IsValid() == false) { continue; }
+                if (survivors.TryGetValue(copy.m_prefab, out List<ZDO> nodes) == false) { continue; }
+
+                Vector3 position = copy.GetPosition();
+                int best = -1;
+                float bestSqr = sqrEpsilon;
+                for (int n = 0; n < nodes.Count; n++) {
+                    Vector3 other = nodes[n].GetPosition();
+                    float ox = other.x - position.x;
+                    float oz = other.z - position.z;
+                    float sqr = (ox * ox) + (oz * oz);
+                    if (sqr <= bestSqr) { bestSqr = sqr; best = n; }
+                }
+                if (best < 0) { continue; }
+
+                ZDO survivor = nodes[best];
+                // Order is irrelevant, so swap-remove rather than shuffling the tail down.
+                nodes[best] = nodes[nodes.Count - 1];
+                nodes.RemoveAt(nodes.Count - 1);
+                DestroyZdo(survivor);
+                removed++;
+            }
+            return removed;
         }
 
         // Poll vanilla's own readiness gate for this chunk's location prefab. PokeCanSpawnLocation both
@@ -727,16 +834,27 @@ namespace StarLevelSystem.modules.LocationReset {
         // unparented, so this clear is the ONLY thing that removes the previous interior.
         private static int ClearLocation(Vector2i zone, Vector3 center, Quaternion rotation,
                                          float exteriorRadius, ZoneSystem.ZoneLocation location,
-                                         LocationResetData.ResolvedResetEntry entry, ZoneResetReport report) {
+                                         LocationResetData.ResolvedResetEntry entry, long ownerKey,
+                                         ZoneResetReport report) {
             // ShouldPreserve classifies against these, and it must not depend on the zone scan two
             // modules away having run first. Idempotent; early-outs on a bool once built.
             ZoneProtectionScan.BuildPrefabSets();
+
+            // The vegetation guard below is only as good as the catalogue behind it, and an empty one
+            // classifies every tree as "not vegetation" -- which is the blanket delete this guard
+            // exists to end. Refuse the clear outright rather than proceed on a catalogue that cannot
+            // answer. Returns before anything is destroyed, so the caller can abandon the whole
+            // regeneration; a half-cleared location is the one outcome this system must never produce.
+            if (LocationResetData.WorldCatalogReady == false) {
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.CatalogNotReady);
+                return -1;
+            }
 
             List<ZDO> doomed = new List<ZDO>();
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     CollectClearable(new Vector2i(zone.x + dx, zone.y + dy), zone, center, exteriorRadius,
-                        entry.ResetInterior, entry, doomed);
+                        entry.ResetInterior, entry, ownerKey, report, doomed);
                 }
             }
 
@@ -744,7 +862,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // it by that pass rather than being orphaned.
             report.SpawnersRemoved = CollectStraySpawners(center, rotation, location, doomed);
 
-            CollectSpawnedCreatures(doomed);
+            CollectSpawnedCreatures(zone, doomed, report);
 
             for (int i = 0; i < doomed.Count; i++) { DestroyZdo(doomed[i]); }
             return doomed.Count;
@@ -959,7 +1077,8 @@ namespace StarLevelSystem.modules.LocationReset {
 
         private static void CollectClearable(Vector2i sector, Vector2i locationZone, Vector3 center,
                                              float exteriorRadius, bool clearInterior,
-                                             LocationResetData.ResolvedResetEntry entry, List<ZDO> doomed) {
+                                             LocationResetData.ResolvedResetEntry entry, long ownerKey,
+                                             ZoneResetReport report, List<ZDO> doomed) {
             zdoBuffer.Clear();
             ZDOMan.instance.FindObjects(sector, zdoBuffer);
 
@@ -968,6 +1087,33 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (zdo == null || zdo.IsValid() == false) { continue; }
                 if (IsStructural(zdo) || IsPlayer(zdo) || IsTamed(zdo)) { continue; }
 
+                // Ownership first, because it is an answer rather than a guess. Everything below it
+                // is the inference the stamp replaces, kept for content that predates the stamp.
+                long owner = LocationOwnership.OwnerOf(zdo);
+                if (owner == ownerKey) {
+                    // Ours wherever it stands, with no radius test at all. This REACHES FURTHER than
+                    // the old rule as well as narrower: DungeonGenerator lays CampRadial perimeter
+                    // sections at a radius it picks, not the one ZoneLocation declares, so those
+                    // routinely sat outside m_exteriorRadius -- surviving every clear while the
+                    // rebuild laid down another set beside them, every cycle.
+                    if (ShouldPreserve(zdo, entry)) { continue; }
+                    doomed.Add(zdo);
+                    report.OwnedCleared++;
+                    continue;
+                }
+                if (owner != LocationOwnership.NoOwner) {
+                    // Stamped, but by somebody else. Two locations' 3x3 blocks overlap routinely, and
+                    // this reset cannot rebuild a neighbour's content -- destroying it would lose it
+                    // for good, which is exactly what the radius rule has been doing.
+                    report.ForeignOwnedSkipped++;
+                    continue;
+                }
+
+                // Unstamped: content that predates the stamp, or debris a player or a client created
+                // inside the footprint (chopped-tree stubbe, a LootSpawner's item piles, a wandering
+                // SpawnSystem creature whose spawn point sits here). The radius rule still governs it.
+                // Deliberately NOT dropped in favour of "stamped only": nothing else collects that
+                // debris, and it would pile up in every location forever.
                 Vector3 origin = OriginOf(zdo);
                 bool inSky = origin.y > ZoneProtectionScan.SkyThreshold;
 
@@ -979,6 +1125,29 @@ namespace StarLevelSystem.modules.LocationReset {
                     if (ZoneSystem.GetZone(origin) != locationZone) { continue; }
                 } else {
                     if (Utils.DistanceXZ(origin, center) > exteriorRadius) { continue; }
+
+                    // World generation really does plant trees inside a location's radius. Vanilla
+                    // only suppresses vegetation for the location registered in the zone being
+                    // generated (ZoneSystem.PlaceLocations builds its ClearArea list from that zone's
+                    // own LocationInstance, and InsideClearArea is a square test besides), so a
+                    // NEIGHBOURING zone's vegetation pass has no idea our radius reaches into it and
+                    // plants there anyway. Every location whose radius crosses a zone boundary has
+                    // world trees inside it.
+                    //
+                    // Those trees are not the location's to remove: the rebuild does not re-place them
+                    // (SpawnLocation only lays down the location's own children) and the Tier 2 replay
+                    // will not either, because AddLocationClearArea now excludes this very disc. So
+                    // clearing them destroyed them for good, one stand per reset cycle.
+                    //
+                    // Surface branch only. In the sky column there is no world vegetation to protect,
+                    // while a dungeon room prefab may legitimately contain a rock or pickable that
+                    // also appears in m_vegetation -- sparing one there would leave it standing while
+                    // SpawnLocation's unconditional DungeonGenerator.Generate lays down another,
+                    // stacking a second interior on the first.
+                    if (LocationResetData.IsWorldVegetation(zdo.m_prefab)) {
+                        report.VegetationPreserved++;
+                        continue;
+                    }
                 }
 
                 if (ShouldPreserve(zdo, entry)) { continue; }
@@ -1019,14 +1188,20 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // This also reaches creatures that wandered clean out of the swept block, which the
         // spawn-point test cannot.
-        private static void CollectSpawnedCreatures(List<ZDO> doomed) {
+        private static void CollectSpawnedCreatures(Vector2i zone, List<ZDO> doomed, ZoneResetReport report) {
             if (ZDOMan.instance == null) { return; }
 
             // Snapshot the count: the loop appends, and a spawned creature is never itself a spawner.
             int spawnerCount = doomed.Count;
+            List<ZDO> spawners = new List<ZDO>();
+
             for (int i = 0; i < spawnerCount; i++) {
                 ZDO zdo = doomed[i];
-                if (zdo == null || ZoneProtectionScan.CreatureSpawnerHashes.Contains(zdo.m_prefab) == false) { continue; }
+                if (zdo == null) { continue; }
+                // Every spawner type, for the SLS link below. The vanilla connection follow that
+                // follows is narrower because only CreatureSpawner has one.
+                if (ZoneProtectionScan.SpawnerHashes.Contains(zdo.m_prefab)) { spawners.Add(zdo); }
+                if (ZoneProtectionScan.CreatureSpawnerHashes.Contains(zdo.m_prefab) == false) { continue; }
 
                 ZDOID spawnedId = zdo.GetConnectionZDOID(ZDOExtraData.ConnectionType.Spawned);
                 if (spawnedId == ZDOID.None) { continue; }
@@ -1038,6 +1213,18 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 doomed.Add(spawned);
             }
+
+            // Everything vanilla's single connection cannot express: a SpawnArea nest's whole brood, a
+            // TriggerSpawner's ambush, and any of them that wandered out of the swept block. See
+            // SpawnerLinks -- this runs after the vanilla follow so the two cannot double-count.
+            report.LinkedCreaturesRemoved = SpawnerLinks.CollectLinked(spawners, zone, doomed);
+        }
+
+        // IsPlayer and IsTamed together, for callers outside this file. SpawnerLinks follows a link to
+        // a creature that can be anywhere in the world, so it needs the same two guards the radius
+        // sweep applies to everything it finds.
+        internal static bool IsProtectedLiving(ZDO zdo) {
+            return IsPlayer(zdo) || IsTamed(zdo);
         }
 
         // The zone controller and terrain compiler ARE the zone, and the location proxy is the

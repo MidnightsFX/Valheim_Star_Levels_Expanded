@@ -1,4 +1,4 @@
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -120,6 +120,10 @@ namespace StarLevelSystem.modules.LocationReset {
             ZoneLoader.Clear();
             ZoneProtectionScan.ResetPrefabSets();
             LocationResetData.ResetWorldCatalogIndex();
+            // Balanced by a finalizer within a session, but a world torn down mid-spawn would
+            // otherwise carry a stale owner into the next one.
+            LocationOwnership.Disarm();
+            SpawnerLinks.Clear();
         }
 
         // -----------------------------------------------------------------------------------

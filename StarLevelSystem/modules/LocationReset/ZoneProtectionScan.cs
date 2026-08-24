@@ -1,4 +1,4 @@
-using StarLevelSystem.Data;
+﻿using StarLevelSystem.Data;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -41,6 +41,13 @@ namespace StarLevelSystem.modules.LocationReset {
         // A one-shot CreatureSpawner records what it spawned as a ZDO connection, so clearing a
         // location means following those links and taking each spawner's creature with it.
         internal static readonly HashSet<int> CreatureSpawnerHashes = new HashSet<int>();
+        // Every spawner type a location can contain, matching ResetTargets.IsSpawnerChild. Wider than
+        // CreatureSpawnerHashes on purpose: that set exists for vanilla's one-connection link, while
+        // this one is what SpawnerLinks arms its spawn context on and what its reconnect pass walks.
+        // The gap between the two is where SpawnArea nests used to leave their creatures behind.
+        internal static readonly HashSet<int> SpawnerHashes = new HashSet<int>();
+        // The same set by name, because ZDOMan.GetAllZDOsWithPrefabIterative takes a prefab name.
+        internal static readonly List<string> SpawnerPrefabNames = new List<string>();
         // Player terraforming ops that persist as their own ZDOs. They have to be instantiated before
         // a terrain reset can see them, because TerrainModifier.GetAllInstances only reports live
         // components -- see ZoneLoader.CreateTerrainObjects.
@@ -109,6 +116,8 @@ namespace StarLevelSystem.modules.LocationReset {
             MineRockAreaCounts.Clear();
             MineRockBaseHealth.Clear();
             CreatureSpawnerHashes.Clear();
+            SpawnerHashes.Clear();
+            SpawnerPrefabNames.Clear();
             TerrainModifierHashes.Clear();
             KeyedDoorHashes.Clear();
             PrefabNamesByHash.Clear();
@@ -129,6 +138,11 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (prefab.GetComponent<Pickable>() != null) { PickableHashes.Add(hash); }
                 if (prefab.GetComponent<MineRock5>() != null) { MineRock5Hashes.Add(hash); }
                 if (prefab.GetComponent<CreatureSpawner>() != null) { CreatureSpawnerHashes.Add(hash); }
+                if (prefab.GetComponent<CreatureSpawner>() != null
+                    || prefab.GetComponent<SpawnArea>() != null
+                    || prefab.GetComponent<TriggerSpawner>() != null) {
+                    if (SpawnerHashes.Add(hash)) { SpawnerPrefabNames.Add(prefab.name); }
+                }
                 if (prefab.GetComponent<TerrainModifier>() != null) { TerrainModifierHashes.Add(hash); }
                 Door door = prefab.GetComponent<Door>();
                 if (door != null && door.m_keyItem != null) { KeyedDoorHashes.Add(hash); }
@@ -142,7 +156,8 @@ namespace StarLevelSystem.modules.LocationReset {
             prefabSetsBuilt = true;
             Logger.LogLocationReset($"Protection prefab sets built: {pieceHashes.Count} pieces, {tombstoneHashes.Count} tombstones, " +
                 $"{wardHashes.Count} wards, {portalHashes.Count} portals, {containerHashes.Count} containers, " +
-                $"{itemDropHashes.Count} item drops, {KeyedDoorHashes.Count} keyed doors.");
+                $"{itemDropHashes.Count} item drops, {KeyedDoorHashes.Count} keyed doors, " +
+                $"{SpawnerHashes.Count} spawners.");
         }
 
         internal static void ResetPrefabSets() {

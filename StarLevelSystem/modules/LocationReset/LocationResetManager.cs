@@ -1,4 +1,4 @@
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections;
 using System.Collections.Generic;
@@ -71,6 +71,15 @@ namespace StarLevelSystem.modules.LocationReset {
 
             if (LocationResetControl.SweepAllowed == false) { return; }
             if (ZoneSystem.instance == null || ZDOMan.instance == null) { return; }
+
+            // Once per world, ahead of the first sweep tick: rebuild the spawner -> creature index from
+            // the durable positions those links carry, because the ZDOIDs in them died with the last
+            // session. Not a precondition for a correct reset -- CollectLinked falls back to matching
+            // by position -- but the index is the only thing that reaches a creature which wandered
+            // out of the swept block, so a reset before it finishes is simply less thorough.
+            // ReconnectPending flips on the coroutine's first line, which runs synchronously here, so
+            // this cannot start a second copy.
+            if (SpawnerLinks.ReconnectPending) { StartCoroutine(SpawnerLinks.ReconnectRoutine()); }
 
             sweepRunning = true;
             StartCoroutine(SweepTick());

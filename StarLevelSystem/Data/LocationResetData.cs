@@ -1,4 +1,4 @@
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
@@ -508,6 +508,23 @@ namespace StarLevelSystem.Data {
         internal static bool IsKnownTargetName(int prefabHash) {
             if (KnownLocationHashes.Contains(prefabHash) || KnownVegetationHashes.Contains(prefabHash)) { return true; }
             return modules.LocationReset.ZoneProtectionScan.PrefabNamesByHash.ContainsKey(prefabHash);
+        }
+
+        // Whether world generation places this prefab as vegetation. The clear needs it because a
+        // location's radius genuinely contains world-generated trees: ZoneSystem.PlaceLocations only
+        // registers a ClearArea for the location whose centre is in ITS zone, so a NEIGHBOURING zone's
+        // vegetation pass knows nothing about our radius and plants inside it. Those trees are not the
+        // location's to remove, and nothing ever puts them back.
+        internal static bool IsWorldVegetation(int prefabHash) {
+            return KnownVegetationHashes.Contains(prefabHash);
+        }
+
+        // Whether the catalogue behind IsWorldVegetation has actually been built. m_vegetation is
+        // filled by ZoneSystem.SetupLocations from ZoneSystem.Start, long after ZNetScene.Awake, so a
+        // clear running before this is true would classify every tree as "not vegetation" and put the
+        // blanket delete straight back. Callers must fail closed on false rather than proceed.
+        internal static bool WorldCatalogReady {
+            get { return worldCatalogBuilt; }
         }
 
         // internal rather than private: the protection scan resolves a blocked chunk's LocationProxy

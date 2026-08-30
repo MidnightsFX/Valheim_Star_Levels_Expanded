@@ -223,14 +223,12 @@ namespace StarLevelSystem.common
         }
 
         public static List<Player> GetPlayersInRange(Vector3 position, float range) {
-            Collider[] objs_near = Physics.OverlapSphere(position, range);
+            // Vanilla's registry walk, same shape as GetCharactersInRange above. The old
+            // Physics.OverlapSphere ran with no layer mask - thousands of collider hits in a
+            // large base, each paying a GetComponentInChildren call - on the 5s nemesis score
+            // tick and on raid target selection.
             List<Player> players = new List<Player>();
-
-            foreach (var col in objs_near) {
-                var chara = col.GetComponentInChildren<Player>();
-                if (chara != null) { players.Add(chara); }
-            }
-
+            Player.GetPlayersInRange(position, range, players);
             return players;
         }
 

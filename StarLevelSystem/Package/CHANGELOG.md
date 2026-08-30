@@ -1,3 +1,14 @@
+**1.8.0**
+ ---
+ ```
+- Fixed Location Reset stripping pieces out of structures it had just rebuilt
+- Fixed zone levels and kill counts resetting every time a world loaded
+- New ZoneScaling option ZoneDecayClock chooses what zone decay measures against
+	- GameTime counts only time the world is actually being played
+	- RealTime (default) counts real world time, so time between play sessions can reduce zone heat
+- Improves performance for some rare raid and nemesis checks
+ ```
+
 **1.7.3**
  ---
  ```

@@ -279,6 +279,16 @@ namespace StarLevelSystem.common
             Linear,
         }
 
+        // Which clock zone level decay is measured against. RealTime is wall-clock unix seconds and
+        // keeps running while nobody is playing; GameTime is ZNet's net time, which only advances
+        // while the world is actually being played and is persisted with the world save.
+        // The ConfigEntry is deliberately named ZoneDecayClock rather than matching this type:
+        // Config.cs has a 'using static DataObjects', so a same-named member would shadow it.
+        public enum ZoneDecayClockSource {
+            RealTime,
+            GameTime,
+        }
+
         public class DNum {
             private static readonly Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static readonly Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -862,7 +872,10 @@ namespace StarLevelSystem.common
             public ProtectionAction Action { get; set; } = ProtectionAction.Block;
             // Prefabs exempt from THIS category: they neither block a chunk from resetting nor survive
             // a regeneration. The exemption is per-category, so listing a prefab under PlayerBuiltPiece
-            // cannot accidentally make it ignorable as a Tombstone.
+            // cannot accidentally make it ignorable as a Tombstone -- and it only reaches objects that
+            // classify as that category in the first place, which for a player category means they
+            // carry a creator. A world-generated copy of an ignored prefab was never protected as
+            // player property and is not exposed by the listing.
             public List<string> Ignored { get; set; }
 
             public ProtectionRule() { }
@@ -2019,6 +2032,11 @@ namespace StarLevelSystem.common
             }
         }
 
+        // Persisted to SavedData/ZoneData.<world>.yaml and read back through the STRICT
+        // deserializer (no IgnoreUnmatchedProperties). A get-only computed property is therefore a
+        // trap: the serializer writes it, and reading it back throws and rejects the whole file --
+        // which silently rebuilt every zone at level 1. Any computed member added here needs
+        // [YamlIgnore] (see ExtendedCharacterDrop.GameDrop).
         [Serializable]
         public class ZoneData {
             public int ZoneId { get; set; }
@@ -2036,9 +2054,6 @@ namespace StarLevelSystem.common
                 return pos.x >= MinX && pos.x < MaxX && pos.z >= MinZ && pos.z < MaxZ;
             }
 
-            public float CenterX => (MinX + MaxX) / 2f;
-            public float CenterZ => (MinZ + MaxZ) / 2f;
-
             internal float GetLevelBonus() {
                 if (ZoneLevel <= 1) { return 1f; }
                 float bonus = (ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
@@ -2051,6 +2066,12 @@ namespace StarLevelSystem.common
         public class ZoneSystemSaveData {
             public List<ZoneData> Zones { get; set; } = new List<ZoneData>();
             public string WorldName { get; set; }
+            // Which clock the LastDecayTimestamp values in this file are expressed in. A plain
+            // settable string on purpose: a get-only computed member here is what broke the whole
+            // round-trip once already (see the note above ZoneData), and a string cannot throw the
+            // way an unparseable enum scalar would. Absent in files written before this existed,
+            // which deserializes to null and is read as RealTime -- correct for those files.
+            public string DecayClock { get; set; }
         }
 
         public class RaidMonitorListZNetProperty : ZNetProperty<List<RaidMonitor>> {

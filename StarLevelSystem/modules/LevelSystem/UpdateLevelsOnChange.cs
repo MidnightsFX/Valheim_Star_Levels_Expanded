@@ -23,11 +23,13 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         public static void UpdateFishMaxLevel() {
             if (ValConfig.EnableScalingFish.Value == false) { return; }
-            IEnumerable<GameObject> fishes = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.name.StartsWith("Fish"));
-            foreach (GameObject fish in fishes) {
-                if (fish.GetComponent<Fish>() != null) {
+            // Typed lookup - the old scan walked every GameObject in the heap, paying a name
+            // allocation and a culture-aware StartsWith per object, on every world entry.
+            foreach (Fish fish in Resources.FindObjectsOfTypeAll<Fish>()) {
+                ItemDrop itemDrop = fish.GetComponent<ItemDrop>();
+                if (itemDrop != null) {
                     //Logger.LogDebug($"Updating max quality {fish.gameObject.name}");
-                    fish.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
+                    itemDrop.m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
                 }
             }
         }

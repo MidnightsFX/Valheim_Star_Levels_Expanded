@@ -630,6 +630,12 @@ namespace StarLevelSystem.common {
 # because one abandoned campfire otherwise freezes a chunk (and its 8 neighbours) forever,
 # and a campfire sitting on an ore spawn stops that ore ever coming back.
 #
+# The exemption only reaches objects that are IN that category to begin with. Every player
+# category is detected by the creator stamped on the object, so ignoring wood_floor drops the
+# protection from decking a PLAYER left behind and does nothing to the identical wood_floor
+# that world generation put in a house - that one was never protected as player property, and
+# is restored or left alone by its location's own rules.
+#
 #   Protection:
 #     PlayerBuiltPiece:
 #       Action: Block

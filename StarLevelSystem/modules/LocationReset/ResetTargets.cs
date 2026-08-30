@@ -222,9 +222,23 @@ namespace StarLevelSystem.modules.LocationReset {
 
             bool succeeded = true;
             try {
+                // What this chunk owes the vegetation replay, settled before anything is touched.
+                // Selection reads the configuration and the state file only -- never the live world --
+                // so resolving it up here cannot change what it picks, and it is what gates the
+                // ignored-piece sweep below.
+                VegetationPlan plan = PlanVegetation(zone, cfg, force, report);
+
+                // BEFORE the rebuild, never after. This sweep exists to clear the chunk's ignored
+                // litter out of PlaceVegetation's way; running it after RegenerateLocation meant every
+                // piece the location had just re-spawned that happened to sit on an ignore list was
+                // deleted again on the spot. A server ignoring wood_floor and woodwall so abandoned
+                // decking could not freeze its chunks got every world house rebuilt without walls or
+                // floors, once per cycle, for as long as the config stood.
+                if (plan != null) { report.IgnoredPiecesCleared += SweepIgnoredPieces(zone); }
+
                 // Vanilla's own ordering: locations first so vegetation sees the fresh clear areas.
                 RegenerateLocation(zone, cfg, force, report);
-                RegenerateVegetation(zone, cfg, force, report);
+                if (plan != null) { RegenerateVegetation(zone, cfg, plan, report); }
             } catch (System.Exception e) {
                 succeeded = false;
                 Logger.LogLocationResetError($"Reset of zone {zone.x},{zone.y} failed and will be retried: {e}");
@@ -1287,6 +1301,35 @@ namespace StarLevelSystem.modules.LocationReset {
             ZDOMan.instance.DestroyZDO(zdo);
         }
 
+        // Everything the vegetation replay needs, resolved before the location rebuild touches the
+        // chunk. Split out from RegenerateVegetation so the ignored-piece sweep can be gated on
+        // "something really is about to regenerate here" while still running ahead of the rebuild.
+        private sealed class VegetationPlan {
+            internal ZoneSystem.ZoneData ZoneData;
+            internal Heightmap Heightmap;
+            internal List<ZoneSystem.ZoneVegetation> Due;
+            internal List<int> DueHashes;
+        }
+
+        // null when this chunk has no vegetation work, which is also the signal that neither the
+        // sweep nor the replay should run.
+        //
+        // SelectDueVegetation reports skipped entries into the report as it goes, so this must be
+        // called exactly once per pass -- hence the plan being carried rather than re-derived.
+        private static VegetationPlan PlanVegetation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+            ZoneSystem zs = ZoneSystem.instance;
+            if (zs == null || zs.m_vegetation == null || zs.m_vegetation.Count == 0) { return null; }
+            if (zs.m_zones.TryGetValue(zone, out ZoneSystem.ZoneData zoneData) == false || zoneData?.m_root == null) { return null; }
+
+            Heightmap heightmap = zoneData.m_root.GetComponentInChildren<Heightmap>();
+            if (heightmap == null) { return null; }
+
+            List<ZoneSystem.ZoneVegetation> due = SelectDueVegetation(zone, cfg, force, report, out List<int> dueHashes);
+            if (due.Count == 0) { return null; }
+
+            return new VegetationPlan() { ZoneData = zoneData, Heightmap = heightmap, Due = due, DueHashes = dueHashes };
+        }
+
         // Tier 2. Re-runs vanilla PlaceVegetation with only the due prefabs enabled.
         //
         // PlaceVegetation seeds each entry with
@@ -1303,22 +1346,16 @@ namespace StarLevelSystem.modules.LocationReset {
         // ZNetScene.CreateObjectsAll, around ZNet.GetReferencePosition() -- Vector3.zero on a
         // dedicated server. So a poke-loaded chunk has no vegetation colliders, IsBlocked is always
         // false, and m_blockCheck is a no-op no matter what it is set to.
-        private static void RegenerateVegetation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+        private static void RegenerateVegetation(Vector2i zone, LocationResetConfigSnapshot cfg, VegetationPlan plan, ZoneResetReport report) {
             ZoneSystem zs = ZoneSystem.instance;
-            if (zs.m_vegetation == null || zs.m_vegetation.Count == 0) { return; }
-            if (zs.m_zones.TryGetValue(zone, out ZoneSystem.ZoneData zoneData) == false || zoneData?.m_root == null) { return; }
+            // Re-validated rather than trusted. The plan is resolved before the location rebuild runs,
+            // and a chunk that lost its zone root in between would take PlaceVegetation down with it.
+            if (zs == null || plan == null || plan.ZoneData?.m_root == null || plan.Heightmap == null) { return; }
 
-            Heightmap heightmap = zoneData.m_root.GetComponentInChildren<Heightmap>();
-            if (heightmap == null) { return; }
-
-            List<ZoneSystem.ZoneVegetation> due = SelectDueVegetation(zone, cfg, force, report, out List<int> dueHashes);
-            if (due.Count == 0) { return; }
-
-            // Clear ignored pieces before placing anything. PlaceVegetation's block check treats any
-            // live collider as an obstruction, so a campfire parked on an ore spawn silently stops
-            // that node from ever returning -- the chunk resets, the node does not. Deliberately only
-            // runs when something is actually about to regenerate here.
-            report.IgnoredPiecesCleared += SweepIgnoredPieces(zone);
+            ZoneSystem.ZoneData zoneData = plan.ZoneData;
+            Heightmap heightmap = plan.Heightmap;
+            List<ZoneSystem.ZoneVegetation> due = plan.Due;
+            List<int> dueHashes = plan.DueHashes;
 
             List<ZoneSystem.ZoneVegetation> original = zs.m_vegetation;
             List<GameObject> ghosts = new List<GameObject>();
@@ -1434,10 +1471,26 @@ namespace StarLevelSystem.modules.LocationReset {
             return true;
         }
 
-        // Destroy every ignored prefab in a chunk's own sector. Ignored prefabs are by definition not
-        // player property worth keeping, and leaving them standing defeats the regeneration.
+        // Destroy the chunk's ignored litter, so PlaceVegetation is not blocked by a campfire parked
+        // on a spawn node. Runs ahead of the location rebuild -- see the call site.
+        //
+        // "Ignored" is an exemption from a PROTECTION category, so an object only qualifies here if it
+        // actually classifies as the category that names it, which for every player category means it
+        // carries a creator. Matching on the bare prefab hash instead -- which is what this did, via
+        // AnyCategoryIgnores -- applied a PlayerBuiltPiece exemption to objects that were never player
+        // built: a server ignoring wood_floor and woodwall so abandoned decking could not freeze its
+        // chunks had the floors and walls stripped out of every world-generated house in range as
+        // well, and they stayed gone unless the location itself happened to be a configured, due
+        // reset target.
+        //
+        // Location-owned content is skipped ahead of that on its own terms. It is not litter by
+        // definition, and it is the rebuild's to manage -- ClearLocation destroys exactly the stamped
+        // set and puts it straight back.
         private static int SweepIgnoredPieces(Vector2i zone) {
             if (ZDOMan.instance == null) { return 0; }
+            // TryClassify reads these, and this now runs in chunks with no location at all, so it
+            // cannot ride on ClearLocation having built them first. Idempotent.
+            ZoneProtectionScan.BuildPrefabSets();
 
             zdoBuffer.Clear();
             ZDOMan.instance.FindObjects(zone, zdoBuffer);
@@ -1453,7 +1506,14 @@ namespace StarLevelSystem.modules.LocationReset {
                 // Ignoring a creature prefab must not extend to somebody's pet. This sweep has no
                 // radius limit, so without the guard an ignore list could clear tames chunk-wide.
                 if (IsTamed(zdo)) { continue; }
-                if (LocationResetData.AnyCategoryIgnores(zdo.m_prefab) == false) { continue; }
+                // A location's own content, wherever it stands. The clear owns it, not this.
+                if (LocationOwnership.OwnerOf(zdo) != LocationOwnership.NoOwner) { continue; }
+                // Unclassified means it is not player property under any category, so no ignore list
+                // can be exempting it from one -- world-generated scenery, in other words.
+                if (ZoneProtectionScan.TryClassify(zdo, out ProtectionCategory category) == false) { continue; }
+                // Per category, matching ShouldPreserve: listing a prefab under PlayerBuiltPiece must
+                // not make it sweepable as a Tombstone.
+                if (LocationResetData.DefaultIgnores(category, zdo.m_prefab) == false) { continue; }
                 if (doomed == null) { doomed = new List<ZDO>(); }
                 doomed.Add(zdo);
             }

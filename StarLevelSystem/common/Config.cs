@@ -258,6 +258,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> ZoneLevelBonusPerLevel;
         public static ConfigEntry<int> ZoneKillsPerLevelUp;
         public static ConfigEntry<float> ZoneDecayLevelsPerHour;
+        public static ConfigEntry<string> ZoneDecayClock;
         public static ConfigEntry<bool> EnableZoneMapOverlay;
         public static ConfigEntry<bool> ZoneOverlayAboveFog;
         public static ConfigEntry<float> MinZoneSize;
@@ -275,8 +276,13 @@ namespace StarLevelSystem.common {
         {
             // ensure all the config values are created
             cfg = cf;
-            cfg.SaveOnConfigSet = true;
+            // Configs are not written to disk until they are all bound - with SaveOnConfigSet
+            // enabled, every individual Bind rewrites the entire cfg file. Binding everything in
+            // memory and flushing once is a significant speedup in mod load time.
+            cfg.SaveOnConfigSet = false;
             CreateConfigValues(cf);
+            cfg.Save();
+            cfg.SaveOnConfigSet = true;
             ConfigFileWatcher.Register(cfg.ConfigFilePath, OnMainConfigFileChanged);
         }
 
@@ -491,7 +497,9 @@ namespace StarLevelSystem.common {
             EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
             ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 2.0f, "Bonus added to each level-up chance tier for each zone level above 1. E.g. 2.0 at zone level 3 adds +4 to every tier.", false, 0.1f, 50f);
             ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
-            ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per real-time hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours.", false, 0f, 50f);
+            ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours. Whether that hour is wall-clock time or time actually spent in the world is set by ZoneDecayClock.", false, 0f, 50f);
+            ZoneDecayClock = BindServerConfig("ZoneScaling", "ZoneDecayClock", ZoneDecayClockSource.RealTime.ToString(), "Which clock zone level decay is measured against. RealTime is the wall clock, so zones keep decaying while nobody is playing and a world left alone overnight comes back several levels lower. GameTime is the world's own time, which only advances while the world is actually being played, so nothing decays while you are logged out or while a dedicated server sits empty. Switching between them re-bases every zone's decay timer within 15 minutes; zone levels themselves are never lost by the switch.", new AcceptableValueList<string>(ZoneDecayClockSource.RealTime.ToString(), ZoneDecayClockSource.GameTime.ToString()));
+            ZoneDecayClock.SettingChanged += ZoneScaleSystemData.OnDecayClockChanged;
             EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
             ZoneOverlayAboveFog = BindServerConfig("ZoneScaling", "ZoneOverlayAboveFog", false, "When enabled, zone boundaries draw above the map fog so they are visible even in unexplored areas. When disabled, boundaries sit below the fog and only appear once an area has been explored.");
             ZoneOverlayAboveFog.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayFogOnChange;

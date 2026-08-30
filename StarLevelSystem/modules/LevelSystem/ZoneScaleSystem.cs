@@ -32,12 +32,18 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (ZNet.instance.IsDedicated()) {
                 Logger.LogDebug("Server is headless, skipping zone minimap generation.");
             }
-            if (ZoneScaleSystemData.LoadZoneData()) {
+            ZoneScaleSystemData.ZoneLoadResult loadResult = ZoneScaleSystemData.LoadZoneData();
+            if (loadResult == ZoneScaleSystemData.ZoneLoadResult.Loaded) {
                 Logger.LogInfo($"Zone data loaded from file. {ZoneScaleSystemData.Zones.Count} zones available.");
                 ZoneScaleSystemData.zonesBuilt = true;
                 ZoneScaleSystemData.StartDecayCoroutine();
                 DrawMinimapOverlay();
                 return;
+            }
+            // A file we could not parse is moved aside first: BuildZoneMap saves unconditionally when
+            // it finishes, so without this a transient read failure silently overwrites every level.
+            if (loadResult == ZoneScaleSystemData.ZoneLoadResult.Unreadable) {
+                ZoneScaleSystemData.PreserveUnreadableZoneData();
             }
             Logger.LogInfo("No zone data found, building zone map from world...");
             ZoneScaleSystemData.buildingZones = true;
@@ -138,15 +144,17 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             var finalZones = cellZones.Values.ToList();
 
-            // Finalize (ids are already assigned deterministically from cell coords above).
-            foreach (var zone in finalZones) {
-                zone.LastDecayTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            }
+            // Finalize (ids are already assigned deterministically from cell coords above). Fresh
+            // geometry has no decay history, so it adopts whichever clock is configured right now --
+            // which is also what makes the SaveZoneData below write a self-consistent file.
+            ZoneScaleSystemData.StampNewZones(finalZones);
             ZoneScaleSystemData.Zones = finalZones;
             ZoneScaleSystemData.BuildZoneIndex();
             ZoneScaleSystemData.zonesBuilt = true;
             ZoneScaleSystemData.buildingZones = false;
             Logger.LogInfo($"Zone map built: {ZoneScaleSystemData.Zones.Count} zones created.");
+            // No-ops on a client: it keeps the geometry in memory for the overlay and takes levels
+            // from the server, so only the authority persists a zone file.
             ZoneScaleSystemData.SaveZoneData();
             ZoneScaleSystemData.StartDecayCoroutine();
             DrawMinimapOverlay();

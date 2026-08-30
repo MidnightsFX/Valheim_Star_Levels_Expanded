@@ -131,18 +131,28 @@
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- JotunnLib's reference list still carries assemblies that Valheim's Unity version
+         dropped. Nothing here uses them, and leaving them in warns MSB3245 every build. -->
+    <Reference Remove="UnityEngine.ProfilerModule" Condition="!Exists('$(VALHEIM_MANAGED)/UnityEngine.ProfilerModule.dll')" />
+  </ItemGroup>
+
   <PropertyGroup>
-    <VALHEIM_MANAGED>$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
+    <!-- VALHEIM_MANAGED and BEPINEX_PATH are resolved in ..\Directory.Build.props, which
+         runs early enough for JotunnLib's reference HintPaths to see them. Only fill in
+         what is still missing here. -->
+    <VALHEIM_MANAGED Condition=" '$(VALHEIM_MANAGED)' == '' ">$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
+    <BEPINEX_PATH Condition=" '$(BEPINEX_PATH)' == '' ">$(VALHEIM_INSTALL)/BepInEx</BEPINEX_PATH>
     <UNITY_FOLDER>$(SolutionDir)StarLevelUnity</UNITY_FOLDER>
   </PropertyGroup>
 
   <Target Name="CopyToUnity">
     <Message Text="Copy assemblies to Unity" Importance="high" />
-    <Copy SourceFiles="$(VALHEIM_INSTALL)/BepInEx/core/BepInEx.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_INSTALL)/BepInEx/core/0Harmony.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_INSTALL)/BepInEx/core/Mono.Cecil.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_INSTALL)/BepInEx/core/MonoMod.Utils.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_INSTALL)/BepInEx/core/MonoMod.RuntimeDetour.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="$(BEPINEX_PATH)/core/BepInEx.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="$(BEPINEX_PATH)/core/0Harmony.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="$(BEPINEX_PATH)/core/Mono.Cecil.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="$(BEPINEX_PATH)/core/MonoMod.Utils.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="$(BEPINEX_PATH)/core/MonoMod.RuntimeDetour.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)Jotunn.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />

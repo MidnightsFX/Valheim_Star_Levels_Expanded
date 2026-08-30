@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Build wiring shared by every project in this repo.
+
+  Why this file and not the .csproj: MSBuild imports Directory.Build.props before
+  NuGet's generated props, and JotunnLib's package props (Paths.props,
+  JotunnLibRefsCorlib.props) bake VALHEIM_MANAGED / BEPINEX_PATH straight into
+  <Reference> HintPath metadata as they are imported. Anything set in the .csproj
+  body runs after that and is silently ignored by those references.
+
+  Everything below only fills in values that are still empty, so an explicit
+  environment variable, an Environment.props, or -p:NAME=... always wins.
+-->
+<Project>
+
+  <!-- ==================== machine-local overrides (gitignored) ==================== -->
+  <!-- Copy Environment.props.example to Environment.props to point the build at a
+       different game install, BepInEx, or to turn the publicizer off. -->
+  <Import Project="$(MSBuildThisFileDirectory)Environment.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)Environment.props')" />
+
+  <!-- ==================== publicize the game assemblies ==================== -->
+  <!-- JotunnLib ships the publicizer (JotunnBuildTask): with ExecutePrebuild=true it
+       hashes every assembly_*.dll / SoftReferenceableAssets.dll / gui_framework.dll in
+       the game's Managed folder and regenerates Managed/publicized_assemblies/*_publicized.dll
+       when they differ, which is exactly what JotunnLibRefsCorlib.props references.
+       Left off, the build silently depends on someone having publicized by hand.
+
+       JotunnLib itself only imports $(SolutionDir)DoPrebuild.props, and SolutionDir is
+       literally "*Undefined*" whenever the .csproj is built directly (dotnet build, CI,
+       `mod-tools`), so that file never took effect. Import it here, where it always does. -->
+  <Import Project="$(MSBuildThisFileDirectory)DoPrebuild.props"
+          Condition="'$(ExecutePrebuild)' == '' And Exists('$(MSBuildThisFileDirectory)DoPrebuild.props')" />
+  <PropertyGroup>
+    <ExecutePrebuild Condition="'$(ExecutePrebuild)' == ''">true</ExecutePrebuild>
+  </PropertyGroup>
+
+  <!-- ==================== Valheim install ==================== -->
+  <!-- Same probe order JotunnLib uses, hoisted here because BEPINEX_PATH below needs
+       the answer before JotunnLib's Paths.props gets a turn. -->
+  <PropertyGroup Condition="'$(VALHEIM_INSTALL)' == '' And '$(OS)' == 'Windows_NT'">
+    <VALHEIM_INSTALL>$([MSBuild]::GetRegistryValueFromView('HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 892970', 'InstallLocation', null, RegistryView.Registry64, RegistryView.Registry32))</VALHEIM_INSTALL>
+    <_SteamLibraryPath>$([MSBuild]::GetRegistryValueFromView('HKEY_CURRENT_USER\SOFTWARE\Valve\Steam', 'SteamPath', null, RegistryView.Registry32))</_SteamLibraryPath>
+    <VALHEIM_INSTALL Condition="!Exists('$(VALHEIM_INSTALL)') And '$(_SteamLibraryPath)' != ''">$(_SteamLibraryPath)\steamapps\common\Valheim</VALHEIM_INSTALL>
+    <VALHEIM_INSTALL Condition="!Exists('$(VALHEIM_INSTALL)')">C:\Program Files\Steam\steamapps\common\Valheim</VALHEIM_INSTALL>
+    <VALHEIM_INSTALL Condition="!Exists('$(VALHEIM_INSTALL)')">C:\Program Files (x86)\Steam\steamapps\common\Valheim</VALHEIM_INSTALL>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(VALHEIM_INSTALL)' == '' And '$(OS)' != 'Windows_NT'">
+    <VALHEIM_INSTALL>$(HOME)/.steam/steam/steamapps/common/Valheim</VALHEIM_INSTALL>
+    <VALHEIM_INSTALL Condition="!Exists('$(VALHEIM_INSTALL)')">$(HOME)/Library/Application Support/Steam/steamapps/common/Valheim/Contents/MacOS</VALHEIM_INSTALL>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(VALHEIM_MANAGED)' == '' And '$(VALHEIM_INSTALL)' != ''">
+    <VALHEIM_MANAGED Condition="Exists('$(VALHEIM_INSTALL)/Valheim_Data/Managed')">$(VALHEIM_INSTALL)/Valheim_Data/Managed</VALHEIM_MANAGED>
+    <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == '' And Exists('$(VALHEIM_INSTALL)/valheim_Data/Managed')">$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
+    <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == '' And Exists('$(VALHEIM_INSTALL)/valheim_server_Data/Managed')">$(VALHEIM_INSTALL)/valheim_server_Data/Managed</VALHEIM_MANAGED>
+  </PropertyGroup>
+
+  <!-- ==================== BepInEx ==================== -->
+  <!-- JotunnLib assumes BepInEx sits in the game folder. It does not when the game is
+       modded through Gale / r2modman / Thunderstore MM, which keep a BepInEx per profile
+       and leave the install vanilla - and then every BepInEx, Harmony, Mono.Cecil and
+       MonoMod reference fails to resolve and the compile dies in hundreds of CS0246s.
+       Fall back to the first profile that actually has a BepInEx core; any BepInEx 5 is
+       fine to compile against, and Environment.props can pin a specific one. -->
+  <PropertyGroup Condition="'$(BEPINEX_PATH)' == ''">
+    <BEPINEX_PATH Condition="Exists('$(VALHEIM_INSTALL)\BepInEx\core\BepInEx.dll')">$(VALHEIM_INSTALL)\BepInEx</BEPINEX_PATH>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BEPINEX_PATH)' == '' And '$(OS)' == 'Windows_NT'">
+    <_VhGaleProfiles>$(AppData)\com.kesomannen.gale\valheim\profiles</_VhGaleProfiles>
+    <_VhR2Profiles>$(AppData)\r2modmanPlus-local\Valheim\profiles</_VhR2Profiles>
+    <_VhTsmmProfiles>$(AppData)\Thunderstore Mod Manager\DataFolder\Valheim\profiles</_VhTsmmProfiles>
+
+    <!-- GetFiles returns absolute paths joined by ';', and only profiles that really have
+         a BepInEx show up at all, so the first hit is a usable one. Each manager is
+         searched only while nothing has been found yet. -->
+    <_VhBepInExHits Condition="'$(_VhBepInExHits)' == '' And Exists('$(_VhGaleProfiles)')">$([System.IO.Directory]::GetFiles('$(_VhGaleProfiles)', 'BepInEx.dll', SearchOption.AllDirectories))</_VhBepInExHits>
+    <_VhBepInExHits Condition="'$(_VhBepInExHits)' == '' And Exists('$(_VhR2Profiles)')">$([System.IO.Directory]::GetFiles('$(_VhR2Profiles)', 'BepInEx.dll', SearchOption.AllDirectories))</_VhBepInExHits>
+    <_VhBepInExHits Condition="'$(_VhBepInExHits)' == '' And Exists('$(_VhTsmmProfiles)')">$([System.IO.Directory]::GetFiles('$(_VhTsmmProfiles)', 'BepInEx.dll', SearchOption.AllDirectories))</_VhBepInExHits>
+    <_VhBepInExDll Condition="'$(_VhBepInExHits)' != ''">$(_VhBepInExHits.Split(';')[0])</_VhBepInExDll>
+    <BEPINEX_PATH Condition="'$(_VhBepInExDll)' != ''">$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName('$(_VhBepInExDll)')), '..'))))</BEPINEX_PATH>
+    <!-- A BepInEx.dll somewhere other than a core folder is not a BepInEx install. -->
+    <BEPINEX_PATH Condition="'$(BEPINEX_PATH)' != '' And !Exists('$(BEPINEX_PATH)\core\0Harmony.dll')"></BEPINEX_PATH>
+  </PropertyGroup>
+
+  <!-- ==================== diagnostics ==================== -->
+  <Target Name="CheckValheimBuildPaths" BeforeTargets="BeforeBuild">
+    <Warning Condition="!Exists('$(VALHEIM_MANAGED)')"
+             Text="Valheim's Managed folder was not found (VALHEIM_INSTALL='$(VALHEIM_INSTALL)'). Vanilla references will not resolve and the assemblies cannot be publicized. Set VALHEIM_INSTALL in Environment.props - see Environment.props.example." />
+    <Warning Condition="!Exists('$(BEPINEX_PATH)\core\BepInEx.dll')"
+             Text="BepInEx was not found (BEPINEX_PATH='$(BEPINEX_PATH)'). BepInEx, Harmony, Mono.Cecil and MonoMod references will not resolve. Set BEPINEX_PATH in Environment.props - see Environment.props.example." />
+  </Target>
+
+</Project>

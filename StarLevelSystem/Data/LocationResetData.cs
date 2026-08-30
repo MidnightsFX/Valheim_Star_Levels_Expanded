@@ -400,17 +400,6 @@ namespace StarLevelSystem.Data {
             return false;
         }
 
-        // Every prefab hash ignored under any category, for the pre-vegetation sweep, which has to
-        // decide before it knows which category a given ZDO would classify as.
-        internal static bool AnyCategoryIgnores(int prefabHash) {
-            Dictionary<ProtectionCategory, ProtectionRule> defaults = SLE_LocationReset_Settings?.Defaults?.Protection;
-            if (defaults == null) { return false; }
-            foreach (KeyValuePair<ProtectionCategory, ProtectionRule> kvp in defaults) {
-                if (kvp.Value != null && kvp.Value.IgnoresHash(prefabHash)) { return true; }
-            }
-            return false;
-        }
-
         private static void TrackInterval(ResolvedResetEntry entry) {
             if (entry.Enabled) {
                 float floor = FloorContribution(entry);

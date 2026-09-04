@@ -20,29 +20,31 @@ namespace StarLevelSystem.Data
         // Keyed by the full ZDOID: the bare ZDOID.ID (uint) is only unique per creator peer, so on a
         // dedicated server two creatures spawned by different players share low IDs (1,2,3,...) and
         // would collide, cross-contaminating name/level/modifiers/etc. between unrelated creatures.
-        private static Dictionary<ZDOID, CharacterCacheEntry> SessionCache = new Dictionary<ZDOID, CharacterCacheEntry>();
+        // ZDOIDComparer keeps that full-ZDOID identity (it compares via ZDOID.Equals) and only
+        // avoids the static List<long> walk inside ZDOID.GetHashCode.
+        private static Dictionary<ZDOID, CharacterCacheEntry> SessionCache = new Dictionary<ZDOID, CharacterCacheEntry>(ZDOIDComparer.Instance);
 
         // Session tree cache, to avoid recalculating tree levels multiple times
-        private static Dictionary<ZDOID, int> TreeSessionCache = new Dictionary<ZDOID, int>();
+        private static Dictionary<ZDOID, int> TreeSessionCache = new Dictionary<ZDOID, int>(ZDOIDComparer.Instance);
 
         // Memoized SLS_MODSV2 parses: raw ZDO string -> parsed dictionary, per creature.
         // GetCreatureModifiers is called per hit and per death, and the YAML deserialize only needs
         // to re-run when the stored string actually changed. Evicted with the other per-ZDOID caches.
-        private static Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>> ModifierParseCache = new Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>>();
+        private static Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>> ModifierParseCache = new Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>>(ZDOIDComparer.Instance);
 
         public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
             if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
             ZDOID cid = zgo.GetZDO().m_uid;
-            if (TreeSessionCache.ContainsKey(cid)) { return TreeSessionCache[cid]; }
+            if (TreeSessionCache.TryGetValue(cid, out int cached)) { return cached; }
             int level = LevelSelection.DeterministicDetermineTreeLevel(zgo.gameObject);
             TreeSessionCache.Add(cid, level);
             return level;
         }
 
+        // Dictionary.Remove already no-ops on a missing key, so a ContainsKey guard only bought a
+        // second hash of the ZDOID. This runs once per object on every streaming unload.
         public static void RemoveTreeCacheEntry(ZDOID id) {
-            if (TreeSessionCache.ContainsKey(id)) {
-                TreeSessionCache.Remove(id);
-            }
+            TreeSessionCache.Remove(id);
         }
 
         internal static void FlushCache() {

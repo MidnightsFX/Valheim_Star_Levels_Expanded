@@ -319,20 +319,12 @@ namespace StarLevelSystem.modules.LevelSystem {
             tree.m_health += (tree.m_health * 0.1f * level);
             // Logger.LogDebug($"Setting Tree size {scale}.");
             tree.transform.localScale *= scale;
-            List<DropTable.DropData> drops = new List<DropTable.DropData>();
-            foreach (var drop in tree.m_dropWhenDestroyed.m_drops) {
-                DropTable.DropData LvlUpDrop = new DropTable.DropData {
-                    // Scale the amount of drops based on level
-                    m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelTreeLootScale.Value * level)),
-                    m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + ValConfig.PerLevelTreeLootScale.Value * level)),
-                    // Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
-                    m_item = drop.m_item
-                };
-                drops.Add(LvlUpDrop);
-            }
-            // Without this assignment the scaled list was built and thrown away, making
-            // PerLevelTreeLootScale a silent no-op.
-            tree.m_dropWhenDestroyed.m_drops = drops;
+            // Loot is deliberately not touched here. LootStyles.UpdateDropTableByLevel applies
+            // PerLevelTreeLootScale to a clone of the table at fell time (via the
+            // TreeBase.RPC_Damage transpiler in LootPatches), so rewriting m_drops on the live
+            // instance scaled every stack a second time - and, because DropData is a struct,
+            // rebuilding it field by field dropped m_weight and m_dontScale, which collapsed
+            // multi-item tables to whatever sat at index 0.
             Physics.SyncTransforms();
 
             yield break;

@@ -87,7 +87,7 @@ namespace StarLevelSystem.modules.UI {
 
         // Keyed by the full ZDOID (not the bare uint ZDOID.ID) so creatures created by different
         // peers with the same per-peer ID counter value don't collide. See CompositeLazyCache.
-        public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>();
+        public static Dictionary<ZDOID, StarLevelHud> characterExtendedHuds = new Dictionary<ZDOID, StarLevelHud>(ZDOIDComparer.Instance);
         private static GameObject HealthText;
         static Sprite defaultStar;
 
@@ -98,16 +98,16 @@ namespace StarLevelSystem.modules.UI {
         }
 
         internal static void RemoveExtendedHudFromCache(ZDOID id) {
-            if (characterExtendedHuds.ContainsKey(id)) {
-                //Logger.LogDebug($"Removing extended hud from cache for {id}");
-                StarLevelHud removed = characterExtendedHuds[id];
-                if (removed.HealthText != null) {
-                    GameObject.Destroy(removed.HealthText.gameObject);
-                }
-                // CurrentBossHuds is otherwise append-only and grows for the whole session.
-                if (removed.IsBoss) { CurrentBossHuds.Remove(removed); }
-                characterExtendedHuds.Remove(id);
+            // TryGetValue + Remove is two hash lookups where ContainsKey + indexer + Remove was
+            // three; net48 has no Remove(key, out value) overload, so two is the floor here.
+            if (characterExtendedHuds.TryGetValue(id, out StarLevelHud removed) == false) { return; }
+            //Logger.LogDebug($"Removing extended hud from cache for {id}");
+            if (removed.HealthText != null) {
+                GameObject.Destroy(removed.HealthText.gameObject);
             }
+            // CurrentBossHuds is otherwise append-only and grows for the whole session.
+            if (removed.IsBoss) { CurrentBossHuds.Remove(removed); }
+            characterExtendedHuds.Remove(id);
         }
 
         // Reads the creature's modifiers, reusing the previously deserialized dictionary when the backing

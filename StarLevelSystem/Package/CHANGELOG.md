@@ -1,3 +1,12 @@
+**1.9.0**
+ ---
+ ```
+- Improves performance for mass deletion of creatures or other objects
+- Fixed tree and bird level scaling stripping drop weights, so multi-item drop tables only ever dropped their first entry - Beech gave Resin but no Feathers or Seeds, Scorched Trees gave Blackwood but no Charcoal
+- Retuned tree drops
+	- Its default rises from 0.2 to 0.5 so per-level yields stay close to before.
+ ```
+
 **1.8.0**
  ---
  ```

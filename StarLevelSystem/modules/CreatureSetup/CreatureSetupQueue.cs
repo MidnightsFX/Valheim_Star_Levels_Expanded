@@ -10,7 +10,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
 
         // Keyed by the full ZDOID (not the bare uint ZDOID.ID) so setup tracking for creatures created
         // by different peers with overlapping per-peer ID counters does not collide. See CompositeLazyCache.
-        private static readonly HashSet<ZDOID> InProgress = new HashSet<ZDOID>();
+        private static readonly HashSet<ZDOID> InProgress = new HashSet<ZDOID>(ZDOIDComparer.Instance);
 
         // Adds a creature to the queue. Returns false when the request is a duplicate
         // (a setup coroutine is already running for this creature) or the character is invalid.

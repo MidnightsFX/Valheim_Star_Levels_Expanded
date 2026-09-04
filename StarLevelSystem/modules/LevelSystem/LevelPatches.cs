@@ -134,17 +134,21 @@ namespace StarLevelSystem.modules.LevelSystem {
                     __instance.transform.localScale *= scale;
                     Physics.SyncTransforms();
                     DropOnDestroyed dropondeath = __instance.gameObject.GetComponent<DropOnDestroyed>();
-                    List<DropTable.DropData> drops = new List<DropTable.DropData>();
-                    foreach (var drop in dropondeath.m_dropWhenDestroyed.m_drops) {
-                        DropTable.DropData lvlupdrop = new DropTable.DropData();
-                        // Scale the amount of drops based on level
-                        lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelBirdLootScale.Value * storedLevel));
-                        lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + ValConfig.PerLevelBirdLootScale.Value * storedLevel));
-                        //Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
-                        lvlupdrop.m_item = drop.m_item;
-                        drops.Add(lvlupdrop);
+                    if (dropondeath != null && dropondeath.m_dropWhenDestroyed != null) {
+                        List<DropTable.DropData> drops = new List<DropTable.DropData>();
+                        foreach (var drop in dropondeath.m_dropWhenDestroyed.m_drops) {
+                            // Copy the struct instead of rebuilding it field by field: m_weight and
+                            // m_dontScale have to survive, or DropTable.GetDropList sees a zero total
+                            // weight and picks index 0 every roll, losing every other item.
+                            DropTable.DropData lvlupdrop = drop;
+                            // Scale the amount of drops based on level
+                            lvlupdrop.m_stackMin = Mathf.RoundToInt(drop.m_stackMin * (1 + ValConfig.PerLevelBirdLootScale.Value * storedLevel));
+                            lvlupdrop.m_stackMax = Mathf.RoundToInt(drop.m_stackMax * (1 + ValConfig.PerLevelBirdLootScale.Value * storedLevel));
+                            //Logger.LogDebug($"Scaling drop {drop.m_item.name} from {drop.m_stackMin}-{drop.m_stackMax} to {lvlupdrop.m_stackMin}-{lvlupdrop.m_stackMax} for level {storedLevel}.");
+                            drops.Add(lvlupdrop);
+                        }
+                        dropondeath.m_dropWhenDestroyed.m_drops = drops;
                     }
-                    dropondeath.m_dropWhenDestroyed.m_drops = drops;
                 }
             }
         }

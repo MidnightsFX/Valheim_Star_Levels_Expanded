@@ -401,6 +401,17 @@ The number of players, frequency, and most all details of each raid is configura
 
 Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
 
+#### Raid cooldowns and logging out
+
+Each player's raid cooldown, and the server's own raid check schedule, are saved per world and picked back up exactly where they left off when the world is loaded again. Logging out and back in does not hand anyone a fresh raid.
+
+`RaidCooldownClock` chooses what a cooldown is actually measured against:
+
+- `WorldTime` (default) - the world's own clock. It advances whenever anybody is playing the world, and jumps forward when someone sleeps through a night. On a busy server a player's cooldown keeps burning down while other people play without them.
+- `PlayerTime` - each player's own time in the world. A cooldown only counts down while that player is actually online, so logging out with 20 minutes left brings them back with 20 minutes left however long they were away, and other people's sessions do not shorten it.
+
+Neither clock runs while nobody is playing. Switching between them re-bases everyone's remaining cooldown, so nobody gains or loses raid time by the change.
+
 Below is an example of many of the details that can be configured for a given raid
 ```
 - Name: foresttrolls              # Each raid has its own name, these should be unique or can be incorrectly selected

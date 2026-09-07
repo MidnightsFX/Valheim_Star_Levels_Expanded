@@ -20,6 +20,10 @@ namespace StarLevelSystem.modules.LevelSystem {
             static void FlushZoneData() {
                 ZoneScaleSystemData.FlushPendingSave();
                 LocationReset.LocationResetState.FlushPendingSave();
+                // Raid cooldowns are stamped in the world's net time, which is written by this same save.
+                // Flushing here keeps the two in step, so a crash between raid checks cannot leave the
+                // schedule describing a later net time than the world it belongs to.
+                Raids.RaidControl.FlushPlayerRaidData(force: true);
             }
         }
 
@@ -41,6 +45,9 @@ namespace StarLevelSystem.modules.LevelSystem {
             // Nemesis pin registry is static; without this, pin entries from world A leak into
             // world B and RemovePin silently no-ops on their dead references.
             NemesisSystem.NemesisMinimap.ClearAll();
+            // Flushes this world's raid schedule and drops it, so world B does not start on world A's
+            // cooldowns (the registry is static, and this component outlives a world change).
+            Raids.RaidControl.OnWorldUnload();
             ConfigNetwork.ResetServerSyncState();
         }
 

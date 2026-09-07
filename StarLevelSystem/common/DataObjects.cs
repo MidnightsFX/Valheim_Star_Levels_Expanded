@@ -289,6 +289,17 @@ namespace StarLevelSystem.common
             GameTime,
         }
 
+        // Which clock raid cooldowns are measured against. WorldTime is ZNet's net time: real seconds,
+        // but only counted while somebody is playing the world, shared by everyone on it, and jumped
+        // forward whenever anyone sleeps through a night. PlayerTime is each player's own accumulated
+        // time in this world, so a cooldown only burns down while that player is actually online.
+        // Named RaidCooldownClockSource rather than matching the ConfigEntry name for the same reason
+        // as ZoneDecayClockSource: Config.cs has a 'using static DataObjects'.
+        public enum RaidCooldownClockSource {
+            WorldTime,
+            PlayerTime,
+        }
+
         public class DNum {
             private static readonly Dictionary<int, string> _enumReverseLookup = new Dictionary<int, string>();
             private static readonly Dictionary<string, int> _enumData = new Dictionary<string, int>();
@@ -786,6 +797,31 @@ namespace StarLevelSystem.common
             public double NextRaidableTime { get; set; } = 0f;
             public SerializableVector3 CurrentRaidPosition { get; set; }
             public Dictionary<string, double> LastRaidByName { get; set; } = new Dictionary<string, double>();
+            // Seconds this player has actually spent in this world, accrued by the raid check tick and
+            // persisted with the rest of their raid state. This is the clock NextRaidableTime and
+            // LastRaidByName are expressed in under RaidCooldownClockSource.PlayerTime; it is kept up to
+            // date in either mode so switching clocks has a real value to re-base onto.
+            public double PlayedTime { get; set; } = 0d;
+        }
+
+        // The whole of a world's raid schedule as it is written to ServerRaidSavedData.<world>.yaml.
+        //
+        // Files written before this wrapper existed are a bare platformID -> PlayerRaidData map; the
+        // loader reads that shape too and treats it as WorldName-less WorldTime data (see
+        // RaidControl.ParseRegistry). WorldName exists because ValConfig.PerWorldStatePath seeds every
+        // new world's file by copying the legacy shared one, so without a recorded owner one world's
+        // cooldowns end up loaded as every other world's.
+        public class RaidSaveState {
+            public string WorldName { get; set; }
+            // The global raid-check schedule. Session-local before this was persisted, which handed
+            // every login a fresh raid check roughly 30 seconds after the world loaded.
+            public double NextRaidCheckTime { get; set; } = 0d;
+            // Which clock the stamps in this file ARE, not the configured one -- writing the configured
+            // value while the stamps are still in the other clock is what would make the next load trust
+            // them. A plain settable string so an unparseable scalar cannot throw the round-trip; absent
+            // in pre-wrapper files, which deserializes to null and is read as WorldTime, correct for them.
+            public string CooldownClock { get; set; }
+            public Dictionary<string, PlayerRaidData> Players { get; set; } = new Dictionary<string, PlayerRaidData>();
         }
 
         public class PlayerPrivatekeys {

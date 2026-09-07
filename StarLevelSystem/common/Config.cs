@@ -233,6 +233,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> MaxActiveRaids;
         public static ConfigEntry<int> MaxRaidAttemptsPerPlayer;
         public static ConfigEntry<int> ServerTimeBetweenRaidStartChecks;
+        public static ConfigEntry<string> RaidCooldownClock;
         public static ConfigEntry<int> RaidWindDownSeconds;
         public static ConfigEntry<bool> RaidForceDeleteStragglers;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
@@ -479,6 +480,8 @@ namespace StarLevelSystem.common {
             RaidEventRate = BindServerConfig("Raids", "RaidEventRate", 1f, "The rate at which raid events occur (Vanilla is 1.0), higher values result in less frequent raids, lower values results in more frequent raids. This modifies the raid timing settings which are set per-raid.", false, 0.001f, 10f);
             MaxRaidAttemptsPerPlayer = BindServerConfig("Raids", "MaxRaidAttemptsPerPlayer", 5, "The Maximum number of times to try to activate a raid for a given player. The available raids will be shuffled each time before rolling their activation chance. With 10 raids defined the randomly selected first X will get a chance to spawn.", true, 0, 50);
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server will check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
+            RaidCooldownClock = BindServerConfig("Raids", "RaidCooldownClock", RaidCooldownClockSource.WorldTime.ToString(), "Which clock raid cooldowns are measured against. WorldTime is the world's own time, which advances whenever anyone is playing the world and jumps forward when someone sleeps through a night, so a player's cooldown keeps burning down while other people play without them. PlayerTime is each player's own time in the world: a cooldown only counts down while that player is actually online, so logging out with 20 minutes left brings them back with 20 minutes left no matter how long they were away. Neither clock runs while nobody is playing. Switching between them re-bases everyone's remaining cooldown, so nobody gains or loses raid time by the switch.", new AcceptableValueList<string>(RaidCooldownClockSource.WorldTime.ToString(), RaidCooldownClockSource.PlayerTime.ToString()));
+            RaidCooldownClock.SettingChanged += RaidControl.OnCooldownClockChanged;
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
             RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
             RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);

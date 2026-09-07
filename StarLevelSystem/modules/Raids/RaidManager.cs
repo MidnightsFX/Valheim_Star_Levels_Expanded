@@ -16,7 +16,6 @@ namespace StarLevelSystem.modules.Raids {
 
     public class RaidManager : MonoBehaviour {
         bool setup = false;
-        double nextCheckForRaidsTime = 0;
         bool forceRaidStart = false;
         // Breadcrumb for the CheckForRaidUpdate error handler, so a failure names the player it was working on.
         string currentlyCheckingPlayer = null;
@@ -40,8 +39,17 @@ namespace StarLevelSystem.modules.Raids {
 
         private void RunRaidCheck() {
             if (setup == false) { return; }
-            if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
+            // The schedule lives in a per-world file that cannot be resolved until ZNet knows which world
+            // is running, which is well after RandEventSystem.Awake ran Setup. Nothing may consult a
+            // cooldown before this succeeds, or the check would run against an empty registry.
+            if (RaidControl.EnsureRegistryLoaded() == false) { return; }
+
+            // Re-base first if the cooldown clock was changed, then advance every online player's own
+            // clock. Both have to happen before any stamp is read this tick.
+            RaidControl.EnsureCooldownClock();
+            RaidControl.AccruePlayerTime();
 
             // Persist any player-key registry changes accumulated since the last tick (key changes
             // only mark the registry dirty rather than writing the file per event).
@@ -50,10 +58,11 @@ namespace StarLevelSystem.modules.Raids {
             if (RaidsData.SLE_Raid_Settings.GlobalSettings.DisableAllRaids == true) { return; }
 
 
-            if (forceRaidStart || ZNet.instance.GetTimeSeconds() >= nextCheckForRaidsTime) {
-                // Update time backoff
-                nextCheckForRaidsTime = ZNet.instance.GetTimeSeconds() + (ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60);
-                Logger.LogDebug($"Raid check happening. Next check will be at: {nextCheckForRaidsTime} currentTime: {ZNet.instance.GetTimeSeconds()}");
+            if (forceRaidStart || ZNet.instance.GetTimeSeconds() >= RaidControl.NextRaidCheckTime) {
+                // Update time backoff. Persisted with the registry, so logging back in resumes the
+                // schedule instead of granting a fresh raid roll 30 seconds into every session.
+                RaidControl.NextRaidCheckTime = ZNet.instance.GetTimeSeconds() + (ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60);
+                Logger.LogDebug($"Raid check happening. Next check will be at: {RaidControl.NextRaidCheckTime} currentTime: {ZNet.instance.GetTimeSeconds()}");
                 // Nothing to do if no one is connected
                 int players = ZNet.instance.GetNrOfPlayers();
                 if (players <= 0) {
@@ -85,7 +94,7 @@ namespace StarLevelSystem.modules.Raids {
                     // Come back promptly to pick the pending peers up, but only abort the cycle if there is
                     // genuinely nobody to raid yet. A single un-synced peer used to block raids for every other
                     // player on the server, indefinitely if that client never answered the request.
-                    nextCheckForRaidsTime = ZNet.instance.GetTimeSeconds() + 60;
+                    RaidControl.NextRaidCheckTime = ZNet.instance.GetTimeSeconds() + 60;
                     if (RaidControl.ServerPlayerRaidData.Count == 0) {
                         Logger.LogInfo("Networked players data is needed to ensure accurate raids, delaying raid initilaization and awaiting updated client data.");
                         return;
@@ -106,8 +115,8 @@ namespace StarLevelSystem.modules.Raids {
                 int numRaids = UnityEngine.Random.Range(1, Mathf.Min(ValConfig.MaxActiveRaids.Value, players));
                 int activatingRaids = 0;
                 int raidsChecked = 0;
-                double currentTime = ZNet.instance.GetTimeSeconds();
-                Logger.LogRaid($"Starting raid init check potential num raids: {numRaids} start-time: {currentTime} checking {RaidControl.ServerPlayerRaidData.Count} players for raid availability.");
+                double worldTime = ZNet.instance.GetTimeSeconds();
+                Logger.LogRaid($"Starting raid init check potential num raids: {numRaids} start-time: {worldTime} checking {RaidControl.ServerPlayerRaidData.Count} players for raid availability.");
                 List<string> peers = new List<string>();
                 foreach (PlayerInfo player in ZNet.instance.GetPlayerList()) {
                     peers.Add(player.m_userInfo.m_id.ToString());
@@ -124,8 +133,11 @@ namespace StarLevelSystem.modules.Raids {
                         Logger.LogRaid($"Client {playerRaids.Key} was not online, skipping raid checks for them.");
                         continue;
                     }
-                    if (forceRaidStart == false && playerRaids.Value.NextRaidableTime >= currentTime) {
-                        Logger.LogRaid($"{playerRaids.Key} is not currently raidable, still on cooldown: {playerRaids.Value.NextRaidableTime} >= {currentTime}");
+                    // Under RaidCooldownClockSource.PlayerTime each player's stamps are in their own clock,
+                    // so there is no single "current time" to compare a whole registry against.
+                    double playerNow = RaidControl.CooldownNow(playerRaids.Value);
+                    if (forceRaidStart == false && playerRaids.Value.NextRaidableTime >= playerNow) {
+                        Logger.LogRaid($"{playerRaids.Key} is not currently raidable, still on cooldown: {playerRaids.Value.NextRaidableTime} >= {playerNow}");
                         continue;
                     }
                     if (activatingRaids >= numRaids) {
@@ -154,15 +166,17 @@ namespace StarLevelSystem.modules.Raids {
                     // Check distance to existing raids
                     bool tooClose = false;
                     foreach (KeyValuePair<string, PlayerRaidData> playerRaid in trackedPlayers) {
+                        // Each entry is measured against its own clock for the same reason as above.
+                        double otherNow = RaidControl.CooldownNow(playerRaid.Value);
                         // Skip distance check if the player is waiting for a raid still
-                        if (playerRaid.Value.NextRaidableTime < currentTime) { continue; }
+                        if (playerRaid.Value.NextRaidableTime < otherNow) { continue; }
 
                         // Last raid of the active raid type, is within its active duration
                         if (playerRaid.Value.ActiveRaid != null && playerRaid.Value.LastRaidByName.ContainsKey(playerRaid.Value.ActiveRaid.Name)) {
                             double lastRaidTime = playerRaid.Value.LastRaidByName[playerRaid.Value.ActiveRaid.Name];
 
                             // Check if the raid is too close
-                            if ((lastRaidTime + playerRaid.Value.ActiveRaid.Duration) > currentTime) {
+                            if ((lastRaidTime + playerRaid.Value.ActiveRaid.Duration) > otherNow) {
                                 if (Vector3.Distance(playerRaid.Value.CurrentRaidPosition, raidPosition) < playerRaid.Value.ActiveRaid.EventRange * 3) {
                                     tooClose = true;
                                     break;
@@ -226,23 +240,17 @@ namespace StarLevelSystem.modules.Raids {
 
         public void Setup() {
             Logger.LogRaid("Starting setup for RaidManager.");
-            Dictionary<string, PlayerRaidData> loadedRaidData = null;
-            try {
-                loadedRaidData = yamlDeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(RaidsData.LoadServerRaidData());
-            } catch (Exception e) {
-                Logger.LogWarning($"There was an error loading saved player raid data. New data will be requested from players. Exception: {e}");
-            }
-            // An absent or empty save deserializes to null without throwing, so the catch above never sees it.
-            if (loadedRaidData == null) {
-                Logger.LogWarning($"No saved player raid data was found ({ValConfig.raidsServerSavedData}), starting from an empty registry. Player data will be requested from connected clients.");
-            }
-            // Fall back to an empty registry: a missing/empty save deserializes to null, and assigning
-            // null here NRE'd on the very next dereference (and on every later registry access).
-            RaidControl.ServerPlayerRaidData = loadedRaidData ?? new Dictionary<string, PlayerRaidData>();
             setup = true;
+            // This runs from RandEventSystem.Awake, where ZNet.instance is normally still null and the
+            // world name -- which the saved-data path is keyed on -- is not resolvable. Loading here read
+            // the legacy shared file instead of this world's, so every world came up holding some other
+            // world's cooldowns. Try anyway (a dedicated server can already be up), and otherwise let the
+            // raid check load it on its first tick.
+            bool loaded = RaidControl.EnsureRegistryLoaded();
             // Peer identity resolution is backend-dependent (see SLSExtensions.GetPeerPlatformUserID), so
             // naming the backend here makes any future raid-dispatch report self-identifying.
-            Logger.LogInfo($"SLS raid manager ready. Online backend: {ZNet.m_onlineBackend}, dedicated: {(ZNet.instance == null ? "unknown" : ZNet.instance.IsDedicated().ToString())}, saved players: {RaidControl.ServerPlayerRaidData.Count}.");
+            Logger.LogInfo($"SLS raid manager ready. Online backend: {ZNet.m_onlineBackend}, dedicated: {(ZNet.instance == null ? "unknown" : ZNet.instance.IsDedicated().ToString())}, " +
+                (loaded ? $"saved players: {RaidControl.ServerPlayerRaidData.Count}." : "raid schedule will be loaded once the world is known."));
         }
 
         public void ForceRaidStart() {
@@ -250,10 +258,8 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void OnDestroy() {
-            // Only the server owns this registry. A client leaving a world would otherwise overwrite its own
-            // ServerRaidSavedData.yaml with whatever it happened to hold (often null, since Setup deserializes
-            // an empty string on a client into null).
-            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            // FlushPlayerRaidData is itself server-only: a client leaving a world would otherwise overwrite
+            // the legacy shared file (its world name is null) with a registry it never loaded.
             RaidControl.FlushPlayerRaidData(force: true);
         }
     }

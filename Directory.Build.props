@@ -2,11 +2,15 @@
 <!--
   Build wiring shared by every project in this repo.
 
-  Why this file and not the .csproj: MSBuild imports Directory.Build.props before
-  NuGet's generated props, and JotunnLib's package props (Paths.props,
-  JotunnLibRefsCorlib.props) bake VALHEIM_MANAGED / BEPINEX_PATH straight into
-  <Reference> HintPath metadata as they are imported. Anything set in the .csproj
-  body runs after that and is silently ignored by those references.
+  Why this file and not the .csproj: JotunnLib's Paths.props fills in VALHEIM_INSTALL,
+  VALHEIM_MANAGED and BEPINEX_PATH itself, each guarded on "only if this is still empty".
+  Property assignments are evaluated in import order, so whoever gets there first wins -
+  and MSBuild imports Directory.Build.props before NuGet's generated props, which is what
+  lets these values beat JotunnLib's own defaults instead of losing to them.
+
+  Reference HintPaths are NOT the reason: MSBuild evaluates every property before any
+  item, so a HintPath declared in an earlier import still picks up a value assigned later
+  in the .csproj. It is the property-precedence race above that needs winning.
 
   Everything below only fills in values that are still empty, so an explicit
   environment variable, an Environment.props, or -p:NAME=... always wins.
@@ -102,6 +106,19 @@
     <BEPINEX_PATH Condition="'$(_VhBepInExDll)' != ''">$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName('$(_VhBepInExDll)')), '..'))))</BEPINEX_PATH>
     <!-- A BepInEx.dll somewhere other than a core folder is not a BepInEx install. -->
     <BEPINEX_PATH Condition="'$(BEPINEX_PATH)' != '' And !Exists('$(BEPINEX_PATH)\core\0Harmony.dll')"></BEPINEX_PATH>
+  </PropertyGroup>
+
+  <!-- ==================== alternate property names ==================== -->
+  <!-- Not every repo is Jotunn-template shaped. The Azu-style projects reach the game through
+       GamePath / GamePathManaged / BepInExPath / PublicizedAssembliesPath instead, and resolve
+       them with their own Choose blocks that are all guarded on "empty" or "does not exist" -
+       so filling them in here wins the same race, and one file covers both conventions.
+       A project that computes its own values still keeps them. -->
+  <PropertyGroup>
+    <GamePath Condition="'$(GamePath)' == ''">$(VALHEIM_INSTALL)</GamePath>
+    <GamePathManaged Condition="'$(GamePathManaged)' == '' And '$(VALHEIM_MANAGED)' != ''">$(VALHEIM_MANAGED)</GamePathManaged>
+    <BepInExPath Condition="'$(BepInExPath)' == '' And '$(BEPINEX_PATH)' != ''">$(BEPINEX_PATH)</BepInExPath>
+    <PublicizedAssembliesPath Condition="'$(PublicizedAssembliesPath)' == '' And '$(VALHEIM_MANAGED)' != ''">$(VALHEIM_MANAGED)\publicized_assemblies</PublicizedAssembliesPath>
   </PropertyGroup>
 
   <!-- ==================== diagnostics ==================== -->

@@ -191,25 +191,322 @@ namespace StarLevelSystem.modules.Raids
 
         internal static void MarkPlayerRaidDataDirty() { playerRaidDataDirty = true; }
 
+        // ------------------------------------------------------------------------------------------
+        // Raid schedule clocks
+        //
+        // Cooldowns used to be stamped straight off ZNet.GetTimeSeconds(). That is already an in-game
+        // clock -- net time only advances while somebody is playing and is persisted with the world save
+        // -- but it is the *world's* clock: it runs while other players are on without you, and it jumps
+        // forward by up to ~25 minutes whenever anyone sleeps through a night. PlayerTime measures each
+        // player's own seconds in the world instead, so a cooldown only burns down while that player is
+        // actually there. Which one is in use is a config choice; the stored stamps are re-based whenever
+        // it changes, so nobody gains or loses raid time by the switch.
+        // ------------------------------------------------------------------------------------------
+
+        // The clock the in-memory stamps are expressed in. NOT the same as the configured clock: the two
+        // differ between a config change and the re-base that follows, and writing the configured value
+        // into the save file while the stamps are still in the other clock is what would make the next
+        // load trust them.
+        internal static RaidCooldownClockSource StampedClock { get; private set; } = RaidCooldownClockSource.WorldTime;
+
+        // Configured clock, resolved defensively. AcceptableValueList constrains the local file, but this
+        // value also arrives over the config sync from another peer's build, so an unrecognised string
+        // falls back to the legacy world clock rather than throwing.
+        private static RaidCooldownClockSource ConfiguredClock() {
+            return ValConfig.RaidCooldownClock.Value == RaidCooldownClockSource.PlayerTime.ToString()
+                ? RaidCooldownClockSource.PlayerTime : RaidCooldownClockSource.WorldTime;
+        }
+
+        private static double ClockNow(RaidCooldownClockSource clock, PlayerRaidData data) {
+            if (clock == RaidCooldownClockSource.PlayerTime) { return data == null ? 0d : data.PlayedTime; }
+            return ZNet.instance.GetTimeSeconds();
+        }
+
+        // "Now" for one player's stored cooldown stamps, in whatever clock those stamps are already in.
+        // Every comparison against NextRaidableTime / LastRaidByName has to go through this: under
+        // PlayerTime each player has their own clock, so a single shared "current time" means nothing.
+        internal static double CooldownNow(PlayerRaidData data) { return ClockNow(StampedClock, data); }
+
+        // Keeps the stored stamps and the configured clock in the same units, re-basing every player when
+        // they diverge. The two are numerically incompatible -- world time is however long the world has
+        // been played, player time however long one player has been in it -- so an unhandled switch would
+        // either free everyone from cooldown at once (player -> world) or strand them on it for the rest
+        // of the world's life (world -> player). Remaining cooldown and elapsed-since-last-raid are both
+        // preserved; only the origin they are measured from moves. Returns true when it re-based.
+        internal static bool EnsureCooldownClock() {
+            RaidCooldownClockSource configured = ConfiguredClock();
+            if (configured == StampedClock) { return false; }
+            RaidCooldownClockSource previous = StampedClock;
+            foreach (PlayerRaidData data in ServerPlayerRaidData.Values) {
+                if (data == null) { continue; }
+                RebaseCooldowns(data, ClockNow(previous, data), ClockNow(configured, data));
+            }
+            StampedClock = configured;
+            MarkPlayerRaidDataDirty();
+            Logger.LogInfo($"Raid cooldown clock changed ({previous} -> {configured}). Re-based {ServerPlayerRaidData.Count} player raid schedule(s); remaining cooldowns are unchanged.");
+            return true;
+        }
+
+        // Moves one player's stamps from oldNow's origin to newNow's, preserving the intervals either side
+        // of "now". A LastRaidByName entry can land negative under PlayerTime (a raid further back than the
+        // player has been in the world at all); that is fine, every read of it is an interval comparison.
+        private static void RebaseCooldowns(PlayerRaidData data, double oldNow, double newNow) {
+            data.NextRaidableTime = newNow + Math.Max(0d, data.NextRaidableTime - oldNow);
+            if (data.LastRaidByName == null) { return; }
+            foreach (string raidName in data.LastRaidByName.Keys.ToList()) {
+                data.LastRaidByName[raidName] = newNow - Math.Max(0d, oldNow - data.LastRaidByName[raidName]);
+            }
+        }
+
+        // The raid check loop re-bases on its own next tick, so this only makes it happen now rather than
+        // up to one check interval later. Guarded on registryLoaded because Jotunn's SynchronizationManager
+        // restores every synced entry to its local value from a ZNet.OnDestroy prefix on world unload,
+        // raising SettingChanged after raid state has already been torn down.
+        internal static void OnCooldownClockChanged(object sender, EventArgs e) {
+            if (registryLoaded == false || ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            if (EnsureCooldownClock()) { FlushPlayerRaidData(force: true); }
+        }
+
+        private static double lastPlayTimeAccrual = -1d;
+        // Two raid-check ticks' worth. Net time can leap ahead of real elapsed time -- a bed sleep skips
+        // most of a night in a few seconds, and toggling SLS raids back on resumes accrual after an
+        // arbitrary gap -- and the player clock is meant to count time a player actually sat through.
+        private const double MaxPlayTimeAccrualPerTick = 60d;
+
+        // Advances every online player's own clock by the net time elapsed since the last tick. Only
+        // players already in the registry are credited: someone with no entry has no cooldown to burn, and
+        // their clock starts at zero when their entry is created.
+        internal static void AccruePlayerTime() {
+            if (ZNet.instance == null) { return; }
+            double now = ZNet.instance.GetTimeSeconds();
+            double previous = lastPlayTimeAccrual;
+            lastPlayTimeAccrual = now;
+            // First tick of the world establishes the baseline; there is no elapsed span to credit yet.
+            if (previous < 0d) { return; }
+            double delta = now - previous;
+            if (delta <= 0d) { return; }
+            if (delta > MaxPlayTimeAccrualPerTick) { delta = MaxPlayTimeAccrualPerTick; }
+            if (ServerPlayerRaidData.Count == 0) { return; }
+            foreach (ZNet.PlayerInfo player in ZNet.instance.GetPlayerList()) {
+                string playerPlatformID = player.m_userInfo.m_id.ToString();
+                if (string.IsNullOrEmpty(playerPlatformID)) { continue; }
+                if (ServerPlayerRaidData.TryGetValue(playerPlatformID, out PlayerRaidData data) == false || data == null) { continue; }
+                data.PlayedTime += delta;
+            }
+            // Deliberately does not mark the registry dirty: this moves every tick, and dirtying it here
+            // would turn the periodic flush into a whole-registry disk write every 30 seconds. The clock
+            // is persisted by the forced flushes instead -- each raid check, every world save, and world
+            // unload -- so at worst a player re-enters with the play time they had at the last world save.
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // Registry lifecycle
+        // ------------------------------------------------------------------------------------------
+
+        // The global raid-check schedule, always in world time. Persisted with the registry: session-local
+        // it started at 0 every launch, so the first tick after any world load always passed and handed
+        // the player a full raid roll ~30 seconds after logging in.
+        private static double nextRaidCheckTime = 0d;
+        internal static double NextRaidCheckTime {
+            get => nextRaidCheckTime;
+            set { nextRaidCheckTime = value; MarkPlayerRaidDataDirty(); }
+        }
+
+        private static bool registryLoaded = false;
+        private static string loadedWorld = null;
+
+        // Loads this world's raid schedule the first time it can, and reports whether the registry is
+        // usable. Deliberately not done in RaidManager.Setup: that runs from RandEventSystem.Awake, where
+        // ZNet.instance is still null, so ValConfig.raidsServerSavedData resolved to the legacy shared path
+        // instead of this world's file -- every world loaded one other world's cooldowns and then wrote its
+        // own back, which is what made raids fire moments after logging in.
+        internal static bool EnsureRegistryLoaded() {
+            if (ZNet.instance == null) { return false; }
+            // Only the authority holds the registry; clients receive raids over ClientStartRaidRPC.
+            if (ZNet.instance.IsServer() == false) { return false; }
+            string world = ZNet.instance.GetWorldName();
+            // ZNet.m_world lands a little after ZNet.Awake, and the file path depends on it.
+            if (string.IsNullOrEmpty(world)) { return false; }
+            if (registryLoaded && loadedWorld == world) { return true; }
+            if (registryLoaded && loadedWorld != world) {
+                // A world switch that missed the unload hook would otherwise keep the previous world's
+                // cooldowns in memory and then write them into this world's file.
+                Logger.LogWarning($"Raid schedule was still loaded for world '{loadedWorld}' while '{world}' is running; reloading it for this world.");
+                ResetRegistry();
+            }
+            LoadRegistry(world);
+            loadedWorld = world;
+            registryLoaded = true;
+            return true;
+        }
+
+        private static void ResetRegistry() {
+            ServerPlayerRaidData = new Dictionary<string, PlayerRaidData>();
+            nextRaidCheckTime = 0d;
+            StampedClock = RaidCooldownClockSource.WorldTime;
+            lastPlayTimeAccrual = -1d;
+            forcedRaidCommits.Clear();
+            ActiveRaidRunners.Clear();
+            playerRaidDataDirty = false;
+            registryLoaded = false;
+            loadedWorld = null;
+        }
+
+        // Leaving a world or quitting (ZNet.Shutdown / ShutdownWithoutSave, via LevelScalingPatches).
+        // ZNet is still alive in those prefixes, so the flush still resolves this world's own file.
+        internal static void OnWorldUnload() {
+            // Forced: the player clock and the check schedule both move without marking the registry
+            // dirty, so a world whose last raid check was uneventful still has something to write.
+            FlushPlayerRaidData(force: true);
+            ResetRegistry();
+        }
+
+        private static void LoadRegistry(string world) {
+            // Private keys can arrive from Player.Load before the registry is readable; those entries are
+            // the only thing in memory worth keeping, so carry their keys across the load.
+            Dictionary<string, PlayerRaidData> preLoad = ServerPlayerRaidData;
+            RaidSaveState state = null;
+            try {
+                state = ParseRegistry(RaidsData.LoadServerRaidData());
+            } catch (Exception e) {
+                Logger.LogWarning($"There was an error loading saved player raid data ({ValConfig.raidsServerSavedData}). New data will be requested from players. Exception: {e}");
+            }
+
+            if (state != null && string.IsNullOrEmpty(state.WorldName) == false && state.WorldName != world) {
+                // Another world's schedule sitting at this world's path -- ValConfig.PerWorldStatePath
+                // seeds each new world's file from the legacy shared one, so this is the expected state for
+                // a world that has never written its own. None of it belongs here.
+                Logger.LogInfo($"Saved raid data belongs to a different world ({state.WorldName} vs {world}); starting this world's raid schedule fresh.");
+                state = null;
+            }
+
+            if (state == null) {
+                Logger.LogInfo($"No usable saved raid data for world '{world}' ({ValConfig.raidsServerSavedData}); starting from an empty raid schedule. Player data will be requested from connected clients.");
+                state = new RaidSaveState();
+            }
+
+            ServerPlayerRaidData = state.Players;
+            nextRaidCheckTime = state.NextRaidCheckTime;
+            StampedClock = state.CooldownClock == RaidCooldownClockSource.PlayerTime.ToString()
+                ? RaidCooldownClockSource.PlayerTime : RaidCooldownClockSource.WorldTime;
+            lastPlayTimeAccrual = -1d;
+
+            foreach (KeyValuePair<string, PlayerRaidData> pending in preLoad) {
+                if (pending.Value == null) { continue; }
+                if (ServerPlayerRaidData.TryGetValue(pending.Key, out PlayerRaidData loaded) && loaded != null) {
+                    loaded.PlayerPrivatekeys = pending.Value.PlayerPrivatekeys;
+                } else {
+                    ServerPlayerRaidData[pending.Key] = pending.Value;
+                }
+            }
+
+            // Re-base before anything reads a stamp, then repair whatever the file could not vouch for.
+            EnsureCooldownClock();
+            SanitizeLoadedSchedule();
+
+            Logger.LogInfo($"Loaded raid schedule for world '{world}': {ServerPlayerRaidData.Count} player(s), cooldown clock {StampedClock}, next raid check at {nextRaidCheckTime:F0} (world time is {ZNet.instance.GetTimeSeconds():F0}).");
+        }
+
+        // The save file has had two shapes. Current is a RaidSaveState; everything written before that is a
+        // bare platformID -> PlayerRaidData map, which the shared deserializer rejects outright (it does not
+        // ignore unmatched properties), so the legacy read only runs once the wrapper read has failed.
+        private static RaidSaveState ParseRegistry(string yaml) {
+            if (string.IsNullOrEmpty(yaml)) { return null; }
+            try {
+                RaidSaveState state = yamlDeserializer.Deserialize<RaidSaveState>(yaml);
+                if (state != null && state.Players != null) { return state; }
+            } catch (Exception) {
+                // Not the current shape. A file that is neither shape throws out of the legacy read below,
+                // where the caller reports it against the file name.
+            }
+            Dictionary<string, PlayerRaidData> legacy = yamlDeserializer.Deserialize<Dictionary<string, PlayerRaidData>>(yaml);
+            if (legacy == null) { return null; }
+            // Pre-wrapper file: no recorded owner to check against, no saved check time, and its stamps can
+            // only be world time, because that is the only clock that existed when it was written.
+            return new RaidSaveState() {
+                Players = legacy,
+                CooldownClock = RaidCooldownClockSource.WorldTime.ToString(),
+            };
+        }
+
+        // Nothing in the file is trustworthy as an absolute value. A pre-wrapper file carries no world name,
+        // so a schedule seeded from another world is accepted above, and a world restored from a backup
+        // rolls net time backwards underneath stamps written after it. Both leave stamps arbitrarily far in
+        // the future, which reads as "on cooldown long past when anyone is still playing". Clamp to the
+        // longest cooldown the configuration can actually produce; nothing beyond that could have been
+        // written by this world's raid system.
+        private static void SanitizeLoadedSchedule() {
+            double maxCooldown = MaxConfiguredCooldownSeconds();
+            int clamped = 0;
+            foreach (PlayerRaidData data in ServerPlayerRaidData.Values) {
+                if (data == null) { continue; }
+                double now = CooldownNow(data);
+                if (data.NextRaidableTime > now + maxCooldown) {
+                    data.NextRaidableTime = now + maxCooldown;
+                    clamped++;
+                }
+                if (data.LastRaidByName == null) { continue; }
+                foreach (string raidName in data.LastRaidByName.Keys.ToList()) {
+                    // A raid cannot have happened later than now; a stamp that reads that way is not ours.
+                    if (data.LastRaidByName[raidName] > now) { data.LastRaidByName[raidName] = now; }
+                }
+            }
+            double worldNow = ZNet.instance.GetTimeSeconds();
+            double checkInterval = ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60d;
+            if (nextRaidCheckTime > worldNow + checkInterval) { nextRaidCheckTime = worldNow + checkInterval; }
+            if (clamped > 0) {
+                Logger.LogInfo($"{clamped} saved raid cooldown(s) were further out than any configured raid could set ({maxCooldown / 60d:F0} minutes) and have been clamped; those players become raidable again on the normal schedule.");
+                MarkPlayerRaidDataDirty();
+            }
+        }
+
+        private static double MaxConfiguredCooldownSeconds() {
+            RaidConfiguration cfg = RaidsData.SLE_Raid_Settings;
+            double scalar = cfg != null && cfg.GlobalSettings != null ? cfg.GlobalSettings.GlobalRaidIntervalScalar : 1d;
+            if (scalar <= 0d) { scalar = 1d; }
+            double longest = 0d;
+            if (cfg != null && cfg.Raids != null) {
+                foreach (RaidDefinition raid in cfg.Raids) {
+                    if (raid == null) { continue; }
+                    double cooldown = raid.RaidCoolDownMinutes * 60d * scalar;
+                    if (cooldown > longest) { longest = cooldown; }
+                }
+            }
+            // MarkRaidPending writes a check interval rather than a raid cooldown, so that is the floor.
+            return Math.Max(longest, ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60d);
+        }
+
         // Serializes + writes the registry. force writes regardless; otherwise only when dirty.
-        // Flushed from RaidManager's periodic tick, raid dispatch/commit, and teardown.
+        // Flushed from RaidManager's periodic tick, raid dispatch/commit, the world save and teardown.
         internal static void FlushPlayerRaidData(bool force = false) {
             if (force == false && playerRaidDataDirty == false) { return; }
+            // Only the authority owns this file. A client's GetWorldName() is null, so it would resolve
+            // the legacy shared path and overwrite it with a registry it never loaded.
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            // Same reason, for the authority: a world that never got as far as reading its schedule (SLS
+            // raids off all session, say) must not write an empty one over it on the way out.
+            if (registryLoaded == false) { return; }
             playerRaidDataDirty = false;
-            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(ServerPlayerRaidData));
+            RaidsData.SaveServerRaidData(DataObjects.yamlSerializer.Serialize(new RaidSaveState() {
+                WorldName = ZNet.instance.GetWorldName(),
+                NextRaidCheckTime = NextRaidCheckTime,
+                CooldownClock = StampedClock.ToString(),
+                Players = ServerPlayerRaidData,
+            }));
         }
 
         internal static void UpdatePlayerRaidHistory(PlayerRaidData playerRaidData, RaidDefinition raidDef, string key) {
+            double now = CooldownNow(playerRaidData);
             // Update history of this raid happening
             if (playerRaidData.LastRaidByName.ContainsKey(key)) {
-                playerRaidData.LastRaidByName[key] = ZNet.instance.GetTimeSeconds();
+                playerRaidData.LastRaidByName[key] = now;
             } else {
-                playerRaidData.LastRaidByName.Add(key, ZNet.instance.GetTimeSeconds());
+                playerRaidData.LastRaidByName.Add(key, now);
             }
             // Set the current raid
             playerRaidData.ActiveRaid = raidDef;
             // Update cooldown
-            playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (raidDef.RaidCoolDownMinutes * 60 * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar);
+            playerRaidData.NextRaidableTime = now + (raidDef.RaidCoolDownMinutes * 60 * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar);
         }
 
         // Lightweight dispatch-time marker. Holds the player off re-dispatch for one check interval and records the
@@ -219,7 +516,7 @@ namespace StarLevelSystem.modules.Raids
         internal static void MarkRaidPending(PlayerRaidData playerRaidData, RaidDefinition raidDef, Vector3 pos) {
             playerRaidData.ActiveRaid = raidDef;
             playerRaidData.CurrentRaidPosition = pos;
-            playerRaidData.NextRaidableTime = ZNet.instance.GetTimeSeconds() + (ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60);
+            playerRaidData.NextRaidableTime = CooldownNow(playerRaidData) + (ValConfig.ServerTimeBetweenRaidStartChecks.Value * 60);
         }
 
         // Raids force-started by sls-raid-spawn. FinalizeRaidCommit consumes the entry instead of writing the
@@ -252,6 +549,9 @@ namespace StarLevelSystem.modules.Raids
         // host, or via RaidCommittedRPC from a networked client). Sets the full cooldown and broadcasts combat music
         // to nearby clients — both deferred from dispatch so an aborted raid produces no visible side effects.
         internal static void FinalizeRaidCommit(string playerPlatformID, string raidName, Vector3 pos) {
+            // Usually already loaded by the raid check that dispatched this, but a raid can also reach
+            // here from the vanilla SetRandomEvent passthrough, which never consults the registry.
+            EnsureRegistryLoaded();
             if (string.IsNullOrEmpty(playerPlatformID)) {
                 Logger.LogWarning("Raid commit received without a resolvable player; cooldown will not be set.");
                 return;
@@ -470,12 +770,13 @@ namespace StarLevelSystem.modules.Raids
                 // Check if the raid has been activated too recently
                 //Logger.LogDebug($"Checking recent activations of specified raid");
                 if (playerData.LastRaidByName.Count > 0) {
-                    if (playerData.NextRaidableTime > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogRaid($"Player {playerPlatformID} is next raidable in {ZNet.instance.GetTimeSeconds() - playerData.NextRaidableTime} seconds, skipping Raid: {raid.Name}");
+                    double playerNow = CooldownNow(playerData);
+                    if (playerData.NextRaidableTime > playerNow) {
+                        Logger.LogRaid($"Player {playerPlatformID} is next raidable in {playerData.NextRaidableTime - playerNow} seconds, skipping Raid: {raid.Name}");
                         continue;
                     }
-                    if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) > ZNet.instance.GetTimeSeconds()) {
-                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Next possible activation time: {ZNet.instance.GetTimeSeconds() - (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60))}");
+                    if (playerData.LastRaidByName != null && playerData.LastRaidByName.ContainsKey(raid.Name) && (playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) > playerNow) {
+                        Logger.LogRaid($"Player {playerPlatformID} has activated Raid {raid.Name} too recently, skipping. Raidable again in {(playerData.LastRaidByName[raid.Name] + (raid.RaidCoolDownMinutes * 60)) - playerNow} seconds.");
                         continue;
                     }
                 }

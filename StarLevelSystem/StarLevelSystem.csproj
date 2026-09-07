@@ -139,8 +139,8 @@
 
   <PropertyGroup>
     <!-- VALHEIM_MANAGED and BEPINEX_PATH are resolved in ..\Directory.Build.props, which
-         runs early enough for JotunnLib's reference HintPaths to see them. Only fill in
-         what is still missing here. -->
+         is evaluated before JotunnLib's package props and so wins the "only set this if it
+         is still empty" race they use. Only fill in what is still missing here. -->
     <VALHEIM_MANAGED Condition=" '$(VALHEIM_MANAGED)' == '' ">$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
     <BEPINEX_PATH Condition=" '$(BEPINEX_PATH)' == '' ">$(VALHEIM_INSTALL)/BepInEx</BEPINEX_PATH>
     <UNITY_FOLDER>$(SolutionDir)StarLevelUnity</UNITY_FOLDER>

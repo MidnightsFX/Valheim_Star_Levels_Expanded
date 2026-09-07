@@ -1,3 +1,12 @@
+**1.9.1**
+ ---
+ ```
+- The server's raid check schedule is now saved with the world, instead of restarting on every login
+- New Raids option RaidCooldownClock chooses what raid cooldowns are measured against
+	- PlayerTime counts only time that player has spent in the world
+	- WorldTime (default) counts time the world is played by anyone, matching previous behaviour
+ ```
+
 **1.9.0**
  ---
  ```

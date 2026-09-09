@@ -26,7 +26,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.10.0";
+        public const string PluginVersion = "1.10.1";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -39,10 +39,6 @@ namespace StarLevelSystem
         public void Awake()
         {
             Log = this.Logger;
-            // Before anything can touch a yaml type. YamlDotNet is a shared package this mod does not
-            // ship, and a missing or pre-16.0 copy surfaces as a TypeLoadException naming one of our
-            // converters, which tells a player nothing. Nothing here works without config, so stop.
-            if (YamlDotNetCheck.Verify() == false) { return; }
             cfg = new ValConfig(Config);
             cfg.SetupConfigRPCs();
             TaskRunner.Setup();

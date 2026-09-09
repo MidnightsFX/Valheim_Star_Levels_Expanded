@@ -1,3 +1,9 @@
+**1.10.1**
+ ---
+ ```
+- Remove yaml.net outside check
+ ```
+
 **1.10.0**
  ---
  ```

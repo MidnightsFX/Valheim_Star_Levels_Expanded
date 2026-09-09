@@ -244,7 +244,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 Vector3 candidate = SelectWorldPoint(range, tries, biome);
 
                 // Force the target zone to generate so ground data is available server-side.
-                Vector2i zoneId = ZoneSystem.GetZone(candidate);
+                Vector2s zoneId = ZoneSystem.GetZone(candidate);
                 int zoneWait = 0;
                 while (!ZoneSystem.instance.SpawnZone(zoneId, ZoneSystem.SpawnMode.Client, out _)) {
                     zoneWait++;

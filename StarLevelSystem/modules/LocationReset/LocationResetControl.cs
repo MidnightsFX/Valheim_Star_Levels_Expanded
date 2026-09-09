@@ -389,7 +389,7 @@ namespace StarLevelSystem.modules.LocationReset {
             }
 
             LocationResetConfigSnapshot cfg = LocationResetConfigSnapshot.Capture();
-            List<Vector2i> zones;
+            List<Vector2s> zones;
 
             if (string.IsNullOrEmpty(request.LocationName) == false) {
                 int hash = request.LocationName.GetStableHashCode();
@@ -404,7 +404,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (request.ResetAllMatches == false && zones.Count > 1) {
                     Announce(output, $"{zones.Count} '{request.LocationName}' locations are within {request.Radius:0}m; " +
                         $"resetting the nearest only.");
-                    zones = new List<Vector2i>() { zones[0] };
+                    zones = new List<Vector2s>() { zones[0] };
                 }
                 // Resolved once for the request rather than per chunk. Distance bands are thousands
                 // of metres wide and a targeted request spans a few hundred at most, so every matched
@@ -462,13 +462,13 @@ namespace StarLevelSystem.modules.LocationReset {
             SafeInvoke(onComplete, summary);
         }
 
-        internal static List<Vector2i> SquareOfZones(Vector3 center, float radius) {
-            List<Vector2i> zones = new List<Vector2i>();
-            Vector2i centerZone = ZoneSystem.GetZone(center);
+        internal static List<Vector2s> SquareOfZones(Vector3 center, float radius) {
+            List<Vector2s> zones = new List<Vector2s>();
+            Vector2s centerZone = ZoneSystem.GetZone(center);
             int span = Mathf.Max(0, Mathf.CeilToInt(radius / 64f));
             for (int dx = -span; dx <= span; dx++) {
                 for (int dy = -span; dy <= span; dy++) {
-                    zones.Add(new Vector2i(centerZone.x + dx, centerZone.y + dy));
+                    zones.Add(new Vector2s(centerZone.x + dx, centerZone.y + dy));
                 }
             }
             return zones;
@@ -483,13 +483,13 @@ namespace StarLevelSystem.modules.LocationReset {
         // placeholder entries carry an all-zero AssetID whose lookup throws. Walking the chunk square
         // and using m_locationInstances as the zone-keyed index it already is costs a dictionary hit
         // per chunk and touches no soft references at all.
-        internal static List<Vector2i> FindNamedLocationZones(Vector3 center, float radius, int nameHash) {
-            List<KeyValuePair<float, Vector2i>> matches = new List<KeyValuePair<float, Vector2i>>();
-            if (ZoneSystem.instance == null) { return new List<Vector2i>(); }
+        internal static List<Vector2s> FindNamedLocationZones(Vector3 center, float radius, int nameHash) {
+            List<KeyValuePair<float, Vector2s>> matches = new List<KeyValuePair<float, Vector2s>>();
+            if (ZoneSystem.instance == null) { return new List<Vector2s>(); }
 
-            List<Vector2i> candidates = SquareOfZones(center, radius);
+            List<Vector2s> candidates = SquareOfZones(center, radius);
             for (int i = 0; i < candidates.Count; i++) {
-                Vector2i zone = candidates[i];
+                Vector2s zone = candidates[i];
                 if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { continue; }
                 if (instance.m_location == null) { continue; }
 
@@ -508,11 +508,11 @@ namespace StarLevelSystem.modules.LocationReset {
                 Vector3 delta = instance.m_position - center;
                 delta.y = 0f;
                 if (delta.magnitude > radius) { continue; }
-                matches.Add(new KeyValuePair<float, Vector2i>(delta.magnitude, zone));
+                matches.Add(new KeyValuePair<float, Vector2s>(delta.magnitude, zone));
             }
 
             matches.Sort((a, b) => a.Key.CompareTo(b.Key));
-            List<Vector2i> zones = new List<Vector2i>();
+            List<Vector2s> zones = new List<Vector2s>();
             for (int i = 0; i < matches.Count; i++) { zones.Add(matches[i].Value); }
             return zones;
         }
@@ -520,7 +520,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // One driver for the admin command, the API radius reset and the API named reset. The only
         // differences between them are the zone list and the snapshot's targeting fields.
         private static System.Collections.IEnumerator ResetZonesRoutine(
-                List<Vector2i> zones, LocationResetConfigSnapshot cfg, ResetRequest request,
+                List<Vector2s> zones, LocationResetConfigSnapshot cfg, ResetRequest request,
                 TerminalOutput output, Action<Dictionary<string, object>> onComplete) {
 
             ResetSummary summary = new ResetSummary() {
@@ -549,7 +549,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 for (int i = 0; i < zones.Count; i++) {
-                    Vector2i zone = zones[i];
+                    Vector2s zone = zones[i];
                     ZoneResetReport report = ZoneResetReport.For(zone, true);
                     // Force means force: biome and band rates scale timers, and force already bypasses
                     // every timer, so the rate stays at 1 here. The description is still recorded so an
@@ -630,7 +630,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // leave them deferred for a full cycle afterwards. This wait belongs to the request, not the
         // zone, so it lives and dies with the request.
         private static System.Collections.IEnumerator WaitForPlayersToClear(
-                List<Vector2i> zones, LocationResetConfigSnapshot cfg, ResetRequest request,
+                List<Vector2s> zones, LocationResetConfigSnapshot cfg, ResetRequest request,
                 TerminalOutput output, Action<bool> onResult) {
 
             float limit = request.SafeWaitSeconds > 0f ? request.SafeWaitSeconds : DefaultSafeWaitSeconds;
@@ -639,7 +639,7 @@ namespace StarLevelSystem.modules.LocationReset {
             bool announced = false;
 
             while (true) {
-                Vector2i blocking = default(Vector2i);
+                Vector2s blocking = default(Vector2s);
                 bool blocked = false;
                 for (int i = 0; i < zones.Count; i++) {
                     // Both halves matter. A player just outside the safe radius can still have the
@@ -713,7 +713,7 @@ namespace StarLevelSystem.modules.LocationReset {
             if (ZoneSystem.instance == null || ZNet.instance == null || ZNet.instance.IsServer() == false) { return 0; }
 
             int stamped = 0;
-            foreach (Vector2i zone in ZoneSystem.instance.m_generatedZones) {
+            foreach (Vector2s zone in ZoneSystem.instance.m_generatedZones) {
                 LocationResetState.StampZone(zone);
                 ZoneProtectionScan.RecordBaseline(zone);
                 stamped++;

@@ -39,12 +39,12 @@ namespace StarLevelSystem.modules.LocationReset {
         // the rest of the outer spawn untagged.
         private static int depth;
 
-        internal static long KeyFor(Vector2i zone) {
+        internal static long KeyFor(Vector2s zone) {
             return ((long)zone.x << 32) | (uint)zone.y;
         }
 
-        internal static Vector2i ZoneFor(long key) {
-            return new Vector2i((int)(key >> 32), (int)(uint)key);
+        internal static Vector2s ZoneFor(long key) {
+            return new Vector2s((int)(key >> 32), (int)(uint)key);
         }
 
         internal static void Begin(long owner) {
@@ -101,10 +101,10 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // Neighbours included: a location's exterior radius crosses zone boundaries routinely, and
             // its spawners cross with it.
-            Vector2i zone = ZoneSystem.GetZone(position);
+            Vector2s zone = ZoneSystem.GetZone(position);
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
-                    Vector2i candidate = new Vector2i(zone.x + dx, zone.y + dy);
+                    Vector2s candidate = new Vector2s(zone.x + dx, zone.y + dy);
                     if (ZoneSystem.instance.m_locationInstances.TryGetValue(candidate, out ZoneSystem.LocationInstance instance) == false) { continue; }
                     if (instance.m_location == null) { continue; }
                     if (Utils.DistanceXZ(instance.m_position, position) > instance.m_location.m_exteriorRadius) { continue; }

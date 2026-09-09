@@ -24,12 +24,12 @@ namespace StarLevelSystem.modules.LocationReset {
         // object loads. No zone is loaded, nothing is destroyed and nothing is created, so this
         // cannot duplicate items or damage a build. It is also where most of the throughput comes
         // from: harvested-but-still-present content is the common case on a busy server.
-        internal static void RefreshZoneInPlace(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+        internal static void RefreshZoneInPlace(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
             if (ZDOMan.instance == null) { return; }
             if (cfg.RefreshPickables == false && cfg.RefreshMineRocks == false && cfg.RefreshContainerLoot == false) { return; }
 
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZoneObjects.FindObjects(zone, zdoBuffer);
 
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
@@ -69,7 +69,7 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // force skips the timers entirely. An admin asking for a reset now means now, and without this
         // sls-loc-reset would still silently honour every per-prefab timestamp.
-        private static bool DueForRefresh(Vector2i zone, int prefabHash, LocationResetConfigSnapshot cfg, bool force, float rate) {
+        private static bool DueForRefresh(Vector2s zone, int prefabHash, LocationResetConfigSnapshot cfg, bool force, float rate) {
             if (force) { return true; }
             if (LocationResetData.TryGetVegetationEntry(prefabHash, out LocationResetData.ResolvedResetEntry entry)) {
                 // A distance-scoped group can override the timer for this chunk only.
@@ -160,7 +160,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // onComplete reports whether the regeneration finished cleanly. A failure must NOT be
         // stamped as done: the clear and the respawn are one operation, and abandoning it in the
         // middle would leave the location permanently empty.
-        internal static IEnumerator RegenerateZone(Vector2i zone, LocationResetConfigSnapshot cfg,
+        internal static IEnumerator RegenerateZone(Vector2s zone, LocationResetConfigSnapshot cfg,
                                                    bool force, ZoneResetReport report, System.Action<bool> onComplete) {
             if (ZoneSystem.instance == null || ZDOMan.instance == null) { onComplete?.Invoke(false); yield break; }
 
@@ -189,7 +189,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // A location configured with ExtraTerrainRadius can reach past its own chunk, and terrain
             // only resets where a heightmap is live, so those neighbours have to come up too. Loading
             // is hoisted here because the regeneration tiers below are synchronous and cannot yield.
-            List<Vector2i> extraZones = ExtraTerrainZones(zone, cfg);
+            List<Vector2s> extraZones = ExtraTerrainZones(zone, cfg);
             if (extraZones != null) {
                 for (int i = 0; i < extraZones.Count; i++) {
                     yield return ZoneLoader.Load(extraZones[i], cfg.MaxZoneLoadWaitSeconds, force, null);
@@ -369,7 +369,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Random.InitState(seed) before laying out rooms, so interiors come back deterministically
         // too. (Radial camps still vary slightly: their wall placement collision-tests against live
         // colliders, which differ between runs.)
-        private static void RegenerateLocation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+        private static void RegenerateLocation(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
             // No record for the miss above: most chunks in the world hold no location at all, and
@@ -420,7 +420,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // exactly this code -- the clear, the Full-mode respawn, the proxy carry-over and the ZDO
         // bookkeeping below are where every hard-won invariant in this system lives, and a second
         // copy of them for the targeted path would drift.
-        private static void RegenerateLocationWith(Vector2i zone, LocationResetConfigSnapshot cfg, bool force,
+        private static void RegenerateLocationWith(Vector2s zone, LocationResetConfigSnapshot cfg, bool force,
                                                    ZoneResetReport report, ZoneSystem.LocationInstance instance,
                                                    int locationHash,
                                                    LocationResetData.ResolvedResetEntry entry) {
@@ -633,7 +633,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Same 0.25m XZ epsilon and the same consume-the-match rule as TryConsumeSurvivingNodeAt, for
         // the same reasons: SnapToGround rewrites y after placement while X and Z are exact, and
         // without consuming, one survivor could absorb two fresh copies and leave a real duplicate.
-        private static int RejectSparedDuplicates(Vector2i zone, List<ZDO> fresh, long ownerKey) {
+        private static int RejectSparedDuplicates(Vector2s zone, List<ZDO> fresh, long ownerKey) {
             if (ZDOMan.instance == null || fresh.Count == 0) { return 0; }
 
             HashSet<ZDO> spawned = new HashSet<ZDO>(fresh);
@@ -642,7 +642,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     zdoBuffer.Clear();
-                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), zdoBuffer);
 
                     for (int i = 0; i < zdoBuffer.Count; i++) {
                         ZDO zdo = zdoBuffer[i];
@@ -706,7 +706,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // override an explicitly named request supplies. Resolving it independently in each of them
         // is how a targeted reset ends up skipping the prefab wait it needed, or poke-loading
         // neighbours for a location it is about to pass over.
-        private static bool GoverningLocation(Vector2i zone, LocationResetConfigSnapshot cfg,
+        private static bool GoverningLocation(Vector2s zone, LocationResetConfigSnapshot cfg,
                                               out ZoneSystem.LocationInstance instance,
                                               out LocationResetData.ResolvedResetEntry entry) {
             instance = default(ZoneSystem.LocationInstance);
@@ -728,7 +728,7 @@ namespace StarLevelSystem.modules.LocationReset {
             return true;
         }
 
-        private static IEnumerator WaitForLocationPrefab(Vector2i zone, LocationResetConfigSnapshot cfg, float maxWaitSeconds) {
+        private static IEnumerator WaitForLocationPrefab(Vector2s zone, LocationResetConfigSnapshot cfg, float maxWaitSeconds) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs == null) { yield break; }
             if (GoverningLocation(zone, cfg, out ZoneSystem.LocationInstance instance, out _) == false) { yield break; }
@@ -751,8 +751,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // only sanctioned way to call TerrainResetter from the sweep. Synchronous by design: yielding
         // between create and destroy would let ZNetScene's 30Hz reaper tear the objects out from under
         // us mid-reset.
-        private static int ResetTerrainLive(Vector2i zone, LocationResetConfigSnapshot cfg, Vector3 position, float radius) {
-            List<Vector2i> zones = TerrainZonesFor(zone, cfg);
+        private static int ResetTerrainLive(Vector2s zone, LocationResetConfigSnapshot cfg, Vector3 position, float radius) {
+            List<Vector2s> zones = TerrainZonesFor(zone, cfg);
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
 
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
@@ -764,9 +764,9 @@ namespace StarLevelSystem.modules.LocationReset {
         }
 
         // The chunk itself plus any neighbour an extra terrain radius reaches into.
-        private static List<Vector2i> TerrainZonesFor(Vector2i zone, LocationResetConfigSnapshot cfg) {
-            List<Vector2i> zones = new List<Vector2i>() { zone };
-            List<Vector2i> extra = ExtraTerrainZones(zone, cfg);
+        private static List<Vector2s> TerrainZonesFor(Vector2s zone, LocationResetConfigSnapshot cfg) {
+            List<Vector2s> zones = new List<Vector2s>() { zone };
+            List<Vector2s> extra = ExtraTerrainZones(zone, cfg);
             if (extra != null) { zones.AddRange(extra); }
             return zones;
         }
@@ -789,8 +789,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // (Heightmap.FindHeightmap and TerrainComp.FindTerrainCompiler both need live components), so
         // without this an extra radius that crosses a chunk boundary silently does nothing on the far
         // side. Empty in the common case, since ExtraTerrainRadius defaults to 0.
-        internal static List<Vector2i> ExtraTerrainZones(Vector2i zone, LocationResetConfigSnapshot cfg) {
-            List<Vector2i> extra = null;
+        internal static List<Vector2s> ExtraTerrainZones(Vector2s zone, LocationResetConfigSnapshot cfg) {
+            List<Vector2s> extra = null;
             if (GoverningLocation(zone, cfg, out ZoneSystem.LocationInstance instance,
                                   out LocationResetData.ResolvedResetEntry entry) == false) { return null; }
             // TerrainOnly always resets terrain; every other mode only does so when asked.
@@ -799,28 +799,28 @@ namespace StarLevelSystem.modules.LocationReset {
 
             float radius = TerrainRadiusFor(entry, instance.m_location.m_exteriorRadius);
             Vector3 position = instance.m_position;
-            Vector2i min = ZoneSystem.GetZone(new Vector3(position.x - radius, 0f, position.z - radius));
-            Vector2i max = ZoneSystem.GetZone(new Vector3(position.x + radius, 0f, position.z + radius));
+            Vector2s min = ZoneSystem.GetZone(new Vector3(position.x - radius, 0f, position.z - radius));
+            Vector2s max = ZoneSystem.GetZone(new Vector3(position.x + radius, 0f, position.z + radius));
 
             for (int x = min.x; x <= max.x; x++) {
                 for (int y = min.y; y <= max.y; y++) {
                     if (x == zone.x && y == zone.y) { continue; }
-                    if (extra == null) { extra = new List<Vector2i>(); }
-                    extra.Add(new Vector2i(x, y));
+                    if (extra == null) { extra = new List<Vector2s>(); }
+                    extra.Add(new Vector2s(x, y));
                 }
             }
             return extra;
         }
 
-        internal static ZDO FindLocationProxy(Vector2i zone, int locationHash) {
+        internal static ZDO FindLocationProxy(Vector2s zone, int locationHash) {
             return FindLocationProxy(zone, locationHash, ZDOID.None);
         }
 
         // exclude lets the caller skip a known proxy, which is how the freshly-spawned one is picked
         // out from the one being retired.
-        internal static ZDO FindLocationProxy(Vector2i zone, int locationHash, ZDOID exclude) {
+        internal static ZDO FindLocationProxy(Vector2s zone, int locationHash, ZDOID exclude) {
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZoneObjects.FindObjects(zone, zdoBuffer);
             ZDO found = null;
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
@@ -846,7 +846,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // regenerates it via DungeonGenerator.Generate -- and vanilla's own DungeonGenerator.Clear
         // only destroys the generator's children, while the interior's contents are instantiated
         // unparented, so this clear is the ONLY thing that removes the previous interior.
-        private static int ClearLocation(Vector2i zone, Vector3 center, Quaternion rotation,
+        private static int ClearLocation(Vector2s zone, Vector3 center, Quaternion rotation,
                                          float exteriorRadius, ZoneSystem.ZoneLocation location,
                                          LocationResetData.ResolvedResetEntry entry, long ownerKey,
                                          ZoneResetReport report) {
@@ -867,7 +867,7 @@ namespace StarLevelSystem.modules.LocationReset {
             List<ZDO> doomed = new List<ZDO>();
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
-                    CollectClearable(new Vector2i(zone.x + dx, zone.y + dy), zone, center, exteriorRadius,
+                    CollectClearable(new Vector2s(zone.x + dx, zone.y + dy), zone, center, exteriorRadius,
                         entry.ResetInterior, entry, ownerKey, report, doomed);
                 }
             }
@@ -897,14 +897,14 @@ namespace StarLevelSystem.modules.LocationReset {
         // something this reset is not responsible for. The creator gate matches RefreshContainerLoot:
         // vanilla has no player-buildable keyed door, but a mod may, and a player's own lock is never
         // ours to change.
-        private static int SealKeyedDoors(Vector2i zone, Vector3 center, float exteriorRadius) {
+        private static int SealKeyedDoors(Vector2s zone, Vector3 center, float exteriorRadius) {
             if (ZDOMan.instance == null || ZoneProtectionScan.KeyedDoorHashes.Count == 0) { return 0; }
 
             int resealed = 0;
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     zdoBuffer.Clear();
-                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), zdoBuffer);
 
                     for (int i = 0; i < zdoBuffer.Count; i++) {
                         ZDO zdo = zdoBuffer[i];
@@ -967,7 +967,7 @@ namespace StarLevelSystem.modules.LocationReset {
             if (ZDOMan.instance == null) { return null; }
 
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(ZoneSystem.GetZone(expected), zdoBuffer);
+            ZoneObjects.FindObjects(ZoneSystem.GetZone(expected), zdoBuffer);
 
             ZDO best = null;
             float bestSqr = DuplicateNodeEpsilon * DuplicateNodeEpsilon;
@@ -1073,11 +1073,11 @@ namespace StarLevelSystem.modules.LocationReset {
         // have one, so troll caves and other hand-built interiors were never detected -- their sky
         // contents were skipped entirely while SpawnLocation kept laying down another copy, which is
         // how one troll cave ended up with 18 treasure chests and 9 one-shot Spawner_Troll.
-        private static bool HasSkyInterior(Vector2i zone) {
+        private static bool HasSkyInterior(Vector2s zone) {
             if (ZDOMan.instance == null) { return false; }
 
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZoneObjects.FindObjects(zone, zdoBuffer);
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
                 if (zdo == null || zdo.IsValid() == false) { continue; }
@@ -1089,12 +1089,12 @@ namespace StarLevelSystem.modules.LocationReset {
             return false;
         }
 
-        private static void CollectClearable(Vector2i sector, Vector2i locationZone, Vector3 center,
+        private static void CollectClearable(Vector2s sector, Vector2s locationZone, Vector3 center,
                                              float exteriorRadius, bool clearInterior,
                                              LocationResetData.ResolvedResetEntry entry, long ownerKey,
                                              ZoneResetReport report, List<ZDO> doomed) {
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(sector, zdoBuffer);
+            ZoneObjects.FindObjects(sector, zdoBuffer);
 
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
@@ -1202,7 +1202,7 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // This also reaches creatures that wandered clean out of the swept block, which the
         // spawn-point test cannot.
-        private static void CollectSpawnedCreatures(Vector2i zone, List<ZDO> doomed, ZoneResetReport report) {
+        private static void CollectSpawnedCreatures(Vector2s zone, List<ZDO> doomed, ZoneResetReport report) {
             if (ZDOMan.instance == null) { return; }
 
             // Snapshot the count: the loop appends, and a spawned creature is never itself a spawner.
@@ -1316,7 +1316,7 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // SelectDueVegetation reports skipped entries into the report as it goes, so this must be
         // called exactly once per pass -- hence the plan being carried rather than re-derived.
-        private static VegetationPlan PlanVegetation(Vector2i zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+        private static VegetationPlan PlanVegetation(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs == null || zs.m_vegetation == null || zs.m_vegetation.Count == 0) { return null; }
             if (zs.m_zones.TryGetValue(zone, out ZoneSystem.ZoneData zoneData) == false || zoneData?.m_root == null) { return null; }
@@ -1346,7 +1346,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // ZNetScene.CreateObjectsAll, around ZNet.GetReferencePosition() -- Vector3.zero on a
         // dedicated server. So a poke-loaded chunk has no vegetation colliders, IsBlocked is always
         // false, and m_blockCheck is a no-op no matter what it is set to.
-        private static void RegenerateVegetation(Vector2i zone, LocationResetConfigSnapshot cfg, VegetationPlan plan, ZoneResetReport report) {
+        private static void RegenerateVegetation(Vector2s zone, LocationResetConfigSnapshot cfg, VegetationPlan plan, ZoneResetReport report) {
             ZoneSystem zs = ZoneSystem.instance;
             // Re-validated rather than trusted. The plan is resolved before the location rebuild runs,
             // and a chunk that lost its zone root in between would take PlaceVegetation down with it.
@@ -1486,14 +1486,14 @@ namespace StarLevelSystem.modules.LocationReset {
         // Location-owned content is skipped ahead of that on its own terms. It is not litter by
         // definition, and it is the rebuild's to manage -- ClearLocation destroys exactly the stamped
         // set and puts it straight back.
-        private static int SweepIgnoredPieces(Vector2i zone) {
+        private static int SweepIgnoredPieces(Vector2s zone) {
             if (ZDOMan.instance == null) { return 0; }
             // TryClassify reads these, and this now runs in chunks with no location at all, so it
             // cannot ride on ClearLocation having built them first. Idempotent.
             ZoneProtectionScan.BuildPrefabSets();
 
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZoneObjects.FindObjects(zone, zdoBuffer);
 
             // Collected first, destroyed after: DestroyZdo mutates ZDOMan's sector index, so deleting
             // while iterating the buffer it just filled would skip entries.
@@ -1535,7 +1535,7 @@ namespace StarLevelSystem.modules.LocationReset {
             LoggedDisabledVegetation.Clear();
         }
 
-        private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2i zone, LocationResetConfigSnapshot cfg,
+        private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2s zone, LocationResetConfigSnapshot cfg,
                                                                            bool force, ZoneResetReport report, out List<int> dueHashes) {
             List<ZoneSystem.ZoneVegetation> due = new List<ZoneSystem.ZoneVegetation>();
             dueHashes = new List<int>();
@@ -1608,7 +1608,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Mining leaves a crater. For entries configured with ResetTerrain, flatten it back around
         // each regenerated node.
-        private static void ApplyVegetationTerrainReset(Vector2i zone, LocationResetConfigSnapshot cfg, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
+        private static void ApplyVegetationTerrainReset(Vector2s zone, LocationResetConfigSnapshot cfg, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
             bool anyTerrain = false;
             for (int i = 0; i < dueHashes.Count; i++) {
                 if (LocationResetData.TryGetVegetationEntry(dueHashes[i], out LocationResetData.ResolvedResetEntry entry) && entry.ResetTerrain) {
@@ -1620,7 +1620,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // One create/destroy around the whole loop rather than per node: the terrain objects are
             // the same for every crater in this chunk, and the bracket has to stay yield-free anyway.
-            List<Vector2i> zones = TerrainZonesFor(zone, cfg);
+            List<Vector2s> zones = TerrainZonesFor(zone, cfg);
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
             try {
@@ -1646,7 +1646,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Vegetation must not spawn inside a location footprint. Vanilla builds these clear areas
         // during PlaceLocations; since we are calling PlaceVegetation on its own, rebuild them.
-        private static void AddLocationClearArea(Vector2i zone, List<ZoneSystem.ClearArea> clearAreas) {
+        private static void AddLocationClearArea(Vector2s zone, List<ZoneSystem.ClearArea> clearAreas) {
             if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
             if (instance.m_location == null || instance.m_location.m_clearArea == false) { return; }
             clearAreas.Add(new ZoneSystem.ClearArea(instance.m_position, instance.m_location.m_exteriorRadius));

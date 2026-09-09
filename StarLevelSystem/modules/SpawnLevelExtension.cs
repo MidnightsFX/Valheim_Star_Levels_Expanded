@@ -30,12 +30,23 @@ namespace StarLevelSystem.modules
                 return new CodeMatcher(instructions, generator)
                     .Start()
                     .MatchStartForward(
-                        new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(ItemDrop), nameof(ItemDrop.OnCreateNew), new Type[] { typeof(GameObject) })),
+                        // Both parameter types are pinned: AccessTools matches argumentTypes exactly and
+                        // returns null rather than throwing when it misses, and a CodeMatch built on a null
+                        // operand matches *any* Call - so a stale array silently anchors on the wrong
+                        // instruction instead of tripping ThrowIfInvalid. 1.0.7 added `bool cheated`.
+                        new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(ItemDrop), nameof(ItemDrop.OnCreateNew), new Type[] { typeof(GameObject), typeof(bool) })))
+                    .ThrowIfInvalid($"Could not patch Terminal.SpawnCommandDelegate()! (OnCreateNew anchor)")
+                    // The level compare is searched for rather than assumed to sit a fixed distance from
+                    // the anchor: 1.0.7 inserted a `component2.m_itemData.m_durability = ...` block between
+                    // OnCreateNew and `if (level > 1)`, which broke the old contiguous four-instruction
+                    // match. Only the display-class field load is Ldarg_1-based in between, so the first
+                    // hit after the anchor is still the level test.
+                    .MatchStartForward(
                         new CodeMatch(OpCodes.Ldarg_1),
                         new CodeMatch(OpCodes.Ldfld),
-                        new CodeMatch(OpCodes.Ldc_I4_1)
-                    ).ThrowIfInvalid($"Could not patch Terminal.SpawnCommandDelegate()! (level-compare)")
-                    .Advance(3).RemoveInstruction().InsertAndAdvance(
+                        new CodeMatch(OpCodes.Ldc_I4_1))
+                    .ThrowIfInvalid($"Could not patch Terminal.SpawnCommandDelegate()! (level-compare)")
+                    .Advance(2).RemoveInstruction().InsertAndAdvance(
                         new CodeInstruction(OpCodes.Ldc_I4_0)
                     )
                     .MatchStartForward(

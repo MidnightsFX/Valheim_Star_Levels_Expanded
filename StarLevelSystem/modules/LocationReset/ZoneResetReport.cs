@@ -45,7 +45,7 @@ namespace StarLevelSystem.modules.LocationReset {
             CatalogNotReady,
         }
 
-        internal Vector2i Zone;
+        internal Vector2s Zone;
         internal Vector3 Center;
         internal Heightmap.Biome Biome;
         // Came from sls-loc-reset rather than the background sweep.
@@ -134,7 +134,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         private List<string> details;
 
-        internal static ZoneResetReport For(Vector2i zone, bool forced) {
+        internal static ZoneResetReport For(Vector2s zone, bool forced) {
             ZoneResetReport report = new ZoneResetReport();
             report.Zone = zone;
             report.Center = ZoneSystem.GetZonePos(zone);

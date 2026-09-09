@@ -172,20 +172,33 @@ namespace StarLevelSystem.modules.Loot {
             [HarmonyPatch(typeof(MineRock), nameof(MineRock.RPC_Hit))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
                 var codeMatcher = new CodeMatcher(instructions);
+                // The vanilla drop loop is bracketed and removed as a span rather than as two fixed
+                // instruction counts (6 then 30). 1.0.7 rewrote that loop - Instantiate is now folded into
+                // the OnCreateNew argument list and carries a new `cheated` flag - so the old counts cut in
+                // the wrong places, and the single ThrowIfNotMatch sat after both removals where it could
+                // no longer catch it. Both ends are anchored on named members now, and each is guarded
+                // before anything is mutated.
                 codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(MineRock), nameof(MineRock.m_dropItems))),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                )
-                .RemoveInstructions(6)
-                .InsertAndAdvance(
-                    // new CodeInstruction(OpCodes.Ldarg_0), // load __instance
-                    new CodeInstruction(OpCodes.Ldarg_2), // load hitdata
-                    Transpilers.EmitDelegate(ModifyMinerockDrops)
-                )
-                //.CreateLabelOffset(out System.Reflection.Emit.Label label, offset: 31)
-                //.InsertAndAdvance(new CodeInstruction(OpCodes.Br, label))
-                .RemoveInstructions(30)
-                .ThrowIfNotMatch("Unable to patch Minerock performance increase.");
+                ).ThrowIfNotMatch("Unable to patch Minerock performance increase: drop loop not found.");
+                int start = codeMatcher.Pos;
+
+                // `if (this.m_removeWhenDestroyed && this.AllDestroyed())` is the first statement after the
+                // loop, and m_removeWhenDestroyed is read exactly once in RPC_Hit.
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(MineRock), nameof(MineRock.m_removeWhenDestroyed)))
+                ).ThrowIfNotMatch("Unable to patch Minerock performance increase: end of drop loop not found.");
+                int end = codeMatcher.Pos;
+
+                // The ldarg.0 ahead of `start` is left in place: it supplies `this` to the delegate below.
+                codeMatcher.Start().Advance(start)
+                    .RemoveInstructions(end - start)
+                    .InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldarg_2), // load hitdata
+                        Transpilers.EmitDelegate(ModifyMinerockDrops)
+                    );
 
                 return codeMatcher.Instructions();
             }
@@ -206,18 +219,34 @@ namespace StarLevelSystem.modules.Loot {
             [HarmonyPatch(nameof(MineRock5.DamageArea))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
                 var codeMatcher = new CodeMatcher(instructions, generator);
+                // Span-based rather than a fixed RemoveInstructions(27), for the same reason as MineRock
+                // above: 1.0.7 rewrote the drop loop and added `cheated`/`gamepadEffectsExclusiveToPlayer`
+                // locals, so a hardcoded count now cuts in the wrong place. vector3 is still local slot 3 -
+                // it is declared ahead of both new locals - so the Ldloc_3 below is still correct.
                 codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(MineRock5), nameof(MineRock5.m_dropItems))),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
                     )
-                .Advance(1)
-                .RemoveInstructions(27) //25? + 2
-                .InsertAndAdvance(
-                    new CodeInstruction(OpCodes.Ldloc_3),
-                    Transpilers.EmitDelegate(MineDrop)
-                    )
-                .ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops.");
+                .ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops: drop loop not found.")
+                .Advance(1);
+                int start = codeMatcher.Pos;
+
+                // `if (this.AllDestroyed())` is the first statement after the loop, and DamageArea calls it
+                // exactly once. Matched by operand so it holds whether the call is emitted as call or callvirt.
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(i => i.Calls(AccessTools.Method(typeof(MineRock5), nameof(MineRock5.AllDestroyed))))
+                    ).ThrowIfNotMatch("Unable to patch MineRock5 to handle large drops: end of drop loop not found.");
+                int end = codeMatcher.Pos;
+
+                // The ldarg.0 ahead of `start` is left in place: it supplies `this` to the delegate below.
+                codeMatcher.Start().Advance(start)
+                    .RemoveInstructions(end - start)
+                    .InsertAndAdvance(
+                        new CodeInstruction(OpCodes.Ldloc_3),
+                        Transpilers.EmitDelegate(MineDrop)
+                    );
                 return codeMatcher.Instructions();
             }
 
@@ -237,17 +266,22 @@ namespace StarLevelSystem.modules.Loot {
             [HarmonyPatch(nameof(DropOnDestroyed.OnDestroyed))]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
                 var codeMatcher = new CodeMatcher(instructions);
+                // The store slot is deliberately not matched. It used to be stloc.2, but 1.0.7 added a
+                // `bool cheated` local ahead of dropList and pushed it to slot 3 - and because the guard
+                // below used to sit after Advance/Insert, a miss would not have been caught before the
+                // instructions were already spliced in at the wrong offset. Pinning m_dropWhenDestroyed
+                // instead is slot-independent, and DropOnDestroyed has exactly one GetDropList call.
                 codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld),
-                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList))),
-                    new CodeMatch(OpCodes.Stloc_2)
-                    ).Advance(1)
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(DropOnDestroyed), nameof(DropOnDestroyed.m_dropWhenDestroyed))),
+                    new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
+                    )
+                    .ThrowIfNotMatch("Unable to patch DropOnDestroy to handle large drops.")
+                    .Advance(1)
                     .InsertAndAdvance(
                         Transpilers.EmitDelegate(DropItemsOnDestroy),
                         new CodeInstruction(OpCodes.Ret)
-                        )
-                    .ThrowIfNotMatch("Unable to patch DropOnDestroy to handle large drops.");
+                        );
                 return codeMatcher.Instructions();
             }
 
@@ -269,21 +303,37 @@ namespace StarLevelSystem.modules.Loot {
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions /*, ILGenerator generator*/) {
                 var codeMatcher = new CodeMatcher(instructions);
 
+                // Span-based rather than a fixed RemoveInstructions(54). 1.0.7 added a
+                // `gamepadEffectsExclusiveToPlayer` local, changed the hit-effect Create signature and
+                // introduced a whole new m_spawnOnDamage projectile block to RPC_Damage, so the old count
+                // no longer lands on the end of the drop loop. Bracketing the loop also removes the need
+                // for the trailing Insert(Ldarg_0): the old count deliberately overran into
+                // `this.gameObject.SetActive(false)` and had to put that receiver back by hand.
                 codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(TreeBase), nameof(TreeBase.m_dropWhenDestroyed))),
                     new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(DropTable), nameof(DropTable.GetDropList)))
-                    ).Advance(1)
+                    )
+                    .ThrowIfNotMatch("Unable to patch Treebase to handle large drops: drop loop not found.")
+                    .Advance(1);
+                int start = codeMatcher.Pos;
+
+                // `this.gameObject.SetActive(false)` is the first statement after the loop and the only
+                // SetActive call in RPC_Damage.
+                codeMatcher.MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(i => i.Calls(AccessTools.PropertyGetter(typeof(Component), nameof(Component.gameObject)))),
+                    new CodeMatch(OpCodes.Ldc_I4_0),
+                    new CodeMatch(i => i.Calls(AccessTools.Method(typeof(GameObject), nameof(GameObject.SetActive))))
+                    ).ThrowIfNotMatch("Unable to patch Treebase to handle large drops: end of drop loop not found.");
+                int end = codeMatcher.Pos;
+
+                // The ldarg.0 ahead of `start` is left in place: it supplies `this` to the delegate below.
+                codeMatcher.Start().Advance(start)
+                    .RemoveInstructions(end - start)
                     .InsertAndAdvance(
                         Transpilers.EmitDelegate(TreebaseDropDestroyedItems)
-                    )
-                    //.MatchStartForward(
-                    //new CodeMatch(OpCodes.)
-                    .RemoveInstructions(54)
-                    .Insert(
-                        new CodeInstruction(OpCodes.Ldarg_0)
-                    )
-                    .ThrowIfNotMatch("Unable to patch Treebase to handle large drops.");
+                    );
 
                 return codeMatcher.Instructions();
             }

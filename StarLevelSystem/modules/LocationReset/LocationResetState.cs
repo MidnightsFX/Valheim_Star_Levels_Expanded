@@ -50,7 +50,7 @@ namespace StarLevelSystem.modules.LocationReset {
         internal const int MaxTransientRetries = 2;
         private static readonly float[] RetryDelaysSeconds = { 300f, 900f };
 
-        private static readonly Dictionary<Vector2i, ZoneRecord> zones = new Dictionary<Vector2i, ZoneRecord>();
+        private static readonly Dictionary<Vector2s, ZoneRecord> zones = new Dictionary<Vector2s, ZoneRecord>();
         private static string loadedWorld = "";
         private static bool dirty = false;
 
@@ -64,15 +64,15 @@ namespace StarLevelSystem.modules.LocationReset {
         // Accessors
         // ---------------------------------------------------------------------------------------
 
-        internal static bool TryGetZone(Vector2i zone, out ZoneRecord record) {
+        internal static bool TryGetZone(Vector2s zone, out ZoneRecord record) {
             return zones.TryGetValue(zone, out record);
         }
 
-        internal static bool IsTracked(Vector2i zone) {
+        internal static bool IsTracked(Vector2s zone) {
             return zones.ContainsKey(zone);
         }
 
-        internal static ZoneRecord GetOrCreate(Vector2i zone) {
+        internal static ZoneRecord GetOrCreate(Vector2s zone) {
             if (zones.TryGetValue(zone, out ZoneRecord record) == false) {
                 record = new ZoneRecord();
                 zones[zone] = record;
@@ -81,7 +81,7 @@ namespace StarLevelSystem.modules.LocationReset {
             return record;
         }
 
-        internal static void StampZone(Vector2i zone) {
+        internal static void StampZone(Vector2s zone) {
             ZoneRecord record = GetOrCreate(zone);
             record.ZoneStamp = Now;
             // The zone is done, so whatever transient block it was retrying is over.
@@ -97,7 +97,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Note this can only ever push a zone FURTHER out: the offset is clamped at 0 and the due
         // gate then adds a full MinEnabledIntervalSeconds on top. To bring a zone forward, use
         // TryScheduleRetry.
-        internal static void BackoffZone(Vector2i zone, float extraSeconds) {
+        internal static void BackoffZone(Vector2s zone, float extraSeconds) {
             ZoneRecord record = GetOrCreate(zone);
             record.ZoneStamp = Now + (long)Math.Max(0f, extraSeconds);
             // An explicit long deferral supersedes any pending short retry.
@@ -113,7 +113,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // did not finish loading. A chunk blocked by a player-built structure is NOT transient and
         // deliberately does not use this: a base built over a crypt will not move in fifteen minutes,
         // and the protection scan is the expensive part of a tick.
-        internal static bool TryScheduleRetry(Vector2i zone, out int attempt, out float delaySeconds) {
+        internal static bool TryScheduleRetry(Vector2s zone, out int attempt, out float delaySeconds) {
             ZoneRecord record = GetOrCreate(zone);
             if (record.RetryCount >= MaxTransientRetries) {
                 attempt = record.RetryCount;
@@ -134,7 +134,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // third way to clear it would just be a way to forget to call it.
 
         // Record the census baseline without moving the timer. Used on first sight.
-        internal static void SetBaseline(Vector2i zone, int prefabHash, ushort baseline) {
+        internal static void SetBaseline(Vector2s zone, int prefabHash, ushort baseline) {
             ZoneRecord record = GetOrCreate(zone);
             record.Entries.TryGetValue(prefabHash, out EntryRecord existing);
             record.Entries[prefabHash] = new EntryRecord() { Stamp = existing.Stamp, Baseline = baseline };
@@ -145,24 +145,24 @@ namespace StarLevelSystem.modules.LocationReset {
         // where the timer is known but the new counts are not -- RecordBaseline supplies those once
         // the reset is known to have completed. Writing a placeholder baseline here instead would be
         // read downstream as "nothing missing" and freeze the entry out of future resets.
-        internal static void StampEntryTime(Vector2i zone, int prefabHash) {
+        internal static void StampEntryTime(Vector2s zone, int prefabHash) {
             ZoneRecord record = GetOrCreate(zone);
             record.Entries.TryGetValue(prefabHash, out EntryRecord existing);
             record.Entries[prefabHash] = new EntryRecord() { Stamp = Now, Baseline = existing.Baseline };
             dirty = true;
         }
 
-        internal static bool TryGetEntry(Vector2i zone, int prefabHash, out EntryRecord entry) {
+        internal static bool TryGetEntry(Vector2s zone, int prefabHash, out EntryRecord entry) {
             entry = default(EntryRecord);
             if (zones.TryGetValue(zone, out ZoneRecord record) == false) { return false; }
             return record.Entries.TryGetValue(prefabHash, out entry);
         }
 
-        internal static void ForgetZone(Vector2i zone) {
+        internal static void ForgetZone(Vector2s zone) {
             if (zones.Remove(zone)) { dirty = true; }
         }
 
-        internal static IEnumerable<KeyValuePair<Vector2i, ZoneRecord>> AllZones() {
+        internal static IEnumerable<KeyValuePair<Vector2s, ZoneRecord>> AllZones() {
             return zones;
         }
 
@@ -205,7 +205,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 int zoneCount = pkg.ReadInt();
                 for (int i = 0; i < zoneCount; i++) {
-                    Vector2i zone = new Vector2i(pkg.ReadInt(), pkg.ReadInt());
+                    Vector2s zone = new Vector2s(pkg.ReadInt(), pkg.ReadInt());
                     ZoneRecord record = new ZoneRecord() { ZoneStamp = pkg.ReadLong() };
                     int entryCount = pkg.ReadByte();
                     for (int e = 0; e < entryCount; e++) {
@@ -239,9 +239,14 @@ namespace StarLevelSystem.modules.LocationReset {
                 pkg.Write(FileVersion);
                 pkg.Write(zones.Count);
 
-                foreach (KeyValuePair<Vector2i, ZoneRecord> kvp in zones) {
-                    pkg.Write(kvp.Key.x);
-                    pkg.Write(kvp.Key.y);
+                foreach (KeyValuePair<Vector2s, ZoneRecord> kvp in zones) {
+                    // Cast to int deliberately. Zone ids became Vector2s in 1.0.7, whose fields are
+                    // short - and ZPackage has a Write(short) overload, so dropping the cast would
+                    // silently start writing 2 bytes per coordinate while the reader below still takes
+                    // 4 via ReadInt(), desyncing every record after the first. Keeping the wire format
+                    // at 4 bytes also keeps state files written by earlier versions readable.
+                    pkg.Write((int)kvp.Key.x);
+                    pkg.Write((int)kvp.Key.y);
                     pkg.Write(kvp.Value.ZoneStamp);
                     // Entry counts are bounded by the number of configured vegetation prefabs in a
                     // single zone, which is far below 255 in practice. Clamp rather than corrupt.

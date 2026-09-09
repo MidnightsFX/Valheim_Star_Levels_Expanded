@@ -30,7 +30,7 @@ namespace StarLevelSystem.modules.LocationReset {
         private bool sweepRunning = false;
 
         // Rotating cursor over the generated-zone snapshot.
-        private readonly List<Vector2i> zoneSnapshot = new List<Vector2i>();
+        private readonly List<Vector2s> zoneSnapshot = new List<Vector2s>();
         private int cursor = 0;
 
         // Rolling server frame time, drives the adaptive backoff.
@@ -118,7 +118,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     if (zoneSnapshot.Count == 0) { yield break; }
                 }
 
-                Vector2i zone = zoneSnapshot[cursor];
+                Vector2s zone = zoneSnapshot[cursor];
                 cursor++;
                 scannedThisPass++;
                 ZonesExamined++;
@@ -151,7 +151,7 @@ namespace StarLevelSystem.modules.LocationReset {
         private void RefreshSnapshot() {
             zoneSnapshot.Clear();
             if (ZoneSystem.instance?.m_generatedZones != null) {
-                foreach (Vector2i zone in ZoneSystem.instance.m_generatedZones) {
+                foreach (Vector2s zone in ZoneSystem.instance.m_generatedZones) {
                     // m_generatedZones includes the sector Valheim parks position-less ZDOs in, at
                     // x=1,000,000 z=1,000,000 (zones ~15623-15629). It is not terrain, but it IS
                     // permanently "loaded", so every lap it produced a run of chunk evaluations that
@@ -164,7 +164,7 @@ namespace StarLevelSystem.modules.LocationReset {
             cursor = 0;
         }
 
-        private static bool IsOffWorld(Vector2i zone) {
+        private static bool IsOffWorld(Vector2s zone) {
             Vector3 center = ZoneSystem.GetZonePos(zone);
             return Mathf.Abs(center.x) > OffWorldDistance || Mathf.Abs(center.z) > OffWorldDistance;
         }
@@ -180,7 +180,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // The cheap gate that runs against every zone in the world. It executes tens of thousands of
         // times per lap, so it must stay allocation-free, must not touch ZDOMan, and must not
         // re-read the wall clock (Now is captured once per tick).
-        private ZoneWork EvaluateZone(Vector2i zone, LocationResetConfigSnapshot cfg) {
+        private ZoneWork EvaluateZone(Vector2s zone, LocationResetConfigSnapshot cfg) {
             // Rate lookup first: an excluded biome or band costs one dictionary hit per lap and
             // nothing else, which is the throughput win of narrowing the sweep to the areas that
             // actually get depleted.
@@ -206,7 +206,7 @@ namespace StarLevelSystem.modules.LocationReset {
             return ZoneWork.Due;
         }
 
-        private IEnumerator ProcessZone(Vector2i zone, LocationResetConfigSnapshot cfg, ZoneWork work, bool allowSlow, System.Action<bool> onSlowUsed) {
+        private IEnumerator ProcessZone(Vector2s zone, LocationResetConfigSnapshot cfg, ZoneWork work, bool allowSlow, System.Action<bool> onSlowUsed) {
             // First sight is pure bookkeeping and fires once for every zone in the world, so it is
             // deliberately kept out of the chunk log; a fresh world would otherwise write ~84k records
             // that say nothing was reset.
@@ -312,7 +312,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Does this zone need the expensive poke-load path? Either a due location lives here, or a
         // tracked prefab's live count has fallen below its recorded baseline. This is the gate that
         // keeps the majority of a world out of the expensive path.
-        private bool NeedsRegeneration(Vector2i zone, float rate) {
+        private bool NeedsRegeneration(Vector2s zone, float rate) {
             if (NeedsLocationReset(zone, rate)) { return true; }
             if (LocationResetData.VegetationByPrefabHash.Count == 0) { return false; }
             Dictionary<int, ushort> live = ZoneProtectionScan.CensusZone(zone);
@@ -334,7 +334,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Locations have no census -- a looted crypt still contains all its objects, they are just
         // empty. Their timer lives on the surviving LocationProxy ZDO instead, which is readable
         // without loading the zone.
-        private bool NeedsLocationReset(Vector2i zone, float rate) {
+        private bool NeedsLocationReset(Vector2s zone, float rate) {
             if (LocationResetData.LocationsByHash.Count == 0) { return false; }
             if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return false; }
             if (instance.m_location == null) { return false; }
@@ -355,7 +355,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // internal rather than private: the Safe path of a manual reset polls on exactly this
         // question, and re-implementing it there would let the two definitions of "somebody is
         // standing here" drift apart.
-        internal static bool PlayersNearby(Vector2i zone, float radius) {
+        internal static bool PlayersNearby(Vector2s zone, float radius) {
             if (ZNet.instance == null) { return false; }
             Vector3 center = ZoneSystem.GetZonePos(zone);
             float sqr = radius * radius;

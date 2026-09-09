@@ -27,7 +27,7 @@ namespace StarLevelSystem.modules.LocationReset {
             internal float Distance;
         }
 
-        private static readonly Dictionary<Vector2i, ZoneGeo> geoCache = new Dictionary<Vector2i, ZoneGeo>();
+        private static readonly Dictionary<Vector2s, ZoneGeo> geoCache = new Dictionary<Vector2s, ZoneGeo>();
 
         internal static int CachedChunkCount { get { return geoCache.Count; } }
 
@@ -46,7 +46,7 @@ namespace StarLevelSystem.modules.LocationReset {
             ResetCache();
         }
 
-        private static ZoneGeo GeoFor(Vector2i zone) {
+        private static ZoneGeo GeoFor(Vector2s zone) {
             if (geoCache.TryGetValue(zone, out ZoneGeo cached)) { return cached; }
 
             Vector3 center = ZoneSystem.GetZonePos(zone);
@@ -65,16 +65,16 @@ namespace StarLevelSystem.modules.LocationReset {
             return geo;
         }
 
-        internal static Heightmap.Biome BiomeFor(Vector2i zone) {
+        internal static Heightmap.Biome BiomeFor(Vector2s zone) {
             return GeoFor(zone).Biome;
         }
 
-        internal static float DistanceFor(Vector2i zone) {
+        internal static float DistanceFor(Vector2s zone) {
             return GeoFor(zone).Distance;
         }
 
         // Combined rate for a chunk. Returns Excluded when either the biome or the band opts out.
-        internal static float MultiplierFor(Vector2i zone, LocationResetConfigSnapshot cfg) {
+        internal static float MultiplierFor(Vector2s zone, LocationResetConfigSnapshot cfg) {
             // Nothing is actually being targeted, so skip the geometry lookup entirely. This runs
             // against every generated chunk on every lap, and the generated config lists every biome
             // at 1.0, so without this a default install would pay for a biome sample per chunk to
@@ -127,7 +127,7 @@ namespace StarLevelSystem.modules.LocationReset {
         }
 
         // Human-readable rate summary for the chunk log. Only called for chunks being reported.
-        internal static string Describe(Vector2i zone, LocationResetConfigSnapshot cfg) {
+        internal static string Describe(Vector2s zone, LocationResetConfigSnapshot cfg) {
             ZoneGeo geo = GeoFor(zone);
             float biomeRate = BiomeRate(geo.Biome, cfg);
             float bandRate = BandRate(geo.Distance, cfg, out LocationResetBand band);

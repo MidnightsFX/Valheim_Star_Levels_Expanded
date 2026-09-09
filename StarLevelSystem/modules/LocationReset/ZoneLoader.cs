@@ -12,9 +12,9 @@ namespace StarLevelSystem.modules.LocationReset {
     // the same way.
     internal static class ZoneLoader {
 
-        private static readonly HashSet<Vector2i> manuallyLoaded = new HashSet<Vector2i>();
+        private static readonly HashSet<Vector2s> manuallyLoaded = new HashSet<Vector2s>();
 
-        internal static bool WasManuallyLoaded(Vector2i zone) {
+        internal static bool WasManuallyLoaded(Vector2s zone) {
             return manuallyLoaded.Contains(zone);
         }
 
@@ -23,7 +23,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // adoptIfLoaded is for the forced admin reset. Valheim keeps the 3x3 zone block around every
         // player loaded, which is exactly what sls-loc-reset targets at its default radius, so
         // refusing loaded zones outright would make the command a no-op where it is used most.
-        internal static IEnumerator Load(Vector2i zone, float maxWaitSeconds, bool adoptIfLoaded, System.Action<bool> onResult) {
+        internal static IEnumerator Load(Vector2s zone, float maxWaitSeconds, bool adoptIfLoaded, System.Action<bool> onResult) {
             if (ZoneSystem.instance == null) { onResult?.Invoke(false); yield break; }
 
             if (ZoneSystem.instance.IsZoneLoaded(zone)) {
@@ -56,12 +56,12 @@ namespace StarLevelSystem.modules.LocationReset {
         }
 
         // Tear down a zone this class loaded. No-op for zones we did not load.
-        internal static void Release(Vector2i zone) {
+        internal static void Release(Vector2s zone) {
             if (manuallyLoaded.Remove(zone) == false) { return; }
             if (ZoneSystem.instance == null || ZNetScene.instance == null) { return; }
 
             List<ZDO> zdos = new List<ZDO>();
-            if (ZDOMan.instance != null) { ZDOMan.instance.FindObjects(zone, zdos); }
+            if (ZDOMan.instance != null) { ZoneObjects.FindObjects(zone, zdos); }
 
             for (int i = 0; i < zdos.Count; i++) {
                 ZDO zdo = zdos[i];
@@ -86,7 +86,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Keep a zone we loaded from being reaped mid-operation. ZoneSystem destroys a poked zone root
         // once its TTL passes m_zoneTTL (4s) with no instances in the sector, which a multi-chunk
         // terrain reset can easily run past. PokeLocalZone resets that TTL to zero.
-        internal static void KeepAlive(Vector2i zone) {
+        internal static void KeepAlive(Vector2s zone) {
             if (ZoneSystem.instance == null) { return; }
             if (manuallyLoaded.Contains(zone) == false) { return; }
             ZoneSystem.instance.PokeLocalZone(zone);
@@ -103,7 +103,7 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // The caller MUST finish its terrain work and call DestroyTerrainObjects WITHOUT yielding in
         // between: ZNetScene.RemoveObjects runs at 30Hz and would reap these as out-of-range.
-        internal static List<ZNetView> CreateTerrainObjects(List<Vector2i> zones) {
+        internal static List<ZNetView> CreateTerrainObjects(List<Vector2s> zones) {
             List<ZNetView> created = new List<ZNetView>();
             if (ZNetScene.instance == null || ZDOMan.instance == null || zones == null) { return created; }
 
@@ -112,7 +112,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             for (int z = 0; z < zones.Count; z++) {
                 zdos.Clear();
-                ZDOMan.instance.FindObjects(zones[z], zdos);
+                ZoneObjects.FindObjects(zones[z], zdos);
                 for (int i = 0; i < zdos.Count; i++) {
                     ZDO zdo = zdos[i];
                     if (zdo == null || zdo.IsValid() == false) { continue; }

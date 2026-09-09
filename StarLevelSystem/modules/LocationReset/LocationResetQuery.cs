@@ -35,7 +35,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Unix seconds UTC of the named location's last reset. NotFound when there is no such
         // location within radius, NeverReset when it has never been stamped.
         internal static long GetLocationLastReset(string locationName, Vector3 center, float radius) {
-            if (TryFindLocation(locationName, center, radius, out Vector2i zone, out _, out int hash) == false) {
+            if (TryFindLocation(locationName, center, radius, out Vector2s zone, out _, out int hash) == false) {
                 return NotFound;
             }
             ZDO proxy = ResetTargets.FindLocationProxy(zone, hash);
@@ -49,7 +49,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Seconds until the named location is next due. -1 when unknown (not found, no proxy, or
         // nothing has it configured), 0 when it is due now.
         internal static double GetSecondsUntilDue(string locationName, Vector3 center, float radius) {
-            if (TryFindLocation(locationName, center, radius, out Vector2i zone, out _, out int hash) == false) { return -1d; }
+            if (TryFindLocation(locationName, center, radius, out Vector2s zone, out _, out int hash) == false) { return -1d; }
             if (LocationResetData.TryGetLocationEntry(hash, out LocationResetData.ResolvedResetEntry entry) == false) { return -1d; }
 
             float rate = RateFor(zone);
@@ -74,7 +74,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 { "found", false },
                 { "name", locationName ?? "" },
             };
-            if (TryFindLocation(locationName, center, radius, out Vector2i zone,
+            if (TryFindLocation(locationName, center, radius, out Vector2s zone,
                                 out ZoneSystem.LocationInstance instance, out int hash) == false) {
                 return info;
             }
@@ -85,8 +85,10 @@ namespace StarLevelSystem.modules.LocationReset {
 
             info["found"] = true;
             info["name"] = name;
-            info["zoneX"] = zone.x;
-            info["zoneZ"] = zone.y;
+            // Boxed as int, not short: these cross the API and terminal boundary, where consumers
+            // unbox to the type they were given before 1.0.7 turned zone ids into Vector2s.
+            info["zoneX"] = (int)zone.x;
+            info["zoneZ"] = (int)zone.y;
             info["positionX"] = instance.m_position.x;
             info["positionY"] = instance.m_position.y;
             info["positionZ"] = instance.m_position.z;
@@ -131,7 +133,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // How many ZDOs across the location's 3x3 block carry its ownership stamp. The same footprint
         // the clear sweeps, so the number an admin reads here is the number the next reset will act on.
-        private static int CountOwnedZdos(Vector2i zone, long ownerKey) {
+        private static int CountOwnedZdos(Vector2s zone, long ownerKey) {
             if (ZDOMan.instance == null) { return 0; }
 
             List<ZDO> buffer = new List<ZDO>();
@@ -139,7 +141,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     buffer.Clear();
-                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), buffer);
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), buffer);
                     for (int i = 0; i < buffer.Count; i++) {
                         ZDO zdo = buffer[i];
                         if (zdo == null || zdo.IsValid() == false) { continue; }
@@ -155,13 +157,13 @@ namespace StarLevelSystem.modules.LocationReset {
         // ---------------------------------------------------------------------------------------
 
         internal static Dictionary<string, object> GetChunkInfo(Vector3 position, bool includePrefabs) {
-            Vector2i zone = ZoneSystem.GetZone(position);
+            Vector2s zone = ZoneSystem.GetZone(position);
             Vector3 zoneCenter = ZoneSystem.GetZonePos(zone);
             long now = LocationResetState.Now;
 
             Dictionary<string, object> info = new Dictionary<string, object>() {
-                { "zoneX", zone.x },
-                { "zoneZ", zone.y },
+                { "zoneX", (int)zone.x },
+                { "zoneZ", (int)zone.y },
                 { "centerX", zoneCenter.x },
                 { "centerZ", zoneCenter.z },
                 { "biome", WorldGenerator.instance != null
@@ -239,7 +241,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Per-prefab census for one chunk: what the sweep recorded as its baseline against what is
         // actually standing there now. Opt-in because it is a full ZDO pass over the chunk.
-        private static List<Dictionary<string, object>> DescribeTrackedPrefabs(Vector2i zone) {
+        private static List<Dictionary<string, object>> DescribeTrackedPrefabs(Vector2s zone) {
             List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
             Dictionary<int, ushort> live = ZoneProtectionScan.CensusZone(zone);
 
@@ -261,15 +263,15 @@ namespace StarLevelSystem.modules.LocationReset {
         // ---------------------------------------------------------------------------------------
 
         private static bool TryFindLocation(string locationName, Vector3 center, float radius,
-                                            out Vector2i zone, out ZoneSystem.LocationInstance instance, out int hash) {
-            zone = default(Vector2i);
+                                            out Vector2s zone, out ZoneSystem.LocationInstance instance, out int hash) {
+            zone = default(Vector2s);
             instance = default(ZoneSystem.LocationInstance);
             hash = 0;
             if (string.IsNullOrWhiteSpace(locationName)) { return false; }
             if (ZoneSystem.instance == null) { return false; }
 
             hash = locationName.Trim().GetStableHashCode();
-            List<Vector2i> zones = LocationResetControl.FindNamedLocationZones(center, radius, hash);
+            List<Vector2s> zones = LocationResetControl.FindNamedLocationZones(center, radius, hash);
             if (zones.Count == 0) { return false; }
             // Nearest first, so an unqualified question about "the crypt near me" answers about the
             // one the caller is looking at.
@@ -291,11 +293,11 @@ namespace StarLevelSystem.modules.LocationReset {
             return Math.Max(0d, ZoneRates.ScaleSeconds(entry.ResetSeconds, rate) - (now - last));
         }
 
-        private static float RateFor(Vector2i zone) {
+        private static float RateFor(Vector2s zone) {
             return ZoneRates.MultiplierFor(zone, LocationResetConfigSnapshot.Capture());
         }
 
-        private static string DescribeRate(Vector2i zone) {
+        private static string DescribeRate(Vector2s zone) {
             return ZoneRates.Describe(zone, LocationResetConfigSnapshot.Capture());
         }
     }

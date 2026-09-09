@@ -660,7 +660,11 @@ namespace StarLevelSystem.modules.LevelSystem {
         [HarmonyPatch(typeof(ItemDrop))]
         public static class DropOnDestroyedSpawnPatch {
             [HarmonyPostfix]
-            [HarmonyPatch(nameof(ItemDrop.OnCreateNew), new Type[] { typeof(GameObject) })]
+            // Both parameter types are pinned because the argumentTypes array is matched exactly:
+            // 1.0.7 added `bool cheated` to both OnCreateNew overloads, and a stale one-element
+            // array resolves to no method at all, which makes PatchAll throw and takes the whole
+            // plugin down rather than just this patch.
+            [HarmonyPatch(nameof(ItemDrop.OnCreateNew), new Type[] { typeof(GameObject), typeof(bool) })]
             static void Postfix(GameObject go) {
                 Character chara = go.GetComponent<Character>();
                 if (chara != null) {

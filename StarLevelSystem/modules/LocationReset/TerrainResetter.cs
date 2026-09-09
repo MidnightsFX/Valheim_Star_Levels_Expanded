@@ -77,7 +77,11 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 if (nview.IsOwner() == false) { nview.ClaimOwnership(); }
                 for (int h = 0; h < heightmaps.Count; h++) {
-                    if (heightmaps[h].TerrainVSModifier(modifier)) { heightmaps[h].Poke(true); }
+                    // Poke(2), not Poke(true): 1.0.7 replaced the bool with an int naming which pass
+                    // regenerates - 1 is Unity's LateUpdate, 2 is CustomLateUpdate, which is where the
+                    // old bool was consumed. 2 is therefore the faithful translation, and it is also what
+                    // vanilla's own TerrainModifier.PokeHeightmaps passes for this same delayed case.
+                    if (heightmaps[h].TerrainVSModifier(modifier)) { heightmaps[h].Poke(2); }
                 }
                 nview.Destroy();
                 resets++;
@@ -145,7 +149,8 @@ namespace StarLevelSystem.modules.LocationReset {
                     comp.m_lastOpPoint = centers[0];
                     comp.m_lastOpRadius = radii[0];
                     comp.Save();
-                    heightmap.Poke(true);
+                    // Delayed regeneration, as above: CustomLateUpdate rather than an immediate rebuild.
+                    heightmap.Poke(2);
                 }
             }
 

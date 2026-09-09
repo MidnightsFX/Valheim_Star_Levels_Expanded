@@ -162,7 +162,7 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // The sweep runs ONCE over the block rather than once per spawner: a crypt can hold twenty
         // spawners, and twenty nine-sector scans to answer one question is not a trade worth making.
-        internal static int CollectLinked(List<ZDO> spawners, Vector2i zone, List<ZDO> doomed) {
+        internal static int CollectLinked(List<ZDO> spawners, Vector2s zone, List<ZDO> doomed) {
             if (ZDOMan.instance == null || spawners == null || spawners.Count == 0) { return 0; }
 
             HashSet<ZDO> seen = new HashSet<ZDO>(doomed);
@@ -190,7 +190,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     scanBuffer.Clear();
-                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), scanBuffer);
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), scanBuffer);
 
                     for (int i = 0; i < scanBuffer.Count; i++) {
                         ZDO zdo = scanBuffer[i];
@@ -250,7 +250,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // Spawners that belong to a location, indexed by the sector they stand in, so a creature's
             // recorded position resolves to a candidate list without scanning them all.
-            Dictionary<Vector2i, List<ZDO>> spawnersBySector = new Dictionary<Vector2i, List<ZDO>>();
+            Dictionary<Vector2s, List<ZDO>> spawnersBySector = new Dictionary<Vector2s, List<ZDO>>();
             List<ZDO> found = new List<ZDO>();
 
             for (int n = 0; n < names.Count; n++) {
@@ -266,7 +266,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     if (spawner == null || spawner.IsValid() == false) { continue; }
                     if (LocationOwnership.OwnerOf(spawner) == LocationOwnership.NoOwner) { continue; }
 
-                    Vector2i sector = ZoneSystem.GetZone(spawner.GetPosition());
+                    Vector2s sector = ZoneSystem.GetZone(spawner.GetPosition());
                     if (spawnersBySector.TryGetValue(sector, out List<ZDO> list) == false) {
                         list = new List<ZDO>();
                         spawnersBySector[sector] = list;
@@ -285,20 +285,20 @@ namespace StarLevelSystem.modules.LocationReset {
             // Creatures live in the spawner's sector or a neighbouring one, so the sectors worth
             // reading are the 3x3 blocks around every spawner -- deduplicated, or a dense camp would
             // have us read the same sector nine times.
-            HashSet<Vector2i> sectors = new HashSet<Vector2i>();
-            foreach (KeyValuePair<Vector2i, List<ZDO>> entry in spawnersBySector) {
+            HashSet<Vector2s> sectors = new HashSet<Vector2s>();
+            foreach (KeyValuePair<Vector2s, List<ZDO>> entry in spawnersBySector) {
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dy = -1; dy <= 1; dy++) {
-                        sectors.Add(new Vector2i(entry.Key.x + dx, entry.Key.y + dy));
+                        sectors.Add(new Vector2s(entry.Key.x + dx, entry.Key.y + dy));
                     }
                 }
             }
 
             float sqrEpsilon = MatchEpsilon * MatchEpsilon;
             int sinceYield = 0;
-            foreach (Vector2i sector in sectors) {
+            foreach (Vector2s sector in sectors) {
                 scanBuffer.Clear();
-                ZDOMan.instance.FindObjects(sector, scanBuffer);
+                ZoneObjects.FindObjects(sector, scanBuffer);
 
                 for (int i = 0; i < scanBuffer.Count; i++) {
                     ZDO zdo = scanBuffer[i];
@@ -334,7 +334,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 $"{ReconnectedCreatures} creatures re-paired across {sectors.Count} sectors.");
         }
 
-        private static ZDO FindSpawnerAt(Dictionary<Vector2i, List<ZDO>> spawnersBySector, Vector3 position, float sqrEpsilon) {
+        private static ZDO FindSpawnerAt(Dictionary<Vector2s, List<ZDO>> spawnersBySector, Vector3 position, float sqrEpsilon) {
             if (spawnersBySector.TryGetValue(ZoneSystem.GetZone(position), out List<ZDO> candidates) == false) { return null; }
 
             for (int i = 0; i < candidates.Count; i++) {

@@ -29,7 +29,7 @@ namespace StarLevelSystem.modules.LocationReset {
             AuditReport report = new AuditReport();
             if (ZDOMan.instance == null || ZoneSystem.instance == null) { return report; }
 
-            Vector2i centerZone = ZoneSystem.GetZone(center);
+            Vector2s centerZone = ZoneSystem.GetZone(center);
             int span = Mathf.Max(0, Mathf.CeilToInt(radius / 64f));
 
             List<ZDO> buffer = new List<ZDO>();
@@ -39,9 +39,9 @@ namespace StarLevelSystem.modules.LocationReset {
 
             for (int dx = -span; dx <= span; dx++) {
                 for (int dy = -span; dy <= span; dy++) {
-                    Vector2i zone = new Vector2i(centerZone.x + dx, centerZone.y + dy);
+                    Vector2s zone = new Vector2s(centerZone.x + dx, centerZone.y + dy);
                     buffer.Clear();
-                    ZDOMan.instance.FindObjects(zone, buffer);
+                    ZoneObjects.FindObjects(zone, buffer);
                     if (buffer.Count == 0) { continue; }
                     report.ZonesScanned++;
 

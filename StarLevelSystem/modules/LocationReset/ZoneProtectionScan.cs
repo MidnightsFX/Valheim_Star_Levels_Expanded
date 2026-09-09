@@ -242,7 +242,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // reset that would happen around its content, which is the conservative direction. And when
         // two groups share a chunk, the strictest one wins per object (see ObjectBlocks) -- a group's
         // ignore only takes effect where every entry with content in the chunk shares it.
-        internal static List<LocationResetData.ResolvedResetEntry> GoverningEntries(Vector2i zone) {
+        internal static List<LocationResetData.ResolvedResetEntry> GoverningEntries(Vector2s zone) {
             List<LocationResetData.ResolvedResetEntry> entries = new List<LocationResetData.ResolvedResetEntry>();
             float distance = ZoneRates.DistanceFor(zone);
 
@@ -274,7 +274,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // entries are the zone's governing entries (see GoverningEntries); pass null or empty to judge
         // purely against Defaults, which is also what the entries themselves fall back to for any
         // category they do not override.
-        internal static ProtectionResult ScanZone(Vector2i zone, List<LocationResetData.ResolvedResetEntry> entries, bool includeNeighbours) {
+        internal static ProtectionResult ScanZone(Vector2s zone, List<LocationResetData.ResolvedResetEntry> entries, bool includeNeighbours) {
             ProtectionResult result = new ProtectionResult();
             if (ZDOMan.instance == null) { return result; }
             BuildPrefabSets();
@@ -289,7 +289,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -range; dx <= range; dx++) {
                 for (int dy = -range; dy <= range; dy++) {
                     bool isCenter = dx == 0 && dy == 0;
-                    if (ScanSector(new Vector2i(zone.x + dx, zone.y + dy), entries, result,
+                    if (ScanSector(new Vector2s(zone.x + dx, zone.y + dy), entries, result,
                                    isCenter ? (Vector2?)null : center, radius)) {
                         // A Block hit is decisive; no point scanning the rest. Name the location being
                         // starved before returning: this is the only moment it is cheap to find, and
@@ -312,7 +312,7 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // Safe to reuse the shared buffer -- ScanSector clears it before handing back a blocking hit,
         // and this only ever runs after that.
-        private static string FindLocationName(Vector2i zone) {
+        private static string FindLocationName(Vector2s zone) {
             if (ZoneSystem.instance != null
                 && ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance)
                 && instance.m_location != null) {
@@ -323,7 +323,7 @@ namespace StarLevelSystem.modules.LocationReset {
             if (ZDOMan.instance == null) { return null; }
 
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZoneObjects.FindObjects(zone, zdoBuffer);
 
             string name = null;
             for (int i = 0; i < zdoBuffer.Count; i++) {
@@ -347,10 +347,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // center is null for the chunk's own sector, which always blocks. For a neighbour it is the
         // chunk centre in XZ, and an object only blocks if it lies within radius of it: the 3x3 sweep
         // otherwise let one forgotten build protect nine chunks.
-        private static bool ScanSector(Vector2i sector, List<LocationResetData.ResolvedResetEntry> entries, ProtectionResult result,
+        private static bool ScanSector(Vector2s sector, List<LocationResetData.ResolvedResetEntry> entries, ProtectionResult result,
                                        Vector2? center, float radius) {
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(sector, zdoBuffer);
+            ZoneObjects.FindObjects(sector, zdoBuffer);
 
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
@@ -463,13 +463,13 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Live counts of every configured vegetation prefab present in a sector, keyed by prefab hash.
         // Only prefabs the config tracks are counted, so the dictionary stays small.
-        internal static Dictionary<int, ushort> CensusZone(Vector2i zone) {
+        internal static Dictionary<int, ushort> CensusZone(Vector2s zone) {
             Dictionary<int, ushort> counts = new Dictionary<int, ushort>();
             if (ZDOMan.instance == null) { return counts; }
             if (LocationResetData.VegetationByPrefabHash.Count == 0) { return counts; }
 
             zdoBuffer.Clear();
-            ZDOMan.instance.FindObjects(zone, zdoBuffer);
+            ZoneObjects.FindObjects(zone, zdoBuffer);
 
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
@@ -485,7 +485,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Record the current contents of a zone as its baseline. Called on first sight and after a
         // successful reset, so "below baseline" always means "a player destroyed something since".
-        internal static void RecordBaseline(Vector2i zone) {
+        internal static void RecordBaseline(Vector2s zone) {
             Dictionary<int, ushort> counts = CensusZone(zone);
             foreach (KeyValuePair<int, LocationResetData.ResolvedResetEntry> tracked in LocationResetData.VegetationByPrefabHash) {
                 counts.TryGetValue(tracked.Key, out ushort present);
@@ -507,7 +507,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Pass the per-prefab dictionaries to also break each side down by prefab hash. That costs a
         // dictionary write per ZDO, so the sweep leaves them null and only the debug growth
         // breakdown asks for them.
-        internal static int BlockZdoCount(Vector2i zone, out int interiorCount,
+        internal static int BlockZdoCount(Vector2s zone, out int interiorCount,
                                           Dictionary<int, int> surfaceByPrefab = null,
                                           Dictionary<int, int> interiorByPrefab = null) {
             interiorCount = 0;
@@ -517,7 +517,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     zdoBuffer.Clear();
-                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), zdoBuffer);
                     for (int i = 0; i < zdoBuffer.Count; i++) {
                         ZDO zdo = zdoBuffer[i];
                         if (zdo == null) { continue; }
@@ -559,7 +559,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Matching stays prefab hash + XZ within a tight epsilon, which is unambiguous across a 3x3:
         // zones are 64m apart, so a same-prefab node from a neighbour cannot sit that close to ours
         // unless it IS ours.
-        internal static Dictionary<int, List<Vector2>> TrackedVegetationPositions(Vector2i zone) {
+        internal static Dictionary<int, List<Vector2>> TrackedVegetationPositions(Vector2s zone) {
             Dictionary<int, List<Vector2>> positions = new Dictionary<int, List<Vector2>>();
             if (ZDOMan.instance == null) { return positions; }
             if (LocationResetData.VegetationByPrefabHash.Count == 0) { return positions; }
@@ -567,7 +567,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     zdoBuffer.Clear();
-                    ZDOMan.instance.FindObjects(new Vector2i(zone.x + dx, zone.y + dy), zdoBuffer);
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), zdoBuffer);
 
                     for (int i = 0; i < zdoBuffer.Count; i++) {
                         ZDO zdo = zdoBuffer[i];

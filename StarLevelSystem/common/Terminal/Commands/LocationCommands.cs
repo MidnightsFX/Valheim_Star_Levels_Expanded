@@ -23,7 +23,7 @@ namespace StarLevelSystem.common
             _ = new SLSCommand("sls-loc-reset",
                 "Format: [optional: radius] Immediately resets the chunks around you, ignoring every reset timer, including the chunks currently loaded around you. Player structures are still protected. eg: sls-loc-reset 128",
                 LocReset, CommandArea.Loc, TerminalArgs.RadiusPresets,
-                isCheat: true, serverAuthoritative: true, requiresAdmin: true,
+                isCheat: false, serverAuthoritative: true, requiresAdmin: true,
                 aliases: "SLS-loc-reset-here");
 
             _ = new SLSCommand("sls-loc-reset-named",
@@ -31,7 +31,7 @@ namespace StarLevelSystem.common
                 "even one no reset group covers. 'safe' waits for players to leave; 'force' (the default) works on the chunks loaded around you. " +
                 "Player structures are protected either way. eg: sls-loc-reset-named Crypt2 128 force",
                 LocResetNamed, CommandArea.Loc, LocResetNamedOptions,
-                isCheat: true, serverAuthoritative: true, requiresAdmin: true);
+                isCheat: false, serverAuthoritative: true, requiresAdmin: true);
 
             _ = new SLSCommand("sls-loc-info",
                 "Format: [optional: location name] [optional: radius] Reports when the chunk you are standing in was last examined and when the " +
@@ -49,19 +49,19 @@ namespace StarLevelSystem.common
             _ = new SLSCommand("sls-loc-audit",
                 "Format: [optional: radius] [optional: fix] Scans for duplicate world objects and surplus terrain compilers. Reports only unless 'fix' is passed. eg: sls-loc-audit 256 fix",
                 LocAudit, CommandArea.Loc, LocAuditOptions,
-                isCheat: true, serverAuthoritative: true, requiresAdmin: true,
+                isCheat: false, serverAuthoritative: true, requiresAdmin: true,
                 aliases: "SLS-loc-reset-audit");
 
             _ = new SLSCommand("sls-loc-dump",
                 "Writes every location and vegetation entry this world knows about (including ones added by other mods) to SavedData/LocationResetCatalog.yaml, for use when configuring LocationResetSettings.yaml.",
                 LocDump, CommandArea.Loc,
-                isCheat: true, serverAuthoritative: true, requiresAdmin: true,
+                isCheat: false, serverAuthoritative: true, requiresAdmin: true,
                 aliases: "SLS-loc-reset-dump");
 
             _ = new SLSCommand("sls-loc-stamp",
                 "Stamps every generated zone as reset right now and records its prefab census. Use this once after installing so an already-explored world starts its reset timers from today instead of resetting everything at once.",
                 LocStamp, CommandArea.Loc,
-                isCheat: true, serverAuthoritative: true, requiresAdmin: true,
+                isCheat: false, serverAuthoritative: true, requiresAdmin: true,
                 aliases: "SLS-loc-reset-stamp-all");
         }
 

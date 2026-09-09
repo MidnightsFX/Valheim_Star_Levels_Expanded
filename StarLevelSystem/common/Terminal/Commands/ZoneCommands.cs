@@ -7,7 +7,7 @@ namespace StarLevelSystem.common
             _ = new SLSCommand("sls-zone-rebuild",
                 "Clears existing zones and regenerates the zone map from the world, then redraws the minimap overlay. Resets zone kill counts and levels.",
                 ZoneRebuild, CommandArea.Zone,
-                isCheat: true,
+                isCheat: false,
                 aliases: "SLS-rebuild-zones");
         }
 

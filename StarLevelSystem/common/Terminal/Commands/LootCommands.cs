@@ -14,7 +14,7 @@ namespace StarLevelSystem.common
             _ = new SLSCommand("sls-loot-dump",
                 "Writes all creature and object loot-tables to a debug file.",
                 LootDump, CommandArea.Loot,
-                isCheat: true,
+                isCheat: false,
                 aliases: "SLS-Dump-LootTables");
         }
 

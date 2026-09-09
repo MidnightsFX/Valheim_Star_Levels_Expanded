@@ -1,3 +1,9 @@
+**1.10.2**
+ ---
+ ```
+- Remove cheat flag for SLS commands, admin is still required.
+ ```
+
 **1.10.1**
  ---
  ```

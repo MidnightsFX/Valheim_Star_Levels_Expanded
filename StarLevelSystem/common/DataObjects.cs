@@ -277,6 +277,7 @@ namespace StarLevelSystem.common
             Gaussian,
             Exponential,
             Linear,
+            Table,
         }
 
         // Which clock zone level decay is measured against. RealTime is wall-clock unix seconds and
@@ -419,6 +420,29 @@ namespace StarLevelSystem.common
                         }
                         break;
                     }
+                    case LevelupCalculationStyle.Table: {
+                        // Looks up a hand-authored shape by span (level count from MinLevel to MaxLevel inclusive)
+                        // in the settings-wide LevelupWeightTablesBySpan, then shifts its entries onto this
+                        // generator's own MinLevel..MaxLevel range. Unlike the formula-driven styles above, this
+                        // does not use LevelUpChance/GaussianOffset - the exact values come from the table.
+                        int spanCount = span + 1;
+                        Dictionary<int, SortedDictionary<int, float>> tables = LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
+                        SortedDictionary<int, float> shape = null;
+                        tables?.TryGetValue(spanCount, out shape);
+                        if (shape == null || shape.Count == 0) {
+                            Logger.LogWarning($"LevelGenerator '{PrefabName}' uses Table style but no LevelupWeightTablesBySpan entry exists for span {spanCount}; falling back to single level {min}.");
+                            chances.Add(min, 0f);
+                            break;
+                        }
+                        int position = 0;
+                        foreach (KeyValuePair<int, float> kvp in shape) {
+                            int lvl = min + position;
+                            if (lvl > max) { break; }
+                            chances.Add(lvl, kvp.Value);
+                            position++;
+                        }
+                        break;
+                    }
                     case LevelupCalculationStyle.Exponential:
                     default: {
                         // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel.
@@ -482,6 +506,10 @@ namespace StarLevelSystem.common
 
             [Description("Defeated-boss global key -> biome -> level generator. Highest tier (bottom-most listed) defeated boss applies; its generator replaces the biome default levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
             public Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> ConditionalCreatureLevelupChance { get; set; }
+
+            [Description("Hand-authored levelup-chance shapes for the 'Table' LevelupCalculationStyle, keyed by span (MaxLevel - MinLevel + 1). A generator using Table style looks up the entry matching its own span and shifts it onto its MinLevel..MaxLevel range.")]
+            [DefaultValue(null)]
+            public Dictionary<int, SortedDictionary<int, float>> LevelupWeightTablesBySpan { get; set; }
         }
 
         [Description("Controls Night-time specific settings")]

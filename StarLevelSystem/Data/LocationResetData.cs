@@ -200,10 +200,7 @@ namespace StarLevelSystem.Data {
             }
 
             internal bool Ignores(ProtectionCategory category, int prefabHash) {
-                if (Protection != null && Protection.TryGetValue(category, out ProtectionRule rule) && rule != null) {
-                    return rule.IgnoresHash(prefabHash);
-                }
-                return false;
+                return RuleIgnores(Protection, category, prefabHash);
             }
         }
 
@@ -393,11 +390,26 @@ namespace StarLevelSystem.Data {
         // Default-path ignore lookup, for zones with no governing entries -- nothing configured lives
         // there, so Defaults.Protection judges alone (see ZoneProtectionScan.ObjectBlocks).
         internal static bool DefaultIgnores(ProtectionCategory category, int prefabHash) {
-            Dictionary<ProtectionCategory, ProtectionRule> defaults = SLE_LocationReset_Settings?.Defaults?.Protection;
-            if (defaults != null && defaults.TryGetValue(category, out ProtectionRule rule) && rule != null) {
-                return rule.IgnoresHash(prefabHash);
+            return RuleIgnores(SLE_LocationReset_Settings?.Defaults?.Protection, category, prefabHash);
+        }
+
+        // The one ignore lookup behind both DefaultIgnores and ResolvedResetEntry.Ignores, so the
+        // PlayerBaseEffect sharing rule below cannot be applied on one path and missed on the other.
+        //
+        // A player base is exempt when its own rule lists the prefab OR PlayerBuiltPiece's does. That
+        // list is where admins write off clutter -- fire_pit ships there -- and a campfire written off
+        // as clutter would otherwise come straight back as a base, freezing the very chunks the ignore
+        // was written to free. Only the LIST is shared, never the action: a group that sets
+        // PlayerBuiltPiece: Ignore still has its bases judged by PlayerBaseEffect.
+        private static bool RuleIgnores(Dictionary<ProtectionCategory, ProtectionRule> protection,
+                                        ProtectionCategory category, int prefabHash) {
+            if (protection == null) { return false; }
+            if (protection.TryGetValue(category, out ProtectionRule rule) && rule != null && rule.IgnoresHash(prefabHash)) {
+                return true;
             }
-            return false;
+            return category == ProtectionCategory.PlayerBaseEffect
+                && protection.TryGetValue(ProtectionCategory.PlayerBuiltPiece, out ProtectionRule piece)
+                && piece != null && piece.IgnoresHash(prefabHash);
         }
 
         private static void TrackInterval(ResolvedResetEntry entry) {
@@ -1001,7 +1013,9 @@ namespace StarLevelSystem.Data {
                 // what the old per-entry boss handling in BuildPopulatedDefault wrote.
                 { "BossAltars", new LocationResetGroup() {
                     ResetTerrain = true,
-                    ExtraTerrainRadius = 32f,
+                    // 16m is the ceiling at the default 48m ProtectionRadius (see MaxExtraTerrainRadius).
+                    // Anything higher is clamped to it anyway, with a warning per altar on every load.
+                    ExtraTerrainRadius = 16f,
                     Members = new List<string>(BossAltarLocations),
                 } },
                 { "Ores", new LocationResetGroup() {
@@ -1126,7 +1140,8 @@ namespace StarLevelSystem.Data {
                 { "AshlandsForts", new LocationResetGroup() {
                     ResetHours = 8f,
                     ResetTerrain = true,
-                    ExtraTerrainRadius = 24f,
+                    // The ceiling at the default ProtectionRadius; see BossAltars.
+                    ExtraTerrainRadius = 16f,
                     Members = new List<string>() {
                         "CharredFortress"
                     },

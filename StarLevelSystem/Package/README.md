@@ -544,8 +544,9 @@ How it works:
 - **Terrain can be reset** around ore to undo mining craters. Locations also support
   `Mode: TerrainOnly`, which flattens the ground around one without touching the structure itself.
 - **Your stuff is safe.** Player-built structures, tombstones, wards, portals, beds, player-placed
-  chests and tamed creatures all block a reset. Protection is configurable per entry, so you can
-  decide (for example) that a stray dropped item is preserved rather than blocking the whole zone.
+  chests, tamed creatures and any chunk inside a player's base all block a reset. Protection is
+  configurable per entry, so you can decide (for example) that a stray dropped item is preserved
+  rather than blocking the whole zone.
 - `StartTemple` can never be reset. Boss altars are covered by the `BossAltars` group, which ships
   enabled with terrain reset on to undo the crater players dig around a summoning circle — set
   `Enabled: false` on that group to leave them alone.
@@ -684,17 +685,32 @@ Protection:
 > ignored for the reasons above; add to the list sparingly. Tombstones can never be ignored, and
 > anything in `ProtectedPrefabs` wins over an ignore. Every deletion is recorded in the chunk log.
 
+**Player bases.** A chunk is also left alone while any part of it lies inside a player's base — the
+area around a workbench and similar pieces that stops monsters spawning in vanilla. This is the
+`PlayerBaseEffect` category, and it reaches exactly as far as that area does rather than
+`ProtectionRadius`. A prefab ignored under `PlayerBuiltPiece` does not count as a base either, so the
+shipped `fire_pit` ignore covers both. A reset group can relax it like any other category:
+
+```yaml
+ResetGroups:
+  Ores:
+    Protection:
+      PlayerBuiltPiece: Ignore   # stray builds no longer hold ore chunks...
+      PlayerBaseEffect: Ignore   # ...and neither does a workbench abandoned on an ore spawn
+```
+
 **Resetting terrain around a location.** Players dig approach ramps and moats just *outside* a
 dungeon's footprint, where the normal terrain reset does not reach. `ExtraTerrainRadius` on a
-location entry adds metres beyond the location's own radius (clamped to 64m, which is as far as the
-protection scan actually checks for player property):
+location entry adds metres beyond the location's own radius, clamped to `ProtectionRadius` minus
+32m — 16m at the default, 64m at most — which is as far as the protection scan actually checks for
+player property:
 
 ```yaml
 Locations:
   Crypt2:
     Enabled: true
     ResetTerrain: true
-    ExtraTerrainRadius: 24
+    ExtraTerrainRadius: 16
 ```
 
 **Seeing what it did.** Every chunk the system works on gets a record in

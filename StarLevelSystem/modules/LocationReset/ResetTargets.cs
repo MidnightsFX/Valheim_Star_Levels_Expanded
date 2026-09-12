@@ -24,12 +24,18 @@ namespace StarLevelSystem.modules.LocationReset {
         // object loads. No zone is loaded, nothing is destroyed and nothing is created, so this
         // cannot duplicate items or damage a build. It is also where most of the throughput comes
         // from: harvested-but-still-present content is the common case on a busy server.
-        internal static void RefreshZoneInPlace(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
-            if (ZDOMan.instance == null) { return; }
-            if (cfg.RefreshPickables == false && cfg.RefreshMineRocks == false && cfg.RefreshContainerLoot == false) { return; }
+        //
+        // Returns the timers this pass earned a restart on, or null when nothing changed. Nothing is
+        // stamped in here: the caller hands them to StampRefreshedTimers once its whole pass is over,
+        // and the comment there is why.
+        internal static List<int> RefreshZoneInPlace(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+            if (ZDOMan.instance == null) { return null; }
+            if (cfg.RefreshPickables == false && cfg.RefreshMineRocks == false && cfg.RefreshContainerLoot == false) { return null; }
 
             zdoBuffer.Clear();
+            dueByPrefab.Clear();
             ZoneObjects.FindObjects(zone, zdoBuffer);
+            List<int> timers = null;
 
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
@@ -41,55 +47,137 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (cfg.TargetPrefabHash != 0 && prefab != cfg.TargetPrefabHash) { continue; }
 
                 if (cfg.RefreshPickables && ZoneProtectionScan.PickableHashes.Contains(prefab)) {
-                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.PickablesNotDue++; continue; }
-                    if (RefreshPickable(zdo)) { report.PickablesRefreshed++; }
+                    if (DueForRefresh(zone, prefab, cfg, force, report) == false) { report.PickablesNotDue++; continue; }
+                    if (RefreshPickable(zdo)) { report.PickablesRefreshed++; timers = NoteRefreshed(timers, prefab); }
                     continue;
                 }
                 if (cfg.RefreshMineRocks && ZoneProtectionScan.MineRock5Hashes.Contains(prefab)) {
-                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.MineRocksNotDue++; continue; }
-                    if (RefreshMineRock5(zdo)) { report.MineRocksRefreshed++; }
+                    if (DueForRefresh(zone, prefab, cfg, force, report) == false) { report.MineRocksNotDue++; continue; }
+                    if (RefreshMineRock5(zdo)) { report.MineRocksRefreshed++; timers = NoteRefreshed(timers, prefab); }
                     continue;
                 }
                 if (cfg.RefreshMineRocks && ZoneProtectionScan.MineRockAreaCounts.ContainsKey(prefab)) {
-                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.MineRocksNotDue++; continue; }
-                    if (RefreshMineRock(zdo, prefab)) { report.MineRocksRefreshed++; }
+                    if (DueForRefresh(zone, prefab, cfg, force, report) == false) { report.MineRocksNotDue++; continue; }
+                    if (RefreshMineRock(zdo, prefab)) { report.MineRocksRefreshed++; timers = NoteRefreshed(timers, prefab); }
                     continue;
                 }
                 if (cfg.RefreshContainerLoot && ZoneProtectionScan.containerHashes.Contains(prefab)) {
-                    if (DueForRefresh(zone, prefab, cfg, force, report.RateMultiplier) == false) { report.ContainersNotDue++; continue; }
-                    if (RefreshContainerLoot(zdo)) { report.ContainersRefreshed++; }
+                    if (DueForRefresh(zone, prefab, cfg, force, report) == false) { report.ContainersNotDue++; continue; }
+                    if (RefreshContainerLoot(zdo)) { report.ContainersRefreshed++; timers = NoteRefreshed(timers, prefab); }
                 }
             }
 
             zdoBuffer.Clear();
+            return timers;
+        }
+
+        // The timer a refresh of this prefab restarts: its own entry's, or the Defaults timer shared by
+        // everything in the zone that has no entry. Listed once however many of its ZDOs came back.
+        private static List<int> NoteRefreshed(List<int> timers, int prefabHash) {
+            int key = LocationResetData.TryGetVegetationEntry(prefabHash, out _) ? prefabHash : LocationResetState.DefaultsTimerKey;
+            if (timers == null) { timers = new List<int>(); }
+            if (timers.Contains(key) == false) { timers.Add(key); }
+            return timers;
+        }
+
+        // Restart the timers a RefreshZoneInPlace pass earned, once each.
+        //
+        // Callers run this after the WHOLE pass -- regeneration included, and whether or not it
+        // succeeded, since the in-place writes landed either way -- never between the tiers. A prefab's
+        // stamp is shared with Tier 2, and NeedsRegeneration and SelectDueVegetation both read it later
+        // in the same pass. Stamped first, a part-mined copper vein would restart copper's 48h clock
+        // before the slow lane looked, hiding a fully mined vein in the same chunk from it; a player
+        // chipping at one rock every cycle would keep the other from ever coming back.
+        //
+        // A tracked prefab with no record here yet -- added to the config after this zone's first
+        // sight, or on a world with StampOnFirstSight off -- gets its real census first. StampEntryTime
+        // alone would create the record with a baseline of 0, which SelectDueVegetation reads as
+        // "nothing missing".
+        internal static void StampRefreshedTimers(Vector2s zone, List<int> timers) {
+            if (timers == null || ZDOMan.instance == null) { return; }
+            Dictionary<int, ushort> live = null;
+            for (int i = 0; i < timers.Count; i++) {
+                int key = timers[i];
+                if (key != LocationResetState.DefaultsTimerKey && LocationResetState.TryGetEntry(zone, key, out _) == false) {
+                    if (live == null) { live = ZoneProtectionScan.CensusZone(zone); }
+                    live.TryGetValue(key, out ushort present);
+                    LocationResetState.SetBaseline(zone, key, present);
+                }
+                LocationResetState.StampEntryTime(zone, key);
+            }
+        }
+
+        // One due verdict per prefab per pass. A chunk holds hundreds of ZDOs of a handful of prefabs,
+        // and nothing restarts a timer until the pass is over, so the answer is the same for all of
+        // them -- which also keeps the not-due detail line to one per prefab. Only touched
+        // synchronously inside RefreshZoneInPlace, which is what makes sharing it safe, as for zdoBuffer.
+        private static readonly Dictionary<int, bool> dueByPrefab = new Dictionary<int, bool>();
+
+        // force skips the timers entirely. An admin asking for a reset now means now, and without this
+        // sls-loc-reset would still silently honour every per-prefab timestamp.
+        private static bool DueForRefresh(Vector2s zone, int prefabHash, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+            if (force) { return true; }
+            if (dueByPrefab.TryGetValue(prefabHash, out bool due) == false) {
+                due = RefreshTimerElapsed(zone, prefabHash, cfg, report);
+                dueByPrefab[prefabHash] = due;
+            }
+            return due;
         }
 
         // A prefab with its own Vegetation config entry uses that entry's timer and opt-in flag;
-        // anything else falls back to the global default interval measured from the zone stamp.
+        // anything else falls back to Defaults, on one timer its whole zone shares.
         //
-        // force skips the timers entirely. An admin asking for a reset now means now, and without this
-        // sls-loc-reset would still silently honour every per-prefab timestamp.
-        private static bool DueForRefresh(Vector2s zone, int prefabHash, LocationResetConfigSnapshot cfg, bool force, float rate) {
-            if (force) { return true; }
+        // Intervals measure from the last refresh that actually changed something (StampRefreshedTimers).
+        // The Defaults interval used to measure from ZoneStamp instead, which every examination
+        // rewrites: with the shipped groups a zone is examined every 6h, so the 72h default could never
+        // elapse, and nothing riding on it -- containers, any mineable rock outside Ores -- was ever
+        // refreshed.
+        private static bool RefreshTimerElapsed(Vector2s zone, int prefabHash, LocationResetConfigSnapshot cfg, ZoneResetReport report) {
+            float rate = report.RateMultiplier;
+            // Ahead of everything, so the unstamped shortcuts below cannot call an excluded chunk due.
+            if (rate <= ZoneRates.Excluded) { return false; }
+            long now = LocationResetState.Now;
+
             if (LocationResetData.TryGetVegetationEntry(prefabHash, out LocationResetData.ResolvedResetEntry entry)) {
                 // A distance-scoped group can override the timer for this chunk only.
                 entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
                 if (entry.Enabled == false) { return false; }
-                if (LocationResetState.TryGetEntry(zone, prefabHash, out LocationResetState.EntryRecord record) && record.Stamp > 0) {
-                    return entry.IsDue(record.Stamp, LocationResetState.Now, rate);
+                // Unstamped means no record yet, or one saved before timers started at first sight (see
+                // LocationResetState.SetBaseline). Due until a refresh here changes something.
+                if (LocationResetState.TryGetEntry(zone, prefabHash, out LocationResetState.EntryRecord record) == false
+                        || record.Stamp <= 0) { return true; }
+                if (entry.IsDue(record.Stamp, now, rate)) { return true; }
+                if (report.Verbose) {
+                    report.Detail($"in-place '{entry.Name}' not due ({(now - record.Stamp) / 3600f:0.#}h elapsed, " +
+                        $"schedule {entry.DescribeSchedule(now, rate)})");
                 }
-                return true;
+                return false;
             }
+
             if (LocationResetState.TryGetZone(zone, out LocationResetState.ZoneRecord zoneRecord) == false) { return false; }
             // No config entry of its own, so this one rides on Defaults - which can itself be a cron
             // schedule, hence the snapshot carrying both forms.
             if (cfg.DefaultSchedule != null) {
-                // The interval branch below gets this for free from ScaleSeconds; state it here so
-                // both halves agree that an excluded chunk is never due.
-                if (rate <= ZoneRates.Excluded) { return false; }
-                return cfg.DefaultSchedule.HasElapsedSince(zoneRecord.ZoneStamp, LocationResetState.Now);
+                // ZoneStamp is still the right anchor for cron, unlike the interval below. Cron asks
+                // whether a fire has landed since the stamp, so however often the zone is examined, a
+                // fire comes due at the next examination and not again after it.
+                if (cfg.DefaultSchedule.HasElapsedSince(zoneRecord.ZoneStamp, now)) { return true; }
+                if (report.Verbose) {
+                    report.Detail($"in-place '{ZoneProtectionScan.PrefabNameFor(prefabHash)}' not due " +
+                        $"(Defaults schedule {cfg.DefaultSchedule.Describe(now)})");
+                }
+                return false;
             }
-            return LocationResetState.Now - zoneRecord.ZoneStamp >= ZoneRates.ScaleSeconds(cfg.DefaultIntervalSeconds, rate);
+            // Unstamped as above: a zone first seen before its Defaults timer existed.
+            if (LocationResetState.TryGetEntry(zone, LocationResetState.DefaultsTimerKey, out LocationResetState.EntryRecord defaults) == false
+                    || defaults.Stamp <= 0) { return true; }
+            float interval = ZoneRates.ScaleSeconds(cfg.DefaultIntervalSeconds, rate);
+            if (now - defaults.Stamp >= interval) { return true; }
+            if (report.Verbose) {
+                report.Detail($"in-place '{ZoneProtectionScan.PrefabNameFor(prefabHash)}' not due " +
+                    $"(Defaults, {(now - defaults.Stamp) / 3600f:0.#}h of {interval / 3600f:0.#}h elapsed)");
+            }
+            return false;
         }
 
         // Pickables that hid instead of despawning keep their ZDO with picked=true. Clearing it is a
@@ -171,14 +259,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 // MUST defer one way or the other: this path used to return before the backoff block
                 // below, leaving ZoneStamp untouched, so the zone stayed permanently due and burned
                 // MaxZoneLoadWaitSeconds of slow-lane budget on every single cursor lap, forever.
-                if (LocationResetState.TryScheduleRetry(zone, out int attempt, out float delay)) {
-                    report.SkipReason = $"zone did not finish loading in {cfg.MaxZoneLoadWaitSeconds:0}s; " +
-                        $"retry {attempt}/{LocationResetState.MaxTransientRetries} in {delay / 60f:0.#} min";
-                } else {
-                    LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
-                    report.SkipReason = $"zone did not finish loading in {cfg.MaxZoneLoadWaitSeconds:0}s; " +
-                        $"{LocationResetState.MaxTransientRetries} retries spent, deferred to the next cycle";
-                }
+                RetryOrDefer(zone, cfg, report, $"zone did not finish loading in {cfg.MaxZoneLoadWaitSeconds:0}s");
                 onComplete?.Invoke(false);
                 yield break;
             }
@@ -292,9 +373,12 @@ namespace StarLevelSystem.modules.LocationReset {
             if (growth != 0 && report.ZoneAdopted == false) { LocationResetManager.ZdoGrowthTotal += growth; }
 
             if (succeeded == false) {
-                // Clear and respawn are one operation. Retry soon rather than leaving a location
-                // cleared but not rebuilt.
-                LocationResetState.BackoffZone(zone, 60f);
+                // Clear and respawn are one operation, and a throw between them leaves the location
+                // cleared but not rebuilt -- the failure that most needs a prompt second attempt.
+                // This used to ask for BackoffZone(60), which cannot give one: a backoff only ever
+                // pushes a zone further out and the due gate then waits a full sweep floor on top, so
+                // "60 seconds" was really the floor plus a minute -- six hours with the shipped groups.
+                RetryOrDefer(zone, cfg, report, "reset failed with an error");
             } else if (report.ZoneAdopted == false && growth > cfg.ZdoGrowthTolerance) {
                 // Observational only. The reset itself completed, so it stays a success: the caller
                 // goes on to stamp the zone and re-record its census, which must reflect the world
@@ -308,6 +392,18 @@ namespace StarLevelSystem.modules.LocationReset {
             // Reported last so this method owns every backoff decision; the caller only stamps the
             // zone as done when we report success, and never overwrites a backoff we just applied.
             onComplete?.Invoke(succeeded);
+        }
+
+        // Deferral for a slow-lane attempt that did not complete: a short retry while the budget
+        // lasts, then a full cycle. The short retry has to go through TryScheduleRetry, the only way
+        // to bring a zone back sooner than the sweep floor -- BackoffZone can only push one out.
+        private static void RetryOrDefer(Vector2s zone, LocationResetConfigSnapshot cfg, ZoneResetReport report, string cause) {
+            if (LocationResetState.TryScheduleRetry(zone, out int attempt, out float delay)) {
+                report.SkipReason = $"{cause}; retry {attempt}/{LocationResetState.MaxTransientRetries} in {delay / 60f:0.#} min";
+                return;
+            }
+            LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
+            report.SkipReason = $"{cause}; {LocationResetState.MaxTransientRetries} retries spent, deferred to the next cycle";
         }
 
         // Per-prefab before/after for a chunk that came out heavier than it went in, so the log names

@@ -222,6 +222,7 @@ namespace StarLevelSystem.modules.LocationReset {
             ZoneResetReport report = ZoneResetReport.For(zone, false);
             report.RateMultiplier = ZoneRates.MultiplierFor(zone, cfg);
             report.RateDescription = ZoneRates.Describe(zone, cfg);
+            List<int> refreshedTimers = null;
             // finally rather than an emit at each exit: every path through this method produces a
             // record, including the ones that decide to do nothing.
             try {
@@ -267,7 +268,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 // ---- Fast lane: pure ZDO refresh, no loading ----
                 FastLaneZones++;
-                ResetTargets.RefreshZoneInPlace(zone, cfg, false, report);
+                refreshedTimers = ResetTargets.RefreshZoneInPlace(zone, cfg, false, report);
 
                 // ---- Slow lane: only if the census says something was destroyed here ----
                 bool needsSlow = allowSlow && NeedsRegeneration(zone, report.RateMultiplier);
@@ -294,8 +295,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 LocationResetState.StampZone(zone);
-                ZoneProtectionScan.RecordBaseline(zone);
+                // cfg.Now predates every stamp this pass wrote, which is how RecordBaseline tells a
+                // loss the pass skipped as not due from one it just regrew.
+                ZoneProtectionScan.RecordBaseline(zone, cfg.Now, report.RateMultiplier);
             } finally {
+                // After the slow lane, on every way out of it: a failed or skipped regeneration does
+                // not undo the in-place writes. Never earlier -- see StampRefreshedTimers.
+                ResetTargets.StampRefreshedTimers(zone, refreshedTimers);
                 EmitZoneReport(report);
             }
         }
@@ -359,15 +365,35 @@ namespace StarLevelSystem.modules.LocationReset {
             if (ZNet.instance == null) { return false; }
             Vector3 center = ZoneSystem.GetZonePos(zone);
             float sqr = radius * radius;
-            // Read the live list rather than GetPlayerList(), which builds a copy on every call.
-            List<ZNet.PlayerInfo> players = ZNet.instance.m_players;
-            if (players == null) { return false; }
-            for (int i = 0; i < players.Count; i++) {
-                Vector3 delta = players[i].m_position - center;
-                delta.y = 0f;
-                if (delta.sqrMagnitude <= sqr) { return true; }
+
+            // Each peer's own reference position, NOT ZNet.m_players. UpdatePlayerList only copies a
+            // position into PlayerInfo when the player shares it on the map and leaves everyone else
+            // at the origin, so a player who hid their position was invisible here. On a dedicated
+            // server the caller's IsZoneLoaded check does not cover for that either: the server only
+            // creates local zones around its own reference point, never around a peer's. m_refPos
+            // arrives from every client whether or not it is public. Live list, so no copy per call.
+            List<ZNetPeer> peers = ZNet.instance.m_peers;
+            if (peers != null) {
+                for (int i = 0; i < peers.Count; i++) {
+                    ZNetPeer peer = peers[i];
+                    // A peer still handshaking has not sent a position; its m_refPos is the origin.
+                    if (peer == null || peer.IsReady() == false) { continue; }
+                    if (WithinXZ(peer.m_refPos, center, sqr)) { return true; }
+                }
             }
+
+            // A listen-server host is not a peer of its own server. The zones around them are loaded,
+            // which the caller's IsZoneLoaded check catches, but the safe radius reaches well past
+            // the loaded area.
+            Player host = Player.m_localPlayer;
+            if (host != null && WithinXZ(host.transform.position, center, sqr)) { return true; }
             return false;
+        }
+
+        private static bool WithinXZ(Vector3 position, Vector3 center, float sqrRadius) {
+            float dx = position.x - center.x;
+            float dz = position.z - center.z;
+            return (dx * dx) + (dz * dz) <= sqrRadius;
         }
     }
 
@@ -384,7 +410,7 @@ namespace StarLevelSystem.modules.LocationReset {
         internal long MinIntervalSeconds;
         internal long DefaultIntervalSeconds;
         // Set when Defaults carries a ResetSchedule instead of ResetHours. Only the fallback path in
-        // DueForRefresh needs it; every configured target resolves its own schedule.
+        // ResetTargets.RefreshTimerElapsed needs it; every configured target resolves its own schedule.
         internal CronSchedule DefaultSchedule;
         internal int MaxZonesPerSecondFastLane;
         internal int MaxZonesPerSecondSlowLane;

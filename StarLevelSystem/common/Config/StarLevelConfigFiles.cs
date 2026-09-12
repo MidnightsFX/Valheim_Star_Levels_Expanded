@@ -666,6 +666,8 @@ namespace StarLevelSystem.common {
 #       Protection:
 #         PlayerBuiltPiece: Ignore        # player builds neither block ore chunks nor
 #                                         #   survive their reset - they are DELETED by it
+#         PlayerBaseEffect: Ignore        # nor does a base, like a workbench left on the
+#                                         #   spawn (see Player bases below)
 #         Container:
 #           Action: Block                 # chests still block ore chunks...
 #           Ignored: [piece_chest_wood]   # ...except plain wood chests, which are deleted
@@ -705,9 +707,21 @@ namespace StarLevelSystem.common {
 #   Defaults:
 #     ProtectionRadius: 48
 #
+# --- Player bases (PlayerBaseEffect) ---
+# A chunk is also blocked while any part of it lies inside a player's base: the PlayerBase
+# area vanilla puts around a workbench and similar pieces, the one that stops monsters
+# spawning. That area's own reach decides it, not ProtectionRadius, so a base in the next
+# chunk over holds this one only if it actually extends across the line. Only pieces a
+# player built count, and a prefab ignored under PlayerBuiltPiece projects no base either -
+# the shipped fire_pit ignore covers both. Groups and entries can override it like any
+# other category.
+#
+# Only Block does anything for this category. Preserve and Ignore both just let the chunk
+# reset; whether the base piece itself survives is still decided by its PlayerBuiltPiece rule.
+#
 # --- ExtraTerrainRadius ---
 # Per location: metres of terrain reset BEYOND the location's own radius, for the ramps and
-# moats players dig around the outside. Clamped to ProtectionRadius minus 32m (so 32m at the
+# moats players dig around the outside. Clamped to ProtectionRadius minus 32m (so 16m at the
 # default), which is as far past a location's own footprint as the protection scan actually
 # checked for player property - resetting terrain further would flatten ground nobody looked
 # at. Raising ProtectionRadius raises this ceiling with it.

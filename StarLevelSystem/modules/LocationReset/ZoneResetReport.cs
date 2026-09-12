@@ -54,7 +54,9 @@ namespace StarLevelSystem.modules.LocationReset {
         // The zone was already live and we worked on it in place instead of poke-loading it.
         internal bool ZoneAdopted;
 
-        // Set when nothing was attempted. Mutually exclusive with the counters below.
+        // Why the chunk was skipped, or why an attempt did not complete. Usually set when nothing was
+        // attempted, but a slow-lane attempt that fails part-way sets it alongside whatever counters it
+        // had already filled, and ToRecord reports that pairing as "incomplete".
         internal string SkipReason;
 
         // Combined biome x band rate applied to every timer in this chunk. 1 = unmodified,

@@ -22,10 +22,22 @@ namespace StarLevelSystem.modules.LocationReset {
             internal ushort Baseline;
         }
 
+        // Entries key for the in-place refresh timer shared by every target in a zone that has no
+        // Vegetation entry of its own: containers, and any mineable rock no group names. A stamp and
+        // nothing else -- there is no census behind it, so its Baseline is never read.
+        //
+        // 0 because vanilla's ZNetScene already treats a prefab hash of 0 as no prefab at all, as
+        // TargetPrefabHash does, so nothing real uses it. It rides in Entries rather than in a new
+        // ZoneRecord field because persisting a field would mean bumping FileVersion, which discards
+        // every stamp and baseline in the world (see RetryAt below); an older build loads it as an entry
+        // no config tracks and never looks it up.
+        internal const int DefaultsTimerKey = 0;
+
         internal class ZoneRecord {
             // Unix seconds of the last time this zone was examined or reset.
             internal long ZoneStamp;
-            // prefab hash -> record. Only holds prefabs the config actually tracks.
+            // prefab hash -> record. Only holds prefabs the config actually tracks, plus the shared
+            // DefaultsTimerKey timer.
             internal Dictionary<int, EntryRecord> Entries = new Dictionary<int, EntryRecord>();
 
             // Short retry for a TRANSIENT block: a player walking through, or a zone that would not
@@ -133,18 +145,38 @@ namespace StarLevelSystem.modules.LocationReset {
         // or BackoffZone (deferred for a full cycle), and both clear the retry state themselves. A
         // third way to clear it would just be a way to forget to call it.
 
-        // Record the census baseline without moving the timer. Used on first sight.
+        // Record the census baseline without moving a running timer. Used by RecordBaseline -- on first
+        // sight, after a successful reset, and by sls-loc-stamp -- and by StampRefreshedTimers for a
+        // prefab refreshed in a zone that never recorded it.
+        //
+        // A timer that has never run starts here, though, because those are exactly the moments one
+        // should. Left at 0 it read as long overdue, so the first loss of each prefab in each zone came
+        // back at the zone's next examination rather than after its ResetHours -- a vein mined once
+        // returned on the 6h sweep floor instead of Ores' 48h. Locations get the same grace from their
+        // FirstSightStamped pass. Records saved before this still hold 0, and are due once before
+        // their timers start.
         internal static void SetBaseline(Vector2s zone, int prefabHash, ushort baseline) {
             ZoneRecord record = GetOrCreate(zone);
             record.Entries.TryGetValue(prefabHash, out EntryRecord existing);
-            record.Entries[prefabHash] = new EntryRecord() { Stamp = existing.Stamp, Baseline = baseline };
+            long stamp = existing.Stamp > 0 ? existing.Stamp : Now;
+            record.Entries[prefabHash] = new EntryRecord() { Stamp = stamp, Baseline = baseline };
+            dirty = true;
+        }
+
+        // SetBaseline's timer half on its own, for DefaultsTimerKey, which has no census to record.
+        internal static void StartTimer(Vector2s zone, int key) {
+            ZoneRecord record = GetOrCreate(zone);
+            if (record.Entries.TryGetValue(key, out EntryRecord existing) && existing.Stamp > 0) { return; }
+            record.Entries[key] = new EntryRecord() { Stamp = Now, Baseline = existing.Baseline };
             dirty = true;
         }
 
         // The mirror of SetBaseline: move the timer, keep the census. Used right after a regeneration,
         // where the timer is known but the new counts are not -- RecordBaseline supplies those once
-        // the reset is known to have completed. Writing a placeholder baseline here instead would be
-        // read downstream as "nothing missing" and freeze the entry out of future resets.
+        // the reset is known to have completed -- and after a pass that refreshed content in place,
+        // which changes no counts at all. Writing a placeholder baseline here instead would be read
+        // downstream as "nothing missing" and freeze the entry out of future resets, which is also why
+        // a caller that may be creating the record has to census it first (StampRefreshedTimers does).
         internal static void StampEntryTime(Vector2s zone, int prefabHash) {
             ZoneRecord record = GetOrCreate(zone);
             record.Entries.TryGetValue(prefabHash, out EntryRecord existing);

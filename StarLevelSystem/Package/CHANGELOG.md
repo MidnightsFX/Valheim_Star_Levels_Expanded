@@ -1,3 +1,13 @@
+**1.11.0**
+ ---
+ ```
+- Player bases now block a reset: the workbench area that stops monsters spawning
+	- Relax it per group with PlayerBaseEffect: Ignore. A prefab ignored under PlayerBuiltPiece projects no base either
+- Players who hide their position on the map are no longer invisible to the reset's safety check
+- ExtraTerrainRadius is now clamped to ProtectionRadius minus 32m, so terrain is never reset further out than player property was checked for
+- A chunk whose reset did not finish now gets two short retries instead of waiting a full cycle
+ ```
+
 **1.10.2**
  ---
  ```

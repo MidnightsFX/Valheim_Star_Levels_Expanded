@@ -589,7 +589,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     // somebody's feet, which the wait above has already settled; splitting this bool
                     // into "bypass timers" and "adopt a loaded zone" would touch seven call sites in
                     // the most delicate code here to express something the gate already handles.
-                    ResetTargets.RefreshZoneInPlace(zone, cfg, true, report);
+                    List<int> refreshedTimers = ResetTargets.RefreshZoneInPlace(zone, cfg, true, report);
                     bool ok = false;
                     yield return ResetTargets.RegenerateZone(zone, cfg, true, report, (r) => { ok = r; });
                     if (ok) {
@@ -597,6 +597,9 @@ namespace StarLevelSystem.modules.LocationReset {
                         ZoneProtectionScan.RecordBaseline(zone);
                         summary.ZonesReset++;
                     }
+                    // Force reads no timers, but still restarts the ones it refreshed, as Tier 2 and a
+                    // location rebuild do. After regeneration and whatever ok says, as in the sweep.
+                    ResetTargets.StampRefreshedTimers(zone, refreshedTimers);
                     summary.Add(report);
                     Announce(output, report, source);
                     yield return null;

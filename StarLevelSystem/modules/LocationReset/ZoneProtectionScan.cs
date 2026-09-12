@@ -58,6 +58,11 @@ namespace StarLevelSystem.modules.LocationReset {
         // are the Sunken Crypt entrance (sunken_crypt_gate) and the Queen's citadel
         // (dungeon_queen_door); classified by component so a modded keyed entrance is covered too.
         internal static readonly HashSet<int> KeyedDoorHashes = new HashSet<int>();
+        // Prefabs carrying a vanilla PlayerBase EffectArea -- the area that stops monsters spawning --
+        // mapped to how far it reaches from the piece in XZ. Read from the prefab rather than the live
+        // component, because EffectArea only registers itself in Awake and the chunks the sweep scans
+        // have nothing instantiated.
+        internal static readonly Dictionary<int, float> PlayerBaseRadius = new Dictionary<int, float>();
 
         private static bool prefabSetsBuilt = false;
 
@@ -120,6 +125,7 @@ namespace StarLevelSystem.modules.LocationReset {
             SpawnerPrefabNames.Clear();
             TerrainModifierHashes.Clear();
             KeyedDoorHashes.Clear();
+            PlayerBaseRadius.Clear();
             PrefabNamesByHash.Clear();
 
             foreach (GameObject prefab in ZNetScene.instance.m_prefabs) {
@@ -146,6 +152,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (prefab.GetComponent<TerrainModifier>() != null) { TerrainModifierHashes.Add(hash); }
                 Door door = prefab.GetComponent<Door>();
                 if (door != null && door.m_keyItem != null) { KeyedDoorHashes.Add(hash); }
+                float baseReach = PlayerBaseReach(prefab);
+                if (baseReach > 0f) { PlayerBaseRadius[hash] = baseReach; }
                 MineRock mineRock = prefab.GetComponent<MineRock>();
                 if (mineRock != null && mineRock.m_hitAreas != null) {
                     MineRockAreaCounts[hash] = mineRock.m_hitAreas.Length;
@@ -157,7 +165,57 @@ namespace StarLevelSystem.modules.LocationReset {
             Logger.LogLocationReset($"Protection prefab sets built: {pieceHashes.Count} pieces, {tombstoneHashes.Count} tombstones, " +
                 $"{wardHashes.Count} wards, {portalHashes.Count} portals, {containerHashes.Count} containers, " +
                 $"{itemDropHashes.Count} item drops, {KeyedDoorHashes.Count} keyed doors, " +
-                $"{SpawnerHashes.Count} spawners.");
+                $"{SpawnerHashes.Count} spawners, {PlayerBaseRadius.Count} player-base pieces.");
+            // Named with their reach, because which pieces make a base is prefab data no config file
+            // shows -- and it is the first thing to check when a chunk reports being inside one.
+            if (PlayerBaseRadius.Count > 0) {
+                List<string> bases = new List<string>();
+                foreach (KeyValuePair<int, float> kvp in PlayerBaseRadius) {
+                    bases.Add($"{PrefabNameFor(kvp.Key)} {kvp.Value:0.#}m");
+                }
+                bases.Sort(string.CompareOrdinal);
+                Logger.LogLocationReset($"Player-base pieces: {string.Join(", ", bases)}");
+            }
+        }
+
+        // How far a prefab's PlayerBase area reaches from the piece in XZ, or 0 when it has none. The
+        // largest wins when a prefab carries several.
+        //
+        // Read off the collider directly: EffectArea.GetRadius goes through m_collider, which Awake
+        // assigns and a prefab never ran. The area's horizontal offset from the piece is added on, so a
+        // sphere set off to one side is still inside the circle drawn around the piece. A box counts
+        // as half its longer horizontal side; any other collider shape is not a base area we can size.
+        private static float PlayerBaseReach(GameObject prefab) {
+            float reach = 0f;
+            EffectArea[] areas = prefab.GetComponentsInChildren<EffectArea>(true);
+            for (int i = 0; i < areas.Length; i++) {
+                EffectArea area = areas[i];
+                if (area == null || (area.m_type & EffectArea.Type.PlayerBase) == EffectArea.Type.None) { continue; }
+
+                Transform t = area.transform;
+                Vector3 scale = t.lossyScale;
+                float horizontalScale = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+                Collider collider = area.GetComponent<Collider>();
+                float radius;
+                Vector3 localCenter;
+                if (collider is SphereCollider sphere) {
+                    radius = sphere.radius * horizontalScale;
+                    localCenter = sphere.center;
+                } else if (collider is CapsuleCollider capsule) {
+                    radius = capsule.radius * horizontalScale;
+                    localCenter = capsule.center;
+                } else if (collider is BoxCollider box) {
+                    radius = 0.5f * Mathf.Max(Mathf.Abs(box.size.x * scale.x), Mathf.Abs(box.size.z * scale.z));
+                    localCenter = box.center;
+                } else {
+                    continue;
+                }
+
+                Vector3 offset = t.TransformPoint(localCenter) - prefab.transform.position;
+                offset.y = 0f;
+                reach = Mathf.Max(reach, radius + offset.magnitude);
+            }
+            return reach;
         }
 
         internal static void ResetPrefabSets() {
@@ -280,7 +338,8 @@ namespace StarLevelSystem.modules.LocationReset {
             BuildPrefabSets();
 
             // Neighbour hits are distance-tested from the chunk centre; the chunk's own sector is not,
-            // so a build inside the chunk always protects it however tight the radius is set.
+            // so a build inside the chunk always protects it however tight the radius is set. Player
+            // bases are measured by their own reach instead -- see ScanSector.
             Vector3 center3 = ZoneSystem.GetZonePos(zone);
             Vector2 center = new Vector2(center3.x, center3.z);
             float radius = LocationResetData.ProtectionRadius;
@@ -289,8 +348,7 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -range; dx <= range; dx++) {
                 for (int dy = -range; dy <= range; dy++) {
                     bool isCenter = dx == 0 && dy == 0;
-                    if (ScanSector(new Vector2s(zone.x + dx, zone.y + dy), entries, result,
-                                   isCenter ? (Vector2?)null : center, radius)) {
+                    if (ScanSector(new Vector2s(zone.x + dx, zone.y + dy), entries, result, center, isCenter, radius)) {
                         // A Block hit is decisive; no point scanning the rest. Name the location being
                         // starved before returning: this is the only moment it is cheap to find, and
                         // the caller abandons the zone immediately afterwards. Off the hot path, since
@@ -344,50 +402,83 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Returns true if this sector produced a blocking hit.
         //
-        // center is null for the chunk's own sector, which always blocks. For a neighbour it is the
-        // chunk centre in XZ, and an object only blocks if it lies within radius of it: the 3x3 sweep
-        // otherwise let one forgotten build protect nine chunks.
+        // Every object in the chunk's own sector (isCenter) counts. In a neighbour an object only counts
+        // within radius of the chunk centre: the 3x3 sweep otherwise let one forgotten build protect
+        // nine chunks. A player base is the exception, judged by its own reach against the chunk's
+        // footprint instead (see InsidePlayerBase).
         private static bool ScanSector(Vector2s sector, List<LocationResetData.ResolvedResetEntry> entries, ProtectionResult result,
-                                       Vector2? center, float radius) {
+                                       Vector2 center, bool isCenter, float radius) {
             zdoBuffer.Clear();
             ZoneObjects.FindObjects(sector, zdoBuffer);
 
             for (int i = 0; i < zdoBuffer.Count; i++) {
                 ZDO zdo = zdoBuffer[i];
                 if (zdo == null || zdo.IsValid() == false) { continue; }
-                if (TryClassify(zdo, out ProtectionCategory category) == false) { continue; }
 
                 // XZ only, and built explicitly: a dungeon interior is parked at its entrance's
                 // y + 5000, so anything that let altitude into this comparison would put every
                 // interior object out of range of its own chunk.
-                if (center.HasValue) {
-                    Vector3 p = zdo.GetPosition();
-                    if (Vector2.Distance(new Vector2(p.x, p.z), center.Value) > radius) { continue; }
+                Vector3 p = zdo.GetPosition();
+                Vector2 position = new Vector2(p.x, p.z);
+
+                if (TryClassify(zdo, out ProtectionCategory category)
+                        && (isCenter || Vector2.Distance(position, center) <= radius)) {
+                    // ProtectedPrefabs blocks unconditionally, whatever its category's action says --
+                    // that is the documented contract ("always block a reset, whatever category detection
+                    // says"), and it beats every ignore list, matching ShouldPreserve and
+                    // WarnOnProtectionConflicts. Routing it through the category action instead would let
+                    // a listed ItemDrop slip through on DroppedItem's Preserve default.
+                    bool blocks = LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)
+                        || ObjectBlocks(entries, category, zdo.m_prefab);
+
+                    // Only Block is decided here. Preserve and Ignore both mean "this zone may be reset",
+                    // and which objects inside it survive is ShouldPreserve's call at clear time.
+                    if (blocks) { return RecordBlock(result, category, zdo); }
                 }
 
-                // ProtectedPrefabs blocks unconditionally, whatever its category's action says --
-                // that is the documented contract ("always block a reset, whatever category detection
-                // says"), and it beats every ignore list, matching ShouldPreserve and
-                // WarnOnProtectionConflicts. Routing it through the category action instead would let
-                // a listed ItemDrop slip through on DroppedItem's Preserve default.
-                bool blocks = LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)
-                    || ObjectBlocks(entries, category, zdo.m_prefab);
-
-                // Only Block is decided here. Preserve and Ignore both mean "this zone may be reset",
-                // and which objects inside it survive is ShouldPreserve's call at clear time.
-                if (blocks) {
-                    result.Blocked = true;
-                    result.BlockingCategory = category;
-                    result.BlockingPrefabHash = zdo.m_prefab;
-                    result.BlockingPosition = zdo.GetPosition();
-                    result.BlockingCreator = zdo.GetLong(ZDOVars.s_creator, 0L);
-                    zdoBuffer.Clear();
-                    return true;
+                // Asked of every object, whatever it classified as and however far it stands from the
+                // centre: whether this chunk lies in somebody's base is a question of the base's reach,
+                // not of where the piece stands. After the category check, so a piece that blocks in
+                // its own right is still reported under that category.
+                if (InsidePlayerBase(zdo, position, center)
+                        && ObjectBlocks(entries, ProtectionCategory.PlayerBaseEffect, zdo.m_prefab)) {
+                    return RecordBlock(result, ProtectionCategory.PlayerBaseEffect, zdo);
                 }
             }
 
             zdoBuffer.Clear();
             return false;
+        }
+
+        private static bool RecordBlock(ProtectionResult result, ProtectionCategory category, ZDO zdo) {
+            result.Blocked = true;
+            result.BlockingCategory = category;
+            result.BlockingPrefabHash = zdo.m_prefab;
+            result.BlockingPosition = zdo.GetPosition();
+            result.BlockingCreator = zdo.GetLong(ZDOVars.s_creator, 0L);
+            zdoBuffer.Clear();
+            return true;
+        }
+
+        // Half a chunk's side: ZoneSystem.GetZone floors (x + 32) / 64, so a chunk spans +/-32m of its
+        // centre on both horizontal axes.
+        private const float ChunkHalfSize = 32f;
+
+        // Whether this is a player-built base piece whose PlayerBase area overlaps the chunk. Circle
+        // against the chunk's square rather than its centre point, so a base reaching over the edge
+        // counts as well as one covering the middle.
+        //
+        // Creator-gated like every other player category: world generation places some of the same
+        // pieces, and those are nobody's base.
+        //
+        // The 3x3 scan bounds what can be seen. A base reaching this chunk from beyond its neighbours
+        // would need more than 64m of reach, and is not found.
+        private static bool InsidePlayerBase(ZDO zdo, Vector2 position, Vector2 center) {
+            if (PlayerBaseRadius.TryGetValue(zdo.m_prefab, out float reach) == false) { return false; }
+            if (zdo.GetLong(ZDOVars.s_creator, 0L) == 0L) { return false; }
+            float dx = Mathf.Max(0f, Mathf.Abs(position.x - center.x) - ChunkHalfSize);
+            float dz = Mathf.Max(0f, Mathf.Abs(position.y - center.y) - ChunkHalfSize);
+            return (dx * dx) + (dz * dz) <= reach * reach;
         }
 
         // Whether one classified object blocks the zone, judged against every governing entry.
@@ -485,12 +576,39 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Record the current contents of a zone as its baseline. Called on first sight and after a
         // successful reset, so "below baseline" always means "a player destroyed something since".
-        internal static void RecordBaseline(Vector2s zone) {
+        // Also where each of the zone's timers starts, if it never has -- see LocationResetState.SetBaseline.
+        //
+        // The sweep's post-reset call passes passStart and the chunk's rate, so that a loss the pass
+        // was not allowed to restore stays owed. SelectDueVegetation skips an entry whose timer is still
+        // running, so when a location in the chunk comes due first, a vein mined out since copper last
+        // came back is still missing afterwards -- and re-recording the lower count forgot it for good.
+        // Timers now also start at first sight and on an in-place refresh, which turned that from an
+        // occasional loss into the usual outcome. Every other caller passes 0 and records the zone
+        // exactly as it stands.
+        internal static void RecordBaseline(Vector2s zone, long passStart = 0L, float rate = 1f) {
             Dictionary<int, ushort> counts = CensusZone(zone);
+            float distance = passStart > 0L ? ZoneRates.DistanceFor(zone) : 0f;
             foreach (KeyValuePair<int, LocationResetData.ResolvedResetEntry> tracked in LocationResetData.VegetationByPrefabHash) {
                 counts.TryGetValue(tracked.Key, out ushort present);
+                if (passStart > 0L && LossStillOwed(zone, tracked.Key, tracked.Value.ForDistance(distance), present, passStart, rate)) { continue; }
                 LocationResetState.SetBaseline(zone, tracked.Key, present);
             }
+            // The timer shared by everything with no entry of its own has nothing to census, but starts
+            // at the same moment.
+            LocationResetState.StartTimer(zone, LocationResetState.DefaultsTimerKey);
+        }
+
+        // Below baseline because the pass that just ended left it alone on purpose: the entry's timer
+        // was still running when the pass began. A stamp at or after passStart means the pass regrew
+        // it, and then the new count is the one to keep, whatever it came to. A due entry the pass
+        // could not regrow is re-recorded as before, or it would hold the chunk in the slow lane.
+        private static bool LossStillOwed(Vector2s zone, int prefabHash, LocationResetData.ResolvedResetEntry entry,
+                                          ushort present, long passStart, float rate) {
+            if (entry.Enabled == false) { return false; }
+            if (LocationResetState.TryGetEntry(zone, prefabHash, out LocationResetState.EntryRecord record) == false) { return false; }
+            if (present >= record.Baseline) { return false; }
+            if (record.Stamp <= 0L || record.Stamp >= passStart) { return false; }
+            return entry.IsDue(record.Stamp, passStart, rate) == false;
         }
 
         // ZDO count over a chunk AND its 8 neighbours, for the before/after accounting that catches a

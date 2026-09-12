@@ -421,40 +421,54 @@ namespace StarLevelSystem.common
                         break;
                     }
                     case LevelupCalculationStyle.Table: {
-                        // Looks up a hand-authored shape by span (level count from MinLevel to MaxLevel inclusive)
-                        // in the settings-wide LevelupWeightTablesBySpan, then shifts its entries onto this
-                        // generator's own MinLevel..MaxLevel range. Unlike the formula-driven styles above, this
-                        // does not use LevelUpChance/GaussianOffset - the exact values come from the table.
+                        // Looks up a hand-authored threshold table by span (level count from MinLevel to MaxLevel
+                        // inclusive) in the settings-wide LevelupChanceTablesBySpan. Entries map by key, not by
+                        // position: key 1 lands on MinLevel, key 2 on MinLevel + 1, so one table serves every
+                        // generator with the same span. LevelUpChance/GaussianOffset are only used by the fallback.
                         int spanCount = span + 1;
-                        Dictionary<int, SortedDictionary<int, float>> tables = LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
-                        SortedDictionary<int, float> shape = null;
-                        tables?.TryGetValue(spanCount, out shape);
-                        if (shape == null || shape.Count == 0) {
-                            Logger.LogWarning($"LevelGenerator '{PrefabName}' uses Table style but no LevelupWeightTablesBySpan entry exists for span {spanCount}; falling back to single level {min}.");
-                            chances.Add(min, 0f);
-                            break;
+                        SortedDictionary<int, float> table = null;
+                        LevelSystemData.SLE_Level_Settings?.LevelupChanceTablesBySpan?.TryGetValue(spanCount, out table);
+                        if (table != null) {
+                            foreach (KeyValuePair<int, float> kvp in table) {
+                                if (kvp.Key < 1 || kvp.Key > spanCount) { continue; }
+                                chances.Add(min + kvp.Key - 1, kvp.Value);
+                            }
                         }
-                        int position = 0;
-                        foreach (KeyValuePair<int, float> kvp in shape) {
-                            int lvl = min + position;
-                            if (lvl > max) { break; }
-                            chances.Add(lvl, kvp.Value);
-                            position++;
-                        }
+                        if (chances.Count > 0) { break; }
+                        // Without a usable table every spawn would pin to MinLevel, so fall back to the default
+                        // curve instead. Warned once: raids and nemesis spawns expand generators on every roll.
+                        WarnOnce($"table:{spanCount}", $"A Table style level generator covers levels {min}-{max} ({spanCount} levels) but LevelupChanceTablesBySpan has no usable '{spanCount}' entry; using the Exponential curve for it instead.");
+                        AddExponentialCurve(chances, min, max, start, epsilon);
                         break;
                     }
                     case LevelupCalculationStyle.Exponential:
                     default: {
-                        // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel.
-                        float decay = Mathf.Pow(epsilon / start, 1f / span); // start * decay^span == epsilon at max
-                        for (int lvl = min; lvl <= max; lvl++) {
-                            float threshold = start * Mathf.Pow(decay, lvl - min);
-                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
-                        }
+                        AddExponentialCurve(chances, min, max, start, epsilon);
                         break;
                     }
                 }
                 return chances;
+            }
+
+            // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel.
+            private static void AddExponentialCurve(SortedDictionary<int, float> chances, int min, int max, float start, float epsilon) {
+                int span = max - min;
+                float decay = Mathf.Pow(epsilon / start, 1f / span); // start * decay^span == epsilon at max
+                for (int lvl = min; lvl <= max; lvl++) {
+                    float threshold = start * Mathf.Pow(decay, lvl - min);
+                    chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
+                }
+            }
+
+            private static readonly HashSet<string> warned = new HashSet<string>();
+
+            private static void WarnOnce(string key, string message) {
+                if (warned.Add(key)) { Logger.LogWarning(message); }
+            }
+
+            // Called when level settings are applied, so a fixed or newly broken table is reported again.
+            internal static void ClearWarnings() {
+                warned.Clear();
             }
 
             public int RollAndDetermineLevel() {
@@ -504,12 +518,16 @@ namespace StarLevelSystem.common
             [Description("Enables boss-reactive, biome-specific levelup chances based on the world's defeated bosses (global keys).")]
             public bool EnableConditionalCreatureLevelupChance { get; set; } = false;
 
-            [Description("Defeated-boss global key -> biome -> level generator. Highest tier (bottom-most listed) defeated boss applies; its generator replaces the biome default levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
+            [Description("Defeated-boss global key -> biome -> level generator. The latest defeated key in ConditionalBossKeyOrder applies (file order does not matter); its generator replaces the biome default levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
             public Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> ConditionalCreatureLevelupChance { get; set; }
 
-            [Description("Hand-authored levelup-chance shapes for the 'Table' LevelupCalculationStyle, keyed by span (MaxLevel - MinLevel + 1). A generator using Table style looks up the entry matching its own span and shifts it onto its MinLevel..MaxLevel range.")]
+            [Description("Boss global keys from earliest to latest progression. The latest defeated key here that has a ConditionalCreatureLevelupChance entry applies. Keys not listed rank below every listed key. Leave empty to use the vanilla boss order.")]
             [DefaultValue(null)]
-            public Dictionary<int, SortedDictionary<int, float>> LevelupWeightTablesBySpan { get; set; }
+            public List<string> ConditionalBossKeyOrder { get; set; }
+
+            [Description("Levelup chance tables for the 'Table' LevelupCalculationStyle, keyed by span (MaxLevel - MinLevel + 1). Inside a table, key 1 is the generator's MinLevel, key 2 is MinLevel + 1, and so on; each value is the % chance to roll past that level, so values must decrease.")]
+            [DefaultValue(null)]
+            public Dictionary<int, SortedDictionary<int, float>> LevelupChanceTablesBySpan { get; set; }
         }
 
         [Description("Controls Night-time specific settings")]

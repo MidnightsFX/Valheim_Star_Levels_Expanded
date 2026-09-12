@@ -1,3 +1,15 @@
+**1.12.0**
+ ---
+ ```
+- New Table curve style for level generators: write the chances yourself in LevelupChanceTablesBySpan and reuse them for any generator covering the same number of levels (thanks NyrZ)
+- The quick configure panel can edit the Table values for its default level generator
+- A level generator using Table with no matching table falls back to the Exponential curve instead of always rolling its lowest level
+- Broken level tables (missing keys, values that do not go down) are reported once when LevelSettings.yaml loads
+- New ConditionalBossKeyOrder decides which defeated boss sets the conditional levelup tier; entry order in the file no longer matters
+- Fixed conditional levelup chances getting stuck on the Eikthyr tier
+- Boss-conditional tiers now update when a boss is defeated for everyone, including dedicated servers, and reset when changing worlds
+ ```
+
 **1.11.0**
  ---
  ```

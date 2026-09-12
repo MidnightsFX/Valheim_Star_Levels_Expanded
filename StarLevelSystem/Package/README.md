@@ -189,6 +189,74 @@ defaultCreatureLevelUpChance:
   12: 0.25
 ```
 
+#### Level Generators
+Writing a long levelup chance table by hand is tedious, so generators build one for you from a level range and a curve style.
+A generator can replace the default table (`DefaultLevelupGenerators`), a biome or creature table (`LevelupGenerators`), and is
+also used by raid spawns, nemesis spawns and boss-conditional chances. Name a list of generators in `CustomLevelupGenerators` to
+reference it from anywhere with `LevelupGeneratorRefs` / `DefaultLevelupGeneratorRefs`.
+
+```
+CustomLevelupGenerators:
+  late_game:
+  - MinLevel: 1
+    MaxLevel: 25
+    LevelUpChance: 0.35             # 0-1 fraction, 0.35 = 35%
+    LevelupCalculationStyle: Gaussian
+    GaussianOffset: 0.25            # Gaussian only: -1 to 1, shifts the most likely level
+DefaultLevelupGeneratorRefs: [ late_game ]
+```
+
+Curve styles:
+- `Linear` - the chance to level up drops evenly from `LevelUpChance` at `MinLevel` to nothing at `MaxLevel`.
+- `Exponential` - the chance drops quickly at first, so low levels are common and high levels are rare.
+- `Gaussian` - a bell curve that favours levels in the middle of the range (moved with `GaussianOffset`).
+- `Table` - uses a table you write yourself from `LevelupChanceTablesBySpan` instead of a formula.
+
+##### Table style
+`LevelupChanceTablesBySpan` is keyed by how many levels a generator covers (`MaxLevel - MinLevel + 1`), not by the levels themselves.
+Inside a table, key `1` is the generator's `MinLevel`, key `2` is `MinLevel + 1` and so on, so one table can be reused by many generators
+that cover the same number of levels at different points in the world. Like `DefaultCreatureLevelUpChance`, each value is the % chance
+to roll past that level, so the values must go down. `LevelUpChance` is not used.
+
+```
+LevelupChanceTablesBySpan:
+  4: { 1: 30, 2: 15, 3: 5, 4: 0.01 }
+CustomLevelupGenerators:
+  swamp_tier:
+  - MinLevel: 3                     # levels 3-6 are 4 levels, so this uses table 4:
+    MaxLevel: 6                     # 30% chance to roll past level 3, 15% past 4, 5% past 5
+    LevelupCalculationStyle: Table
+```
+
+If there is no table for a generator's span it uses the `Exponential` curve instead, and a warning is logged once. Tables that are
+missing keys or whose values do not go down are also reported when the config loads. The quick configure panel can edit the table
+for its default generator directly: pick the `Table` curve style and type the values separated by commas.
+
+#### Boss-Conditional Levelup Chances
+With `EnableConditionalCreatureLevelupChance: true`, each biome's levelup chances change as world bosses are defeated.
+`ConditionalCreatureLevelupChance` maps a boss global key to per-biome generators, and `ConditionalBossKeyOrder` decides which boss
+counts as furthest along: the latest defeated key in that list that has an entry is used. The order of entries in the file does not matter.
+
+```
+EnableConditionalCreatureLevelupChance: true
+ConditionalBossKeyOrder:            # earliest to latest; leave out to use this vanilla order
+- defeated_eikthyr
+- defeated_gdking
+- defeated_bonemass
+- defeated_dragon
+- defeated_goblinking
+- defeated_queen
+- defeated_fader
+ConditionalCreatureLevelupChance:
+  defeated_bonemass:
+    Meadows:
+      LevelupGenerators:
+      - { MinLevel: 3, MaxLevel: 16, LevelUpChance: 0.25, LevelupCalculationStyle: Exponential }
+```
+
+Add keys from modded bosses where they belong in your progression. An entry whose key is not in the list only applies while no
+listed boss has been defeated. The tier changes as soon as a boss key is set or removed, for creatures spawned after that.
+
 ### Nemesis System
 The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
 

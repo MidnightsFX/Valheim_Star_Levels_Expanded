@@ -192,34 +192,58 @@ namespace StarLevelSystem.common {
 #
 # --- Table calculation style ---
 # Linear/Exponential/Gaussian compute a curve from LevelUpChance; Table instead
-# looks up a hand-authored shape from LevelupWeightTablesBySpan and shifts it
-# onto the generator's own MinLevel..MaxLevel range. LevelUpChance and
-# GaussianOffset are ignored for Table style.
+# reads a hand-written table from LevelupChanceTablesBySpan and moves it onto
+# the generator's own MinLevel..MaxLevel range. LevelUpChance and GaussianOffset
+# are not used by Table.
 #
-# LevelupWeightTablesBySpan is keyed by SPAN (MaxLevel - MinLevel + 1), not by
-# absolute level: each table's first entry always lands on the generator's own
-# MinLevel, its second entry on MinLevel + 1, and so on. This lets many
-# generators with different MinLevel/MaxLevel ranges (e.g. one per biome, each
-# shifted further out) share one authored shape as long as their span matches -
-# exactly what a ConditionalCreatureLevelupChance progression typically needs.
-# If a generator's span has no matching entry here, it falls back to a flat
-# chance at MinLevel and logs a warning - so keep an entry for every span you
-# actually use.
+# The values work like DefaultCreatureLevelUpChance: each one is the % chance to
+# roll PAST that level, so they must go down from one level to the next. A
+# value at or above the one before it means that level can never be rolled.
 #
-#   LevelupWeightTablesBySpan:
+# LevelupChanceTablesBySpan is keyed by SPAN, the number of levels the generator
+# covers (MaxLevel - MinLevel + 1), not by absolute level. Inside a table, key 1
+# is the generator's MinLevel, key 2 is MinLevel + 1, and so on. That lets many
+# generators with different ranges (e.g. one per biome, each shifted further
+# out) share one table as long as they cover the same number of levels.
+# Every span you use needs keys 1..span. A generator whose span has no table
+# uses the Exponential curve (from its LevelUpChance) and logs one warning.
+# Raid and nemesis generators using Table read their tables from this file too.
+#
+#   LevelupChanceTablesBySpan:
 #     4: { 1: 30, 2: 15,   3: 5,      4: 0.01 }
 #     5: { 1: 30, 2: 16,   3: 6.8333, 4: 2.5,  5: 0.01 }
 #     6: { 1: 30, 2: 17.5, 3: 8.5,    4: 3.0,  5: 1.0, 6: 0.01 }
 #
 #   CustomLevelupGenerators:
 #     late_game:
-#     - MinLevel: 3            # span = 3..8 = 6, so this uses the '6' table
-#       MaxLevel: 8            # above: level 3 gets 30, level 4 gets 17.5, etc.
+#     - MinLevel: 3            # levels 3..8 = 6 levels, so this uses table 6:
+#       MaxLevel: 8            # 30% roll past level 3, 17.5% past level 4, ...
 #       LevelupCalculationStyle: Table
 #
+# The tables shipped in the default file are examples; no default generator
+# uses them. The quick configure panel can also edit the table for its default
+# generator.
+#
+# --- Boss-conditional levelup chances ---
 # ConditionalCreatureLevelupChance switches biome curves as world bosses fall:
-# defeated-boss global key -> biome -> generator. The highest defeated tier
-# listed applies; 'All' inside an entry is that entry's fallback biome.
+# defeated-boss global key -> biome -> generator. 'All' inside an entry is that
+# entry's fallback biome. The order of entries in the file does not matter:
+# ConditionalBossKeyOrder lists boss keys from earliest to latest progression,
+# and the latest defeated key that has an entry applies. Tiers update as soon
+# as a boss key is set or removed; no relog needed.
+#
+#   ConditionalBossKeyOrder:
+#   - defeated_eikthyr
+#   - defeated_gdking
+#   - defeated_bonemass
+#   - defeated_dragon
+#   - defeated_goblinking
+#   - defeated_queen
+#   - defeated_fader
+#
+# Add modded boss keys where they fall in your progression. An entry whose key
+# is not listed only applies while no listed key is defeated (a warning names
+# it at load). Leaving the list out uses the vanilla order above.
 #################################################";
 
         private const string ColorSettingsHeader = @"#################################################

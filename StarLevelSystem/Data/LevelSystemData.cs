@@ -11,6 +11,7 @@ using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -18,6 +19,18 @@ namespace StarLevelSystem.Data
 {
     public static class LevelSystemData
     {
+
+        // Vanilla boss defeat keys, earliest progression first. Declared above DefaultConfiguration because static
+        // initializers run in textual order and the default config copies this list.
+        internal static readonly List<string> VanillaBossKeyOrder = new List<string>() {
+            "defeated_eikthyr",
+            "defeated_gdking",
+            "defeated_bonemass",
+            "defeated_dragon",
+            "defeated_goblinking",
+            "defeated_queen",
+            "defeated_fader",
+        };
 
         public static DataObjects.CreatureLevelSettings SLE_Level_Settings = DefaultConfiguration;
 
@@ -331,12 +344,15 @@ namespace StarLevelSystem.Data
                     }
                 }
             },
-            LevelupWeightTablesBySpan = new Dictionary<int, SortedDictionary<int, float>>() {
+            // Example tables for the Table curve style. No default generator uses them; a Table generator whose
+            // MinLevel..MaxLevel covers 4, 5 or 6 levels picks up the matching entry.
+            LevelupChanceTablesBySpan = new Dictionary<int, SortedDictionary<int, float>>() {
                 { 4, new SortedDictionary<int, float>() { { 1, 30f }, { 2, 15f },   { 3, 5f },      { 4, 0.01f } } },
                 { 5, new SortedDictionary<int, float>() { { 1, 30f }, { 2, 16f },   { 3, 6.8333f }, { 4, 2.5f }, { 5, 0.01f } } },
                 { 6, new SortedDictionary<int, float>() { { 1, 30f }, { 2, 17.5f }, { 3, 8.5f },    { 4, 3.0f }, { 5, 1.0f }, { 6, 0.01f } } },
             },
             EnableConditionalCreatureLevelupChance = false,
+            ConditionalBossKeyOrder = new List<string>(VanillaBossKeyOrder),
             ConditionalCreatureLevelupChance = new Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>>() {
                 { "defeated_fader", new Dictionary<Heightmap.Biome, ConditionalLevelupChance>() {
                     {
@@ -550,6 +566,9 @@ namespace StarLevelSystem.Data
         // LevelSettings.yaml, so all three routes run identically.
         internal static void ApplyLoaded(DataObjects.CreatureLevelSettings parsed) {
             SLE_Level_Settings = parsed;
+            // Before ApplyLevelupGenerators, so its Table fallback warnings are reported for this load.
+            LevelGenerator.ClearWarnings();
+            ValidateLevelSettings(parsed);
             ApplyLevelupGenerators();
             Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
             DistanceScaleSystem.DelayedMinimapSetup();
@@ -570,6 +589,43 @@ namespace StarLevelSystem.Data
         }
 
         private static Coroutine runningAttributeUpdate;
+
+        // Reports settings that load fine but cannot do what was meant. Runs once per apply, so these show up
+        // when the file is loaded rather than on every spawn that reads them.
+        private static void ValidateLevelSettings(CreatureLevelSettings settings) {
+            if (settings == null) { return; }
+
+            if (settings.LevelupChanceTablesBySpan != null) {
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in settings.LevelupChanceTablesBySpan) {
+                    SortedDictionary<int, float> table = entry.Value;
+                    if (table == null || table.Count == 0) {
+                        Logger.LogWarning($"LevelupChanceTablesBySpan '{entry.Key}' is empty; Table generators covering {entry.Key} levels will use the Exponential curve.");
+                        continue;
+                    }
+                    // Keys are sorted and unique, so this is exactly "one entry for each of 1..span".
+                    if (table.Count != entry.Key || table.Keys.First() != 1 || table.Keys.Last() != entry.Key) {
+                        Logger.LogWarning($"LevelupChanceTablesBySpan '{entry.Key}' should have keys 1-{entry.Key}, but has {string.Join(", ", table.Keys)}. Keys outside 1-{entry.Key} are ignored and missing keys leave those levels out of the roll.");
+                    }
+                    float previous = float.MaxValue;
+                    foreach (KeyValuePair<int, float> kvp in table) {
+                        if (kvp.Value >= previous) {
+                            Logger.LogWarning($"LevelupChanceTablesBySpan '{entry.Key}': key {kvp.Key} ({kvp.Value}) is not lower than the key before it ({previous}). Values are the % chance to roll past each level and must decrease, otherwise that level can never be rolled.");
+                            break;
+                        }
+                        previous = kvp.Value;
+                    }
+                }
+            }
+
+            if (settings.ConditionalCreatureLevelupChance != null) {
+                HashSet<string> ordered = new HashSet<string>(ConditionalScaleSystem.BossKeyOrder(settings).Where(k => k != null), StringComparer.OrdinalIgnoreCase);
+                foreach (string key in settings.ConditionalCreatureLevelupChance.Keys) {
+                    if (key != null && ordered.Contains(key) == false) {
+                        Logger.LogWarning($"ConditionalCreatureLevelupChance key '{key}' is not in ConditionalBossKeyOrder, so it only applies while no listed boss key is defeated. Add it to ConditionalBossKeyOrder to give it a tier.");
+                    }
+                }
+            }
+        }
 
         // Expands any configured level generators (inline or referenced via CustomLevelupGenerators) into the
         // levelup-chance tables of the default/biome/creature sections, overwriting the existing chances when

@@ -5,6 +5,7 @@ using StarLevelSystem.Data;
 using StarLevelSystem.modules.LevelSystem;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -82,6 +83,9 @@ namespace StarLevelSystem.modules.UI {
         private static GameObject applyBtn;
         private static Text creatureExampleText;
         private static Text bossExampleText;
+        private static Slider maxLevelSlider;
+        private static InputField tableThresholdField;
+        private static Text tableStatusText;
         private static StagedConfig staged;
 
         private const string LauncherEntry = "Star Level System";
@@ -336,31 +340,122 @@ namespace StarLevelSystem.modules.UI {
             bossExampleText = bossEx.GetComponentInChildren<Text>();
             ConfigUI.PositionRow(bossEx, RightColumnX, StartY + 4 * RowPitch + bossShift);   // aligns with "Boss HP / level"
 
-            // Default level generator below the previews. The Gaussian offset row is tracked so it can be shown
-            // only when the Gaussian curve style is selected.
+            // Default level generator below the previews. Rows that only apply to some curve styles are tracked so
+            // they can be shown only when they do anything: the Gaussian offset for Gaussian, the level-up chance
+            // for every style but Table, and the threshold field plus its status line for Table. With Table
+            // selected the column is as tall as with Gaussian, so the page height still fits.
             float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
-            GameObject gaussianRow = null;
-            List<GameObject> gen = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator"),
-                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => staged.generator.MinLevel = (int)v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => staged.generator.MaxLevel = (int)v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v)
-            };
+            GameObject chanceRow = null, gaussianRow = null, tableRow = null, tableStatusRow = null;
+            List<GameObject> gen = new List<GameObject>();
+            void ShowStyleRows() {
+                LevelupCalculationStyle style = staged.generator.LevelupCalculationStyle;
+                chanceRow.SetActive(style != LevelupCalculationStyle.Table);
+                gaussianRow.SetActive(style == LevelupCalculationStyle.Gaussian);
+                tableRow.SetActive(style == LevelupCalculationStyle.Table);
+                tableStatusRow.SetActive(style == LevelupCalculationStyle.Table);
+                ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
+            }
+
+            gen.Add(ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator"));
+            gen.Add(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => { staged.generator.MinLevel = (int)v; RefreshTableRows(true); }));
+            GameObject maxRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => { staged.generator.MaxLevel = (int)v; RefreshTableRows(true); });
+            maxLevelSlider = maxRow.GetComponentInChildren<Slider>();
+            gen.Add(maxRow);
+            chanceRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v);
+            gen.Add(chanceRow);
             gen.Add(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
-                if (gaussianRow != null) {
-                    gaussianRow.SetActive((LevelupCalculationStyle)i == LevelupCalculationStyle.Gaussian);
-                    ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
-                }
+                ShowStyleRows();
             }));
             gaussianRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => staged.generator.GaussianOffset = v);
             gen.Add(gaussianRow);
+            tableRow = ConfigUI.AddTextFieldRow(parent, RightColWidth, LabelWidth, SliderWidth + ValueWidth + 10f, "Table thresholds", "", CommitTableThresholds, "30, 15, 5, 0.01");
+            tableThresholdField = tableRow.GetComponentInChildren<InputField>();
+            gen.Add(tableRow);
+            tableStatusRow = ConfigUI.AddTextRow(parent, RightColWidth, RowHeight, "", 13, GUIManager.Instance.ValheimBeige);
+            tableStatusText = tableStatusRow.GetComponentInChildren<Text>();
+            gen.Add(tableStatusRow);
             gen.Add(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
 
-            gaussianRow.SetActive(staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Gaussian);
-            ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
+            RefreshTableRows(true);
+            ShowStyleRows();
 
             UpdateExampleMath();
+        }
+
+        // The number of levels the staged default generator covers, which picks its LevelupChanceTablesBySpan entry.
+        private static int StagedTableSpan() {
+            return Mathf.Abs(staged.generator.MaxLevel - staged.generator.MinLevel) + 1;
+        }
+
+        // Shows the staged table for the generator's current span and whether it will work. rewriteField is false
+        // after a rejected entry, so the admin's typing stays in the box to be corrected.
+        private static void RefreshTableRows(bool rewriteField) {
+            if (staged == null || tableThresholdField == null || tableStatusText == null) { return; }
+            int span = StagedTableSpan();
+            int min = Mathf.Min(staged.generator.MinLevel, staged.generator.MaxLevel);
+            int max = Mathf.Max(staged.generator.MinLevel, staged.generator.MaxLevel);
+            staged.tables.TryGetValue(span, out List<float> values);
+            if (rewriteField) {
+                tableThresholdField.SetTextWithoutNotify(values == null ? "" : string.Join(", ", values.Select(v => v.ToString("0.####", CultureInfo.InvariantCulture))));
+            }
+
+            if (span < 2) {
+                SetTableStatus("A single level always rolls that level; widen Min/Max to use a table.", false);
+            } else if (values == null || values.Count == 0) {
+                SetTableStatus($"No table for {span} levels ({min}-{max}); rolls use the Exponential curve. Enter {span} values.", false);
+            } else if (IsStrictlyDecreasing(values) == false) {
+                SetTableStatus("Values must decrease: each is the % chance to roll past a level, so a level at or above the one before it is never rolled.", false);
+            } else {
+                SetTableStatus($"Levels {min}-{max}: each value is the % chance to roll past that level, from level {min} up.", true);
+            }
+        }
+
+        private static void SetTableStatus(string message, bool ok) {
+            tableStatusText.text = message;
+            tableStatusText.color = ok ? GUIManager.Instance.ValheimBeige : GUIManager.Instance.ValheimOrange;
+        }
+
+        private static bool IsStrictlyDecreasing(List<float> values) {
+            for (int i = 1; i < values.Count; i++) {
+                if (values[i] >= values[i - 1]) { return false; }
+            }
+            return true;
+        }
+
+        // Parses "30, 15, 5, 0.01" into the table for that many levels. The entry count sets the span, so the Max
+        // level slider moves to MinLevel + count - 1 to match what was typed.
+        private static void CommitTableThresholds(string text) {
+            if (staged == null) { return; }
+            if (string.IsNullOrWhiteSpace(text)) { RefreshTableRows(true); return; }
+
+            List<float> values = new List<float>();
+            foreach (string token in text.Split(',')) {
+                string trimmed = token.Trim();
+                if (float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) == false) {
+                    SetTableStatus($"Could not read '{trimmed}'. Enter numbers separated by commas, e.g. 30, 15, 5, 0.01.", false);
+                    return;
+                }
+                values.Add(value);
+            }
+            if (values.Count < 2) {
+                SetTableStatus("Enter at least two values; a table covers two or more levels.", false);
+                return;
+            }
+
+            // onEndEdit also fires when the box merely loses focus, so an unchanged table is not an edit.
+            if (staged.tables.TryGetValue(values.Count, out List<float> existing) == false || existing.SequenceEqual(values) == false) {
+                staged.tables[values.Count] = values;
+                staged.editedTableSpans.Add(values.Count);
+            }
+
+            int wantedMax = staged.generator.MinLevel + values.Count - 1;
+            if (maxLevelSlider != null && maxLevelSlider.value != wantedMax) {
+                maxLevelSlider.value = wantedMax;   // its listener stores MaxLevel and refreshes these rows
+            } else {
+                staged.generator.MaxLevel = wantedMax;
+            }
+            RefreshTableRows(true);
         }
 
         private static void BuildRaidsPage(Transform parent) {
@@ -634,6 +729,15 @@ namespace StarLevelSystem.modules.UI {
                         DataObjects.yamlSerializer.Serialize(LevelSystemData.SLE_Level_Settings));
                     settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
                     settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
+                    if (staged.editedTableSpans.Count > 0) {
+                        if (settings.LevelupChanceTablesBySpan == null) { settings.LevelupChanceTablesBySpan = new Dictionary<int, SortedDictionary<int, float>>(); }
+                        foreach (int span in staged.editedTableSpans) {
+                            SortedDictionary<int, float> table = new SortedDictionary<int, float>();
+                            List<float> values = staged.tables[span];
+                            for (int i = 0; i < values.Count; i++) { table[i + 1] = values[i]; }
+                            settings.LevelupChanceTablesBySpan[span] = table;
+                        }
+                    }
                     string yaml = DataObjects.yamlSerializer.Serialize(settings);
                     // Through ValConfig rather than File.WriteAllText: a bare write drops the documented
                     // header block, which is the only in-file explanation these settings have.
@@ -850,6 +954,12 @@ namespace StarLevelSystem.modules.UI {
 
             public LevelGenerator generator;
 
+            // Table style thresholds keyed by span, values in key order, seeded from LevelupChanceTablesBySpan.
+            // Only the spans in editedTableSpans were typed into the panel and get written back, so a hand-authored
+            // table that was merely displayed keeps its exact keys.
+            public Dictionary<int, List<float>> tables;
+            public HashSet<int> editedTableSpans;
+
             public int maxMajor, maxMinor, maxBossMods, prefixLimit;
             public float chanceMajor, chanceMinor, chanceBoss;
             public bool limitToStarLevel, enableBossMods, minorFirst;
@@ -920,6 +1030,13 @@ namespace StarLevelSystem.modules.UI {
                 CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
                 s.generator = CloneOrDefaultGenerator(settings, s.maxLevel);
+                s.tables = new Dictionary<int, List<float>>();
+                s.editedTableSpans = new HashSet<int>();
+                if (settings?.LevelupChanceTablesBySpan != null) {
+                    foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in settings.LevelupChanceTablesBySpan) {
+                        if (entry.Value != null) { s.tables[entry.Key] = entry.Value.Values.ToList(); }
+                    }
+                }
 
                 if (!Enum.TryParse(ValConfig.ModifierIconDisplayStyle.Value, out ModifierDisplayStyle ds)) {
                     ds = ModifierDisplayStyle.Stars;

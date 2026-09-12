@@ -75,6 +75,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             [HarmonyPostfix]
             static void ClearUnloadingFlag() {
                 MinimapOverlayFog.WorldUnloading = false;
+                // The boss tier resolved for the previous world must not carry over into this one.
+                ConditionalScaleSystem.ResetCache();
             }
         }
 
@@ -98,6 +100,31 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         [HarmonyPatch(typeof(Player), nameof(Player.RemoveUniqueKey))]
         internal static class RemovePlayerPrivateKey {
+            public static void Postfix() {
+                ConditionalScaleSystem.ResetCache();
+            }
+        }
+
+        // Boss kills set a world global key, which the player unique-key patches above never see: the unique key
+        // only lands on the killer's client, so a dedicated server and every other client kept rolling the old
+        // tier. GlobalKeyAdd/Remove run on the server for the change and on each client when RPC_GlobalKeys
+        // replaces the whole key set (ClearGlobalKeys first, then GlobalKeyAdd per key).
+        [HarmonyPatch(typeof(ZoneSystem), nameof(ZoneSystem.GlobalKeyAdd))]
+        internal static class GlobalKeyAdded {
+            public static void Postfix() {
+                ConditionalScaleSystem.ResetCache();
+            }
+        }
+
+        [HarmonyPatch(typeof(ZoneSystem), nameof(ZoneSystem.GlobalKeyRemove))]
+        internal static class GlobalKeyRemoved {
+            public static void Postfix() {
+                ConditionalScaleSystem.ResetCache();
+            }
+        }
+
+        [HarmonyPatch(typeof(ZoneSystem), nameof(ZoneSystem.ClearGlobalKeys))]
+        internal static class GlobalKeysCleared {
             public static void Postfix() {
                 ConditionalScaleSystem.ResetCache();
             }

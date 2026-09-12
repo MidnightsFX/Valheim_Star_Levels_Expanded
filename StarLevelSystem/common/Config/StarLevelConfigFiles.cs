@@ -175,8 +175,8 @@ namespace StarLevelSystem.common {
 #
 # --- Level generators ---
 # Instead of hand-writing chance tables, generators expand a Min/Max level plus
-# a curve style (Linear, Exponential, Gaussian) into a table at load. Name them
-# in CustomLevelupGenerators, then reference them anywhere a
+# a curve style (Linear, Exponential, Gaussian, Table) into a table at load.
+# Name them in CustomLevelupGenerators, then reference them anywhere a
 # LevelupGeneratorRefs list exists (defaults, biomes, creatures, raids,
 # nemesis spawns). When present, the generated curve REPLACES that section's
 # chance table.
@@ -189,6 +189,33 @@ namespace StarLevelSystem.common {
 #       LevelupCalculationStyle: Gaussian
 #       GaussianOffset: 0.25
 #   DefaultLevelupGeneratorRefs: [ late_game ]
+#
+# --- Table calculation style ---
+# Linear/Exponential/Gaussian compute a curve from LevelUpChance; Table instead
+# looks up a hand-authored shape from LevelupWeightTablesBySpan and shifts it
+# onto the generator's own MinLevel..MaxLevel range. LevelUpChance and
+# GaussianOffset are ignored for Table style.
+#
+# LevelupWeightTablesBySpan is keyed by SPAN (MaxLevel - MinLevel + 1), not by
+# absolute level: each table's first entry always lands on the generator's own
+# MinLevel, its second entry on MinLevel + 1, and so on. This lets many
+# generators with different MinLevel/MaxLevel ranges (e.g. one per biome, each
+# shifted further out) share one authored shape as long as their span matches -
+# exactly what a ConditionalCreatureLevelupChance progression typically needs.
+# If a generator's span has no matching entry here, it falls back to a flat
+# chance at MinLevel and logs a warning - so keep an entry for every span you
+# actually use.
+#
+#   LevelupWeightTablesBySpan:
+#     4: { 1: 30, 2: 15,   3: 5,      4: 0.01 }
+#     5: { 1: 30, 2: 16,   3: 6.8333, 4: 2.5,  5: 0.01 }
+#     6: { 1: 30, 2: 17.5, 3: 8.5,    4: 3.0,  5: 1.0, 6: 0.01 }
+#
+#   CustomLevelupGenerators:
+#     late_game:
+#     - MinLevel: 3            # span = 3..8 = 6, so this uses the '6' table
+#       MaxLevel: 8            # above: level 3 gets 30, level 4 gets 17.5, etc.
+#       LevelupCalculationStyle: Table
 #
 # ConditionalCreatureLevelupChance switches biome curves as world bosses fall:
 # defeated-boss global key -> biome -> generator. The highest defeated tier

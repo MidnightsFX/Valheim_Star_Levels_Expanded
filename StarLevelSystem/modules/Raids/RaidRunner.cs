@@ -27,6 +27,10 @@ namespace StarLevelSystem.modules.Raids {
         // Time (ZNet seconds) at which the raid finished and began winding down; 0 while the raid is still running.
         // ZDO-backed so wind-down survives owner-handoff and so all in-range clients can stop forcing the environment.
         internal DoubleZNetProperty RaidWindDownStart;
+        // Stamped by StartRaid on every runner started since the prefab became registered with ZNetScene. A runner
+        // ZNetScene rebuilds from a ZDO without it was written by an earlier version, when no machine could
+        // reconstruct it; Update deletes those. See RaidControl.LoadAssets.
+        internal BoolZNetProperty RunnerRegistered;
 
         private bool networkReady;
         private double Endtime = 0;
@@ -40,6 +44,7 @@ namespace StarLevelSystem.modules.Raids {
         private RaidDefinition raidCache;
         private string raidEnvNameCache;
         private bool raidStartedCache;
+        private bool runnerRegisteredCache;
         private double windDownStartCache;
         private double raidStartTimeCache;
         private bool spawnPointsReadyCache;
@@ -54,6 +59,7 @@ namespace StarLevelSystem.modules.Raids {
             raidCache = RunningRaid.Get();
             raidEnvNameCache = raidCache != null ? raidCache.ForceEnvironment.ToString() : null;
             raidStartedCache = RaidStarted.Get();
+            runnerRegisteredCache = RunnerRegistered.Get();
             windDownStartCache = RaidWindDownStart.Get();
             raidStartTimeCache = RaitStartTime.Get();
             spawnPointsReadyCache = RaidSpawnPointsReady.Get();
@@ -81,9 +87,22 @@ namespace StarLevelSystem.modules.Raids {
 
 
         public void Update() {
-            if (ValConfig.UseVanillaRaidConfiguration.Value == true || RunningRaid == null || Znet.IsValid() == false) { return; }
+            if (RunningRaid == null || Znet.IsValid() == false) { return; }
 
             RefreshZDataCache();
+
+            // A runner rebuilt from a ZDO written before the prefab was registered (1.13.0 and earlier) is a
+            // leftover: its raid ended long ago, or its owner left before EndRaid could delete it, and until now no
+            // machine could load it -- every client near it logged "Missing prefab hash" on every object pass
+            // instead. There is nothing worth resuming, so the first machine to load one deletes it along with its
+            // ZDO. This runs ahead of the vanilla-raid gate so the leftovers go even where SLS raids are off.
+            if (runnerRegisteredCache == false) {
+                Logger.LogRaid($"Deleting a raid runner left behind by an earlier version at {transform.position}.");
+                EndRaid(destroyCreatures: false);
+                return;
+            }
+
+            if (ValConfig.UseVanillaRaidConfiguration.Value == true) { return; }
             RaidDefinition raid = raidCache;
 
             // Force the raid environment only once the raid has actually committed, so an aborted raid (e.g. no
@@ -463,6 +482,7 @@ namespace StarLevelSystem.modules.Raids {
             ActiveRaidSpawns = new RaidMonitorListZNetProperty("SLS_RAID_SPAWNS_ACTIVE", Znet, new List<RaidMonitor>());
             RaidStarted = new BoolZNetProperty("SLS_RAID_STARTED", Znet, false);
             RaidWindDownStart = new DoubleZNetProperty("SLS_RAID_WINDDOWN", Znet, 0);
+            RunnerRegistered = new BoolZNetProperty("SLS_RAID_RUNNER_REGISTERED", Znet, false);
             networkReady = true;
         }
 
@@ -489,6 +509,8 @@ namespace StarLevelSystem.modules.Raids {
 
         public void StartRaid(DataObjects.RaidDefinition raid, Player player) {
             Znet.ClaimOwnership();
+            // Before the first Update, which deletes any runner that lacks it.
+            RunnerRegistered.ForceSet(true);
             RunningRaid.ForceSet(raid);
             RaitStartTime.ForceSet(ZNet.instance.GetTimeSeconds());
             Logger.LogRaid($"Starting Raid {raid.Name}");

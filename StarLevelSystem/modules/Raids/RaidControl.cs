@@ -1,4 +1,5 @@
 using HarmonyLib;
+using Jotunn.Entities;
 using Jotunn.Managers;
 using Mono.Security.Authenticode;
 using PlayFab.ClientModels;
@@ -30,6 +31,7 @@ namespace StarLevelSystem.modules.Raids
 
         internal static RaidManager RaidMan;
 
+        internal const string RaidRunnerPrefabName = "RaidRunner";
         internal static GameObject RaidRunnerGO;
 
         // Raids that have committed but not yet entered their wind-down phase. While any are active, SLS reports an
@@ -46,8 +48,36 @@ namespace StarLevelSystem.modules.Raids
             return ActiveRaidRunners.Count > 0;
         }
 
+        // The prefab is a persistent ZNetView holder plus the RaidRunner component. It used to be loaded and
+        // instantiated only, never registered, so no machine could rebuild a runner from its ZDO: ZNetScene logged
+        // "Missing prefab hash" for every runner ZDO in range on every object pass, forever, because a client never
+        // destroys an unresolvable ZDO and a dedicated server only streams its own origin area. Any raid whose owner
+        // left before EndRaid (or that 1.12.0's component-only teardown ended) left one of those behind at the base.
+        // Idempotent. Registration mirrors NemesisRemoteSpawnControl.
         internal static void LoadAssets() {
-            RaidRunnerGO = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>("RaidRunner.prefab");
+            if (RaidRunnerGO != null) { return; }
+            RaidRunnerGO = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(RaidRunnerPrefabName + ".prefab");
+            if (RaidRunnerGO == null) {
+                Logger.LogWarning($"Raid runner prefab '{RaidRunnerPrefabName}.prefab' was not found in the asset bundle; raids cannot start.");
+                return;
+            }
+            if (PrefabManager.Instance.GetPrefab(RaidRunnerPrefabName) == null) {
+                PrefabManager.Instance.AddPrefab(new CustomPrefab(RaidRunnerGO, false));
+            }
+        }
+
+        // Guarantee the prefab is in ZNetScene.m_namedPrefabs on THIS machine. Jotunn copies PrefabManager prefabs
+        // into ZNetScene from its own ZNetScene.Awake postfix, but order against ours is not guaranteed and a
+        // dedicated server skips the main-menu path that Jotunn's registration leans on, so the raid patches call
+        // this from a ZNetScene.Awake postfix too. Idempotent, and safe alongside Jotunn's registration.
+        internal static void EnsureRegisteredToZNetScene() {
+            LoadAssets();
+            if (RaidRunnerGO == null || ZNetScene.instance == null) { return; }
+            int hash = RaidRunnerPrefabName.GetStableHashCode();
+            if (ZNetScene.instance.HasPrefab(hash) == false) {
+                PrefabManager.Instance.RegisterToZNetScene(RaidRunnerGO);
+            }
+            Logger.LogRaid($"RaidRunner prefab registered to ZNetScene: {ZNetScene.instance.HasPrefab(hash)}");
         }
 
         internal static void StartRaidRunner(RaidDefinition targetRaid, Vector3 pos) {

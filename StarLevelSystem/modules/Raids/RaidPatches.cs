@@ -32,6 +32,16 @@ namespace StarLevelSystem.modules.Raids
         // between "dedicated client -> RPC up to the server" and "integrated host -> update the registry directly".
         private static bool CanSyncPrivateKeys() => ZNet.instance != null && Player.m_localPlayer != null;
 
+        // Registers the RaidRunner prefab into ZNetScene on every machine, the dedicated server included, so a
+        // runner's persistent ZDO is rebuilt where it is loaded instead of logging "Missing prefab hash" on
+        // every object pass. See RaidControl.EnsureRegisteredToZNetScene.
+        [HarmonyPatch(typeof(ZNetScene), nameof(ZNetScene.Awake))]
+        public static class RegisterRaidRunnerPrefab {
+            public static void Postfix() {
+                EnsureRegisteredToZNetScene();
+            }
+        }
+
         [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
         internal static class UpdatePlayerPrivateKeys {
             public static void Postfix() {

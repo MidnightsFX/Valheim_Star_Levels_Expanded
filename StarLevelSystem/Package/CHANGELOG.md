@@ -1,3 +1,9 @@
+**1.13.1**
+ ---
+ ```
+- Raid runners left behind by earlier versions are deleted the first time anyone loads their area
+ ```
+
 **1.13.0**
  ---
  ```

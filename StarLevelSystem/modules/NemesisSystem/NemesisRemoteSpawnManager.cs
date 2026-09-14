@@ -26,6 +26,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             // either, and previously paid a full-world ZDO scan at world load for nothing.
             if (ZNet.instance != null && ZNet.instance.IsServer()) {
                 NemesisRemoteSpawnControl.LoadState();
+                NemesisRemoteSpawnControl.ShowActiveBossPinsLocally();
                 StartCoroutine(NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs());
             }
             // Give players a couple of minutes after load before the first placement wave.

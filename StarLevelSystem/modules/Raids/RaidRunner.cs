@@ -61,15 +61,13 @@ namespace StarLevelSystem.modules.Raids {
             spawnPointsCache = RaidSpawnPoints.Get();
             activeSpawnsCache = ActiveRaidSpawns.Get();
         }
-        // Set when a wind-down completes with stragglers intentionally left to despawn on their own, so OnDestroy
-        // skips the force-delete cleanup. Hard teardowns (admin reset, shutdown) leave this false and still clean up.
-        private bool skipCreatureCleanup = false;
         private List<RaidMonitor> RaidSpawners = new List<RaidMonitor>();
         // The environment name this runner last wrote into EnvMan.m_forceEnv, so teardown can release the
         // override without stomping one another system has taken over since. Null when we hold no override.
         private string forcedEnvName;
 
-        // Should map pins be persisted between clients? probably
+        // This machine's local map pins for the raid. Every client holding the runner draws its own from the replicated
+        // raid state (see Update); nothing about them is networked.
         private Minimap.PinData AreaPin;
         private Minimap.PinData IconPin;
 
@@ -100,13 +98,19 @@ namespace StarLevelSystem.modules.Raids {
             // creature, InEvent()/HaveActiveEvent() went false on their machine and MonsterAI cleared huntplayer and
             // walked the creature off to despawn. Both calls are idempotent HashSet ops, and raidStartedCache /
             // windDownStartCache are ZDO-backed so they already replicate to non-owners via RefreshZDataCache.
+            //
+            // Map pins live here for the same reason. They are local Minimap entries, so adding them only on the
+            // owner at commit meant no other player ever saw the raid on their map, and neither did a player who
+            // inherited ownership or reloaded into a raid that was already running.
             if (raidStartedCache) {
                 if (IsWindingDown()) {
                     ReleaseForcedEnvironment();
                     RaidControl.UnregisterActiveRaid(this);
+                    RemoveExistingMapPins();
                 } else {
                     ForceEnvironment(raidEnvNameCache);
                     RaidControl.RegisterActiveRaid(this);
+                    AddMapPins(this.transform.position, raid);
                 }
             }
 
@@ -134,8 +138,7 @@ namespace StarLevelSystem.modules.Raids {
                 List<SerializableVector3> determinedSpawnPoints = spawnPointsCache;
                 if (determinedSpawnPoints == null || determinedSpawnPoints.Count == 0) {
                     Logger.LogRaid($"Raid failed to find any valid spawn points, stopping raid.");
-                    RemoveExistingMapPins();
-                    ZNetScene.Destroy(this);
+                    EndRaid(destroyCreatures: false);
                     return;
                 }
             }
@@ -295,27 +298,56 @@ namespace StarLevelSystem.modules.Raids {
             }
         }
 
+        // Runs however the runner goes away: EndRaid here, another machine ending the raid (ZNetScene.OnZDODestroyed),
+        // or ZNetScene simply unloading it because this player moved out of range or logged out. In the last case the
+        // raid is still running for everyone else, so this only undoes what this machine did locally. Deleting the
+        // raid's creatures used to happen here as well, which force-deleted any raid creature still loaded around a
+        // player who walked away. ZNetScene resets the ZDO before destroying on all of those paths, so nothing here may
+        // read a ZNetProperty.
         public void OnDestroy() {
             // No longer an active raid; drop registration so SLS stops reporting an active event for its creatures.
             RaidControl.UnregisterActiveRaid(this);
-
-            // Remove existing pins
             RemoveExistingMapPins();
-
-            // Stop the music
-            if (MusicMan.instance != null) {
-                MusicMan.instance.StopMusic();
-            }
-
-
-            // Hand the environment override back
+            StopRaidMusic();
             ReleaseForcedEnvironment();
 
-            // A wind-down that intentionally left its stragglers to despawn on their own asks us to skip the
-            // force-delete. Hard teardowns (admin reset, shutdown) leave skipCreatureCleanup false and still clean up.
-            if (skipCreatureCleanup == false) {
-                ForceDestroyTrackedCreatures();
+            // Every sanctioned teardown -- EndRaid, OnZDODestroyed, range unload, ZNetScene.Shutdown on logout/quit --
+            // resets the view first, so a view that still holds its ZDO means something destroyed this component (or
+            // raw-destroyed its GameObject) directly, e.g. a Destroy(this). Take the GameObject and ZNetView down with it
+            // so the script never goes on its own again. On the owner that also deletes the ZDO; elsewhere ZNetScene
+            // just recreates a working runner from the ZDO next frame.
+            if (Znet != null && Znet.IsValid() && ZNetScene.instance != null && ZDOMan.instance != null) {
+                Logger.LogWarning("RaidRunner was destroyed without its network object; destroying the raid object through ZNetScene. Use EndRaid to end a raid.");
+                ZNetScene.instance.Destroy(gameObject);
             }
+        }
+
+        // Ends the raid for everyone: optionally force-deletes its tracked creatures, then destroys the runner together
+        // with its ZDO so every other machine's copy goes too. This is the only real teardown -- OnDestroy alone never
+        // ends a raid. Creatures are cleaned up first because the ZDO-backed spawner list is unreadable once
+        // ZNetScene.Destroy has reset the view.
+        //
+        // These paths used to call ZNetScene.Destroy(this), which binds to UnityEngine.Object.Destroy(Object) and
+        // removed only this component: the GameObject and its persistent ZDO stayed behind, so every finished raid
+        // left a runner in the world save that came back to life whenever its area was next loaded.
+        internal void EndRaid(bool destroyCreatures) {
+            if (destroyCreatures) { ForceDestroyTrackedCreatures(); }
+            if (ZNetScene.instance == null) {
+                Destroy(gameObject);
+                return;
+            }
+            // ZNetScene.Destroy only deletes the ZDO for its owner.
+            if (Znet != null && Znet.IsValid()) { Znet.ClaimOwnership(); }
+            ZNetScene.instance.Destroy(gameObject);
+        }
+
+        // MusicMan.StopMusic stops whatever is playing, so only stop the track this raid forced. A player walking out
+        // of range must not lose boss, location or another event's music.
+        private void StopRaidMusic() {
+            if (MusicMan.instance == null || raidCache == null) { return; }
+            string raidMusic = raidCache.ForceMusic.ToString();
+            if (MusicMan.instance.m_triggerMusic == raidMusic) { MusicMan.instance.m_triggerMusic = null; }
+            if (MusicMan.instance.GetCurrentMusic() == raidMusic) { MusicMan.instance.StopMusic(); }
         }
 
         // Whether the raid has finished and entered its wind-down phase (creatures dispersing). ZDO-backed so it is
@@ -335,7 +367,7 @@ namespace StarLevelSystem.modules.Raids {
 
             RemoveExistingMapPins();
             Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.EndMessage);
-            if (MusicMan.instance != null) { MusicMan.instance.StopMusic(); }
+            StopRaidMusic();
             ReleaseForcedEnvironment();
         }
 
@@ -383,8 +415,7 @@ namespace StarLevelSystem.modules.Raids {
             if (remaining == 0) {
                 // Everything wandered off and despawned on its own; nothing left to clean up.
                 Logger.LogRaid("Raid wind-down complete, all creatures dispersed.");
-                skipCreatureCleanup = true;
-                ZNetScene.Destroy(this);
+                EndRaid(destroyCreatures: false);
                 return;
             }
 
@@ -393,22 +424,21 @@ namespace StarLevelSystem.modules.Raids {
 
             if (ValConfig.RaidForceDeleteStragglers.Value) {
                 Logger.LogRaid($"Raid wind-down window elapsed; force-deleting {remaining} remaining creature(s).");
-                ForceDestroyTrackedCreatures();
             } else {
                 Logger.LogRaid($"Raid wind-down window elapsed; leaving {remaining} remaining creature(s) to despawn on their own.");
-                skipCreatureCleanup = true;
             }
-            ZNetScene.Destroy(this);
+            EndRaid(destroyCreatures: ValConfig.RaidForceDeleteStragglers.Value);
         }
 
-        // Force-deletes every tracked raid creature. Falls back to the ZDO-backed spawner list when the in-memory
-        // cache is empty (e.g. console-command teardown before Update populated RaidSpawners, or after owner-handoff).
+        // Force-deletes every tracked raid creature. Prefers the ZDO-backed spawner list, which the owner keeps current:
+        // RaidSpawners is only filled on a machine that has owned the raid, and on a former owner it misses anything
+        // spawned after the hand-off. Must run while the view still holds its ZDO (see EndRaid).
         private void ForceDestroyTrackedCreatures() {
             // Skip if the network is shutting down.
             if (ZDOMan.instance == null || ZNetScene.instance == null) { return; }
-            List<RaidMonitor> spawnersToClean = (RaidSpawners != null && RaidSpawners.Count > 0)
-                ? RaidSpawners
-                : (networkReady && ActiveRaidSpawns != null ? ActiveRaidSpawns.Get() : null);
+            List<RaidMonitor> spawnersToClean = (ActiveRaidSpawns != null && ActiveRaidSpawns.IsHostValid())
+                ? ActiveRaidSpawns.Get()
+                : RaidSpawners;
             if (spawnersToClean == null) { return; }
             foreach (var raidmon in spawnersToClean) {
                 foreach (ZDOID spawned in raidmon.GetSpawnedZDOIDs() ) {
@@ -464,7 +494,11 @@ namespace StarLevelSystem.modules.Raids {
             Logger.LogRaid($"Starting Raid {raid.Name}");
         }
 
+        // Idempotent, since Update calls it every frame on every machine holding the runner. A dedicated server
+        // holds runners too but has no Minimap.
         public void AddMapPins(Vector3 pos, RaidDefinition raid) {
+            if (Minimap.instance == null || raid == null) { return; }
+            if (AreaPin != null && IconPin != null) { return; }
             RemoveExistingMapPins();
 
             // Add the Area pin
@@ -479,6 +513,12 @@ namespace StarLevelSystem.modules.Raids {
         }
 
         public void RemoveExistingMapPins() {
+            // The Minimap can already be gone when a runner is destroyed during world unload.
+            if (Minimap.instance == null) {
+                AreaPin = null;
+                IconPin = null;
+                return;
+            }
             if (AreaPin != null) {
                 Minimap.instance.RemovePin(AreaPin);
                 AreaPin = null;

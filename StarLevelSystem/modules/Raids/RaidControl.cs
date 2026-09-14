@@ -813,8 +813,7 @@ namespace StarLevelSystem.modules.Raids
             foreach (RaidRunner obj in objects) {
                 if (obj.name == "RaidRunner") { continue; } // skip the original
                 Logger.LogRaid($"Removing {obj.name}");
-                if (obj.Znet != null) { obj.Znet.ClaimOwnership(); }
-                ZNetScene.instance.Destroy(obj.gameObject);
+                obj.EndRaid(destroyCreatures: true);
             }
         }
 

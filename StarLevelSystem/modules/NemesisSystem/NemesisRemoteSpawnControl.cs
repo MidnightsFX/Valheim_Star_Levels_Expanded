@@ -102,6 +102,17 @@ namespace StarLevelSystem.modules.NemesisSystem {
             }
         }
 
+        // Connecting clients get the active pins from the initial sync, but the server's own player
+        // (integrated host or singleplayer) never connects to itself, so it lost the pin of every boss
+        // still waiting in the world each time the world was restarted. Queued into NemesisMinimap,
+        // which holds them until the map data has loaded.
+        internal static void ShowActiveBossPinsLocally() {
+            if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
+            foreach (NemesisBossPin pin in ActiveRemoteBosses.Values) {
+                NemesisMinimap.AddOrUpdatePin(pin);
+            }
+        }
+
         internal static void RegisterActiveBoss(NemesisBossPin pin) {
             if (pin == null || string.IsNullOrEmpty(pin.Id)) { return; }
             ActiveRemoteBosses[pin.Id] = pin;
@@ -134,12 +145,18 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 string pinId = zdo.GetString(SLS_NEMESIS_PIN, "");
                 if (string.IsNullOrEmpty(pinId) || ActiveRemoteBosses.ContainsKey(pinId)) { continue; }
                 Vector3 pos = zdo.GetPosition();
-                ActiveRemoteBosses[pinId] = new NemesisBossPin() {
+                NemesisBossPin pin = new NemesisBossPin() {
                     Id = pinId,
                     Position = pos,
                     Biome = Heightmap.FindBiome(pos),
                     Name = zdo.GetString(SLS_NAME, "")
                 };
+                ActiveRemoteBosses[pinId] = pin;
+                // A recovered boss is as real as a freshly placed one; without this only players who
+                // connected afterwards (via the initial sync) ever saw its pin.
+                if (NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.ShowMapPin) {
+                    ValConfig.BroadcastNemesisBossPinAdd(pin);
+                }
             }
         }
 

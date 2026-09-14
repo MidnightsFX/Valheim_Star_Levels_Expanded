@@ -1,3 +1,14 @@
+**1.13.0**
+ ---
+ ```
+- Fixed finished raids staying in the world save and starting back up whenever their area was loaded again
+- Raid map pins now show for every player, including players who join or reload into a raid that is already running
+- Walking away from or logging out near a raid no longer deletes its creatures that are still loaded around you
+- A raid ending or unloading now only stops its own music, not boss, location or other event music
+- Ending a raid now also removes creatures spawned after the raid passed to another player
+- Fixed a NullReferenceException from the map rings when joining a server before the minimap had loaded
+ ```
+
 **1.12.0**
  ---
  ```

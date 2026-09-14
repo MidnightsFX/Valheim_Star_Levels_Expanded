@@ -23,6 +23,13 @@ namespace StarLevelSystem.modules.LevelSystem {
         // flag is what distinguishes "in a world" from "leaving one".
         internal static bool WorldUnloading = false;
 
+        // The Minimap whose map data has finished loading (set from the Minimap.LoadMapData postfix
+        // below). Minimap.instance alone is not enough: it is assigned in Minimap.Awake, but the map
+        // textures Jotunn's overlay setup copies from (m_fogTexture etc.) are only created in
+        // Minimap.Start. Holding the instance rather than a bool means a new world's fresh Minimap
+        // never inherits the previous world's "loaded" state.
+        private static Minimap loadedMinimap;
+
         private static float nextFogRefresh = 0f;
         private const float FogRefreshInterval = 10f;
 
@@ -37,11 +44,23 @@ namespace StarLevelSystem.modules.LevelSystem {
         // SettingChanged on our overlay settings while the world is being torn down. Without the flag
         // those events start an overlay rebuild on the DontDestroyOnLoad TaskRunner, which then keeps
         // running into the main menu and dereferences a destroyed Minimap.
+        //
+        // The loadedMinimap check matters on join: the same Jotunn manager resets every synced config
+        // entry to its default from a ZNet.Start prefix when a client connects, and ZNet.Start can run
+        // before Minimap.Start. Without it those SettingChanged events reached GetMapOverlay while
+        // m_fogTexture was still null and Jotunn's SetupOverlays threw a NullReferenceException.
         internal static bool CanDrawOverlays() {
             return !WorldUnloading
                 && ZNet.instance != null
-                && Minimap.instance != null
+                && IsMapDataLoaded()
                 && SceneManager.GetActiveScene().name == "main";
+        }
+
+        // True once the live Minimap has run LoadMapData. Anything added to the map before that is at
+        // risk: SetMapData calls ClearPins when the player profile has saved data for this world, which
+        // silently drops every non-saved pin added earlier.
+        internal static bool IsMapDataLoaded() {
+            return Minimap.instance != null && loadedMinimap == Minimap.instance;
         }
 
         // Mirrors vanilla Minimap.IsExplored but takes overlay pixel coords directly (the ring/zone
@@ -83,6 +102,17 @@ namespace StarLevelSystem.modules.LevelSystem {
         internal static class Minimap_Explore_Patch {
             private static void Postfix(bool __result) {
                 if (__result) { ExplorationChanged = true; }
+            }
+        }
+
+        // Opens the CanDrawOverlays gate. Jotunn raises OnVanillaMapDataLoaded -- which is what
+        // triggers the first ring/zone draw -- from its own postfix on this method, so ours must run
+        // first; Priority.First guarantees that regardless of patch application order.
+        [HarmonyPatch(typeof(Minimap), nameof(Minimap.LoadMapData))]
+        internal static class Minimap_LoadMapData_Patch {
+            [HarmonyPriority(Priority.First)]
+            private static void Postfix(Minimap __instance) {
+                loadedMinimap = __instance;
             }
         }
     }

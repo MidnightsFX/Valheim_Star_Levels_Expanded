@@ -1,5 +1,6 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.LevelSystem;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -12,7 +13,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
     internal static class NemesisMinimap {
         // Each boss owns a list of pins: the red circular EventArea overlay plus the boss icon.
         private static readonly Dictionary<string, List<Minimap.PinData>> pins = new Dictionary<string, List<Minimap.PinData>>();
-        // Pins received before the minimap exists; flushed once the map data has loaded.
+        // Pins received before the minimap has loaded its map data; flushed from OnMapReady.
         private static readonly Dictionary<string, NemesisBossPin> pending = new Dictionary<string, NemesisBossPin>();
 
         private static Minimap.PinType customPinType = Minimap.PinType.None;
@@ -34,8 +35,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         public static void AddOrUpdatePin(NemesisBossPin pin) {
             if (pin == null || string.IsNullOrEmpty(pin.Id)) { return; }
+            // Buffer until LoadMapData, not merely until Minimap.instance exists. A joining client receives
+            // the initial pin set before the server's PeerInfo, so the Minimap is alive but has not loaded
+            // yet; SetMapData then runs ClearPins for any world the player has visited before, and pins
+            // added here were wiped with no trace. Buffering first also means ShowMapPin is read after the
+            // server's NemesisSettings sync, which Jotunn delivers after this pin sync.
+            if (!MinimapOverlayFog.IsMapDataLoaded()) { pending[pin.Id] = pin; return; }
             if (NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.ShowMapPin == false) { return; }
-            if (Minimap.instance == null) { pending[pin.Id] = pin; return; }
 
             RemovePin(pin.Id); // avoid duplicate markers for the same boss
             RemoteNemesisSpawnSettings settings = NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning;

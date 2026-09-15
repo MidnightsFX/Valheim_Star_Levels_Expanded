@@ -42,6 +42,8 @@ namespace StarLevelSystem.modules.Raids {
         // something was actually written, so these stay in sync at a fraction of the cost.
         private uint cachedDataRevision = uint.MaxValue;
         private RaidDefinition raidCache;
+        // True when the ZDO's raid definition or spawner list threw on deserialize; see RefreshZDataCache.
+        private bool raidUnreadable;
         private string raidEnvNameCache;
         private bool raidStartedCache;
         private bool runnerRegisteredCache;
@@ -56,7 +58,18 @@ namespace StarLevelSystem.modules.Raids {
             ZDO zdo = Znet.GetZDO();
             if (zdo == null || zdo.DataRevision == cachedDataRevision) { return; }
             cachedDataRevision = zdo.DataRevision;
-            raidCache = RunningRaid.Get();
+            // The raid definition and the spawner list are BinaryFormatter payloads of SLS types. A runner saved by
+            // a build whose shape of those types differs throws here, and an exception out of Update on every frame
+            // left the runner -- with its pins on every client in range -- in place and unendable. Flag it instead;
+            // the owner deletes a flagged runner (see Update).
+            try {
+                raidCache = RunningRaid.Get();
+                raidUnreadable = false;
+            } catch (Exception e) {
+                if (raidUnreadable == false) { Logger.LogWarning($"The raid runner at {transform.position} holds a raid definition this build cannot read; it will be deleted. {e.Message}"); }
+                raidCache = null;
+                raidUnreadable = true;
+            }
             raidEnvNameCache = raidCache != null ? raidCache.ForceEnvironment.ToString() : null;
             raidStartedCache = RaidStarted.Get();
             runnerRegisteredCache = RunnerRegistered.Get();
@@ -65,8 +78,19 @@ namespace StarLevelSystem.modules.Raids {
             spawnPointsReadyCache = RaidSpawnPointsReady.Get();
             spawnPointsGeneratingCache = RaidSpawnPointsGenerating.Get();
             spawnPointsCache = RaidSpawnPoints.Get();
-            activeSpawnsCache = ActiveRaidSpawns.Get();
+            try {
+                activeSpawnsCache = ActiveRaidSpawns.Get();
+            } catch (Exception e) {
+                if (raidUnreadable == false) { Logger.LogWarning($"The raid runner at {transform.position} holds spawner state this build cannot read; it will be deleted. {e.Message}"); }
+                activeSpawnsCache = new List<RaidMonitor>();
+                raidUnreadable = true;
+            }
         }
+
+        // Read-only views of the replicated raid state, for the HUD event banner and sls-raid-clear-pins.
+        internal RaidDefinition CurrentRaid => raidCache;
+        internal bool IsActive => raidStartedCache && raidCache != null && IsWindingDown() == false;
+        internal double SecondsSinceStart => ZNet.instance == null ? 0d : ZNet.instance.GetTimeSeconds() - raidStartTimeCache;
         private List<RaidMonitor> RaidSpawners = new List<RaidMonitor>();
         // The environment name this runner last wrote into EnvMan.m_forceEnv, so teardown can release the
         // override without stomping one another system has taken over since. Null when we hold no override.
@@ -121,7 +145,10 @@ namespace StarLevelSystem.modules.Raids {
             // Map pins live here for the same reason. They are local Minimap entries, so adding them only on the
             // owner at commit meant no other player ever saw the raid on their map, and neither did a player who
             // inherited ownership or reloaded into a raid that was already running.
-            if (raidStartedCache) {
+            //
+            // Gated on a readable definition: a started runner whose raid cannot be read is about to be deleted by
+            // its owner, and must not be reported as an active event or hold the weather in the meantime.
+            if (raidStartedCache && raid != null) {
                 if (IsWindingDown()) {
                     ReleaseForcedEnvironment();
                     RaidControl.UnregisterActiveRaid(this);
@@ -137,6 +164,16 @@ namespace StarLevelSystem.modules.Raids {
 
             // Network data is required before we start performing actions
             if (networkReady == false) { ConnectZData(); }
+
+            // A runner whose stored raid or spawner state this build cannot read has nothing it can resume. The
+            // definition is written in StartRaid in the same frame the runner is created, and every peer receives
+            // it with the ZDO, so a started runner with no definition is the same case. Delete it rather than hold
+            // it -- and its map pins on every client in range -- open forever.
+            if (raidUnreadable || (raidStartedCache && raid == null)) {
+                Logger.LogWarning($"Deleting the raid runner at {transform.position}: its raid state could not be read.");
+                EndRaid(destroyCreatures: false);
+                return;
+            }
 
             // Wait until the raid definition has replicated.
             if (raid == null) { return; }
@@ -264,25 +301,10 @@ namespace StarLevelSystem.modules.Raids {
 
                 // Raid is over (or waiting on defeat)
                 if (spawnWindowClosed) {
-                    bool raidComplete = !raid.RaidActiveTillDefeated;
-                    bool spawnedMaxOnce = false;
-                    foreach (RaidMonitor raidspawn in RaidSpawners) {
-                        if (raidspawn.RaidSpawnDef.MaxSpawnTriggers > 0 && raidspawn.TriggerCount >= raidspawn.RaidSpawnDef.MaxSpawnTriggers) {
-                            raidComplete = true;
-                        }
-                        if (raidspawn.RaidSpawnDef.MaxSpawnTriggers == 0) { raidComplete = true; }
-                        if (raidspawn.RaidSpawnDef.MaxSpawned > 0 && raidspawn.TriggerCount >= raidspawn.RaidSpawnDef.MaxSpawned) {
-                            spawnedMaxOnce = true;
-                        }
-                        if (raidspawn.RaidSpawnDef.MaxSpawned == 0) { spawnedMaxOnce = true; }
-                    }
-                    
-                    if (raidComplete && spawnedMaxOnce) {
-                        if (IsWindingDown() == false) {
-                            BeginWindDown(raid);
-                        } else {
-                            UpdateWindDown();
-                        }
+                    if (IsWindingDown()) {
+                        UpdateWindDown();
+                    } else if (ShouldWindDown(raid)) {
+                        BeginWindDown(raid);
                     }
                 }
 
@@ -374,6 +396,51 @@ namespace StarLevelSystem.modules.Raids {
         // cache; BeginWindDown's Set bumps the revision, so the transition is picked up on the next Update.
         private bool IsWindingDown() {
             return windDownStartCache > 0;
+        }
+
+        private float nextDefeatCheck = 0f;
+
+        // Whether a raid whose spawn window has closed should begin winding down now.
+        //
+        // This used to also require that some spawner had been triggered at least MaxSpawned times ("spawned its
+        // full set once"). Triggers only fire while the window is open, and are held back by the alive cap and
+        // the spawn chance, so any raid whose players killed slowly -- or whose SpawnInterval could never fit
+        // MaxSpawned triggers into its Duration at all (foresttrolls: 9 needed, 6 possible) -- could not satisfy
+        // it once the window closed, and nothing could satisfy it later. The runner then sat there for good: its
+        // creatures kept hunting, its pins, music and forced weather stayed, and as a persistent ZDO it came back
+        // after every restart, while each later raid at the same base stacked another set of pins on top.
+        //
+        // RaidActiveTillDefeated now means what the config header says: after its Duration the raid stays active
+        // until its tracked creatures are dead, for at most RaidActiveTillDefeatedMaxSeconds.
+        private bool ShouldWindDown(RaidDefinition raid) {
+            if (raid.RaidActiveTillDefeated == false) { return true; }
+            double graceSeconds = ValConfig.RaidActiveTillDefeatedMaxSeconds.Value;
+            if (graceSeconds <= 0d) { return true; }
+            // Once a second: the alive check re-parses every tracked ZDOID from its string form.
+            if (Time.time < nextDefeatCheck) { return false; }
+            nextDefeatCheck = Time.time + 1f;
+            if (CountTrackedCreaturesAlive() == 0) {
+                Logger.LogRaid($"{raid.Name} creatures have all been defeated.");
+                return true;
+            }
+            if (ZNet.instance.GetTimeSeconds() > Endtime + graceSeconds) {
+                Logger.LogRaid($"{raid.Name} has waited {graceSeconds:0}s past its duration for its remaining creatures to be defeated; ending it now.");
+                return true;
+            }
+            return false;
+        }
+
+        // Tracked raid creatures whose ZDO this machine still knows. A creature that died or despawned had its ZDO
+        // destroyed, so it drops out; one that streamed out of range keeps its ZDO here and still counts.
+        private int CountTrackedCreaturesAlive() {
+            if (ZDOMan.instance == null) { return 0; }
+            int alive = 0;
+            foreach (RaidMonitor rmonitor in RaidSpawners) {
+                foreach (ZDOID spawned in rmonitor.GetSpawnedZDOIDs()) {
+                    if (ZDOMan.instance.GetZDO(spawned) != null) { alive++; }
+                }
+            }
+            return alive;
         }
 
         // Called once when the raid completes. Performs the player-facing teardown (message, pins, music, weather) and
@@ -516,6 +583,10 @@ namespace StarLevelSystem.modules.Raids {
             Logger.LogRaid($"Starting Raid {raid.Name}");
         }
 
+        // Every map pin SLS raids have drawn on this client, across all runners. Each runner removes its own in
+        // RemoveExistingMapPins; this is what lets sls-raid-clear-pins also sweep up a pin whose runner is gone.
+        private static readonly HashSet<Minimap.PinData> TrackedPins = new HashSet<Minimap.PinData>();
+
         // Idempotent, since Update calls it every frame on every machine holding the runner. A dedicated server
         // holds runners too but has no Minimap.
         public void AddMapPins(Vector3 pos, RaidDefinition raid) {
@@ -532,9 +603,14 @@ namespace StarLevelSystem.modules.Raids {
             IconPin = Minimap.instance.AddPin(pos, Minimap.PinType.RandomEvent, "", false, false, author: new PlatformUserID());
             IconPin.m_animate = true;
             IconPin.m_doubleSize = true;
+
+            TrackedPins.Add(AreaPin);
+            TrackedPins.Add(IconPin);
         }
 
         public void RemoveExistingMapPins() {
+            if (AreaPin != null) { TrackedPins.Remove(AreaPin); }
+            if (IconPin != null) { TrackedPins.Remove(IconPin); }
             // The Minimap can already be gone when a runner is destroyed during world unload.
             if (Minimap.instance == null) {
                 AreaPin = null;
@@ -549,6 +625,35 @@ namespace StarLevelSystem.modules.Raids {
                 Minimap.instance.RemovePin(IconPin);
                 IconPin = null;
             }
+        }
+
+        // Removes every SLS raid pin from this client's map: each live runner's own pair, then anything left in
+        // the registry (a pin whose runner went away without removing it). A runner that is still active redraws
+        // its pair on its next Update, so only pins of raids that have ended stay gone; activeRaids says how many
+        // will come straight back. Backs sls-raid-clear-pins.
+        internal static void ClearAllRaidPins(out int removed, out int activeRaids) {
+            removed = 0;
+            activeRaids = 0;
+            Minimap map = Minimap.instance;
+            // Registry entries can outlive the Minimap that drew them (a previous world this session); only count
+            // pins the current map is actually showing.
+            if (map != null) {
+                foreach (Minimap.PinData pin in TrackedPins) {
+                    if (pin != null && map.m_pins.Contains(pin)) { removed++; }
+                }
+            }
+            // Scene objects only, not Resources.FindObjectsOfTypeAll, which would include the prefab asset.
+            foreach (RaidRunner runner in UnityEngine.Object.FindObjectsByType<RaidRunner>(FindObjectsSortMode.None)) {
+                if (runner == null) { continue; }
+                if (runner.IsActive) { activeRaids++; }
+                runner.RemoveExistingMapPins();
+            }
+            if (map != null) {
+                foreach (Minimap.PinData pin in TrackedPins) {
+                    if (pin != null) { map.RemovePin(pin); }
+                }
+            }
+            TrackedPins.Clear();
         }
     }
 }

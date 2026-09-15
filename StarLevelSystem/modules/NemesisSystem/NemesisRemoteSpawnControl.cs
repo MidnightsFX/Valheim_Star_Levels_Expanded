@@ -360,12 +360,17 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
             }
             if (boss.BossSpawn != null) {
-                SpawnNemesisSpawn(boss.BossSpawn, point, rot, extraLevelBonus, biomeLoot, pinId);
+                // The boss hunts the nearest player like its minions do (their NemesisSpawns default to HuntPlayer,
+                // while the shipped boss candidates say Alerted, which only ever had the boss stand and wait).
+                RemoteNemesisSpawnSettings remote = NemesisSystemData.SLE_Nemesis_Settings?.RemoteSpawning;
+                AI? bossAI = (remote == null || remote.BossesHuntPlayers) ? AI.HuntPlayer : (AI?)null;
+                SpawnNemesisSpawn(boss.BossSpawn, point, rot, extraLevelBonus, biomeLoot, pinId, bossAI);
             }
         }
 
         // Instantiate and fully set up one NemesisSpawn group (extracted from NemesisActions.NemesisRandomSpawner).
-        internal static void SpawnNemesisSpawn(NemesisSpawn spawn, Vector3 basePoint, Quaternion rot, int levelBonus, List<ExtendedCharacterDrop> extraBiomeLoot, string pinId) {
+        // creatureAIOverride replaces the spawn's own CreatureAI when given.
+        internal static void SpawnNemesisSpawn(NemesisSpawn spawn, Vector3 basePoint, Quaternion rot, int levelBonus, List<ExtendedCharacterDrop> extraBiomeLoot, string pinId, AI? creatureAIOverride = null) {
             if (spawn == null || string.IsNullOrEmpty(spawn.Prefab)) { return; }
             var offset = UnityEngine.Random.insideUnitCircle * 0.8f;
             Vector3 determinedSpawn = basePoint + new Vector3(offset.x, 0, offset.y);
@@ -401,7 +406,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
                 MonsterAI spawnAI = cgo.GetComponent<MonsterAI>();
                 if (spawnAI != null) {
-                    CreatureSetupControl.ApplySpawnAI(spawnAI, spawn.CreatureAI);
+                    CreatureSetupControl.ApplySpawnAI(spawnAI, creatureAIOverride ?? spawn.CreatureAI);
                     if (spawn.DespawnIfNotAlerted) {
                         spawnAI.SetEventCreature(true);
                     }
@@ -425,6 +430,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         cce.CreatureBaseValueModifiers[entry.Key] = entry.Value;
                     }
                 }
+                // Persist them as well: the cache entry above is session-local and is rebuilt from the biome and
+                // creature settings alone on every reload and ownership handoff, which is what stripped remote
+                // bosses of their extra health and damage after a server restart.
+                CompositeLazyCache.SetStatOverrides(spawnChara, spawn.CreatureBaseValueModifiers, spawn.CreaturePerLevelValueModifiers);
                 if (spawn.RequiredModifiers != null && spawn.RequiredModifiers.Count > 0) {
                     cce.CreatureModifiers = spawn.RequiredModifiers;
                     CompositeLazyCache.SetCreatureModifiers(spawnChara, spawn.RequiredModifiers);

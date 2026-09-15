@@ -199,11 +199,14 @@ namespace StarLevelSystem.common {
             if (parsed == null) { return Fail(reason, origin); }
 
             bool changedByMigration = false;
+            bool replacedBySchema = false;
+            int previousSchemaVersion = 0;
 
             if (SchemaVersion > 0 && GetSchemaVersion != null) {
-                if (ApplySchemaVersion(ref parsed, out string versionProblem, out changedByMigration) == false) {
+                if (ApplySchemaVersion(ref parsed, out string versionProblem, out replacedBySchema, out previousSchemaVersion) == false) {
                     return Fail(versionProblem, origin);
                 }
+                changedByMigration = replacedBySchema;
             }
 
             if (MigrateInPlace != null) {
@@ -243,6 +246,10 @@ namespace StarLevelSystem.common {
             // the owner -- the server has already migrated its own copy and sent the result.
             if (changedByMigration && origin != ConfigOrigin.ServerSync
                 && (ZNet.instance == null || ZNet.instance.IsServer())) {
+                // A schema migration may replace the file wholesale -- both shipped ones reset to the defaults
+                // -- so keep what was there first: an admin's edits are the one thing the rewrite cannot bring
+                // back. An in-place format fix keeps their values, so it needs no backup.
+                if (replacedBySchema) { YamlConfigManager.BackupBeforeRewrite(this, yaml, previousSchemaVersion); }
                 Logger.LogInfo($"{FileName} was migrated to the current format; rewriting it.");
                 YamlConfigManager.WriteCurrentToDisk(this);
             }
@@ -292,11 +299,12 @@ namespace StarLevelSystem.common {
             }
         }
 
-        private bool ApplySchemaVersion(ref T parsed, out string problem, out bool changed) {
+        // found reports the version the file was in, so a caller can name it when backing the file up.
+        private bool ApplySchemaVersion(ref T parsed, out string problem, out bool changed, out int found) {
             problem = null;
             changed = false;
+            found = 0;
 
-            int found;
             try {
                 found = GetSchemaVersion(parsed);
             } catch (Exception e) {

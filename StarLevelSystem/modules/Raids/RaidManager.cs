@@ -163,30 +163,14 @@ namespace StarLevelSystem.modules.Raids {
                         Logger.LogRaid($"Player {playerRaids.Key} position was not found, they will not get raided.");
                         continue;
                     }
-                    // Check distance to existing raids
-                    bool tooClose = false;
-                    foreach (KeyValuePair<string, PlayerRaidData> playerRaid in trackedPlayers) {
-                        // Each entry is measured against its own clock for the same reason as above.
-                        double otherNow = RaidControl.CooldownNow(playerRaid.Value);
-                        // Skip distance check if the player is waiting for a raid still
-                        if (playerRaid.Value.NextRaidableTime < otherNow) { continue; }
-
-                        // Last raid of the active raid type, is within its active duration
-                        if (playerRaid.Value.ActiveRaid != null && playerRaid.Value.LastRaidByName.ContainsKey(playerRaid.Value.ActiveRaid.Name)) {
-                            double lastRaidTime = playerRaid.Value.LastRaidByName[playerRaid.Value.ActiveRaid.Name];
-
-                            // Check if the raid is too close
-                            if ((lastRaidTime + playerRaid.Value.ActiveRaid.Duration) > otherNow) {
-                                if (Vector3.Distance(playerRaid.Value.CurrentRaidPosition, raidPosition) < playerRaid.Value.ActiveRaid.EventRange * 3) {
-                                    tooClose = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (tooClose) {
-                        Logger.LogRaid("Potential raid would be too close to an existing raid, skipping.");
-                        break;
+                    // The first raid in an area is the only raid. Asked of the world itself (runner ZDOs, plus raids
+                    // dispatched moments ago) rather than the per-player bookkeeping this used to consult, which
+                    // only knew a raid for its Duration, never learned of force-started ones, and could not see the
+                    // raid handed to the previous player in this same loop. See RaidControl.CanStartRaidAt. A
+                    // continue rather than the old break: a player elsewhere can still be raided this check.
+                    if (RaidControl.CanStartRaidAt(raidPosition, out string blockedBy) == false) {
+                        Logger.LogRaid($"Skipping raids for {playerRaids.Key}: {blockedBy}.");
+                        continue;
                     }
 
 

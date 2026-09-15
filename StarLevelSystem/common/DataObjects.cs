@@ -56,6 +56,13 @@ namespace StarLevelSystem.common
         public static readonly string SLS_CUSTOM_LOOT = "SLS_CUSTOM_LOOT";
         public static readonly string SLS_NEMESIS_BOSS = "SLS_NEM_BOSS";
         public static readonly string SLS_NEMESIS_PIN = "SLS_NEM_PIN";
+        // The CreatureBaseValueModifiers / CreaturePerLevelValueModifiers a spawn definition (NemesisSpawn,
+        // NemesisMinion) gave one creature, serialized like SLS_MODSV2. They used to live only in the session
+        // cache entry built at spawn time, so a remote Nemesis boss lost its 4x health and 1.5x damage the first
+        // time that entry was rebuilt: on every restart, on ownership handoff, and whenever the hud refreshed its
+        // modifier list. See CompositeLazyCache.SetStatOverrides.
+        public static readonly string SLS_BASE_STATS = "SLS_BASESTATS";
+        public static readonly string SLS_PERLEVEL_STATS = "SLS_LVLSTATS";
         // Marks a creature SLS spawned awake on purpose. MonsterAI.m_fallAsleepDistance isn't networked, so a
         // client that later takes ownership re-instantiates from the prefab and would put the creature back to
         // sleep; this flag is what survives handoff and reload. See CreatureSleepPatches.
@@ -881,6 +888,9 @@ namespace StarLevelSystem.common
         }
 
         public class RaidConfiguration {
+            // Schema stamp, same contract as NemesisVersion: a file whose value is missing (reads as 0) or does
+            // not match RaidsData.DefaultConfiguration.RaidVersion is backed up and reset to the defaults on load.
+            public int RaidVersion { get; set; }
             public GlobalRaidSettings GlobalSettings { get; set; } = new GlobalRaidSettings();
             public List<RaidDefinition> Raids { get; set; } = new List<RaidDefinition>();
         }
@@ -1366,8 +1376,11 @@ namespace StarLevelSystem.common
             // attribute existed have no CreatureAI key at all and land on whatever this says.
             [DefaultValue(AI.HuntPlayer)]
             public AI CreatureAI { get; set; } = AI.HuntPlayer;
-            [DefaultValue(10f)]
-            public float SpawnInterval { get; set; } = 10f;
+            // Raised 30% from 10 in 1.14.0 along with every shipped raid, so creatures pile up a little slower.
+            // A file written before then omits this key for any entry that sat at the old default, so those
+            // entries pick the new pace up too; explicit values are kept as written.
+            [DefaultValue(13f)]
+            public float SpawnInterval { get; set; } = 13f;
             [DefaultValue(100f)]
             public float SpawnChance { get; set; } = 100f;
             [DefaultValue(0f)]
@@ -1500,6 +1513,10 @@ namespace StarLevelSystem.common
             [Description("Label the map pin with the boss name.")]
             [DefaultValue(true)]
             public bool PinShowsBossName { get; set; } = true;
+
+            [Description("Remote bosses hunt the nearest player once they materialize, the way their minions do, instead of only standing alerted. Off: each boss uses the CreatureAI of its BossCandidatesByBiome entry.")]
+            [DefaultValue(true)]
+            public bool BossesHuntPlayers { get; set; } = true;
         }
 
         public class BiomeSpawnRadius {

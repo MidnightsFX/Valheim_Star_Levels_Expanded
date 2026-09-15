@@ -48,6 +48,120 @@ namespace StarLevelSystem.modules.Raids
             return ActiveRaidRunners.Count > 0;
         }
 
+        // The active raid whose event area contains pos on this machine (the nearest, where areas overlap), or
+        // null. Backs the HUD event banner: ActiveRaidRunners holds exactly the started, not-yet-winding-down
+        // raids, which is the set vanilla shows its own banner for.
+        internal static RaidRunner GetActiveRaidAt(Vector3 pos) {
+            if (ActiveRaidRunners.Count == 0) { return null; }
+            RaidRunner nearest = null;
+            float nearestDistance = float.MaxValue;
+            foreach (RaidRunner runner in ActiveRaidRunners) {
+                if (runner == null || runner.IsActive == false) { continue; }
+                float distance = Utils.DistanceXZ(pos, runner.transform.position);
+                if (distance < runner.CurrentRaid.EventRange && distance < nearestDistance) {
+                    nearest = runner;
+                    nearestDistance = distance;
+                }
+            }
+            return nearest;
+        }
+
+        private static string hudTextSource;
+        private static string hudTextLocalized;
+
+        // What the HUD banner says for a raid: its start message, which is what vanilla shows for its own events
+        // (RandomEvent.GetHudText), or the raid's name when it has none. Memoized per source string because the
+        // banner is refreshed every frame.
+        internal static string RaidHudText(RaidDefinition raid) {
+            if (raid == null) { return ""; }
+            string source = string.IsNullOrEmpty(raid.StartMessage) ? (raid.Name ?? "") : raid.StartMessage;
+            if (source != hudTextSource) {
+                hudTextSource = source;
+                hudTextLocalized = Localization.instance != null ? Localization.instance.Localize(source) : source;
+            }
+            return hudTextLocalized;
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // Raid exclusion
+        //
+        // The first raid in an area is the only raid. Dispatch used to check a per-player bookkeeping proxy --
+        // each registry entry's last raid stamp plus its Duration, against the candidate position -- which missed
+        // every case that mattered: a raid past its Duration but still running (any raid that had deadlocked, or
+        // one waiting on RaidActiveTillDefeated), a raid handed to another player earlier in the same check (its
+        // commit, and so the stamp, had not arrived yet), a force-started raid (never recorded at all), and any
+        // raid from before a restart. The world is the authority instead: the runner ZDOs, which exist from the
+        // moment a raid is created until EndRaid deletes them, plus a short-lived note of raids dispatched to a
+        // client whose runner has not been synced back to the server yet.
+        // ------------------------------------------------------------------------------------------
+
+        private static readonly List<KeyValuePair<Vector3, double>> recentDispatches = new List<KeyValuePair<Vector3, double>>();
+        // Comfortably longer than a client needs to instantiate the runner and sync its ZDO up; a dispatch that
+        // never produced a runner (nothing to spawn, client left) stops blocking the area once this lapses.
+        private const double RecentDispatchWindowSeconds = 120d;
+
+        internal static void RecordRaidDispatch(Vector3 pos) {
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { return; }
+            recentDispatches.Add(new KeyValuePair<Vector3, double>(pos, ZNet.instance.GetTimeSeconds()));
+        }
+
+        // Server-side. Whether a new raid may start at pos; blockedBy describes what is in the way when not.
+        internal static bool CanStartRaidAt(Vector3 pos, out string blockedBy) {
+            blockedBy = null;
+            float range = ValConfig.RaidExclusionRange.Value;
+            if (range <= 0f || ZNet.instance == null) { return true; }
+
+            double now = ZNet.instance.GetTimeSeconds();
+            recentDispatches.RemoveAll(dispatch => now - dispatch.Value > RecentDispatchWindowSeconds);
+            foreach (KeyValuePair<Vector3, double> dispatch in recentDispatches) {
+                float distance = Utils.DistanceXZ(dispatch.Key, pos);
+                if (distance < range) {
+                    blockedBy = $"a raid dispatched {now - dispatch.Value:0}s ago is {distance:0}m away";
+                    return false;
+                }
+            }
+
+            ZDO runner = FindNearestRaidRunnerZDO(pos, range, out float runnerDistance);
+            if (runner != null) {
+                blockedBy = $"a raid is already running {runnerDistance:0}m away";
+                return false;
+            }
+            return true;
+        }
+
+        // The nearest RaidRunner ZDO within range of pos, or null. Reads the sector index directly rather than
+        // walking the whole ZDO table (GetAllZDOsWithPrefab), which on a mature world is a several-hundred
+        // millisecond stall. A sector is one zone (64m) square; every sector that could hold a point within range
+        // is covered, and out-of-grid sectors map to bucket 0, whose contents the distance test rejects.
+        internal static ZDO FindNearestRaidRunnerZDO(Vector3 pos, float range, out float distance) {
+            distance = float.MaxValue;
+            if (ZDOMan.instance == null || ZoneSystem.instance == null) { return null; }
+            List<ZDO>[] bySector = ZDOMan.instance.m_objectsBySector;
+            if (bySector == null) { return null; }
+
+            int prefabHash = RaidRunnerPrefabName.GetStableHashCode();
+            Vector2s centre = ZoneSystem.GetZone(pos);
+            int reach = Mathf.CeilToInt(range / ZoneSystem.instance.m_zoneSize) + 1;
+            ZDO nearest = null;
+            for (int x = centre.x - reach; x <= centre.x + reach; x++) {
+                for (int y = centre.y - reach; y <= centre.y + reach; y++) {
+                    uint index = ZoneSystem.SectorToIndex(x, y).Sector;
+                    if (index >= bySector.Length) { continue; }
+                    List<ZDO> sector = bySector[index];
+                    if (sector == null) { continue; }
+                    foreach (ZDO zdo in sector) {
+                        if (zdo == null || zdo.GetPrefab() != prefabHash) { continue; }
+                        float d = Utils.DistanceXZ(zdo.GetPosition(), pos);
+                        if (d < range && d < distance) {
+                            nearest = zdo;
+                            distance = d;
+                        }
+                    }
+                }
+            }
+            return nearest;
+        }
+
         // The prefab is a persistent ZNetView holder plus the RaidRunner component. It used to be loaded and
         // instantiated only, never registered, so no machine could rebuild a runner from its ZDO: ZNetScene logged
         // "Missing prefab hash" for every runner ZDO in range on every object pass, forever, because a client never
@@ -81,6 +195,7 @@ namespace StarLevelSystem.modules.Raids
         }
 
         internal static void StartRaidRunner(RaidDefinition targetRaid, Vector3 pos) {
+            RecordRaidDispatch(pos);
             GameObject raidGo = GameObject.Instantiate(RaidRunnerGO, pos, Quaternion.identity);
             RaidRunner raidRun = raidGo.GetComponent<RaidRunner>();
             raidRun.StartRaid(targetRaid, Player.m_localPlayer);
@@ -94,6 +209,11 @@ namespace StarLevelSystem.modules.Raids
         // see MarkForcedRaid. The eligibility/cooldown checks on the way in are skipped regardless, since this
         // path never consults GetValidRaidsForPlayer.
         internal static bool DispatchForcedRaid(RaidDefinition targetRaid, Vector3 pos, bool skipCooldown = false) {
+            // Cooldowns and activation rules are skipped on purpose here; the no-stacking rule is not.
+            if (CanStartRaidAt(pos, out string blockedBy) == false) {
+                Logger.LogWarning($"Not starting raid '{targetRaid.Name}' at {pos}: {blockedBy}. Raids never stack.");
+                return false;
+            }
             // Special case for when the server itself tries to start a raid, as it does not have a player.
             if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
                 if (StartNetworkedRaidRunner(targetRaid, pos, skipCooldown) == false) {
@@ -148,6 +268,7 @@ namespace StarLevelSystem.modules.Raids
 
             Logger.LogDebug($"Sending networked raid runner for {targetRaid.Name} to {peer.m_playerName} at {pos}");
             ValConfig.ClientStartRaidRPC.SendPackage(peer.m_uid, CreateStartRaidPackage(targetRaid, pos));
+            RecordRaidDispatch(pos);
             return true;
         }
 

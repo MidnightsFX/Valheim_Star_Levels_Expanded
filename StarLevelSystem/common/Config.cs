@@ -236,6 +236,8 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<string> RaidCooldownClock;
         public static ConfigEntry<int> RaidWindDownSeconds;
         public static ConfigEntry<bool> RaidForceDeleteStragglers;
+        public static ConfigEntry<int> RaidActiveTillDefeatedMaxSeconds;
+        public static ConfigEntry<float> RaidExclusionRange;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
 
@@ -485,6 +487,8 @@ namespace StarLevelSystem.common {
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
             RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
             RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
+            RaidExclusionRange = BindServerConfig("Raids", "RaidExclusionRange", 500f, "No raid starts within this many meters of a raid that is already running or winding down, whoever it belongs to and however it was started: the first raid in an area is the only raid. Applies to force-started raids too. 0 disables the check.", false, 0f, 5000f);
+            RaidActiveTillDefeatedMaxSeconds = BindServerConfig("Raids", "RaidActiveTillDefeatedMaxSeconds", 300, "Only for raids with RaidActiveTillDefeated set in RaidSettings.yaml. Once such a raid's Duration has elapsed it stays active until its remaining creatures are dead, for at most this many seconds; then it winds down regardless, so a straggler stuck somewhere cannot hold a raid open forever. 0 winds every raid down as soon as its Duration elapses.", true, 0, 3600);
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");

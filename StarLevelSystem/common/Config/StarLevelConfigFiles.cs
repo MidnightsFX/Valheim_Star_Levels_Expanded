@@ -73,6 +73,12 @@ namespace StarLevelSystem.common {
                 Defaults = () => RaidsData.DefaultConfiguration,
                 Apply = RaidsData.ApplyLoaded,
                 OnFailure = ConfigFailurePolicy.RevertToDefaults,
+                // Same contract as NemesisSettings below: a file at any other version (or with no version at
+                // all) is backed up beside itself and reset to this build's defaults, on the owner only.
+                SchemaVersion = RaidsData.DefaultConfiguration.RaidVersion,
+                GetSchemaVersion = RaidsData.GetSchemaVersion,
+                SetSchemaVersion = RaidsData.SetSchemaVersion,
+                Migrate = RaidsData.MigrateToCurrent,
                 AllowAdminEdit = true,
             });
 
@@ -423,6 +429,11 @@ namespace StarLevelSystem.common {
 # SERVER AUTHORITATIVE: the server's copy is synced to clients; editing this
 # on a client does nothing. Edits apply live.
 #
+# DO NOT edit RaidVersion: a version that does not match this build resets
+# the whole file to the defaults on load. The previous file is saved next to
+# this one as RaidSettings.yaml.v<old version>.<date>.bak first, so your own
+# raids can be copied back in.
+#
 # --- GlobalSettings ---
 #   GlobalSettings:
 #     DisableAllRaids: false
@@ -436,7 +447,8 @@ namespace StarLevelSystem.common {
 #   Raids:
 #   - Name: my_swamp_raid            # unique; also used for cooldown tracking
 #     Duration: 120                  # seconds of active spawning
-#     RaidActiveTillDefeated: true   # raid only ends once its creatures die
+#     RaidActiveTillDefeated: true   # after Duration, stays active until its creatures die (at most
+#                                    # RaidActiveTillDefeatedMaxSeconds from the main .cfg); false ends it at Duration
 #     RaidCoolDownMinutes: 120       # per-player cooldown for THIS raid
 #     EventRange: 96                 # radius of the event circle
 #     StartMessage: $SLS_my_raid_start   # localization tokens or plain text
@@ -453,7 +465,7 @@ namespace StarLevelSystem.common {
 #       PauseIfNoPlayerInArea: true
 #     Spawns:
 #     - PrefabName: Draugr
-#       SpawnInterval: 10            # seconds between spawn waves
+#       SpawnInterval: 13            # seconds between spawn waves
 #       SpawnChance: 100             # chance per wave
 #       SpawnGroupSize: 2            # creatures per wave
 #       MaxSpawned: 6                # cap on this entry's living creatures
@@ -562,6 +574,8 @@ namespace StarLevelSystem.common {
 #         SelectionWeight: 1
 #     ShowMapPin: true
 #     PinShowsBossName: true
+#     BossesHuntPlayers: true        # bosses hunt the nearest player like their minions;
+#                                    # false uses each candidate's own CreatureAI
 #
 # NemesisBossLootTables adds biome-keyed bonus loot to remote bosses and their
 # minions, using the same drop blocks as LootSettings.yaml. The console command

@@ -228,5 +228,28 @@ namespace StarLevelSystem.modules.Raids
                 return false;
             }
         }
+
+        // Vanilla fills the top-centre event banner from RandEventSystem.m_activeEvent, which SLS raids never set
+        // (they run through RaidRunner instead), so a player standing inside an SLS raid had no on-screen sign of
+        // which raid it was. Fill the same bar when the local player is inside an SLS raid's event area, under
+        // the same gates vanilla applies: not while a boss hud is up, and not in the raid's first three seconds.
+        // Vanilla has just written the bar for this frame, so an active vanilla event always wins.
+        [HarmonyPatch(typeof(Hud), nameof(Hud.UpdateEvent))]
+        public static class ShowSlsRaidEventBanner {
+            public static void Postfix(Hud __instance, Player player) {
+                if (ValConfig.UseVanillaRaidConfiguration.Value) { return; }
+                if (__instance.m_eventBar == null || __instance.m_eventBar.activeSelf || player == null) { return; }
+                RaidRunner runner = RaidControl.GetActiveRaidAt(player.transform.position);
+                if (runner == null || runner.SecondsSinceStart < 3d) { return; }
+                if (EnemyHud.instance != null && EnemyHud.instance.ShowingBossHud()) { return; }
+
+                __instance.m_eventBar.SetActive(true);
+                string text = RaidControl.RaidHudText(runner.CurrentRaid);
+                // Only assign when changed: a TMP text write re-runs layout even for an identical string.
+                if (__instance.m_eventName != null && __instance.m_eventName.text != text) {
+                    __instance.m_eventName.text = text;
+                }
+            }
+        }
     }
 }

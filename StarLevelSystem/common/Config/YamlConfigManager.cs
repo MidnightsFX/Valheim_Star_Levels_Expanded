@@ -150,6 +150,26 @@ namespace StarLevelSystem.common {
             WriteRawToDisk(file, file?.SerializeCurrent());
         }
 
+        // Saves a file's previous content beside it before a schema migration rewrites it. previousYaml is
+        // the text that was just loaded (header included), which is exactly what the admin had. Named with
+        // the version it was in and a timestamp so repeated migrations never overwrite an earlier backup,
+        // and with a .bak extension so nothing ever mistakes it for a live config. Returns the path written,
+        // or null when nothing was.
+        internal static string BackupBeforeRewrite(YamlConfigFile file, string previousYaml, int previousVersion) {
+            if (file == null || string.IsNullOrEmpty(file.Path) || string.IsNullOrEmpty(previousYaml)) { return null; }
+            string backupPath = $"{file.Path}.v{previousVersion}.{DateTime.Now:yyyyMMdd-HHmmss}.bak";
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(file.Path));
+                File.WriteAllText(backupPath, previousYaml);
+                Logger.LogWarning($"{file.FileName} was schema version {previousVersion} and is being rewritten for this build; " +
+                    $"the previous file was saved as {Path.GetFileName(backupPath)} next to it.");
+                return backupPath;
+            } catch (Exception e) {
+                Logger.LogError($"Could not back up {file.FileName} before rewriting it: {e.Message}");
+                return null;
+            }
+        }
+
         // Every write to a registered config file goes through here rather than File.WriteAllText.
         //
         // The header is the only documentation of the schema an admin ever sees -- it is what tells them

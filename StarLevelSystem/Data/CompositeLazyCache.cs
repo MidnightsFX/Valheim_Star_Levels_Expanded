@@ -154,6 +154,8 @@ namespace StarLevelSystem.Data
             characterEntry.DamageRecievedModifiers = DamageModifications.DetermineCreatureDamageRecievedModifiers(biomeSettings, creatureSettings);
             characterEntry.CreaturePerLevelValueModifiers = DamageModifications.DetermineCharacterPerLevelStats(biomeSettings, creatureSettings);
             characterEntry.CreatureBaseValueModifiers = DamageModifications.DetermineCreatureBaseStats(biomeSettings, creatureSettings);
+            // Then whatever the spawn that created this creature gave it on top (nemesis bosses and minions).
+            ApplyPersistedStatOverrides(characterEntry.ZDO, characterEntry);
 
             // skip setting cache if the creature is gone already
             ZDOID uid = character.GetZDOID();
@@ -333,6 +335,53 @@ namespace StarLevelSystem.Data
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;
                 UpdateCharacterCacheEntry(chara, cce);
+            }
+        }
+
+        // Persists the stat overrides a spawn definition gave this creature (a NemesisSpawn's or NemesisMinion's
+        // CreatureBaseValueModifiers and CreaturePerLevelValueModifiers) so every later cache build applies them
+        // again: another peer's, the next owner's after a handoff, and the one after a reload. Before this they
+        // lived only in the session cache entry built at spawn time, so a remote Nemesis boss lost its 4x health
+        // and 1.5x damage after a server restart. Stored like SLS_MODSV2; null or empty dictionaries write nothing.
+        public static void SetStatOverrides(Character chara, Dictionary<CreatureBaseAttribute, float> baseStats, Dictionary<CreaturePerLevelAttribute, float> perLevelStats)
+        {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { return; }
+            ZDO zdo = chara.m_nview.GetZDO();
+            if (baseStats != null && baseStats.Count > 0) {
+                zdo.Set(SLS_BASE_STATS, DataObjects.yamlSerializerJsonCompat.Serialize(baseStats));
+            }
+            if (perLevelStats != null && perLevelStats.Count > 0) {
+                zdo.Set(SLS_PERLEVEL_STATS, DataObjects.yamlSerializerJsonCompat.Serialize(perLevelStats));
+            }
+        }
+
+        // Merges the persisted overrides onto the biome/creature-derived dictionaries of a freshly built entry.
+        // A value this build cannot parse is skipped with a warning rather than failing the build, which would
+        // leave the creature without a cache entry for the whole session.
+        private static void ApplyPersistedStatOverrides(ZDO zdo, CharacterCacheEntry entry)
+        {
+            if (zdo == null || entry == null) { return; }
+            string baseYaml = zdo.GetString(SLS_BASE_STATS, null);
+            if (string.IsNullOrEmpty(baseYaml) == false) {
+                try {
+                    Dictionary<CreatureBaseAttribute, float> baseStats = DataObjects.yamlDeserializer.Deserialize<Dictionary<CreatureBaseAttribute, float>>(baseYaml);
+                    if (baseStats != null) {
+                        foreach (KeyValuePair<CreatureBaseAttribute, float> stat in baseStats) { entry.CreatureBaseValueModifiers[stat.Key] = stat.Value; }
+                    }
+                } catch (System.Exception e) {
+                    Logger.LogWarning($"Could not read the saved base stat overrides of {entry.RefCreatureName}; ignoring them. {e.Message}");
+                }
+            }
+            string perLevelYaml = zdo.GetString(SLS_PERLEVEL_STATS, null);
+            if (string.IsNullOrEmpty(perLevelYaml) == false) {
+                try {
+                    Dictionary<CreaturePerLevelAttribute, float> perLevelStats = DataObjects.yamlDeserializer.Deserialize<Dictionary<CreaturePerLevelAttribute, float>>(perLevelYaml);
+                    if (perLevelStats != null) {
+                        foreach (KeyValuePair<CreaturePerLevelAttribute, float> stat in perLevelStats) { entry.CreaturePerLevelValueModifiers[stat.Key] = stat.Value; }
+                    }
+                } catch (System.Exception e) {
+                    Logger.LogWarning($"Could not read the saved per-level stat overrides of {entry.RefCreatureName}; ignoring them. {e.Message}");
+                }
             }
         }
 

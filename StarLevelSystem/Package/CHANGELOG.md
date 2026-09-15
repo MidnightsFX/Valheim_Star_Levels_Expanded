@@ -1,3 +1,17 @@
+**1.14.0**
+ ---
+ ```
+- Fixes for raids that never ended: If no creatures hit a full spawn a raid could never end
+- RaidActiveTillDefeated is now capped by the new RaidActiveTillDefeatedMaxSeconds setting (default 5 minutes)
+- Fixes raid stacking: Raid collision checks moved to the server side.
+- sls-raid-clear-pins command removes every SLS raid map pin from your map; raids still running redraw theirs
+	- stopevent still kills running raids and cleans up
+- The vanilla event banner now shows the raid's start message while you are inside an SLS raid's area
+- RaidSettings.yaml is now versioned (RaidVersion) and is reset to the new defaults on load, the old file is backed up next to it first
+	- Spawn interval is increased for groups during a raid (gives you more time to deal with enemies before they pile up)
+- Remote Nemesis bosses now hunt the nearest player like their minions (RemoteSpawning.BossesHuntPlayers, default on)
+ ```
+
 **1.13.1**
  ---
  ```

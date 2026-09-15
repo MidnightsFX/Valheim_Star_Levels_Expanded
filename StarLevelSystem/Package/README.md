@@ -469,6 +469,8 @@ The number of players, frequency, and most all details of each raid is configura
 
 Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
 
+`RaidSettings.yaml` carries a `RaidVersion` stamp, like `NemesisVersion`. Do not edit it: when the shipped raids change in a way every install should pick up, the version is bumped and a file at any other version (or with none, as every file from before 1.14.0) is reset to the new defaults on load. The previous file is saved next to it first as `RaidSettings.yaml.v<old version>.<date>.bak`, so raids of your own can be copied back in.
+
 #### Raid cooldowns and logging out
 
 Each player's raid cooldown, and the server's own raid check schedule, are saved per world and picked back up exactly where they left off when the world is loaded again. Logging out and back in does not hand anyone a fresh raid.
@@ -479,6 +481,19 @@ Each player's raid cooldown, and the server's own raid check schedule, are saved
 - `PlayerTime` - each player's own time in the world. A cooldown only counts down while that player is actually online, so logging out with 20 minutes left brings them back with 20 minutes left however long they were away, and other people's sessions do not shorten it.
 
 Neither clock runs while nobody is playing. Switching between them re-bases everyone's remaining cooldown, so nobody gains or loses raid time by the change.
+
+#### How a raid ends
+
+A raid spawns creatures for its `Duration`. What happens next depends on `RaidActiveTillDefeated`:
+
+- `true` (default) - the raid stays active, with its creatures still hunting and its map pin, music and weather in place, until every creature it spawned is dead. `RaidActiveTillDefeatedMaxSeconds` in the main config (default 300) caps that wait, so a straggler stuck somewhere cannot hold a raid open forever.
+- `false` - the raid ends as soon as its `Duration` elapses.
+
+Either way the raid then winds down for `RaidWindDownSeconds`: the end message shows, the pin, music and weather go, and the creatures wander off and despawn. Anything still around at the end of the window is deleted when `RaidForceDeleteStragglers` is on.
+
+While you are inside a raid's area the vanilla event banner at the top of the screen shows the raid's start message, just as it does for vanilla events. `sls-raid-clear-pins` removes every SLS raid pin from your map if any are ever left behind.
+
+Raids never stack. Before a raid starts, the server checks for any raid still in the world within `RaidExclusionRange` (main config, default 500m), running or winding down, whoever it belongs to and however it was started, and skips the new one. The first raid in an area is the only raid; other players elsewhere are still considered. `sls-raid-spawn` is refused the same way.
 
 Below is an example of many of the details that can be configured for a given raid
 ```
@@ -503,7 +518,7 @@ Below is an example of many of the details that can be configured for a given ra
   Spawns:
   - PrefabName: Troll             # Prefab name of a creature to spawn in the raid
     CreatureAI: AgitatedByBuild   # Type of creature AI setting to apply, valid values are: Alert, AgitatedByBuild, HuntPlayer
-    SpawnInterval: 30             # Number of seconds between when another of this monster can spawn
+    SpawnInterval: 40             # Number of seconds between when another of this monster can spawn
     Faction: Demon                # Faction this creature will be assigned to Valid options: Players, AnimalsVeg, ForestMonsters, Undead, Demon, MountainMonsters, SeaMonsters, PlainsMonsters, Boss, MistlandsMonsters, Dverger, PlayerSpawned
     MaxSpawned: 3                 # Maximum number of this creature that can be alive (from this specific spawn group)
     SpawnGroupSize: 2             # Number of creatures to spawn at once
@@ -818,7 +833,8 @@ client setting if you prefer plain text).
 - `sls-zone-rebuild` - regenerates the zone map from the world and redraws the minimap overlay. Resets zone kill counts and levels
 - `sls-nemesis-spawn [biome]` - force-scouts and places one remote Nemesis boss
 - `sls-nemesis-score [value]` - sets your local Nemesis score
-- `sls-raid-spawn [raid_name] [x] [z]` - force-starts a raid, ignoring every cooldown and activation requirement (biome, keys, player base). Tab-completes the raid names from your `RaidSettings.yaml`. Defaults to your own position; pass an `x` and `z` to start it somewhere else. The raid does not consume the target player's raid cooldown, so it will not delay their next natural raid. Works on raids that are disabled or while `DisableAllRaids` is set, so you can test one before turning it on
+- `sls-raid-spawn [raid_name] [x] [z]` - force-starts a raid, ignoring every cooldown and activation requirement (biome, keys, player base), but not a raid already running within `RaidExclusionRange`. Tab-completes the raid names from your `RaidSettings.yaml`. Defaults to your own position; pass an `x` and `z` to start it somewhere else. The raid does not consume the target player's raid cooldown, so it will not delay their next natural raid. Works on raids that are disabled or while `DisableAllRaids` is set, so you can test one before turning it on
+- `sls-raid-clear-pins` - removes every SLS raid map pin (the red event circle and the `!` marker) from your own map. Raids still running near you redraw theirs; pins left behind by a raid that has ended are gone for good. Pins are local to each client, so no admin is needed
 
 Location Reset commands (server authoritative):
 - `sls-loc-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift

@@ -20,6 +20,34 @@ namespace StarLevelSystem.common
                 "and activation requirements. Defaults to your position. eg: sls-raid-spawn army_eikthyr",
                 RaidSpawn, CommandArea.Raid, RaidSpawnOptions,
                 serverAuthoritative: true, requiresAdmin: true);
+
+            // Pins are local Minimap entries, so this is a plain client command: no relay, no admin.
+            _ = new SLSCommand("sls-raid-clear-pins",
+                "Removes every SLS raid map pin (the red event circle and the ! marker) from your map. " +
+                "Raids still running near you redraw theirs; pins left behind by a raid that has ended are gone for good.",
+                RaidClearPins, CommandArea.Raid);
+        }
+
+        private static void RaidClearPins(SLSCommandArgs args)
+        {
+            if (Minimap.instance == null)
+            {
+                args.Output.Error("There is no map to clear; this only works while in a world.");
+                return;
+            }
+            RaidRunner.ClearAllRaidPins(out int removed, out int activeRaids);
+            if (removed == 0)
+            {
+                args.Output.Info("No SLS raid pins were on your map.");
+            }
+            else
+            {
+                args.Output.Info($"Removed {removed} SLS raid map pin(s).");
+            }
+            if (activeRaids > 0)
+            {
+                args.Output.Detail($"{activeRaids} raid(s) are still running near you; their pins will be redrawn.");
+            }
         }
 
         private static List<string> RaidSpawnOptions(string[] input)
@@ -51,6 +79,14 @@ namespace StarLevelSystem.common
             if (raid == null) { return; }
 
             if (TryResolveRaidPosition(args, out Vector3 pos) == false) { return; }
+
+            // Cooldowns and activation rules are skipped on purpose; the no-stacking rule is not. Checked here so
+            // the refusal can say why, rather than surfacing as the generic dispatch failure below.
+            if (RaidControl.CanStartRaidAt(pos, out string blockedBy) == false)
+            {
+                args.Output.Error($"Could not start '{raid.Name}': {blockedBy}. Raids never stack; wait for that raid to end, or stop it with the vanilla 'stopevent' command.");
+                return;
+            }
 
             // Deliberately warnings rather than refusals: force-spawning is how you test a raid before turning
             // it on, so a disabled raid is a thing to flag, not a thing to block.

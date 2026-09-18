@@ -26,6 +26,12 @@ namespace StarLevelSystem.modules.LevelSystem {
             return null;
         }
 
+        // NightMultiplier of the generators behind GetConditionalLevelupChance for this biome, 1 when none apply.
+        internal static float GetConditionalNightMultiplier(Heightmap.Biome biome) {
+            if (GetConditionalLevelupChance(biome) == null) { return 1f; }
+            return resolvedByBiome.TryGetValue(biome, out List<LevelGenerator> generators) ? LevelGeneratorResolver.NightMultiplierOf(generators) : 1f;
+        }
+
         private static void RebuildCache() {
             CurrentGlobalKey = null;
             CurrentGlobalKeyConditionalLevelup.Clear();

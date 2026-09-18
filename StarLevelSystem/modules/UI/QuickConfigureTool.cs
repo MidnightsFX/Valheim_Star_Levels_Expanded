@@ -1,94 +1,68 @@
+﻿using BepInEx.Configuration;
 using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
-using StarLevelSystem.modules.LevelSystem;
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.VFX;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.UI {
-    internal static class QuickConfigureTool {
+    // A paged editor over the settings most worlds want to change. Opened from the shared Mod Config launcher, or once
+    // on the main menu as the first-time setup, which adds a welcome page in front. Every page can be saved, and the X
+    // closes from anywhere. This file is the shell (opening, navigation, saving, staged state); the pages themselves are
+    // built in QuickConfigurePages.cs.
+    internal static partial class QuickConfigureTool {
 
         // --- layout constants ---
         private const float PanelW = 900f;
         private const float PanelH = 690f;
         private const float Margin = 26f;
-        private const float ContentTop = 92f;
-        private const float RowHeight = 34f;
-        private const float SubRowHeight = 26f;
-        private const float RowGap = 4f;
-        private const int PageCount = 5;
-
-        // Sample creatures data | TODO: allow selecting different creature examples?
-        private const float TrollHp = 600f;
-        private const float TrollDmg = 70f;
-        private const float TheElderHP = 2500f;
-        private const float TheElderDmg = 60f;
-
-        private static readonly string[] CalcStyleOptions = Enum.GetNames(typeof(DataObjects.LevelupCalculationStyle));
-        private static readonly string[] DisplayStyleOptions = Enum.GetNames(typeof(DataObjects.ModifierDisplayStyle));
-
-        // Brief, player-facing descriptions for each modifier (see Package/README.md), keyed by ModifierNames.
-        private static readonly Dictionary<string, string> ModifierDescriptions = new Dictionary<string, string>() {
-            { "BossSummoner", "Summons minion creatures at regular intervals." },
-            { "SoulEater", "Grows stronger as nearby creatures die; self-heals." },
-            { "LifeLink", "Redirects some damage taken to a nearby creature." },
-            { "Splitter", "Spawns replacement creatures when it dies." },
-            { "Lootbags", "Tankier and faster; drops extra loot." },
-            { "Fire", "Adds fire damage to its attacks." },
-            { "Frost", "Adds frost damage to its attacks." },
-            { "Poison", "Adds poison damage to its attacks." },
-            { "Lightning", "Adds lightning damage to its attacks." },
-            { "FireNova", "Explodes in fire on death, damaging nearby targets." },
-            { "FrostNova", "Explodes in frost on death, damaging nearby targets." },
-            { "PoisonNova", "Explodes in poison on death, damaging nearby targets." },
-            { "LightningNova", "Explodes in lightning on death, damaging nearby targets." },
-            { "Evolving", "Gains a level after enough kills." },
-            { "ResistSlash", "Reduces damage taken from slash." },
-            { "ResistBlunt", "Reduces damage taken from blunt." },
-            { "ResistPierce", "Reduces damage taken from pierce (e.g. arrows)." },
-            { "ResistFire", "Reduces damage taken from fire." },
-            { "ResistFrost", "Reduces damage taken from frost." },
-            { "ResistPoison", "Reduces damage taken from poison." },
-            { "ResistSpirit", "Reduces damage taken from spirit." },
-            { "Alert", "Increases the creature's hearing range." },
-            { "Big", "Increases the creature's size." },
-            { "Fast", "Increases the creature's movement speed." },
-            { "StaminaDrain", "Its attacks drain your stamina. Dodging avoids it; blocking or parrying lessens it." },
-            { "EitrDrain", "Its attacks drain your eitr. Dodging avoids it; blocking or parrying lessens it." },
-            { "Brutal", "Increases the creature's attack speed." },
-            { "ElementalChaos", "Adds random elemental damage on each hit." },
-        };
-
-        private static Sprite DistanceExample;
-        private static Sprite ZoneExample;
-
-        // --- runtime state ---
-        private static GameObject panel;
-        private static GameObject[] pageRoots;
-        private static int currentPage;
-        private static Text titleText;
-        private static GameObject backBtn;
-        private static GameObject cancelBtn;
-        private static GameObject nextBtn;
-        private static GameObject applyBtn;
-        private static Text creatureExampleText;
-        private static Text bossExampleText;
-        private static Slider maxLevelSlider;
-        private static InputField tableThresholdField;
-        private static Text tableStatusText;
-        private static StagedConfig staged;
+        private const float ContentTop = 64f;
+        private const float PageW = PanelW - 2 * Margin;
+        private const float PageH = PanelH - ContentTop - 84f;   // leaves the status line and the nav bar below
+        private const float RowHeight = ConfigUI.RowHeight;
+        private const float SubRowHeight = ConfigUI.SubRowHeight;
+        private const float RowGap = ConfigUI.RowGap;
+        private const float NavButtonW = 170f;
 
         private const string LauncherEntry = "Star Level System";
+
+        private struct PageDef {
+            internal string Title;
+            internal Action<Transform> Build;
+            internal Action OnShow;
+        }
+
+        // --- runtime state ---
+        private static GameObject overlay;
+        private static GameObject panel;
+        private static GameObject confirmOverlay;
+        private static List<PageDef> pages;
+        private static GameObject[] pageRoots;
+        private static int currentPage;
+        private static bool tutorialMode;
+        private static Text titleText;
+        private static Text statusText;
+        private static GameObject backBtn;
+        private static GameObject nextBtn;
+        private static GameObject finishBtn;
+        private static Text nextCaption;
+
+        // What the pages edit, and what was live when the panel opened (or was last saved). Unsaved changes are the
+        // difference between the two, so an edit that is put back is not an edit.
+        private static StagedConfig staged;
+        private static StagedConfig baseline;
+
+        // First-time setup: shown at most once a session. The FejdStartup it was queued on is kept so a new visit to the
+        // main menu can queue it again if the last one ended before the menu was ever ready.
+        private static bool tutorialShownThisSession;
+        private static FejdStartup tutorialQueuedOn;
 
         internal static void Init() {
             DistanceExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("distance_rings");
@@ -100,6 +74,7 @@ namespace StarLevelSystem.modules.UI {
             // contract.
             ConfigUILauncher.Init();
             ApplyRegistration();
+            ConfigNetwork.EditResult += OnRemoteEditResult;
         }
 
         // SettingChanged handler for the client toggle.
@@ -113,7 +88,7 @@ namespace StarLevelSystem.modules.UI {
                 return;
             }
 
-            // Off-host, this tool can only half work: ApplyAndSave writes ~25 BepInEx ConfigEntry values,
+            // Off-host, this tool can only half work: SaveStaged writes ~25 BepInEx ConfigEntry values,
             // and Jotunn only pushes a remote admin's changed entries from SynchronizeChangedConfig, which
             // is internal and fires when the ConfigurationManager window closes -- not from here. If that
             // method cannot be reached, do not offer the button off-host at all. Better to be missing than
@@ -158,546 +133,310 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // ------------------------------------------------------------------------------------------------
-        //  Panel Creation
+        //  First-time setup
         // ------------------------------------------------------------------------------------------------
 
+        // Called from the FejdStartup.Start postfix. Start runs before the intro cinematic, so this only queues: the
+        // coroutine lives on the FejdStartup, and dies with it if the player leaves the start scene first.
+        internal static void QueueTutorial(FejdStartup startup) {
+            if (startup == null || GUIManager.IsHeadless()) { return; }
+            if (ValConfig.SetupTutorialComplete.Value || tutorialShownThisSession || tutorialQueuedOn == startup) { return; }
+            tutorialQueuedOn = startup;
+            startup.StartCoroutine(OpenTutorialWhenMenuReady(startup));
+        }
+
+        private static IEnumerator OpenTutorialWhenMenuReady(FejdStartup startup) {
+            while (MainMenuReady(startup) == false) { yield return null; }
+            // The menu fades in once the cinematic ends; let it land before covering it.
+            yield return new WaitForSeconds(1f);
+            while (MainMenuReady(startup) == false) { yield return null; }
+            if (ValConfig.SetupTutorialComplete.Value || tutorialShownThisSession || panel != null) { yield break; }
+            OpenPanel(tutorial: true);
+        }
+
+        // PlayIntroCinematic keeps m_mainMenu hidden until the video stops, whether it ends, is skipped, or never plays.
+        // The menu list is inactive under the character and world pickers, which are not a moment to interrupt either.
+        private static bool MainMenuReady(FejdStartup startup) {
+            return startup != null
+                && CinematicsManager.IsStartedPlaying() == false
+                && startup.m_mainMenu != null && startup.m_mainMenu.activeInHierarchy
+                && startup.m_menuList != null && startup.m_menuList.activeInHierarchy
+                && UnifiedPopup.IsVisible() == false
+                && GUIManager.CustomGUIFront != null;
+        }
+
+        // ------------------------------------------------------------------------------------------------
+        //  Panel
+        // ------------------------------------------------------------------------------------------------
+
+        // The launcher's entry point.
         internal static void OpenPanel() {
+            OpenPanel(tutorial: false);
+        }
+
+        internal static void OpenPanel(bool tutorial) {
+            if (GUIManager.IsHeadless() || GUIManager.Instance == null || GUIManager.CustomGUIFront == null) { return; }
+            // Built fresh every time, so every widget starts from the current configuration.
+            DestroyPanel();
+            tutorialMode = tutorial;
+            if (tutorial) { tutorialShownThisSession = true; }
             staged = StagedConfig.Snapshot();
-            // Create fresh UI, allows setting all of the current configs to reflect current reality
-            if (panel != null) {
-                UnityEngine.Object.Destroy(panel);
-                panel = null;
-            }
+            baseline = StagedConfig.Snapshot();
             try {
                 BuildPanel();
             } catch (Exception e) {
                 Logger.LogWarning($"QuickConfigureTool failed to build panel: {e}");
-                if (panel != null) { UnityEngine.Object.Destroy(panel); panel = null; }
+                DestroyPanel();
                 return;
             }
-            currentPage = 0;
             ShowPage(0);
         }
 
-        private static void ClosePanel() {
-            if (panel != null) {
-                UnityEngine.Object.Destroy(panel);
-                panel = null;
-            }
-        }
-
         private static void BuildPanel() {
+            // A full-screen dimmer under the panel, so clicks cannot fall through to the menu behind it. It also owns the
+            // input block and, on the main menu, hides the menu itself (see MainMenuGuard); both are released when it is
+            // destroyed, whatever route that takes.
+            overlay = ConfigUI.NewUI("SLSQuickConfigure", GUIManager.CustomGUIFront.transform, typeof(Image));
+            StretchToParent(overlay);
+            overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.45f);
+            overlay.AddComponent<ConfigUI.ConfigUIInputGuard>().Hold();
+            overlay.AddComponent<MainMenuGuard>();
+
             panel = GUIManager.Instance.CreateWoodpanel(
-                parent: GUIManager.CustomGUIFront.transform, 
-                anchorMin: new Vector2(0.5f, 0.5f), 
-                anchorMax: new Vector2(0.5f, 0.5f), 
+                parent: overlay.transform,
+                anchorMin: new Vector2(0.5f, 0.5f),
+                anchorMax: new Vector2(0.5f, 0.5f),
                 position: new Vector2(0f, 0f),
-                width: PanelW, 
-                height: PanelH, 
+                width: PanelW,
+                height: PanelH,
                 draggable: true);
 
             titleText = ConfigUI.AddText(
                 parent: panel.transform,
-                x: Margin,
+                x: Margin + 40f,
                 y: 18f,
-                w: PanelW - 2 * Margin,
+                w: PageW - 80f,
                 h: RowHeight,
-                text: "StarLevelSystem - Quick Configure",
-                fontSize: 22, 
+                text: "",
+                fontSize: 22,
                 anchor: TextAnchor.MiddleCenter,
                 color: GUIManager.Instance.ValheimYellow);
+            WithTip(ConfigUI.AddCloseX(panel.transform, PanelW, RequestClose),
+                Tip("Close", "Closes the panel. If anything has not been saved yet you are asked about it first."));
 
-            // Build out the page skeletons
-            pageRoots = new GameObject[PageCount];
-            for (int i = 0; i < PageCount; i++) {
-                pageRoots[i] = ConfigUI.NewRect(
-                    name: "Page" + i, 
-                    parent: panel.transform,
-                    x: Margin,
-                    y: ContentTop,
-                    w: PanelW - 2 * Margin,
-                    h: PanelH - ContentTop - 70f);
+            pages = BuildPageList(tutorialMode);
+            pageRoots = new GameObject[pages.Count];
+            for (int i = 0; i < pages.Count; i++) {
+                pageRoots[i] = ConfigUI.NewRect("Page" + i, panel.transform, Margin, ContentTop, PageW, PageH);
+                pages[i].Build(pageRoots[i].transform);
             }
 
-            BuildScalingPage(pageRoots[0].transform);
-            BuildStatsPage(pageRoots[1].transform);
-            BuildModifiersPage(pageRoots[2].transform);
-            BuildRaidsPage(pageRoots[3].transform);
-            BuildNemesisPage(pageRoots[4].transform);
+            statusText = ConfigUI.AddText(panel.transform, Margin, PanelH - 80f, PageW, 22f, "", 13, TextAnchor.MiddleCenter);
 
             float navY = PanelH - 56f;
-            backBtn = ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1));
-            cancelBtn = ConfigUI.AddButton(panel.transform, Margin + 150f, navY, 130f, "Cancel", ClosePanel);
-            nextBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Next >", () => ShowPage(currentPage + 1));
-            applyBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Apply & Save", ApplyAndSave);
+            backBtn = WithTip(ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1)),
+                Tip("Back", "The previous page. Moving between pages keeps your edits; only Save writes them."));
+            WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f, navY, NavButtonW, "$sls_cfg_button_save", OnSaveClicked),
+                Tip("Save", "Writes every page's changes: the BepInEx settings and the YAML files behind them. The panel stays open."));
+            nextBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "Next >", () => ShowPage(currentPage + 1)),
+                Tip("Next", "The next page. Moving between pages keeps your edits; only Save writes them."));
+            nextCaption = nextBtn.GetComponentInChildren<Text>();
+            finishBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "$sls_cfg_button_finish", OnFinishClicked),
+                Tip("Save & Finish", "Saves everything and closes the panel."));
         }
 
-        // Moves to the current page
-        // Sets the Title
+        private static List<PageDef> BuildPageList(bool tutorial) {
+            List<PageDef> list = new List<PageDef>();
+            if (tutorial) {
+                list.Add(new PageDef { Title = "Welcome", Build = BuildWelcomePage });
+            }
+            list.Add(new PageDef { Title = "Level Progression", Build = BuildScalingPage });
+            list.Add(new PageDef { Title = "Level Distribution", Build = BuildDistributionPage, OnShow = RefreshDistribution });
+            list.Add(new PageDef { Title = "Health & Damage", Build = BuildStatsPage, OnShow = UpdateExampleMath });
+            list.Add(new PageDef { Title = "Modifiers", Build = BuildModifiersPage });
+            list.Add(new PageDef { Title = "Raids", Build = BuildRaidsPage });
+            list.Add(new PageDef { Title = "Nemesis System", Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions });
+            list.Add(new PageDef { Title = "Location Reset", Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews });
+            return list;
+        }
+
         private static void ShowPage(int page) {
-            currentPage = Mathf.Clamp(page, 0, PageCount - 1);
+            if (pageRoots == null) { return; }
+            currentPage = Mathf.Clamp(page, 0, pageRoots.Length - 1);
             for (int i = 0; i < pageRoots.Length; i++) {
                 pageRoots[i].SetActive(i == currentPage);
             }
-            string[] names = { "Scaling Mechanisms", "Stats & Level Generator", "Modifiers", "Raids", "Nemesis System" };
-            titleText.text = $"StarLevelSystem - {names[currentPage]}  (Page {currentPage + 1} of {PageCount})";
+            titleText.text = $"StarLevelSystem - {pages[currentPage].Title}  (Page {currentPage + 1} of {pageRoots.Length})";
 
             backBtn.SetActive(currentPage > 0);
-            bool last = currentPage == PageCount - 1;
+            bool last = currentPage == pageRoots.Length - 1;
             nextBtn.SetActive(!last);
-            applyBtn.SetActive(last);
-            if (currentPage == 1) { UpdateExampleMath(); }
+            finishBtn.SetActive(last);
+            nextCaption.text = ConfigUI.L(tutorialMode && currentPage == 0 ? "$sls_cfg_button_get_started" : "Next >");
+            SetStatus("", true);
+            pages[currentPage].OnShow?.Invoke();
         }
 
-        // ------------------------------------------------------------------------------------------------
-        //  Pages
-        // ------------------------------------------------------------------------------------------------
-
-        private static void BuildScalingPage(Transform parent) {
-            const float ColWidth = 760f;   // left config column + gap + image(300)
-            const float ImgW = 300f;
-            const float ImgH = 168f;
-            const float LeftColW = ColWidth - ImgW;   // configuration area to the left of the example image
-
-            // Build each row as its own container, collect them in order, then space the column out in one pass.
-            List<GameObject> column = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColW, "$sls_cfg_scaling_selection_header", TextAnchor.MiddleCenter),
-                ConfigUI.AddTextRow(parent, ColWidth, 34f, "Here are some high level configurations from the mod, many more things can be customized within the yaml configuration.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter),
-                AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
-                    DistanceExample,
-                    "$sls_cfg_distance_scale_header",
-                    "$sls_cfg_distance_scale_desc",
-                    staged.enableDistance,
-                    v => staged.enableDistance = v,
-                    "$sls_cfg_distance_overlay_toggle",
-                    staged.enableDistanceOverlay,
-                    v => staged.enableDistanceOverlay = v),
-                ConfigUI.AddDividerRow(parent, ColWidth),
-                AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
-                    ZoneExample,
-                    "$sls_cfg_zone_scale_header",
-                    "$sls_cfg_zone_scale_desc",
-                    staged.enableZone,
-                    v => staged.enableZone = v,
-                    "$sls_cfg_zone_overlay_toggle",
-                    staged.enableZoneOverlay,
-                    v => staged.enableZoneOverlay = v),
-                ConfigUI.AddDividerRow(parent, ColWidth),
-                ConfigUI.AddToggleRow(parent, ColWidth, 360f, "$sls_cfg_conditional_scale_header", staged.enableConditional, v => staged.enableConditional = v, true),
-                ConfigUI.AddTextRow(parent, ColWidth, 24f, "$sls_cfg_conditional_scale_desc", 13, GUIManager.Instance.ValheimBeige),
-            };
-            // Center the column within the page root so it isn't left-biased (page root is PanelW - 2*Margin wide).
-            float colOffsetX = Mathf.Max(0f, (PanelW - 2 * Margin - ColWidth) * 0.5f);
-            ConfigUI.LayoutColumn(column, colOffsetX, 4f);
+        private static void SetStatus(string message, bool ok) {
+            if (statusText == null) { return; }
+            statusText.text = message ?? "";
+            statusText.color = ok ? GUIManager.Instance.ValheimBeige : GUIManager.Instance.ValheimOrange;
         }
 
-        private static void BuildStatsPage(Transform parent) {
-            const float RightColumnX = 450f;
-            const float LeftColWidth = 430f;
-            const float RightColWidth = PanelW - 2 * Margin - RightColumnX;
-            const float LabelWidth = 168f;
-            const float SliderWidth = 150f;
-            const float ValueWidth = 60f;
-            const float StartY = 2f;
-            const float DividerH = 12f;
-
-            // Left column - stat multipliers and multiplayer scaling. A full-width divider separates the
-            // creature stats (above) from the boss stats (below).
-            List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Per-level stats"),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature HP / level", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature dmg / level", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level (stars)", 1f, 200f, staged.maxLevel, true, v => { staged.maxLevel = (int)v; UpdateExampleMath(); }),
-                ConfigUI.AddDividerRow(parent, PanelW - 2 * Margin, DividerH),   // spans both columns, between creature and boss sections
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss HP / level", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss dmg / level", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max boss level", 1f, 200f, staged.maxBossLevel, true, v => { staged.maxBossLevel = (int)v; UpdateExampleMath(); }),
-                ConfigUI.AddSpacerRow(parent, LeftColWidth, 4f),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Multiplayer scaling"),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain HP with more players", staged.mpHealth, v => staged.mpHealth = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "HP per extra player", 0f, 0.99f, staged.mpHealthMod, false, v => staged.mpHealthMod = v),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain dmg with more players", staged.mpDamage, v => staged.mpDamage = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Dmg per extra player", 0f, 2f, staged.mpDamageMod, false, v => staged.mpDamageMod = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Players needed nearby", 1f, 20f, staged.mpRequiredPlayers, true, v => staged.mpRequiredPlayers = (int)v),
-            };
-            ConfigUI.LayoutColumn(left, 0f, StartY);
-
-            // Right column - example previews aligned to the matching left-column stat rows: the creature (Troll)
-            // example sits beside the Creature HP/dmg sliders, the boss (The Elder) example beside the Boss HP/dmg
-            // sliders. The default level generator is laid out below them.
-            const float RowPitch = RowHeight + RowGap;
-            GameObject exHeader = ConfigUI.AddHeaderRow(parent, RightColWidth, "Example scaling preview");
-            ConfigUI.PositionRow(exHeader, RightColumnX, StartY);
-
-            GameObject creatureEx = ConfigUI.AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
-            creatureExampleText = creatureEx.GetComponentInChildren<Text>();
-            ConfigUI.PositionRow(creatureEx, RightColumnX, StartY + RowPitch);          // aligns with "Creature HP / level"
-
-            // The divider between the creature and boss sections pushes the boss rows down by its height + gap;
-            // keep the boss example (and the generator below it) aligned to that shift.
-            float bossShift = DividerH + RowGap;
-            GameObject bossEx = ConfigUI.AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
-            bossExampleText = bossEx.GetComponentInChildren<Text>();
-            ConfigUI.PositionRow(bossEx, RightColumnX, StartY + 4 * RowPitch + bossShift);   // aligns with "Boss HP / level"
-
-            // Default level generator below the previews. Rows that only apply to some curve styles are tracked so
-            // they can be shown only when they do anything: the Gaussian offset for Gaussian, the level-up chance
-            // for every style but Table, and the threshold field plus its status line for Table. With Table
-            // selected the column is as tall as with Gaussian, so the page height still fits.
-            float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
-            GameObject chanceRow = null, gaussianRow = null, tableRow = null, tableStatusRow = null;
-            List<GameObject> gen = new List<GameObject>();
-            void ShowStyleRows() {
-                LevelupCalculationStyle style = staged.generator.LevelupCalculationStyle;
-                chanceRow.SetActive(style != LevelupCalculationStyle.Table);
-                gaussianRow.SetActive(style == LevelupCalculationStyle.Gaussian);
-                tableRow.SetActive(style == LevelupCalculationStyle.Table);
-                tableStatusRow.SetActive(style == LevelupCalculationStyle.Table);
-                ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
-            }
-
-            gen.Add(ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator"));
-            gen.Add(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => { staged.generator.MinLevel = (int)v; RefreshTableRows(true); }));
-            GameObject maxRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => { staged.generator.MaxLevel = (int)v; RefreshTableRows(true); });
-            maxLevelSlider = maxRow.GetComponentInChildren<Slider>();
-            gen.Add(maxRow);
-            chanceRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v);
-            gen.Add(chanceRow);
-            gen.Add(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
-                staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
-                ShowStyleRows();
-            }));
-            gaussianRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => staged.generator.GaussianOffset = v);
-            gen.Add(gaussianRow);
-            tableRow = ConfigUI.AddTextFieldRow(parent, RightColWidth, LabelWidth, SliderWidth + ValueWidth + 10f, "Table thresholds", "", CommitTableThresholds, "30, 15, 5, 0.01");
-            tableThresholdField = tableRow.GetComponentInChildren<InputField>();
-            gen.Add(tableRow);
-            tableStatusRow = ConfigUI.AddTextRow(parent, RightColWidth, RowHeight, "", 13, GUIManager.Instance.ValheimBeige);
-            tableStatusText = tableStatusRow.GetComponentInChildren<Text>();
-            gen.Add(tableStatusRow);
-            gen.Add(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
-
-            RefreshTableRows(true);
-            ShowStyleRows();
-
-            UpdateExampleMath();
-        }
-
-        // The number of levels the staged default generator covers, which picks its LevelupChanceTablesBySpan entry.
-        private static int StagedTableSpan() {
-            return Mathf.Abs(staged.generator.MaxLevel - staged.generator.MinLevel) + 1;
-        }
-
-        // Shows the staged table for the generator's current span and whether it will work. rewriteField is false
-        // after a rejected entry, so the admin's typing stays in the box to be corrected.
-        private static void RefreshTableRows(bool rewriteField) {
-            if (staged == null || tableThresholdField == null || tableStatusText == null) { return; }
-            int span = StagedTableSpan();
-            int min = Mathf.Min(staged.generator.MinLevel, staged.generator.MaxLevel);
-            int max = Mathf.Max(staged.generator.MinLevel, staged.generator.MaxLevel);
-            staged.tables.TryGetValue(span, out List<float> values);
-            if (rewriteField) {
-                tableThresholdField.SetTextWithoutNotify(values == null ? "" : string.Join(", ", values.Select(v => v.ToString("0.####", CultureInfo.InvariantCulture))));
-            }
-
-            if (span < 2) {
-                SetTableStatus("A single level always rolls that level; widen Min/Max to use a table.", false);
-            } else if (values == null || values.Count == 0) {
-                SetTableStatus($"No table for {span} levels ({min}-{max}); rolls use the Exponential curve. Enter {span} values.", false);
-            } else if (IsStrictlyDecreasing(values) == false) {
-                SetTableStatus("Values must decrease: each is the % chance to roll past a level, so a level at or above the one before it is never rolled.", false);
-            } else {
-                SetTableStatus($"Levels {min}-{max}: each value is the % chance to roll past that level, from level {min} up.", true);
-            }
-        }
-
-        private static void SetTableStatus(string message, bool ok) {
-            tableStatusText.text = message;
-            tableStatusText.color = ok ? GUIManager.Instance.ValheimBeige : GUIManager.Instance.ValheimOrange;
-        }
-
-        private static bool IsStrictlyDecreasing(List<float> values) {
-            for (int i = 1; i < values.Count; i++) {
-                if (values[i] >= values[i - 1]) { return false; }
-            }
-            return true;
-        }
-
-        // Parses "30, 15, 5, 0.01" into the table for that many levels. The entry count sets the span, so the Max
-        // level slider moves to MinLevel + count - 1 to match what was typed.
-        private static void CommitTableThresholds(string text) {
-            if (staged == null) { return; }
-            if (string.IsNullOrWhiteSpace(text)) { RefreshTableRows(true); return; }
-
-            List<float> values = new List<float>();
-            foreach (string token in text.Split(',')) {
-                string trimmed = token.Trim();
-                if (float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) == false) {
-                    SetTableStatus($"Could not read '{trimmed}'. Enter numbers separated by commas, e.g. 30, 15, 5, 0.01.", false);
-                    return;
-                }
-                values.Add(value);
-            }
-            if (values.Count < 2) {
-                SetTableStatus("Enter at least two values; a table covers two or more levels.", false);
+        // The X. Unsaved changes get a chance to be kept.
+        private static void RequestClose() {
+            if (staged != null && baseline != null && staged.Matches(baseline) == false) {
+                ShowDiscardConfirm();
                 return;
             }
-
-            // onEndEdit also fires when the box merely loses focus, so an unchanged table is not an edit.
-            if (staged.tables.TryGetValue(values.Count, out List<float> existing) == false || existing.SequenceEqual(values) == false) {
-                staged.tables[values.Count] = values;
-                staged.editedTableSpans.Add(values.Count);
-            }
-
-            int wantedMax = staged.generator.MinLevel + values.Count - 1;
-            if (maxLevelSlider != null && maxLevelSlider.value != wantedMax) {
-                maxLevelSlider.value = wantedMax;   // its listener stores MaxLevel and refreshes these rows
-            } else {
-                staged.generator.MaxLevel = wantedMax;
-            }
-            RefreshTableRows(true);
+            ClosePanel();
         }
 
-        private static void BuildRaidsPage(Transform parent) {
-            const float FullWidth = PanelW - 2 * Margin;
-            const float LeftColWidth = 430f;
-            const float LabelWidth = 235f, SliderWidth = 130f, ValueWidth = 56f;
-            const float ToggleLabelWidth = 300f;
-            const float StartY = 4f;
+        // Closing by any route finishes the first-time setup: the welcome page promises that the X is enough.
+        private static void ClosePanel() {
+            if (tutorialMode) {
+                ValConfig.SetupTutorialComplete.Value = true;
+            }
+            DestroyPanel();
+        }
 
-            // Full-width header + intro across the top.
-            GameObject header = ConfigUI.AddHeaderRow(parent, FullWidth, "Raids", TextAnchor.MiddleCenter);
-            ConfigUI.PositionRow(header, 0f, StartY);
-            GameObject intro = ConfigUI.AddTextRow(parent, FullWidth, 40f, "StarLevelSystem replaces vanilla raids with its own configurable raids. Detailed per-raid settings live in RaidSettings.yaml.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
-            ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
-            float colStartY = StartY + RowHeight + RowGap + 40f + 8f;
+        private static void DestroyPanel() {
+            CloseConfirm();
+            QuickConfigTooltip.Close();
+            if (overlay != null) {
+                UnityEngine.Object.Destroy(overlay);
+            }
+            overlay = null;
+            panel = null;
+            pages = null;
+            pageRoots = null;
+            tutorialMode = false;
+            ClearPageReferences();
+        }
 
-            // Left column - global raid settings.
-            List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", 0.1f, 10f, staged.raidEventRate, false, v => staged.raidEventRate = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", 1f, 20f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v),
-            };
-            ConfigUI.LayoutColumn(left, 0f, colStartY);
+        private static void ShowDiscardConfirm() {
+            CloseConfirm();
+            const float W = 470f;
+            const float H = 190f;
+            const float ButtonW = 136f;
 
-            // Right side - scrollable list of every configured raid, each with an enable/disable toggle.
-            // Disabled raids keep their config in RaidSettings.yaml and are simply marked Enabled = false.
-            const float ScrollX = 446f;
-            const float ScrollW = 402f;
-            const float ScrollH = 398f;
-            ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "Enable / disable raids", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            GameObject scrollHolder = ConfigUI.NewRect("RaidScrollHolder", parent, ScrollX, colStartY + RowHeight, ScrollW, ScrollH);
-            GameObject scrollCanvas = GUIManager.Instance.CreateScrollView(
-                scrollHolder.transform, false, true, 8f, 4f,
-                GUIManager.Instance.ValheimScrollbarHandleColorBlock, new Color(0f, 0f, 0f, 0.5f),
-                ScrollW, ScrollH);
-            Transform content = scrollCanvas.transform.Find("Scroll View/Viewport/Content");
-            if (content != null) {
-                float contentW = ScrollW - 16f;   // minus the vertical scrollbar + border (handleSize + 2*border)
-                List<RaidDefinition> raids = staged.raidSource?.Raids;
-                if (raids != null) {
-                    foreach (RaidDefinition raid in raids.OrderBy(r => r.Name)) {
-                        string raidName = raid.Name;   // capture for the closure
-                        AddRaidEntry(content, contentW, raid, staged.raidsOn.Contains(raidName), on => {
-                            if (on) { staged.raidsOn.Add(raidName); }
-                            else { staged.raidsOn.Remove(raidName); }
-                        });
-                    }
+            confirmOverlay = ConfigUI.NewUI("SLSQuickConfigureConfirm", GUIManager.CustomGUIFront.transform, typeof(Image));
+            StretchToParent(confirmOverlay);
+            confirmOverlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.35f);
+
+            GameObject box = GUIManager.Instance.CreateWoodpanel(
+                parent: confirmOverlay.transform,
+                anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f),
+                position: new Vector2(0f, 0f), width: W, height: H, draggable: false);
+
+            ConfigUI.AddText(box.transform, 0f, 16f, W, 30f, "$sls_cfg_discard_title", 20, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimYellow);
+            ConfigUI.AddText(box.transform, 20f, 54f, W - 40f, 50f, "$sls_cfg_discard_body", 14, TextAnchor.MiddleCenter);
+
+            float y = H - 64f;
+            float gap = (W - 3 * ButtonW) / 4f;
+            ConfigUI.AddButton(box.transform, gap, y, ButtonW, "$sls_cfg_button_keep_editing", CloseConfirm, 36f);
+            ConfigUI.AddButton(box.transform, 2 * gap + ButtonW, y, ButtonW, "$sls_cfg_button_discard", ClosePanel, 36f);
+            ConfigUI.AddButton(box.transform, 3 * gap + 2 * ButtonW, y, ButtonW, "$sls_cfg_button_save_close", () => {
+                CloseConfirm();
+                OnFinishClicked();
+            }, 36f);
+        }
+
+        private static void CloseConfirm() {
+            if (confirmOverlay != null) {
+                UnityEngine.Object.Destroy(confirmOverlay);
+            }
+            confirmOverlay = null;
+        }
+
+        // Tooltip helpers, kept short because nearly every row on every page carries one. See QuickConfigTooltip.
+        private static GameObject WithTip(GameObject row, string tooltip) => QuickConfigTooltip.Attach(row, tooltip);
+
+        private static string Tip(ConfigEntryBase entry) => QuickConfigTooltip.Of(entry);
+
+        private static string Tip(string key, string description) => QuickConfigTooltip.Text(key, description);
+
+        private static string YamlTip(Type type, string member, string fallback = null) => QuickConfigTooltip.OfYaml(type, member, fallback);
+
+        private static void StretchToParent(GameObject go) {
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
+        // Hides the main menu while the panel is up and restores it when the panel goes. FejdStartup keeps reading the
+        // keyboard while its menu is visible: Enter in one of the panel's value boxes would start the game underneath,
+        // and the arrow keys and gamepad pull focus back onto the menu buttons. Vanilla's own Settings panel does the
+        // same. Tied to OnDestroy, like ConfigUIInputGuard, so no close path can leave the menu hidden.
+        private class MainMenuGuard : MonoBehaviour {
+            private GameObject hiddenMenu;
+
+            public void Awake() {
+                FejdStartup startup = FejdStartup.instance;
+                if (startup != null && startup.m_mainMenu != null && startup.m_mainMenu.activeSelf) {
+                    hiddenMenu = startup.m_mainMenu;
+                    hiddenMenu.SetActive(false);
                 }
             }
-        }
 
-        // A single raid line: enable toggle on the left, prettified name + a brief spawn summary to its right.
-        private static void AddRaidEntry(Transform content, float width, RaidDefinition raid, bool enabled, Action<bool> onChange) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 44f);
-            GameObject tgo = GUIManager.Instance.CreateToggle(row.transform, 22f, 22f);
-            tgo.transform.SetParent(row.transform, false);
-            RectTransform trt = (RectTransform)tgo.transform;
-            trt.localScale = Vector3.one;
-            trt.anchorMin = new Vector2(0f, 1f); trt.anchorMax = new Vector2(0f, 1f); trt.pivot = new Vector2(0f, 1f);
-            trt.anchoredPosition = new Vector2(2f, -3f);
-            Toggle tg = tgo.GetComponent<Toggle>();
-            tg.isOn = enabled;
-            tg.onValueChanged.AddListener(b => onChange(b));
-
-            const float TextX = 32f;
-            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, PrettifyRaidName(raid.Name), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-            int types = raid.Spawns != null ? raid.Spawns.Select(sp => sp.PrefabName).Distinct().Count() : 0;
-            string sub = $"{types} creature type{(types == 1 ? "" : "s")}  ·  {raid.Duration:0}s";
-            ConfigUI.AddText(row.transform, TextX, 20f, width - TextX - 4f, 24f, sub, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-        }
-
-        // "army_eikthyr" -> "Army Eikthyr", "gjall_ambush" -> "Gjall Ambush".
-        private static string PrettifyRaidName(string name) {
-            if (string.IsNullOrEmpty(name)) { return name; }
-            return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(name.Replace('_', ' '));
-        }
-
-        private static void BuildNemesisPage(Transform parent) {
-            const float LeftColWidth = 400f;
-            const float LeftLabelWidth = 200f, LeftSliderWidth = 130f, LeftValueWidth = 60f;
-            const float RightColumnX = 440f;
-            const float RightColWidth = PanelW - 2 * Margin - RightColumnX;
-            const float RightLabelWidth = 210f, RightSliderWidth = 120f, RightValueWidth = 60f;
-            const float StartY = 4f;
-
-            // Full-width intro describing the system.
-            GameObject intro = ConfigUI.AddTextRow(parent, PanelW - 2 * Margin, 40f, "The Nemesis system is a personal game manager that can tune up or down the world around you or your group.", 14, GUIManager.Instance.ValheimBeige);
-            ConfigUI.PositionRow(intro, 0f, StartY);
-            float colStartY = StartY + 44f;
-
-            // Left column - core nemesis settings.
-            List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Nemesis settings"),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, LeftLabelWidth + 60f, "Enable Nemesis system", staged.enableNemesis, v => staged.enableNemesis = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Action cooldown (sec)", 0f, 120f, staged.nemCooldown, false, v => staged.nemCooldown = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Influence radius (m)", 0f, 1000f, staged.nemInfluence, false, v => staged.nemInfluence = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Min spawn distance (m)", 0f, 500f, staged.nemMinSpawn, false, v => staged.nemMinSpawn = v),
-            };
-            ConfigUI.LayoutColumn(left, 0f, colStartY);
-
-            // Right column - core subset of the score system.
-            List<GameObject> right = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, RightColWidth, "Score system"),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Neutral score", 0f, 20000f, staged.neutralScore, true, v => staged.neutralScore = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Min score", 0f, 20000f, staged.minScore, true, v => staged.minScore = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Max score", 0f, 20000f, staged.maxScore, true, v => staged.maxScore = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Decay per update", 0f, 2000f, staged.decayPerUpdate, true, v => staged.decayPerUpdate = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Score interval (sec)", 1f, 120f, staged.scoreInterval, true, v => staged.scoreInterval = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Boss-kill bonus", 0f, 5000f, staged.bossKillBonus, true, v => staged.bossKillBonus = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Death score reduction", 0f, 5000f, staged.deathReduction, true, v => staged.deathReduction = v),
-            };
-            ConfigUI.LayoutColumn(right, RightColumnX, colStartY);
-        }
-
-        private static void BuildModifiersPage(Transform parent) {
-            // Left column holds all of the numeric/toggle config; sliders are kept narrow so their value
-            // boxes don't run into the scroll view on the right.
-            const float LeftColWidth = 430f;
-            const float LeftLabelWidth = 200f, LeftSliderWidth = 120f, LeftValueWidth = 56f;
-            const float ToggleLabelWidth = 300f;
-            const float StartY = 4f;
-
-            List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Creature modifiers"),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, 6f, staged.maxMajor, true, v => staged.maxMajor = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, 6f, staged.maxMinor, true, v => staged.maxMinor = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Limit modifier count to star level", staged.limitToStarLevel, v => staged.limitToStarLevel = v),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Boss modifiers"),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Bosses can have modifiers", staged.enableBossMods, v => staged.enableBossMods = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, 6f, staged.maxBossMods, true, v => staged.maxBossMods = (int)v),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Modifier display"),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max name prefixes", 0f, 6f, staged.prefixLimit, true, v => staged.prefixLimit = (int)v),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Minor modifiers first in name", staged.minorFirst, v => staged.minorFirst = v),
-                ConfigUI.AddEnumCycleRow(parent, LeftColWidth, LeftLabelWidth, 150f, "Icon display style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i),
-            };
-            ConfigUI.LayoutColumn(left, 0f, StartY);
-
-            // Right side - scrollable list of every modifier defined in Modifiers.yaml, grouped by category,
-            // each with an enable/disable toggle and a brief description.
-            const float ScrollX = 446f;
-            const float ScrollW = 400f;
-            const float ScrollH = 478f;
-            ConfigUI.AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "Enable / disable modifiers", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            GameObject scrollHolder = ConfigUI.NewRect("ModScrollHolder", parent, ScrollX, StartY + RowHeight, ScrollW, ScrollH);
-            GameObject scrollCanvas = GUIManager.Instance.CreateScrollView(
-                scrollHolder.transform, false, true, 8f, 4f,
-                GUIManager.Instance.ValheimScrollbarHandleColorBlock, new Color(0f, 0f, 0f, 0.5f),
-                ScrollW, ScrollH);
-            Transform content = scrollCanvas.transform.Find("Scroll View/Viewport/Content");
-            if (content != null) {
-                float contentW = ScrollW - 16f;   // minus the vertical scrollbar + border (handleSize + 2*border)
-                AddModifierCategory(content, contentW, "Boss modifiers", ModifierType.Boss, staged.modifierSource?.BossModifiers);
-                AddModifierCategory(content, contentW, "Major modifiers", ModifierType.Major, staged.modifierSource?.MajorModifiers);
-                AddModifierCategory(content, contentW, "Minor modifiers", ModifierType.Minor, staged.modifierSource?.MinorModifiers);
+            public void OnDestroy() {
+                if (hiddenMenu != null) {
+                    hiddenMenu.SetActive(true);
+                }
+                hiddenMenu = null;
             }
-        }
-
-        // Adds a category header followed by one toggle row per modifier defined in that category.
-        private static void AddModifierCategory(Transform content, float width, string label, ModifierType type, Dictionary<string, CreatureModifierConfiguration> dict) {
-            if (dict == null || dict.Count == 0) { return; }
-            AddModifierCategoryHeader(content, width, label);
-            HashSet<string> enabled = staged.modifierOn[type];
-            foreach (string name in dict.Keys.OrderBy(n => n)) {
-                string modName = name;   // capture for the closure
-                AddModifierEntry(content, width, modName, enabled.Contains(modName), on => {
-                    if (on) { staged.modifierOn[type].Add(modName); }
-                    else { staged.modifierOn[type].Remove(modName); }
-                });
-            }
-        }
-
-        private static void AddModifierCategoryHeader(Transform content, float width, string label) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 30f);
-            ConfigUI.AddText(row.transform, 2f, 4f, width - 4f, 24f, label, 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-        }
-
-        // A single modifier line: enable toggle on the left, prettified name + brief description to its right.
-        private static void AddModifierEntry(Transform content, float width, string name, bool enabled, Action<bool> onChange) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 48f);
-            GameObject tgo = GUIManager.Instance.CreateToggle(row.transform, 22f, 22f);
-            tgo.transform.SetParent(row.transform, false);
-            RectTransform trt = (RectTransform)tgo.transform;
-            trt.localScale = Vector3.one;
-            trt.anchorMin = new Vector2(0f, 1f); trt.anchorMax = new Vector2(0f, 1f); trt.pivot = new Vector2(0f, 1f);
-            trt.anchoredPosition = new Vector2(2f, -3f);
-            Toggle tg = tgo.GetComponent<Toggle>();
-            tg.isOn = enabled;
-            tg.onValueChanged.AddListener(b => onChange(b));
-
-            const float TextX = 32f;
-            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, Prettify(name), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-            string desc = ModifierDescriptions.TryGetValue(name, out string d) ? d : "";
-            ConfigUI.AddText(row.transform, TextX, 20f, width - TextX - 4f, 26f, desc, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-        }
-
-        // "ResistPierce" -> "Resist Pierce", "BossSummoner" -> "Boss Summoner".
-        private static string Prettify(string name) => Regex.Replace(name, "(\\B[A-Z])", " $1");
-
-        private static void UpdateExampleMath() {
-            if (staged == null) { return; }
-            if (creatureExampleText != null) {
-                int maxStars = Mathf.Max(0, staged.maxLevel);
-                int medStars = Mathf.Max(0, Mathf.CeilToInt(maxStars / 2f));
-                creatureExampleText.text = FormatCreatureExample("Troll", TrollHp, TrollDmg, medStars, maxStars, staged.creatureHpPerLevel, staged.creatureDmgPerLevel);
-            }
-            if (bossExampleText != null) {
-                int maxStars = Mathf.Max(0, staged.maxBossLevel);
-                int medStars = Mathf.Max(0, Mathf.CeilToInt(maxStars / 2f));
-                bossExampleText.text = FormatCreatureExample("The Elder (boss)", TheElderHP, TheElderDmg, medStars, maxStars, staged.bossHpPerLevel, staged.bossDmgPerLevel);
-            }
-        }
-
-        private static string FormatCreatureExample(string name, float baseHp, float baseDmg, int medStars, int maxStars, float hpMul, float dmgMul) {
-            float Hp(int stars) => baseHp * (1f + hpMul * stars);
-            float Dmg(int stars) => baseDmg * (1f + dmgMul * stars);
-            return $"{name} (base {baseHp:0} HP / {baseDmg:0} dmg)\n" +
-                   $"  Min (0 stars):   {Hp(0):0} HP    {Dmg(0):0} dmg\n" +
-                   $"  Median ({medStars} stars):   {Hp(medStars):0} HP    {Dmg(medStars):0} dmg\n" +
-                   $"  Max ({maxStars} stars):   {Hp(maxStars):0} HP    {Dmg(maxStars):0} dmg\n";
         }
 
         // ------------------------------------------------------------------------------------------------
-        //  Apply
+        //  Save
         // ------------------------------------------------------------------------------------------------
 
-        private static void ApplyAndSave() {
+        private static void OnSaveClicked() {
+            if (SaveStaged(out string message)) {
+                SetStatus(string.IsNullOrEmpty(message) ? ConfigUI.L("$sls_cfg_status_saved") : ConfigUI.L("$sls_cfg_status_saved") + " " + message, string.IsNullOrEmpty(message));
+            } else {
+                SetStatus(message, false);
+            }
+        }
+
+        private static void OnFinishClicked() {
+            if (SaveStaged(out string message)) {
+                ClosePanel();
+            } else {
+                SetStatus(message, false);
+            }
+        }
+
+        // Applies everything staged. Returns false with the reasons when anything was refused; the panel stays open with
+        // the edits intact either way, since a half-applied save closing its window is how an admin ends up believing it
+        // landed. On success the message carries any validation warnings.
+        private static bool SaveStaged(out string message) {
+            message = "";
+            if (staged == null || baseline == null) { return false; }
+
+            string invalid = staged.ValidationError(baseline);
+            if (invalid != null) {
+                message = invalid;
+                return false;
+            }
+
+            List<string> failures = new List<string>();
+            List<string> warnings = new List<string>();
             try {
                 ValConfig.EnableDistanceLevelScalingBonus.Value = staged.enableDistance;
                 ValConfig.EnableMapRingsForDistanceBonus.Value = staged.enableDistanceOverlay;
                 ValConfig.EnableZoneScalingBonus.Value = staged.enableZone;
                 ValConfig.EnableZoneMapOverlay.Value = staged.enableZoneOverlay;
+                ValConfig.ShowNoMapRingLevel.Value = staged.showNoMapRing;
+                ValConfig.ShowNoMapZoneLevel.Value = staged.showNoMapZone;
 
                 ValConfig.EnemyHealthMultiplier.Value = staged.creatureHpPerLevel;
                 ValConfig.EnemyDamageLevelMultiplier.Value = staged.creatureDmgPerLevel;
                 ValConfig.BossEnemyHealthMultiplier.Value = staged.bossHpPerLevel;
                 ValConfig.BossEnemyDamageMultiplier.Value = staged.bossDmgPerLevel;
-                ValConfig.MaxLevel.Value = staged.maxLevel;
+                ValConfig.MaxLevel.Value = staged.maxStars;
                 ValConfig.MaxBossLevel.Value = staged.maxBossLevel;
 
                 ValConfig.EnableMultiplayerEnemyHealthScaling.Value = staged.mpHealth;
@@ -716,55 +455,11 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.MaxBossModifiersPerBoss.Value = staged.maxBossMods;
                 ValConfig.LimitCreatureModifierPrefixes.Value = staged.prefixLimit;
                 ValConfig.MinorModifiersFirstInName.Value = staged.minorFirst;
+                ValConfig.AutoTuneBiomeStarCaps.Value = staged.biomeCapAuto;
                 ValConfig.ModifierIconDisplayStyle.Value = staged.displayStyle.ToString();
 
-                // Write out the level settings.
-                //
-                // Through a deserialized copy, not the live object: SLE_Level_Settings can BE the shared
-                // static default (LevelSystemData re-points it there whenever a parse fails), so mutating
-                // it in place would corrupt the defaults for the rest of the session. Raids and nemesis
-                // below already did this; levels and modifiers did not.
-                if (LevelSystemData.SLE_Level_Settings != null) {
-                    CreatureLevelSettings settings = DataObjects.yamlDeserializer.Deserialize<CreatureLevelSettings>(
-                        DataObjects.yamlSerializer.Serialize(LevelSystemData.SLE_Level_Settings));
-                    settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
-                    settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
-                    if (staged.editedTableSpans.Count > 0) {
-                        if (settings.LevelupChanceTablesBySpan == null) { settings.LevelupChanceTablesBySpan = new Dictionary<int, SortedDictionary<int, float>>(); }
-                        foreach (int span in staged.editedTableSpans) {
-                            SortedDictionary<int, float> table = new SortedDictionary<int, float>();
-                            List<float> values = staged.tables[span];
-                            for (int i = 0; i < values.Count; i++) { table[i + 1] = values[i]; }
-                            settings.LevelupChanceTablesBySpan[span] = table;
-                        }
-                    }
-                    string yaml = DataObjects.yamlSerializer.Serialize(settings);
-                    // Through ValConfig rather than File.WriteAllText: a bare write drops the documented
-                    // header block, which is the only in-file explanation these settings have.
-                    // One call: validate, apply, write with the header intact, broadcast. It refuses and
-                    // reports rather than half-writing, which the old three-step sequence could not do.
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.LevelSettings, yaml, out string levelMessage) == false) {
-                        Logger.LogWarning($"Level settings were not saved: {levelMessage}");
-                    }
-                }
-
-                // Persist modifier enable/disable changes (only if a toggle actually changed, so we don't
-                // rewrite the modifier YAML when the user only touched the sliders). Disabled modifiers keep
-                // their config in the file and are simply marked Enabled = false.
-                if (ModifiersChanged()) {
-                    // Deserialized copy, same reason as the level settings above.
-                    CreatureModifierCollection src = DataObjects.yamlDeserializer.Deserialize<CreatureModifierCollection>(
-                        DataObjects.yamlSerializer.Serialize(staged.modifierSource));
-                    ApplyEnabledFlags(src.BossModifiers, staged.modifierOn[ModifierType.Boss]);
-                    ApplyEnabledFlags(src.MajorModifiers, staged.modifierOn[ModifierType.Major]);
-                    ApplyEnabledFlags(src.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
-                    string modifiersYaml = DataObjects.yamlSerializer.Serialize(src);
-                    // ClearProbabilityCaches is part of the Apply hook now, so it happens on every route
-                    // rather than only when saving from this panel.
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.ModifierSettings, modifiersYaml, out string modifierMessage) == false) {
-                        Logger.LogWarning($"Modifier settings were not saved: {modifierMessage}");
-                    }
-                }
+                SaveLevelSettings(failures, warnings);
+                SaveModifiers(failures, warnings);
 
                 // Raids - plain BepInEx ConfigEntries; "Enable SLS Raids" is the inverse of vanilla raids.
                 ValConfig.UseVanillaRaidConfiguration.Value = !staged.enableSlsRaids;
@@ -772,74 +467,158 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.ServerTimeBetweenRaidStartChecks.Value = staged.raidCheckMinutes;
                 ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
                 ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
-
-                // Per-raid enable/disable lives in the RaidSettings YAML (RaidDefinition.Enabled). Only rewrite
-                // when a toggle actually changed; work on a deserialized copy so the live config isn't mutated
-                // in place (all other per-raid settings are preserved).
-                if (RaidsChanged()) {
-                    RaidConfiguration raidCFG = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(
-                        DataObjects.yamlSerializer.Serialize(staged.raidSource));
-                    foreach (RaidDefinition raid in raidCFG.Raids) {
-                        raid.Enabled = staged.raidsOn.Contains(raid.Name);
-                    }
-                    string raidYaml = DataObjects.yamlSerializer.Serialize(raidCFG);
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.RaidSettings, raidYaml, out string raidMessage) == false) {
-                        Logger.LogWarning($"Raid settings were not saved: {raidMessage}");
-                    }
-                }
+                SaveRaids(failures, warnings);
 
                 // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
                 ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
-                if (NemesisChanged()) {
-                    // Work on a deserialized copy so the shared default/live instance is never mutated in place
-                    // (and all other YAML sections + NemesisVersion are preserved).
-                    NemesisConfiguration nemesisCFG = DataObjects.yamlDeserializer.Deserialize<NemesisConfiguration>(
-                        DataObjects.yamlSerializer.Serialize(staged.nemesisSource));
-                    nemesisCFG.NemesisActionCooldownSeconds = staged.nemCooldown;
-                    nemesisCFG.NemesisInfluenceRadius = staged.nemInfluence;
-                    nemesisCFG.NemesisMinSpawnDistance = staged.nemMinSpawn;
-                    if (nemesisCFG.ScoreSystem == null) { nemesisCFG.ScoreSystem = new NemesisScore(); }
-                    nemesisCFG.ScoreSystem.NeutralScore = staged.neutralScore;
-                    nemesisCFG.ScoreSystem.MinScore = staged.minScore;
-                    nemesisCFG.ScoreSystem.MaxScore = staged.maxScore;
-                    nemesisCFG.ScoreSystem.DecayPerUpdate = staged.decayPerUpdate;
-                    nemesisCFG.ScoreSystem.ScoreIntervalSeconds = staged.scoreInterval;
-                    nemesisCFG.ScoreSystem.BossKillBonus = staged.bossKillBonus;
-                    nemesisCFG.ScoreSystem.DeathScoreReduction = staged.deathReduction;
-                    string nemesisYaml = DataObjects.yamlSerializer.Serialize(nemesisCFG);
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.NemesisSettings, nemesisYaml, out string nemesisMessage) == false) {
-                        Logger.LogWarning($"Nemesis settings were not saved: {nemesisMessage}");
-                    }
-                }
+                SaveNemesis(failures, warnings);
+
+                // Location reset - the master switch and sweep budget are ConfigEntries; the rest is in the
+                // LocationResetSettings YAML.
+                ValConfig.EnableLocationReset.Value = staged.locationReset.masterSwitch;
+                ValConfig.LocationResetSweepBudgetMs.Value = staged.locationReset.sweepBudgetMs;
+                SaveLocationReset(failures, warnings);
 
                 // A remote admin's ConfigEntry writes above are local-only until Jotunn is told to push
                 // them. On a host this is a no-op.
                 PushRemoteConfigChanges();
-
-                Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
-                ClosePanel();
             } catch (Exception e) {
-                // ClosePanel is deliberately NOT in a finally: a mid-apply failure leaves configuration
-                // half-written, and closing the window over it is how an admin ends up believing the save
-                // landed. Leave the panel up with their edits intact.
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
+                message = $"Saving failed: {e.Message}";
+                return false;
+            }
+
+            if (failures.Count > 0) {
+                message = string.Join(" ", failures);
+                return false;
+            }
+
+            Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
+            // What was just written is now the live configuration, so it is the new point unsaved changes are measured from.
+            baseline = StagedConfig.Snapshot();
+            message = string.Join(" ", warnings);
+            return true;
+        }
+
+        // Every YAML write goes through ApplyEdited: validate, apply, write with the documented header intact, broadcast.
+        // It refuses and reports rather than half-writing. Off-host only the server may take that path, so a remote
+        // admin's copy is sent to it instead; the verdict comes back later through OnRemoteEditResult.
+        private static void ApplyYaml(YamlConfigFile file, string yaml, string label, List<string> failures, List<string> warnings) {
+            if (IsOwner() == false) {
+                if (ConfigNetwork.RequestEdit(file, yaml, out string refusal)) {
+                    warnings.Add($"{label} sent to the server.");
+                    return;
+                }
+                Logger.LogWarning($"{label} were not saved: {refusal}");
+                failures.Add($"{label} were not saved: {refusal}");
+                return;
+            }
+            if (YamlConfigManager.ApplyEdited(file, yaml, out string result)) {
+                if (string.IsNullOrEmpty(result) == false) { warnings.Add(result); }
+                return;
+            }
+            Logger.LogWarning($"{label} were not saved: {result}");
+            failures.Add($"{label} were not saved: {result}");
+        }
+
+        // The server's answer to a YAML edit sent from here. The server broadcasts an accepted file before it answers,
+        // so by now the live settings hold it and a fresh baseline stops it counting as unsaved.
+        private static void OnRemoteEditResult(YamlConfigFile file, bool accepted, string message) {
+            string name = file?.FileName ?? "Settings";
+            if (accepted) {
+                Logger.LogInfo($"The server accepted {name}. {message}");
+                if (panel != null && staged != null) {
+                    baseline = StagedConfig.Snapshot();
+                    SetStatus($"{name} saved on the server.", string.IsNullOrEmpty(message));
+                }
+                return;
+            }
+            Logger.LogWarning($"The server refused {name}: {message}");
+            if (panel != null) {
+                SetStatus($"The server refused {name}: {message}", false);
+            } else if (MessageHud.instance != null) {
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.TopLeft, $"The server refused {name}: {message}");
             }
         }
 
-        // True if any modifier's staged enable state differs from its current Enabled flag.
-        private static bool ModifiersChanged() {
-            if (staged?.modifierSource == null) { return false; }
-            return EnabledDiffers(staged.modifierSource.BossModifiers, staged.modifierOn[ModifierType.Boss])
-                || EnabledDiffers(staged.modifierSource.MajorModifiers, staged.modifierOn[ModifierType.Major])
-                || EnabledDiffers(staged.modifierSource.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
+        // Always through a deserialized copy, never the live object: a live settings object can BE the shared static
+        // default (each Data class re-points to it whenever a parse fails), so mutating it in place would corrupt the
+        // defaults for the rest of the session. Copied and written through the file's own format, so what is saved is
+        // exactly what the framework would have written itself.
+        private static T CopyForEdit<T>(YamlConfigFile<T> file, T live) where T : class {
+            return file.EffectiveFormat.Deserializer.Deserialize<T>(YamlConfigManager.SerializeForEdit(file, live));
         }
 
-        private static bool EnabledDiffers(Dictionary<string, CreatureModifierConfiguration> dict, HashSet<string> enabledNames) {
-            if (dict == null) { return false; }
-            foreach (KeyValuePair<string, CreatureModifierConfiguration> kv in dict) {
-                if (kv.Value.Enabled != enabledNames.Contains(kv.Key)) { return true; }
+        private static void SaveYaml<T>(YamlConfigFile<T> file, T value, string label, List<string> failures, List<string> warnings) where T : class {
+            ApplyYaml(file, YamlConfigManager.SerializeForEdit(file, value), label, failures, warnings);
+        }
+
+        private static void SaveLevelSettings(List<string> failures, List<string> warnings) {
+            CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
+            if (live == null) { return; }
+
+            bool conditionalChanged = staged.enableConditional != baseline.enableConditional;
+            bool curveChanged = staged.CurveDiffers(baseline);
+            bool bossCurveChanged = staged.BossCurveDiffers(baseline);
+            List<int> changedSpans = staged.ChangedTableSpans(baseline);
+            Dictionary<Heightmap.Biome, int> changedCaps = staged.ChangedBiomeCaps(live);
+            if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && changedCaps.Count == 0) { return; }
+
+            CreatureLevelSettings settings = CopyForEdit(YamlConfigManager.LevelSettings, live);
+            settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
+            if (curveChanged) {
+                settings.DefaultLevelupGenerators = new List<LevelGenerator> { CloneGenerator(staged.generator) };
+                // The page shows and saves one curve. Referenced generators would be merged into it on load and quietly
+                // change every chance it showed.
+                settings.DefaultLevelupGeneratorRefs = null;
             }
-            return false;
+            if (bossCurveChanged) {
+                if (staged.bossCurveOn) {
+                    settings.BossLevelupGenerators = new List<LevelGenerator> { CloneGenerator(staged.bossGenerator) };
+                    settings.BossLevelupGeneratorRefs = null;
+                } else {
+                    // The table is built from these generators on load, so it goes when they do; leaving it behind would
+                    // keep bosses on a curve the page says they no longer have.
+                    settings.BossLevelupGenerators = null;
+                    settings.BossLevelupGeneratorRefs = null;
+                    settings.BossCreatureLevelUpChance = null;
+                }
+            }
+            if (changedSpans.Count > 0) {
+                if (settings.LevelupChanceTablesBySpan == null) { settings.LevelupChanceTablesBySpan = new Dictionary<int, SortedDictionary<int, float>>(); }
+                foreach (int span in changedSpans) {
+                    SortedDictionary<int, float> table = new SortedDictionary<int, float>();
+                    List<float> values = staged.tables[span];
+                    for (int i = 0; i < values.Count; i++) { table[i + 1] = values[i]; }
+                    settings.LevelupChanceTablesBySpan[span] = table;
+                }
+            }
+            if (settings.BiomeConfiguration != null) {
+                foreach (KeyValuePair<Heightmap.Biome, int> cap in changedCaps) {
+                    if (settings.BiomeConfiguration.TryGetValue(cap.Key, out BiomeSpecificSetting biome) && biome != null) {
+                        biome.BiomeMaxLevelOverride = cap.Value;
+                    }
+                }
+            }
+            SaveYaml(YamlConfigManager.LevelSettings, settings, "Level settings", failures, warnings);
+        }
+
+        // Modifier enable/disable is only written when a toggle actually changed, so touching the sliders alone never
+        // rewrites the modifier YAML. Disabled modifiers keep their config in the file and are marked Enabled = false.
+        private static void SaveModifiers(List<string> failures, List<string> warnings) {
+            CreatureModifierCollection live = CreatureModifiersData.ActiveCreatureModifiers;
+            if (live == null) { return; }
+            bool changed = false;
+            foreach (ModifierType type in staged.modifierOn.Keys) {
+                if (SetsEqual(staged.modifierOn[type], baseline.modifierOn[type]) == false) { changed = true; }
+            }
+            if (changed == false) { return; }
+
+            CreatureModifierCollection copy = CopyForEdit(YamlConfigManager.ModifierSettings, live);
+            ApplyEnabledFlags(copy.BossModifiers, staged.modifierOn[ModifierType.Boss]);
+            ApplyEnabledFlags(copy.MajorModifiers, staged.modifierOn[ModifierType.Major]);
+            ApplyEnabledFlags(copy.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
+            SaveYaml(YamlConfigManager.ModifierSettings, copy, "Modifier settings", failures, warnings);
         }
 
         // Writes the staged on/off state back onto each modifier's Enabled flag.
@@ -850,123 +629,127 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
-        // True if any staged nemesis YAML value differs from the live config (so we only rewrite when changed).
-        private static bool NemesisChanged() {
-            NemesisConfiguration n = staged?.nemesisSource;
-            if (n == null) { return false; }
-            NemesisScore sc = n.ScoreSystem ?? new NemesisScore();
-            return n.NemesisActionCooldownSeconds != staged.nemCooldown
-                || n.NemesisInfluenceRadius != staged.nemInfluence
-                || n.NemesisMinSpawnDistance != staged.nemMinSpawn
-                || sc.NeutralScore != staged.neutralScore
-                || sc.MinScore != staged.minScore
-                || sc.MaxScore != staged.maxScore
-                || sc.DecayPerUpdate != staged.decayPerUpdate
-                || sc.ScoreIntervalSeconds != staged.scoreInterval
-                || sc.BossKillBonus != staged.bossKillBonus
-                || sc.DeathScoreReduction != staged.deathReduction;
-        }
+        // The copy keeps NemesisVersion and every section this panel does not show; any other version resets the file.
+        private static void SaveNemesis(List<string> failures, List<string> warnings) {
+            NemesisConfiguration live = NemesisSystemData.SLE_Nemesis_Settings;
+            if (live == null || staged.NemesisMatches(baseline)) { return; }
 
-        // True if any raid's staged enable state differs from its current Enabled flag.
-        private static bool RaidsChanged() {
-            if (staged?.raidSource?.Raids == null) { return false; }
-            foreach (RaidDefinition raid in staged.raidSource.Raids) {
-                if (raid.Enabled != staged.raidsOn.Contains(raid.Name)) { return true; }
+            NemesisConfiguration copy = CopyForEdit(YamlConfigManager.NemesisSettings, live);
+            copy.NemesisActionCooldownSeconds = staged.nemCooldown;
+            copy.NemesisInfluenceRadius = staged.nemInfluence;
+            copy.NemesisMinSpawnDistance = staged.nemMinSpawn;
+            if (copy.ScoreSystem == null) { copy.ScoreSystem = new NemesisScore(); }
+            copy.ScoreSystem.NeutralScore = staged.neutralScore;
+            copy.ScoreSystem.MinScore = staged.minScore;
+            copy.ScoreSystem.MaxScore = staged.maxScore;
+            copy.ScoreSystem.DecayPerUpdate = staged.decayPerUpdate;
+            copy.ScoreSystem.ScoreIntervalSeconds = staged.scoreInterval;
+            copy.ScoreSystem.BossKillBonus = staged.bossKillBonus;
+            copy.ScoreSystem.DeathScoreReduction = staged.deathReduction;
+            if (copy.ChanceChanges?.CreatureOps != null) {
+                foreach (KeyValuePair<string, NemesisChanceEntry> op in copy.ChanceChanges.CreatureOps) {
+                    if (op.Value == null || staged.nemesisActions.TryGetValue(op.Key, out StagedNemesisAction action) == false) { continue; }
+                    op.Value.Enabled = action.Enabled;
+                    op.Value.Chance = action.Chance;
+                    op.Value.ScoreThreshold = action.Threshold;
+                    op.Value.LevelBonus = action.LevelBonus;
+                }
             }
-            return false;
+            SaveYaml(YamlConfigManager.NemesisSettings, copy, "Nemesis settings", failures, warnings);
         }
 
-        // Row based dual config, for scalars
-        private static GameObject AddScalingFeatureRow(Transform parent, float colWidth, float imgW, float imgH, Sprite sprite, string mainLabel, string description, bool mainValue, Action<bool> onMain, string subLabel, bool subValue, Action<bool> onSub) {
-            const float SubIndent = 24f;
-            const float MainToggleSize = 26f;
-            const float SubToggleSize = 22f;
-            const float ToggleGap = 8f;   // gap between a toggle and the title to its right
-            const float DescH = 72f;      // up to ~4 wrapped lines; the row is tall so the description has room
-            float leftColW = colWidth - imgW;   // configuration area to the left of the example image
-            GameObject row = ConfigUI.NewRow(parent, colWidth, imgH);
+        // ------------------------------------------------------------------------------------------------
+        //  Staged configuration
+        // ------------------------------------------------------------------------------------------------
 
-            // Example image on the right
-            GameObject go = ConfigUI.NewUI("Image", row.transform, typeof(Image));
-            RectTransform rt = (RectTransform)go.transform;
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(imgW, imgH);
-            rt.anchoredPosition = new Vector2(colWidth - imgW, 0f);
-            Image img = go.GetComponent<Image>();
-            img.sprite = sprite;
-            img.preserveAspect = true;   // 256x171 letterboxes inside the box
-            img.raycastTarget = false;
-
-            // Vertically center the (main toggle + description + sub toggle) block in the image box
-            float blockH = RowHeight + 2f + DescH + 4f + SubRowHeight;   // 34 + 2 + 72 + 4 + 26 = 138
-            float topY = Mathf.Max(0f, (imgH - blockH) * 0.5f);
-
-            // Main toggle, directly to the left of its title
-            GameObject mainToggleGO = GUIManager.Instance.CreateToggle(row.transform, MainToggleSize, MainToggleSize);
-            mainToggleGO.transform.SetParent(row.transform, false);
-            RectTransform mrt = (RectTransform)mainToggleGO.transform;
-            mrt.localScale = Vector3.one;
-            mrt.anchorMin = new Vector2(0f, 1f); mrt.anchorMax = new Vector2(0f, 1f); mrt.pivot = new Vector2(0f, 1f);
-            mrt.anchoredPosition = new Vector2(0f, -(topY + 3f));
-            Toggle mt = mainToggleGO.GetComponent<Toggle>();
-            mt.isOn = mainValue;
-            mt.onValueChanged.AddListener(b => onMain(b));
-
-            float mainLabelX = MainToggleSize + ToggleGap;
-            ConfigUI.AddText(row.transform, mainLabelX, topY, leftColW - mainLabelX - 12f, RowHeight, mainLabel, 18, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-
-            // Description directly under the main label (full left column up to the image)
-            float descY = topY + RowHeight + 2f;
-            ConfigUI.AddText(row.transform, 0f, descY, leftColW - 12f, DescH, description, 14, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-
-            // Sub toggle (smaller, indented, below the description), directly to the left of its title
-            float subY = descY + DescH + 4f;
-            GameObject subToggleGO = GUIManager.Instance.CreateToggle(row.transform, SubToggleSize, SubToggleSize);
-            subToggleGO.transform.SetParent(row.transform, false);
-            RectTransform srt = (RectTransform)subToggleGO.transform;
-            srt.localScale = Vector3.one;
-            srt.anchorMin = new Vector2(0f, 1f); srt.anchorMax = new Vector2(0f, 1f); srt.pivot = new Vector2(0f, 1f);
-            srt.anchoredPosition = new Vector2(SubIndent, -(subY + 2f));
-            Toggle st = subToggleGO.GetComponent<Toggle>();
-            st.isOn = subValue;
-            st.onValueChanged.AddListener(b => onSub(b));
-
-            float subLabelX = SubIndent + SubToggleSize + ToggleGap;
-            ConfigUI.AddText(row.transform, subLabelX, subY, leftColW - subLabelX - 12f, SubRowHeight, subLabel, 14, TextAnchor.MiddleLeft);
-
-            return row;
+        private static LevelGenerator CloneGenerator(LevelGenerator src) {
+            return new LevelGenerator {
+                PrefabName = src.PrefabName,
+                MinLevel = src.MinLevel,
+                MaxLevel = src.MaxLevel,
+                LevelUpChance = src.LevelUpChance,
+                LevelupCalculationStyle = src.LevelupCalculationStyle,
+                GaussianOffset = src.GaussianOffset,
+                NightMultiplier = src.NightMultiplier,
+            };
         }
 
+        private static bool GeneratorsEqual(LevelGenerator a, LevelGenerator b) {
+            if (a == null || b == null) { return a == b; }
+            return a.MinLevel == b.MinLevel
+                && a.MaxLevel == b.MaxLevel
+                && a.LevelUpChance == b.LevelUpChance
+                && a.LevelupCalculationStyle == b.LevelupCalculationStyle
+                && a.GaussianOffset == b.GaussianOffset
+                && a.NightMultiplier == b.NightMultiplier;
+        }
+
+        private static bool SetsEqual(HashSet<string> a, HashSet<string> b) {
+            if (a == null || b == null) { return a == b; }
+            return a.SetEquals(b);
+        }
+
+        private static bool TableEqual(Dictionary<int, List<float>> a, Dictionary<int, List<float>> b, int span) {
+            bool inA = a.TryGetValue(span, out List<float> va);
+            bool inB = b.TryGetValue(span, out List<float> vb);
+            if (inA != inB) { return false; }
+            return inA == false || va.SequenceEqual(vb);
+        }
+
+        private class StagedNemesisAction {
+            // The configured entry, read-only here: its spawns and gates feed the generated description.
+            internal NemesisChanceEntry Source;
+            internal bool Enabled;
+            internal float Chance;
+            internal float Threshold;
+            internal int LevelBonus;
+
+            internal bool SameAs(StagedNemesisAction other) {
+                return other != null && Enabled == other.Enabled && Chance == other.Chance && Threshold == other.Threshold && LevelBonus == other.LevelBonus;
+            }
+        }
 
         private class StagedConfig {
             public bool enableDistance, enableDistanceOverlay;
             public bool enableZone, enableZoneOverlay;
+            // Client-side readouts: where the ring/zone level is shown when there is no map to draw it on.
+            public bool showNoMapRing, showNoMapZone;
             public bool enableConditional;
 
             public float creatureHpPerLevel, creatureDmgPerLevel, bossHpPerLevel, bossDmgPerLevel;
-            public int maxLevel, maxBossLevel;
+            public int maxBossLevel;
 
             public bool mpHealth, mpDamage;
             public float mpHealthMod, mpDamageMod;
             public int mpRequiredPlayers;
 
+            // Level distribution. The page works in stars; the generator works in levels (stars + 1). maxStars is
+            // ValConfig.MaxLevel, and every edit on the page keeps the generator's range at the stars shown.
+            public int maxStars;
             public LevelGenerator generator;
 
+            // Bosses roll from the creature curve unless one is configured for them. bossGenerator is kept seeded either
+            // way, so turning the toggle on starts from something sensible rather than from nothing.
+            public bool bossCurveOn;
+            public LevelGenerator bossGenerator;
+
             // Table style thresholds keyed by span, values in key order, seeded from LevelupChanceTablesBySpan.
-            // Only the spans in editedTableSpans were typed into the panel and get written back, so a hand-authored
-            // table that was merely displayed keeps its exact keys.
             public Dictionary<int, List<float>> tables;
-            public HashSet<int> editedTableSpans;
+
+            // Biome star caps as they were when this snapshot was taken, and the MaxLevel they sat under. While caps are
+            // auto-tuned they are always scaled from these, so moving Max back and forth never compounds rounding.
+            public Dictionary<Heightmap.Biome, int> biomeCapOriginals;
+            public int biomeCapBaseMax;
+            // Auto-tuning off means the caps are whatever was typed on the page instead, and Max stars leaves them alone.
+            public bool biomeCapAuto;
+            public Dictionary<Heightmap.Biome, int> biomeCapManual;
 
             public int maxMajor, maxMinor, maxBossMods, prefixLimit;
             public float chanceMajor, chanceMinor, chanceBoss;
             public bool limitToStarLevel, enableBossMods, minorFirst;
             public ModifierDisplayStyle displayStyle;
 
-            // Modifier enable/disable: the live active collection (read-only here) and the set of names
-            // currently toggled on per category. Toggling off then removes the entry when saved.
+            // Modifier enable/disable: the collection the page lists (read-only here) and the names toggled on per category.
             public CreatureModifierCollection modifierSource;
             public Dictionary<ModifierType, HashSet<string>> modifierOn;
 
@@ -975,17 +758,25 @@ namespace StarLevelSystem.modules.UI {
             public float raidEventRate;
             public int raidCheckMinutes, maxRaidAttempts, maxActiveRaids;
 
-            // Per-raid enable/disable. raidSource is the live raid config (read-only here); raidsOn holds the
-            // names of the raids currently toggled on. Toggling off then marks Enabled = false when saved.
+            // Per-raid enable/disable: the raids the page lists (read-only here) and the names toggled on. raidSpawns
+            // holds the per-creature numbers that page edits, keyed by position in the file.
             public RaidConfiguration raidSource;
             public HashSet<string> raidsOn;
+            public Dictionary<string, StagedRaidSpawn> raidSpawns;
 
-            // Nemesis system. enableNemesis is a ConfigEntry; the rest live in the NemesisSettings YAML
-            // (NemesisSystemData.SLE_Nemesis_Settings). nemesisSource is kept for apply + change detection.
+            // Nemesis system. enableNemesis is a ConfigEntry; the rest live in the NemesisSettings YAML.
             public bool enableNemesis;
             public float nemCooldown, nemInfluence, nemMinSpawn;
             public float neutralScore, minScore, maxScore, decayPerUpdate, scoreInterval, bossKillBonus, deathReduction;
-            public NemesisConfiguration nemesisSource;
+            public Dictionary<string, StagedNemesisAction> nemesisActions;
+
+            // Location reset: two ConfigEntries plus the LocationResetSettings YAML. See QuickConfigureLocationReset.cs.
+            public StagedLocationReset locationReset;
+
+            public int MinStars => Mathf.Max(0, Mathf.Min(generator.MinLevel, generator.MaxLevel) - 1);
+
+            // The span of levels the generator covers, which picks its LevelupChanceTablesBySpan entry.
+            public int TableSpan => Mathf.Abs(generator.MaxLevel - generator.MinLevel) + 1;
 
             public static StagedConfig Snapshot() {
                 StagedConfig s = new StagedConfig {
@@ -993,12 +784,14 @@ namespace StarLevelSystem.modules.UI {
                     enableDistanceOverlay = ValConfig.EnableMapRingsForDistanceBonus.Value,
                     enableZone = ValConfig.EnableZoneScalingBonus.Value,
                     enableZoneOverlay = ValConfig.EnableZoneMapOverlay.Value,
+                    showNoMapRing = ValConfig.ShowNoMapRingLevel.Value,
+                    showNoMapZone = ValConfig.ShowNoMapZoneLevel.Value,
 
                     creatureHpPerLevel = ValConfig.EnemyHealthMultiplier.Value,
                     creatureDmgPerLevel = ValConfig.EnemyDamageLevelMultiplier.Value,
                     bossHpPerLevel = ValConfig.BossEnemyHealthMultiplier.Value,
                     bossDmgPerLevel = ValConfig.BossEnemyDamageMultiplier.Value,
-                    maxLevel = ValConfig.MaxLevel.Value,
+                    maxStars = ValConfig.MaxLevel.Value,
                     maxBossLevel = ValConfig.MaxBossLevel.Value,
 
                     mpHealth = ValConfig.EnableMultiplayerEnemyHealthScaling.Value,
@@ -1017,6 +810,7 @@ namespace StarLevelSystem.modules.UI {
                     maxBossMods = ValConfig.MaxBossModifiersPerBoss.Value,
                     prefixLimit = ValConfig.LimitCreatureModifierPrefixes.Value,
                     minorFirst = ValConfig.MinorModifiersFirstInName.Value,
+                    biomeCapAuto = ValConfig.AutoTuneBiomeStarCaps.Value,
 
                     enableSlsRaids = !ValConfig.UseVanillaRaidConfiguration.Value,
                     raidEventRate = ValConfig.RaidEventRate.Value,
@@ -1029,14 +823,23 @@ namespace StarLevelSystem.modules.UI {
 
                 CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
-                s.generator = CloneOrDefaultGenerator(settings, s.maxLevel);
+                s.generator = SeedGenerator(settings, s.maxStars);
+                s.bossCurveOn = (settings?.BossLevelupGenerators?.Count ?? 0) > 0 || (settings?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
+                s.bossGenerator = SeedBossGenerator(settings, s.maxBossLevel, s.generator);
                 s.tables = new Dictionary<int, List<float>>();
-                s.editedTableSpans = new HashSet<int>();
                 if (settings?.LevelupChanceTablesBySpan != null) {
                     foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in settings.LevelupChanceTablesBySpan) {
                         if (entry.Value != null) { s.tables[entry.Key] = entry.Value.Values.ToList(); }
                     }
                 }
+                s.biomeCapOriginals = new Dictionary<Heightmap.Biome, int>();
+                s.biomeCapBaseMax = s.maxStars;
+                if (settings?.BiomeConfiguration != null) {
+                    foreach (KeyValuePair<Heightmap.Biome, BiomeSpecificSetting> biome in settings.BiomeConfiguration) {
+                        if (biome.Value != null && biome.Value.BiomeMaxLevelOverride > 0) { s.biomeCapOriginals[biome.Key] = biome.Value.BiomeMaxLevelOverride; }
+                    }
+                }
+                s.biomeCapManual = new Dictionary<Heightmap.Biome, int>(s.biomeCapOriginals);
 
                 if (!Enum.TryParse(ValConfig.ModifierIconDisplayStyle.Value, out ModifierDisplayStyle ds)) {
                     ds = ModifierDisplayStyle.Stars;
@@ -1045,13 +848,13 @@ namespace StarLevelSystem.modules.UI {
 
                 s.modifierSource = CreatureModifiersData.ActiveCreatureModifiers;
                 s.modifierOn = new Dictionary<ModifierType, HashSet<string>>() {
-                    { ModifierType.Boss, KeysOf(s.modifierSource?.BossModifiers) },
-                    { ModifierType.Major, KeysOf(s.modifierSource?.MajorModifiers) },
-                    { ModifierType.Minor, KeysOf(s.modifierSource?.MinorModifiers) },
+                    { ModifierType.Boss, EnabledNamesOf(s.modifierSource?.BossModifiers) },
+                    { ModifierType.Major, EnabledNamesOf(s.modifierSource?.MajorModifiers) },
+                    { ModifierType.Minor, EnabledNamesOf(s.modifierSource?.MinorModifiers) },
                 };
 
+                s.nemesisActions = new Dictionary<string, StagedNemesisAction>();
                 NemesisConfiguration nemesisCFG = NemesisSystemData.SLE_Nemesis_Settings;
-                s.nemesisSource = nemesisCFG;
                 if (nemesisCFG != null) {
                     s.nemCooldown = nemesisCFG.NemesisActionCooldownSeconds;
                     s.nemInfluence = nemesisCFG.NemesisInfluenceRadius;
@@ -1064,7 +867,21 @@ namespace StarLevelSystem.modules.UI {
                     s.scoreInterval = score.ScoreIntervalSeconds;
                     s.bossKillBonus = score.BossKillBonus;
                     s.deathReduction = score.DeathScoreReduction;
+                    if (nemesisCFG.ChanceChanges?.CreatureOps != null) {
+                        foreach (KeyValuePair<string, NemesisChanceEntry> op in nemesisCFG.ChanceChanges.CreatureOps) {
+                            if (op.Value == null) { continue; }
+                            s.nemesisActions[op.Key] = new StagedNemesisAction {
+                                Source = op.Value,
+                                Enabled = op.Value.Enabled,
+                                Chance = op.Value.Chance,
+                                Threshold = op.Value.ScoreThreshold,
+                                LevelBonus = op.Value.LevelBonus,
+                            };
+                        }
+                    }
                 }
+
+                s.locationReset = StagedLocationReset.Snapshot();
 
                 s.raidSource = RaidsData.SLE_Raid_Settings;
                 s.raidsOn = new HashSet<string>();
@@ -1073,11 +890,12 @@ namespace StarLevelSystem.modules.UI {
                         if (raid.Enabled) { s.raidsOn.Add(raid.Name); }
                     }
                 }
+                s.raidSpawns = SnapshotRaidSpawns(s.raidSource);
                 return s;
             }
 
             // Names of the entries that are currently enabled (entries default to enabled).
-            private static HashSet<string> KeysOf(Dictionary<string, CreatureModifierConfiguration> dict) {
+            private static HashSet<string> EnabledNamesOf(Dictionary<string, CreatureModifierConfiguration> dict) {
                 HashSet<string> set = new HashSet<string>();
                 if (dict == null) { return set; }
                 foreach (KeyValuePair<string, CreatureModifierConfiguration> kv in dict) {
@@ -1086,32 +904,153 @@ namespace StarLevelSystem.modules.UI {
                 return set;
             }
 
-            // Prepopulate the configurable level generator from the existing default generator if one is set,
-            // otherwise a sensible exponential default that approximates the built-in level-up curve.
-            private static LevelGenerator CloneOrDefaultGenerator(CreatureLevelSettings settings, int maxLevel) {
-                LevelGenerator src = null;
-                if (settings?.DefaultLevelupGenerators != null && settings.DefaultLevelupGenerators.Count > 0) {
-                    src = settings.DefaultLevelupGenerators[0];
-                }
-                if (src == null) {
-                    return new LevelGenerator {
-                        MinLevel = 1,
-                        MaxLevel = Mathf.Max(1, maxLevel),
-                        LevelUpChance = 0.2f,
-                        LevelupCalculationStyle = LevelupCalculationStyle.Exponential,
-                        GaussianOffset = 0f,
-                        NightMultiplier = 1f,
-                    };
+            // The generator the distribution page starts from. An existing default generator is used as is. Otherwise one
+            // is shaped after the hand-written default table, starting where it starts with its first chance, so the
+            // sliders open close to what the world already rolls. Two snapshots of the same config seed identically,
+            // which is what lets an untouched page compare equal and never be written.
+            private static LevelGenerator SeedGenerator(CreatureLevelSettings settings, int maxStars) {
+                LevelGenerator src = settings?.DefaultLevelupGenerators?.FirstOrDefault(g => g != null);
+                if (src != null) { return CloneGenerator(src); }
+
+                SortedDictionary<int, float> table = settings?.DefaultCreatureLevelUpChance ?? LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
+                int firstLevel = 1;
+                float chance = 0.2f;
+                if (table != null && table.Count > 0) {
+                    KeyValuePair<int, float> first = table.First();
+                    firstLevel = Mathf.Max(1, first.Key);
+                    if (first.Value > 0f) { chance = Mathf.Clamp01(first.Value / 100f); }
                 }
                 return new LevelGenerator {
-                    PrefabName = src.PrefabName,
-                    MinLevel = src.MinLevel,
-                    MaxLevel = src.MaxLevel,
-                    LevelUpChance = src.LevelUpChance,
-                    LevelupCalculationStyle = src.LevelupCalculationStyle,
-                    GaussianOffset = src.GaussianOffset,
-                    NightMultiplier = src.NightMultiplier,
+                    MinLevel = Mathf.Min(firstLevel, maxStars + 1),
+                    MaxLevel = Mathf.Max(1, maxStars) + 1,
+                    LevelUpChance = chance,
+                    LevelupCalculationStyle = LevelupCalculationStyle.Exponential,
+                    GaussianOffset = 0f,
+                    NightMultiplier = 1f,
                 };
+            }
+
+            // The boss curve the page starts from: the one already configured for bosses, or the creature curve reshaped
+            // to the boss star range, which is the closest thing to "what bosses do today" this can offer.
+            private static LevelGenerator SeedBossGenerator(CreatureLevelSettings settings, int maxBossStars, LevelGenerator creature) {
+                LevelGenerator src = settings?.BossLevelupGenerators?.FirstOrDefault(g => g != null);
+                if (src != null) { return CloneGenerator(src); }
+                LevelGenerator seeded = CloneGenerator(creature);
+                seeded.MinLevel = 1;
+                seeded.MaxLevel = Mathf.Max(1, maxBossStars) + 1;
+                return seeded;
+            }
+
+            public int BossMinStars => Mathf.Max(0, Mathf.Min(bossGenerator.MinLevel, bossGenerator.MaxLevel) - 1);
+
+            public int BossTableSpan => Mathf.Abs(bossGenerator.MaxLevel - bossGenerator.MinLevel) + 1;
+
+            // Whether what bosses roll from would change: the toggle moved, or the boss curve itself did.
+            public bool BossCurveDiffers(StagedConfig other) {
+                if (bossCurveOn != other.bossCurveOn) { return true; }
+                if (bossCurveOn == false) { return false; }
+                if (GeneratorsEqual(bossGenerator, other.bossGenerator) == false) { return true; }
+                return bossGenerator.LevelupCalculationStyle == LevelupCalculationStyle.Table
+                    && TableEqual(tables, other.tables, BossTableSpan) == false;
+            }
+
+            // A biome's star cap: scaled in proportion to the staged Max stars while auto-tuning is on, the typed value
+            // when it is off, and 0 for a biome that has no cap at all.
+            public int CapFor(Heightmap.Biome biome) {
+                if (biomeCapOriginals.TryGetValue(biome, out int original) == false) { return 0; }
+                if (biomeCapAuto == false) { return biomeCapManual.TryGetValue(biome, out int manual) ? manual : original; }
+                if (biomeCapBaseMax <= 0 || maxStars == biomeCapBaseMax) { return original; }
+                return Mathf.Max(1, Mathf.RoundToInt(original * (float)maxStars / biomeCapBaseMax));
+            }
+
+            // Takes the caps auto-tuning is showing as the starting point for typing them by hand, so switching modes
+            // never moves a cap on its own.
+            public void HoldCapsForManualEditing() {
+                foreach (Heightmap.Biome biome in biomeCapOriginals.Keys.ToList()) { biomeCapManual[biome] = CapFor(biome); }
+            }
+
+            // Biomes whose staged cap differs from what the live settings hold.
+            public Dictionary<Heightmap.Biome, int> ChangedBiomeCaps(CreatureLevelSettings live) {
+                Dictionary<Heightmap.Biome, int> changed = new Dictionary<Heightmap.Biome, int>();
+                if (live?.BiomeConfiguration == null) { return changed; }
+                foreach (Heightmap.Biome biome in biomeCapOriginals.Keys) {
+                    if (live.BiomeConfiguration.TryGetValue(biome, out BiomeSpecificSetting setting) == false || setting == null) { continue; }
+                    int cap = CapFor(biome);
+                    if (setting.BiomeMaxLevelOverride != cap) { changed[biome] = cap; }
+                }
+                return changed;
+            }
+
+            // Whether the curve the page shows is no longer the one the world rolls from: the generator was changed, or it
+            // is Table style and the table it reads was.
+            public bool CurveDiffers(StagedConfig other) {
+                if (GeneratorsEqual(generator, other.generator) == false) { return true; }
+                return generator.LevelupCalculationStyle == LevelupCalculationStyle.Table && TableEqual(tables, other.tables, TableSpan) == false;
+            }
+
+            public List<int> ChangedTableSpans(StagedConfig other) {
+                List<int> spans = new List<int>();
+                foreach (int span in tables.Keys) {
+                    if (TableEqual(tables, other.tables, span) == false) { spans.Add(span); }
+                }
+                return spans;
+            }
+
+            public bool NemesisMatches(StagedConfig o) {
+                if (nemCooldown != o.nemCooldown || nemInfluence != o.nemInfluence || nemMinSpawn != o.nemMinSpawn
+                    || neutralScore != o.neutralScore || minScore != o.minScore || maxScore != o.maxScore
+                    || decayPerUpdate != o.decayPerUpdate || scoreInterval != o.scoreInterval
+                    || bossKillBonus != o.bossKillBonus || deathReduction != o.deathReduction) {
+                    return false;
+                }
+                if (nemesisActions.Count != o.nemesisActions.Count) { return false; }
+                foreach (KeyValuePair<string, StagedNemesisAction> action in nemesisActions) {
+                    if (o.nemesisActions.TryGetValue(action.Key, out StagedNemesisAction other) == false || action.Value.SameAs(other) == false) { return false; }
+                }
+                return true;
+            }
+
+            // Why the staged values cannot be saved, or null. Only checks what would be written.
+            public string ValidationError(StagedConfig original) {
+                if (NemesisMatches(original) == false && (minScore > neutralScore || neutralScore > maxScore)) {
+                    return ConfigUI.L("$sls_cfg_nemesis_score_order");
+                }
+                return null;
+            }
+
+            public bool Matches(StagedConfig o) {
+                bool scalars =
+                    enableDistance == o.enableDistance && enableDistanceOverlay == o.enableDistanceOverlay
+                    && enableZone == o.enableZone && enableZoneOverlay == o.enableZoneOverlay
+                    && showNoMapRing == o.showNoMapRing && showNoMapZone == o.showNoMapZone
+                    && enableConditional == o.enableConditional
+                    && creatureHpPerLevel == o.creatureHpPerLevel && creatureDmgPerLevel == o.creatureDmgPerLevel
+                    && bossHpPerLevel == o.bossHpPerLevel && bossDmgPerLevel == o.bossDmgPerLevel
+                    && maxStars == o.maxStars && maxBossLevel == o.maxBossLevel
+                    && mpHealth == o.mpHealth && mpDamage == o.mpDamage
+                    && mpHealthMod == o.mpHealthMod && mpDamageMod == o.mpDamageMod && mpRequiredPlayers == o.mpRequiredPlayers
+                    && maxMajor == o.maxMajor && maxMinor == o.maxMinor && maxBossMods == o.maxBossMods && prefixLimit == o.prefixLimit
+                    && chanceMajor == o.chanceMajor && chanceMinor == o.chanceMinor && chanceBoss == o.chanceBoss
+                    && limitToStarLevel == o.limitToStarLevel && enableBossMods == o.enableBossMods && minorFirst == o.minorFirst
+                    && displayStyle == o.displayStyle && biomeCapAuto == o.biomeCapAuto
+                    && enableSlsRaids == o.enableSlsRaids && raidEventRate == o.raidEventRate
+                    && raidCheckMinutes == o.raidCheckMinutes && maxRaidAttempts == o.maxRaidAttempts && maxActiveRaids == o.maxActiveRaids
+                    && enableNemesis == o.enableNemesis;
+                if (scalars == false) { return false; }
+
+                if (GeneratorsEqual(generator, o.generator) == false) { return false; }
+                if (BossCurveDiffers(o)) { return false; }
+                if (tables.Count != o.tables.Count || tables.Keys.Any(span => TableEqual(tables, o.tables, span) == false)) { return false; }
+                foreach (Heightmap.Biome biome in biomeCapOriginals.Keys.Union(o.biomeCapOriginals.Keys)) {
+                    if (CapFor(biome) != o.CapFor(biome)) { return false; }
+                }
+
+                foreach (ModifierType type in modifierOn.Keys) {
+                    if (o.modifierOn.TryGetValue(type, out HashSet<string> other) == false || SetsEqual(modifierOn[type], other) == false) { return false; }
+                }
+                if (SetsEqual(raidsOn, o.raidsOn) == false || RaidSpawnsMatch(raidSpawns, o.raidSpawns) == false) { return false; }
+                if (locationReset.Matches(o.locationReset) == false) { return false; }
+                return NemesisMatches(o);
             }
         }
     }

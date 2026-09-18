@@ -59,7 +59,7 @@ namespace StarLevelSystem.common
                 aliases: "SLS-loc-reset-dump");
 
             _ = new SLSCommand("sls-loc-stamp",
-                "Stamps every generated zone as reset right now and records its prefab census. Use this once after installing so an already-explored world starts its reset timers from today instead of resetting everything at once.",
+                "Stamps every generated zone as reset right now and records its prefab census, restarting every reset timer from today. A world with no timers at all is stamped automatically when resets are switched on, so this is for re-baselining one that already has them.",
                 LocStamp, CommandArea.Loc,
                 isCheat: false, serverAuthoritative: true, requiresAdmin: true,
                 aliases: "SLS-loc-reset-stamp-all");

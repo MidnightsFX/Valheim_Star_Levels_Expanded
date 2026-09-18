@@ -346,6 +346,8 @@ namespace StarLevelSystem.common
 
             SortedDictionary<int, float> levelupSource = prioritycfg.CustomCreatureLevelUpChance ?? othercfg.CustomCreatureLevelUpChance;
             if (levelupSource != null) { biomecfg.CustomCreatureLevelUpChance = new SortedDictionary<int, float>(levelupSource); }
+            // Runtime-only, so it has to follow the table it belongs to by hand.
+            biomecfg.GeneratorNightMultiplier = prioritycfg.CustomCreatureLevelUpChance != null ? prioritycfg.GeneratorNightMultiplier : othercfg.GeneratorNightMultiplier;
 
             biomecfg.CreatureBaseValueModifiers = MergeDictionaryPreferPriority(prioritycfg.CreatureBaseValueModifiers, othercfg.CreatureBaseValueModifiers);
             biomecfg.CreaturePerLevelValueModifiers = MergeDictionaryPreferPriority(prioritycfg.CreaturePerLevelValueModifiers, othercfg.CreaturePerLevelValueModifiers);

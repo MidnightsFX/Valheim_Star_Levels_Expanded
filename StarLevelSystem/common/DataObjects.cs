@@ -480,7 +480,7 @@ namespace StarLevelSystem.common
 
             public int RollAndDetermineLevel() {
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
-                return LevelSelection.DetermineLevelRollResult(levelup_roll, MaxLevel, GetLevelUpDefinition(), new SortedDictionary<int, float>(), 1f, NightMultiplier);
+                return LevelSelection.DetermineLevelRollResult(levelup_roll, MaxLevel, GetLevelUpDefinition(), new SortedDictionary<int, float>(), 1f, LevelGeneratorResolver.NightFactor(NightMultiplier));
             }
         }
 
@@ -516,6 +516,18 @@ namespace StarLevelSystem.common
             [DefaultValue(null)]
             public List<string> DefaultLevelupGeneratorRefs { get; set; }
 
+            [Description("Levelup chance for boss creatures, replacing the chances above for anything Valheim counts as a boss. Left out, bosses roll from the same chances as everything else. Overwritten on load by BossLevelupGenerators when those are set.")]
+            [DefaultValue(null)]
+            public SortedDictionary<int, float> BossCreatureLevelUpChance { get; set; }
+
+            [Description("Inline level generators whose expanded curve overwrites BossCreatureLevelUpChance on load. Merged with BossLevelupGeneratorRefs. A boss curve outranks the default, conditional and biome chances; a creature-specific entry naming that boss still wins.")]
+            [DefaultValue(null)]
+            public List<LevelGenerator> BossLevelupGenerators { get; set; }
+
+            [Description("Names of generator lists in CustomLevelupGenerators to include when building BossCreatureLevelUpChance.")]
+            [DefaultValue(null)]
+            public List<string> BossLevelupGeneratorRefs { get; set; }
+
             [Description("Globally disables the distance scaling system.")]
             public bool EnableDistanceLevelBonus { get; set; } = false;
 
@@ -535,6 +547,13 @@ namespace StarLevelSystem.common
             [Description("Levelup chance tables for the 'Table' LevelupCalculationStyle, keyed by span (MaxLevel - MinLevel + 1). Inside a table, key 1 is the generator's MinLevel, key 2 is MinLevel + 1, and so on; each value is the % chance to roll past that level, so values must decrease.")]
             [DefaultValue(null)]
             public Dictionary<int, SortedDictionary<int, float>> LevelupChanceTablesBySpan { get; set; }
+
+            // Runtime only, never serialized: the NightMultiplier of the generators that built
+            // DefaultCreatureLevelUpChance (1 when there are none). Set by LevelSystemData.ApplyLevelupGenerators,
+            // because merging the generators into one table loses which multiplier belonged to it.
+            internal float DefaultGeneratorNightMultiplier = 1f;
+            // The same, for the boss curve.
+            internal float BossGeneratorNightMultiplier = 1f;
         }
 
         [Description("Controls Night-time specific settings")]
@@ -615,6 +634,9 @@ namespace StarLevelSystem.common
 
             [Description("Night-time specific settings for this biome.")]
             public BiomeNightSettings NightSettings { get; set; }
+
+            // Runtime only: NightMultiplier of this biome's LevelupGenerators (see CreatureLevelSettings).
+            internal float GeneratorNightMultiplier = 1f;
         }
 
         [Description("Creature-specific settings.")]
@@ -691,6 +713,9 @@ namespace StarLevelSystem.common
                 get => null;
                 set => DamageRecievedModifiers = value;
             }
+
+            // Runtime only: NightMultiplier of this creature's LevelupGenerators (see CreatureLevelSettings).
+            internal float GeneratorNightMultiplier = 1f;
         }
 
         [DataContract]

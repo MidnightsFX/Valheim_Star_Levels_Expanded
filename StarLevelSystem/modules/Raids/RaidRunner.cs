@@ -248,15 +248,17 @@ namespace StarLevelSystem.modules.Raids {
                         Vector3 selectedSpawn = spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Count)];
                         // Do custom level if custom level chances are set. Level generators (inline or referenced)
                         // take precedence and overwrite the spawn's configured levelup chances when present.
-                        SortedDictionary<int, float> levelupChance = LevelGeneratorResolver.BuildLevelupChance(rmonitor.RaidSpawnDef.LevelupGenerators, rmonitor.RaidSpawnDef.LevelupGeneratorRefs)
-                            ?? LevelSelection.DetermineLevelupChance(customLevelup: rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance);
+                        SortedDictionary<int, float> levelupChance = LevelGeneratorResolver.BuildLevelupChance(rmonitor.RaidSpawnDef.LevelupGenerators, rmonitor.RaidSpawnDef.LevelupGeneratorRefs, out float generatorNight);
+                        if (levelupChance == null) {
+                            levelupChance = LevelSelection.DetermineLevelupChance(null, null, rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance, 1f, false, out generatorNight);
+                        }
                         SortedDictionary<int, float> levelupDistanceBonus = LevelSelection.DetermineDistanceBonus(selectedSpawn);
 
                         int spawns = 0;
                         while(spawns < rmonitor.RaidSpawnDef.SpawnGroupSize) {
                             int level = 0;
                             if (rmonitor.RaidSpawnDef.UseRaidLevelSystem) {
-                                level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1);
+                                level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1, LevelGeneratorResolver.NightFactor(generatorNight));
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
                             } else {
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");

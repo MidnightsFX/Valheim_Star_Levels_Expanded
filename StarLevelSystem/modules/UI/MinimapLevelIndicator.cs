@@ -75,11 +75,10 @@ namespace StarLevelSystem.modules.UI {
             Vector3 pos = player.transform.position;
             List<string> lines = new List<string>(2);
             if (ValConfig.EnableDistanceLevelScalingBonus.Value) {
-                lines.Add($"Ring {DistanceScaleSystem.GetCurrentRingLevel(pos)}");
+                lines.Add(RingLine(pos));
             }
             if (ValConfig.EnableZoneScalingBonus.Value) {
-                ZoneData zone = ZoneScaleSystemData.GetZoneForPosition(pos);
-                lines.Add($"Zone {(zone != null ? zone.ZoneLevel : 0)}");
+                lines.Add(ZoneLine(pos));
             }
 
             if (lines.Count == 0) {
@@ -89,6 +88,17 @@ namespace StarLevelSystem.modules.UI {
 
             indicatorText.text = string.Join("\n", lines);
             if (!indicatorText.gameObject.activeSelf) { indicatorText.gameObject.SetActive(true); }
+        }
+
+        // The two readout lines. Shared with NoMapLevelIndicator, which draws the same values in the hud's
+        // top right corner when there is no minimap to sit next to, so both render identical wording.
+        internal static string RingLine(Vector3 pos) {
+            return $"Ring {DistanceScaleSystem.GetCurrentRingLevel(pos)}";
+        }
+
+        internal static string ZoneLine(Vector3 pos) {
+            ZoneData zone = ZoneScaleSystemData.GetZoneForPosition(pos);
+            return $"Zone {(zone != null ? zone.ZoneLevel : 0)}";
         }
 
         // SettingChanged handler for the client toggle: hide immediately when disabled; the refresh

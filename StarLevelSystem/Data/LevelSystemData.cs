@@ -635,22 +635,29 @@ namespace StarLevelSystem.Data
             CreatureLevelSettings settings = SLE_Level_Settings;
             if (settings == null) { return; }
 
-            SortedDictionary<int, float> defaultChances = LevelGeneratorResolver.BuildLevelupChance(settings.DefaultLevelupGenerators, settings.DefaultLevelupGeneratorRefs);
+            SortedDictionary<int, float> defaultChances = LevelGeneratorResolver.BuildLevelupChance(settings.DefaultLevelupGenerators, settings.DefaultLevelupGeneratorRefs, out float defaultNight);
             if (defaultChances != null) { settings.DefaultCreatureLevelUpChance = defaultChances; }
+            settings.DefaultGeneratorNightMultiplier = defaultNight;
+
+            SortedDictionary<int, float> bossChances = LevelGeneratorResolver.BuildLevelupChance(settings.BossLevelupGenerators, settings.BossLevelupGeneratorRefs, out float bossNight);
+            if (bossChances != null) { settings.BossCreatureLevelUpChance = bossChances; }
+            settings.BossGeneratorNightMultiplier = bossNight;
 
             if (settings.BiomeConfiguration != null) {
                 foreach (BiomeSpecificSetting biome in settings.BiomeConfiguration.Values) {
                     if (biome == null) { continue; }
-                    SortedDictionary<int, float> biomeChances = LevelGeneratorResolver.BuildLevelupChance(biome.LevelupGenerators, biome.LevelupGeneratorRefs);
+                    SortedDictionary<int, float> biomeChances = LevelGeneratorResolver.BuildLevelupChance(biome.LevelupGenerators, biome.LevelupGeneratorRefs, out float biomeNight);
                     if (biomeChances != null) { biome.CustomCreatureLevelUpChance = biomeChances; }
+                    biome.GeneratorNightMultiplier = biomeNight;
                 }
             }
 
             if (settings.CreatureConfiguration != null) {
                 foreach (CreatureSpecificSetting creature in settings.CreatureConfiguration.Values) {
                     if (creature == null) { continue; }
-                    SortedDictionary<int, float> creatureChances = LevelGeneratorResolver.BuildLevelupChance(creature.LevelupGenerators, creature.LevelupGeneratorRefs);
+                    SortedDictionary<int, float> creatureChances = LevelGeneratorResolver.BuildLevelupChance(creature.LevelupGenerators, creature.LevelupGeneratorRefs, out float creatureNight);
                     if (creatureChances != null) { creature.CustomCreatureLevelUpChance = creatureChances; }
+                    creature.GeneratorNightMultiplier = creatureNight;
                 }
             }
         }

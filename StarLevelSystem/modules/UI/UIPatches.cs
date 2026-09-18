@@ -199,5 +199,14 @@ namespace StarLevelSystem.modules.UI {
         // The Menu.Start patch that used to add the pause-menu button lives in the shared launcher now
         // (common/ConfigUI/QuickConfigBroker), which patches it once with a private Harmony instance
         // keyed on the launcher object name -- so several mods carrying that folder cannot double-patch it.
+
+        // First-time setup. Start runs on every visit to the start scene, including the return from a world, and
+        // before the intro cinematic has even begun; QueueTutorial waits for the real menu and acts once a session.
+        [HarmonyPatch(typeof(FejdStartup), nameof(FejdStartup.Start))]
+        public static class OpenSetupTutorialOnMainMenu {
+            public static void Postfix(FejdStartup __instance) {
+                QuickConfigureTool.QueueTutorial(__instance);
+            }
+        }
     }
 }

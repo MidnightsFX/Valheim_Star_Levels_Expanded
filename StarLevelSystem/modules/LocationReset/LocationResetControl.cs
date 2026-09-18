@@ -15,6 +15,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // True once the world state has been loaded and the sweep is allowed to run.
         internal static bool Ready = false;
 
+        // True once this world has been looked at for an existing baseline, so EnsureBaselineStamped
+        // is a single dictionary read for the rest of the session. Cleared with the world.
+        private static bool baselineChecked = false;
+
         // Composite gate. Every path that mutates the world must consult this rather than reading
         // the yaml/BepInEx flags directly, so a mod conflict or an unloaded world cannot be
         // bypassed by a config edit mid-session.
@@ -52,6 +56,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // location/vegetation catalogue exist. Loads per-world state and, if the config file was
         // written before a world was ever loaded, rewrites it now that the catalogue is known.
         internal static void OnZoneSystemReady() {
+            baselineChecked = false;
             if (ZNet.instance == null || ZNet.instance.IsServer() == false) {
                 Ready = false;
                 return;
@@ -108,6 +113,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         internal static void OnWorldUnload() {
             Ready = false;
+            baselineChecked = false;
             // Client side: fail any API call still waiting on this server rather than letting it time
             // out into a world that no longer exists. Server side: forget per-peer request cooldowns.
             LocationResetNetwork.Reset();
@@ -708,6 +714,60 @@ namespace StarLevelSystem.modules.LocationReset {
         private static void Announce(TerminalOutput output, string message) {
             Logger.LogLocationResetAlways(message);
             output?.Info(message, log: false);
+        }
+
+        // sls-loc-stamp, run for the admin. A world whose reset state is empty has no timers at all,
+        // so every zone in it reads as never examined -- the mod was just installed on an explored
+        // world, or the state file is gone. StampOnFirstSight already covers that lazily, one zone at
+        // a time as the sweep cursor reaches it, but only for zones the sweep actually looks at: a
+        // biome or distance band excluded by the zone rates is skipped before the first-sight check,
+        // so it stays untracked and becomes due the moment its rate is widened. Baselining the whole
+        // world in one pass is the same policy applied everywhere at once, and it retires the manual
+        // step the README used to open with.
+        //
+        // Deliberately NOT done with StampOnFirstSight off. That setting means "treat a zone I have
+        // never seen as due", which is how an admin asks for a world-wide reset, and a bulk stamp
+        // would silently cancel it -- so it is also the opt-out for this.
+        //
+        // Runs from the sweep tick rather than from OnZoneSystemReady because it needs a populated
+        // m_generatedZones and a loaded ZDOMan to census against, and neither is guaranteed at
+        // ZoneSystem.Start: ZNet reads the world off disk from its own Start, in no fixed order
+        // relative to ours.
+        internal static void EnsureBaselineStamped() {
+            if (baselineChecked) { return; }
+            if (SweepAllowed == false) { return; }
+            if (ZoneSystem.instance == null || ZDOMan.instance == null) { return; }
+
+            // A state file that could not be read is not an unstamped world. It may still hold every
+            // timer this world has, and StampAllGeneratedZones saves over it, so leave it alone and
+            // say why -- sls-loc-stamp is still there once an admin has decided the file is really
+            // gone.
+            if (LocationResetState.LastLoad == LocationResetState.StateLoad.ReadFailed) {
+                baselineChecked = true;
+                Logger.LogLocationResetWarning("The reset state file could not be read, so this world has NOT been baselined " +
+                    "automatically -- overwriting it would lose whatever timers it still holds. Zone timers will start as each " +
+                    "zone is first examined. Run sls-loc-stamp to baseline the world now.");
+                return;
+            }
+
+            if (LocationResetState.TrackedZoneCount > 0) { baselineChecked = true; return; }
+
+            // A world with no generated zones has nothing to baseline yet, and this is not the moment
+            // to decide it never will: a freshly created world generates its first zones as players
+            // move through it. Leave the latch alone and look again next tick.
+            if (ZoneSystem.instance.m_generatedZones.Count == 0) { return; }
+
+            baselineChecked = true;
+            if ((LocationResetData.SLE_LocationReset_Settings?.StampOnFirstSight ?? true) == false) {
+                Logger.LogLocationResetAlways("No zone reset timers in this world and StampOnFirstSight is off, so it is not " +
+                    "being baselined: every zone counts as due and will be reset as the sweep reaches it.");
+                return;
+            }
+
+            int stamped = StampAllGeneratedZones();
+            Logger.LogLocationResetAlways($"No zone reset timers in this world, so all {stamped} generated zones were baselined " +
+                "as reset just now. Nothing is due until its configured interval has passed. Set StampOnFirstSight: false in " +
+                "LocationResetSettings.yaml to skip this and let the sweep reset an explored world instead.");
         }
 
         // Baseline an already-explored world so timers start now rather than firing everywhere at

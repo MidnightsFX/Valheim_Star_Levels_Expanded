@@ -46,6 +46,15 @@ Below are a few examples of what you might see, and what the mod can do.
 
 ![HeaderExample](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true)
 
+## First-time setup
+The first time you reach the main menu, a short setup opens and walks through level scaling, the star range and its spawn chances,
+creature health and damage, modifiers, raids, the Nemesis system and Location Reset. You can save from any page, or click the X to skip it. Either way
+it won't open again; set `SetupTutorialComplete` back to `false` in the BepInEx config to see it again. The same pages (without the
+welcome page) open from the Mod Config button on the main menu, or on the pause menu for hosts and admins.
+
+Upgrading rather than installing fresh? The setup stays out of your way: a config file that already exists when this
+version first runs means the mod has been configured already, so it is marked done without being shown.
+
 ## Features
 
 ### Levels, Levels and more Levels (LevelSettings.yaml)
@@ -203,6 +212,7 @@ CustomLevelupGenerators:
     LevelUpChance: 0.35             # 0-1 fraction, 0.35 = 35%
     LevelupCalculationStyle: Gaussian
     GaussianOffset: 0.25            # Gaussian only: -1 to 1, shifts the most likely level
+    NightMultiplier: 1.5            # scales these chances at night only, 1.5 = level-ups 50% more likely (1 = no change)
 DefaultLevelupGeneratorRefs: [ late_game ]
 ```
 
@@ -211,6 +221,21 @@ Curve styles:
 - `Exponential` - the chance drops quickly at first, so low levels are common and high levels are rare.
 - `Gaussian` - a bell curve that favours levels in the middle of the range (moved with `GaussianOffset`).
 - `Table` - uses a table you write yourself from `LevelupChanceTablesBySpan` instead of a formula.
+
+Bosses roll from the same chances as everything else unless you give them `BossLevelupGenerators`, which fills
+`BossCreatureLevelUpChance` on load and applies to anything the game counts as a boss, modded ones included:
+
+```
+BossLevelupGenerators:
+- MinLevel: 1
+  MaxLevel: 11
+  LevelUpChance: 0.3
+  LevelupCalculationStyle: Gaussian
+```
+
+A boss curve outranks the default, conditional and biome chances wherever that boss stands, while a `CreatureConfiguration`
+entry naming the boss still wins over it. `MaxBossLevel` caps bosses either way. The Level Distribution page of the quick
+configure panel turns this on and off with its **Own curve for bosses** toggle and charts both curves side by side.
 
 ##### Table style
 `LevelupChanceTablesBySpan` is keyed by how many levels a generator covers (`MaxLevel - MinLevel + 1`), not by the levels themselves.
@@ -286,7 +311,7 @@ ScoreSystem:                           # Nemesis score system determines player 
   MeleeDamageDealtFactor: 0.75         # score contribution of melee damage
   MagicDamageDealtFactor: 0.5          # score contribution for magic damage
   RangedDamageDealtFactor: 0.25        # score contribution for ranged damage
-  DamageTakenFactor: -0.5              # score contriubtion for taking damage
+  DamageTakenFactor: 0.5               # score lost per point of damage taken (sign is ignored)
   BossKillBonus: 500                   # score bonus from killing a boss
 GaurenteedChanges:                     # nemesis changes that always happen
   FirstBossSetLevel: true              # first world boss of each kind when enabled will use the specified level
@@ -467,6 +492,11 @@ during an event.
 
 The number of players, frequency, and most all details of each raid is configurable through `RaidSettings.yaml`.
 
+The Raids page of the quick configure panel (Mod Config button) covers the common ones without editing YAML: the global
+raid settings, which raids are enabled, and per creature in a raid how many arrive each wave (`SpawnGroupSize`), how many
+may be alive at once (`MaxSpawned`, where 0 stops that creature spawning) and the seconds between its waves
+(`SpawnInterval`). Open a raid's **Spawns** button to see its creatures.
+
 Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
 
 `RaidSettings.yaml` carries a `RaidVersion` stamp, like `NemesisVersion`. Do not edit it: when the shipped raids change in a way every install should pick up, the version is bumped and a file at any other version (or with none, as every file from before 1.14.0) is reset to the new defaults on load. The previous file is saved next to it first as `RaidSettings.yaml.v<old version>.<date>.bak`, so raids of your own can be copied back in.
@@ -612,6 +642,11 @@ content the early players already stripped. Location Reset brings that content b
 **It is disabled by default, and every location and vegetation entry is opt-in.** Turn on
 `EnableLocationReset`, then set `Enabled: true` on the specific things you want to come back.
 
+The Location Reset page of the quick configure panel (Mod Config button) covers the common settings
+without editing YAML: one switch for both master switches, the default timer and terrain reset, the
+safe and protection radii, chest refills, the sweep budget, biome rates, and each reset group's on/off,
+timer and terrain reset. Group members, schedules, distance limits and protection rules stay in the file.
+
 How it works:
 - **Resets happen in the background, only in zones with no players nearby.** Nobody ever watches a
   location pop out and back in, which is what causes the lag spikes and item duplication other
@@ -639,8 +674,11 @@ Timers are in **real-world hours** (`ResetHours`), which stays predictable on a 
 time the sweep may use per frame. Raise it to restore the world faster; it automatically backs off
 when the server is under load. Use `sls-loc-status` to see the projected time for a full pass.
 
-After installing on an already-explored world, run `sls-loc-stamp` once so every zone's
-timer starts from today instead of everything becoming due at once.
+**An already-explored world baselines itself.** The first time resets are switched on in a world
+with no reset timers of its own, every generated zone is stamped as reset right then, so timers
+start from that moment instead of everything becoming due at once. The same happens if the state
+file is ever lost. Set `StampOnFirstSight: false` to skip it and have the sweep reset an explored
+world instead; `sls-loc-stamp` re-baselines a world by hand at any time.
 
 **Reset groups.** Groups are how this feature is configured. A group configures and **enables** a
 whole set of targets in one block, and stands on its own — a member needs no entry anywhere else in
@@ -839,7 +877,7 @@ client setting if you prefer plain text).
 Location Reset commands (server authoritative):
 - `sls-loc-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
 - `sls-loc-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
-- `sls-loc-stamp` - stamps every generated zone as reset right now. Run this once after installing on an existing world
+- `sls-loc-stamp` - stamps every generated zone as reset right now, restarting every timer from today. A world with no timers at all does this automatically when resets are switched on, so this is for re-baselining one that already has them
 - `sls-loc-reset [range:64]` - immediately resets the chunks around you, ignoring every timer, including the chunks currently loaded around you. Reports each chunk it touched to the console. Player structures are still protected
 - `sls-loc-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
 

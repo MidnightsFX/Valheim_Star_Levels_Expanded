@@ -68,6 +68,15 @@ namespace StarLevelSystem.modules.LocationReset {
 
         internal static int TrackedZoneCount { get { return zones.Count; } }
 
+        // Why the in-memory state is what it is, for the automatic baseline stamp alone. Nothing on
+        // disk -- or nothing usable there -- means this world has no timers and should start them
+        // today. A file that exists and could not be READ is the opposite case: it may still hold
+        // every timer this world has, and a baseline pass saves a fresh one straight over it, so
+        // that outcome deliberately blocks the automatic stamp. See LocationResetControl.
+        internal enum StateLoad { NotLoaded, Loaded, NoUsableState, ReadFailed }
+
+        internal static StateLoad LastLoad { get; private set; } = StateLoad.NotLoaded;
+
         internal static long Now {
             get { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
         }
@@ -210,12 +219,16 @@ namespace StarLevelSystem.modules.LocationReset {
             zones.Clear();
             loadedWorld = "";
             dirty = false;
+            LastLoad = StateLoad.NotLoaded;
         }
 
         internal static bool Load() {
             try {
                 ResetState();
                 ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
+                // Set up front so every "nothing to load" exit below -- missing, empty, wrong
+                // version, another world's file -- lands on it without a line of its own.
+                LastLoad = StateLoad.NoUsableState;
                 if (File.Exists(ValConfig.locationResetStatePath) == false) { return false; }
 
                 byte[] raw = File.ReadAllBytes(ValConfig.locationResetStatePath);
@@ -250,6 +263,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     zones[zone] = record;
                 }
 
+                LastLoad = StateLoad.Loaded;
                 loadedWorld = currentWorld;
                 dirty = false;
                 Logger.LogLocationResetAlways($"Loaded reset state for {zones.Count} zones.");
@@ -257,6 +271,7 @@ namespace StarLevelSystem.modules.LocationReset {
             } catch (Exception e) {
                 Logger.LogLocationResetWarning($"Failed to load reset state, starting fresh: {e.Message}");
                 ResetState();
+                LastLoad = StateLoad.ReadFailed;
                 return false;
             }
         }

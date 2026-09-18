@@ -194,7 +194,21 @@ namespace StarLevelSystem.common {
 #       LevelUpChance: 0.35             # authored as a 0-1 fraction
 #       LevelupCalculationStyle: Gaussian
 #       GaussianOffset: 0.25
+#       NightMultiplier: 1.5            # scales these chances at night only (1 = no change)
 #   DefaultLevelupGeneratorRefs: [ late_game ]
+#
+# --- Boss levels ---
+# BossLevelupGenerators (and BossLevelupGeneratorRefs) do the same for anything the game
+# counts as a boss, filling BossCreatureLevelUpChance on load. A boss curve outranks the
+# default, conditional and biome chances wherever a boss stands; a creature entry naming
+# that boss still wins. Leave them out and bosses roll from the same chances as everything
+# else. Either way MaxBossLevel caps them.
+#
+#   BossLevelupGenerators:
+#   - MinLevel: 1
+#     MaxLevel: 11
+#     LevelUpChance: 0.3
+#     LevelupCalculationStyle: Gaussian
 #
 # --- Table calculation style ---
 # Linear/Exponential/Gaussian compute a curve from LevelUpChance; Table instead
@@ -515,7 +529,7 @@ namespace StarLevelSystem.common {
 #     MeleeDamageDealtFactor: 0.5    # score gained per point of damage dealt
 #     RangedDamageDealtFactor: 0.25
 #     MagicDamageDealtFactor: 0.3
-#     DamageTakenFactor: 1           # score LOST per point of damage taken
+#     DamageTakenFactor: 1           # score LOST per point of damage taken (sign ignored)
 #     BossKillBonus: 250
 #     DeathScoreReduction: 500
 #     NearbyPlayerRadius: 25         # players near each other share score drift

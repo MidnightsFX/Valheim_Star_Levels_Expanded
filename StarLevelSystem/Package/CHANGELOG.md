@@ -1,3 +1,18 @@
+**1.15.0**
+ ---
+ ```
+- New TamesSkipRandomLevelRoll option: tamed creatures spawned without a level stay at 0 stars instead of rolling a random level (levels inherited from parents still apply)
+- Fixed RandomizeTameLevels: bred offspring always kept the parent's level instead of the rolled one (the roll can now also land on the parent's level)
+- First-time setup: on a fresh install quick configure opens once on the main menu with a welcome page; existing installs skip it (SetupTutorialComplete)
+- No-map worlds get the ring/zone level readout in the top right corner instead of on the minimap; each line toggles on the quick configure scaling page (ShowNoMapRingLevel, ShowNoMapZoneLevel)
+- Quick configure: save from any page, hover any setting for its config key and description, and the X asks before discarding
+- Bosses can have their own level curve (BossLevelupGenerators), charted on that page
+- Fixed Nemesis BossKillBonus never being added to the score
+- Fixed taking damage raising the Nemesis score (DamageTakenFactor is now always a loss)
+- Fixed level generator NightMultiplier being ignored; it now applies at night
+- A distance bonus no longer lets a level generator roll below its MinLevel
+ ```
+
 **1.14.0**
  ---
  ```

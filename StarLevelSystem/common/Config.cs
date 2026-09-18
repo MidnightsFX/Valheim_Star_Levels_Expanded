@@ -1,4 +1,4 @@
-using BepInEx;
+﻿using BepInEx;
 using BepInEx.Configuration;
 using Jotunn.Entities;
 using Jotunn.Managers;
@@ -164,6 +164,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> TreeSizeScalePerLevel;
         public static ConfigEntry<bool> UseDeterministicTreeScaling;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
+        public static ConfigEntry<bool> TamesSkipRandomLevelRoll;
         public static ConfigEntry<bool> RandomizeTameChildrenModifiers;
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
@@ -269,16 +270,25 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> KillReportFlushIntervalSeconds;
         public static ConfigEntry<string> ZoneOverlayColorOptions;
         public static ConfigEntry<bool> ShowMinimapLevelIndicator;
+        public static ConfigEntry<bool> ShowNoMapRingLevel;
+        public static ConfigEntry<bool> ShowNoMapZoneLevel;
         public static ConfigEntry<float> ZoneOverlayColorTransparency;
         public static ConfigEntry<bool> ShowQuickConfigureButton;
+        public static ConfigEntry<bool> SetupTutorialComplete;
+        public static ConfigEntry<bool> AutoTuneBiomeStarCaps;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
         public static ConfigEntry<float> ConfigApplyDelay;
+
+        // What the config file held before this run bound anything, or null when there was no file at all. Read in
+        // the constructor because the flush below is what writes the file.
+        private readonly string existingConfigText;
 
         public ValConfig(ConfigFile cf)
         {
             // ensure all the config values are created
             cfg = cf;
+            existingConfigText = ReadExistingConfig(cf.ConfigFilePath);
             // Configs are not written to disk until they are all bound - with SaveOnConfigSet
             // enabled, every individual Bind rewrites the entire cfg file. Binding everything in
             // memory and flushing once is a significant speedup in mod load time.
@@ -287,6 +297,16 @@ namespace StarLevelSystem.common {
             cfg.Save();
             cfg.SaveOnConfigSet = true;
             ConfigFileWatcher.Register(cfg.ConfigFilePath, OnMainConfigFileChanged);
+        }
+
+        private static string ReadExistingConfig(string path) {
+            try {
+                return File.Exists(path) ? File.ReadAllText(path) : null;
+            } catch (Exception e) {
+                // Only decides whether the first-time setup is offered, so a failed read is not worth more than a line.
+                Logger.LogWarning($"Could not read the existing configuration file: {e.Message}");
+                return null;
+            }
         }
 
         public void SetupConfigRPCs() {
@@ -376,11 +396,37 @@ namespace StarLevelSystem.common {
                 null,
                 new ConfigurationManagerAttributes { }));
             ShowMinimapLevelIndicator.SettingChanged += MinimapLevelIndicator.OnShowIndicatorChanged;
+            ShowNoMapRingLevel = Config.Bind("Client config", "ShowNoMapRingLevel", true,
+                new ConfigDescription("Show the current distance ring level in the top right corner while playing without a map. Hidden when distance scaling is disabled, and when a map is available (the minimap readout covers that case).",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowNoMapRingLevel.SettingChanged += NoMapLevelIndicator.OnShowIndicatorChanged;
+            ShowNoMapZoneLevel = Config.Bind("Client config", "ShowNoMapZoneLevel", true,
+                new ConfigDescription("Show the current zone level in the top right corner while playing without a map. Hidden when zone scaling is disabled, and when a map is available (the minimap readout covers that case).",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowNoMapZoneLevel.SettingChanged += NoMapLevelIndicator.OnShowIndicatorChanged;
             ShowQuickConfigureButton = Config.Bind("Client config", "ShowQuickConfigureButton", true,
                 new ConfigDescription("Show the StarLevelSystem quick configuration button on the main menu and (for hosts/admins) the pause menu.",
                 null,
                 new ConfigurationManagerAttributes { }));
             ShowQuickConfigureButton.SettingChanged += QuickConfigureTool.OnShowButtonChanged;
+            SetupTutorialComplete = Config.Bind("Client config", "SetupTutorialComplete", false,
+                new ConfigDescription("Set once the first-time setup has been shown on the main menu. Set to false to see it again the next time the main menu opens. An install that already had a config file before this setting existed starts at true, so the setup only greets fresh installs.",
+                null,
+                new ConfigurationManagerAttributes { }));
+            AutoTuneBiomeStarCaps = Config.Bind("Client config", "AutoTuneBiomeStarCaps", true,
+                new ConfigDescription("On the quick configure panel's Level Distribution page, scale each biome's star cap with the Max stars slider. Turn this off to type each biome's cap in yourself on that page.",
+                null,
+                new ConfigurationManagerAttributes { }));
+            // A config file that predates this setting belongs to someone who has already installed and configured the
+            // mod by hand, so the first-time setup would interrupt rather than help: mark it done. A file that names
+            // the setting keeps whatever it says, and a fresh install has no file and gets the setup.
+            if (existingConfigText != null && existingConfigText.Contains("SetupTutorialComplete") == false) {
+                SetupTutorialComplete.Value = true;
+                Logger.LogInfo("Existing StarLevelSystem configuration found, skipping the first-time setup. " +
+                    "Set SetupTutorialComplete to false to see it.");
+            }
 
 
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have.", false, 1, 200);
@@ -415,6 +461,7 @@ namespace StarLevelSystem.common {
             BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
             RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
+            TamesSkipRandomLevelRoll = BindServerConfig("LevelSystem", "TamesSkipRandomLevelRoll", false, "When enabled, tamed creatures that spawn without a level (summons, spawn multiplied tames, egg hatchlings when EggLevelDeterminedByItemQuality is off) stay at level 1 (0 stars) instead of rolling a random level. Levels inherited from parents are still applied.");
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");

@@ -72,6 +72,14 @@ namespace StarLevelSystem.modules.LocationReset {
             if (LocationResetControl.SweepAllowed == false) { return; }
             if (ZoneSystem.instance == null || ZDOMan.instance == null) { return; }
 
+            // Before a single zone is evaluated: a world with no timers at all is baselined in one
+            // pass rather than one zone at a time. Self-disarming, so this costs a bool for the rest
+            // of the session. Here rather than at world load because this is the first point where
+            // the generated-zone set and the ZDOs to census are certainly both in memory -- and
+            // because it is the first point where the sweep is known to be switched ON, which is
+            // what makes a flip of either master switch mid-session trigger it too.
+            LocationResetControl.EnsureBaselineStamped();
+
             // Once per world, ahead of the first sweep tick: rebuild the spawner -> creature index from
             // the durable positions those links carry, because the ZDOIDs in them died with the last
             // session. Not a precondition for a correct reset -- CollectLinked falls back to matching

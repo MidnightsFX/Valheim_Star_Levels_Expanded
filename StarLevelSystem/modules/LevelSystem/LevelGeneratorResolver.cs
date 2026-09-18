@@ -35,6 +35,13 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         // Builds a merged levelup-chance table from the configured generators, or null when none are configured.
         internal static SortedDictionary<int, float> BuildLevelupChance(List<LevelGenerator> inline, List<string> refs) {
+            return BuildLevelupChance(inline, refs, out _);
+        }
+
+        // As above, also reporting the generators' NightMultiplier (see NightMultiplierOf). One pass, so a missing
+        // reference is only warned about once.
+        internal static SortedDictionary<int, float> BuildLevelupChance(List<LevelGenerator> inline, List<string> refs, out float nightMultiplier) {
+            nightMultiplier = 1f;
             if (!HasGenerators(inline, refs)) { return null; }
             List<LevelGenerator> gens = Resolve(inline, refs);
             if (gens.Count == 0) { return null; }
@@ -42,7 +49,23 @@ namespace StarLevelSystem.modules.LevelSystem {
             foreach (LevelGenerator gen in gens) {
                 chances.MergeSortedDictionary(gen.GetLevelUpDefinition());
             }
+            nightMultiplier = NightMultiplierOf(gens);
             return chances;
+        }
+
+        // Generators are merged into a single table, so one multiplier has to stand for the whole list: the first
+        // generator that sets one wins.
+        internal static float NightMultiplierOf(List<LevelGenerator> gens) {
+            if (gens == null) { return 1f; }
+            foreach (LevelGenerator gen in gens) {
+                if (gen != null && gen.NightMultiplier != 1f) { return gen.NightMultiplier; }
+            }
+            return 1f;
+        }
+
+        // The factor a generator NightMultiplier contributes to a roll right now: the multiplier at night, 1 by day.
+        internal static float NightFactor(float nightMultiplier) {
+            return nightMultiplier != 1f && EnvMan.IsNight() ? nightMultiplier : 1f;
         }
 
         // Rolls a concrete level from the configured generators, or 0 when none are configured.
@@ -57,7 +80,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (gen.MaxLevel > maxLevel) { maxLevel = gen.MaxLevel; }
             }
             float roll = UnityEngine.Random.Range(0f, 100f);
-            return LevelSelection.DetermineLevelRollResult(roll, maxLevel, chances, new SortedDictionary<int, float>(), 1f);
+            return LevelSelection.DetermineLevelRollResult(roll, maxLevel, chances, new SortedDictionary<int, float>(), 1f, NightFactor(NightMultiplierOf(gens)));
         }
     }
 }

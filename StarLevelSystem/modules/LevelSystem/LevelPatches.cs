@@ -323,30 +323,27 @@ namespace StarLevelSystem.modules.LevelSystem {
                     inheritedLevel = cdc_parent.Level;
                 }
 
+                int level = inheritedLevel;
                 if (ValConfig.RandomizeTameChildrenLevels.Value == true) {
-                    int level = UnityEngine.Random.Range(1, inheritedLevel);
-                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
-                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
-                            level += 1;
-                            Logger.LogDebug($"Child is strong, but still random.");
-                        }
-                    }
+                    // Max is exclusive for ints, +1 so the child can roll the parent's own level.
+                    level = UnityEngine.Random.Range(1, inheritedLevel + 1);
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
-                    CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, inheritedLevel, updateCache: true);
-                    chara.m_nview.GetZDO().Set(ZDOVars.s_level, inheritedLevel);
-                    CreatureSetupControl.CreatureSetup(chara, level, delay: 0.1f);
                 } else {
-                    if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
-                        if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
-                            inheritedLevel += 1;
-                            Logger.LogDebug($"Child is stronger than parents and has a higher max level.");
-                        }
-                    }
-                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
-                    CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, inheritedLevel, updateCache: true);
-                    chara.m_nview.GetZDO().Set(ZDOVars.s_level, inheritedLevel);
-                    CreatureSetupControl.CreatureSetup(chara, inheritedLevel, delay: 0.1f);
+                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent?.Level}.");
                 }
+                if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
+                    if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
+                        level += 1;
+                        Logger.LogDebug($"Child is stronger than parents, level increased to {level}.");
+                    }
+                }
+
+                // The cache and ZDO are what actually carry the child's level: the CreatureSetup call below is dropped
+                // by the CreatureSetupQueue dedupe (Character.Awake already enqueued this child during Instantiate),
+                // and the queued worker reads the level back from the cache/ZDO. Both must hold the final level.
+                CompositeLazyCache.GetAndSetLocalCache(chara, level, updateCache: true);
+                chara.m_nview.GetZDO().Set(ZDOVars.s_level, level);
+                CreatureSetupControl.CreatureSetup(chara, level, delay: 0.1f);
                 CheckToMakeOffspringInfertile(chara);
             }
         }
@@ -630,7 +627,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
 
             public static void SetSpawnAbilityLevelControl(Character chara, int providedLevel) {
-                if (ValConfig.ControlAbilitySpawnedCreatures.Value) {
+                // Tames skipping random rolls keep the vanilla skill-based summon level.
+                if (ValConfig.ControlAbilitySpawnedCreatures.Value && LevelSelection.SkipRandomLevelForTame(chara) == false) {
                     CreatureSetupControl.CreatureSpawnerSetup(chara);
                     return;
                 }

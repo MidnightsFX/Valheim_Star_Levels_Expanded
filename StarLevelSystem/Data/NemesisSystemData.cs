@@ -31,7 +31,7 @@ namespace StarLevelSystem.Data
                 MeleeDamageDealtFactor = 0.75f,
                 RangedDamageDealtFactor = 0.25f,
                 MagicDamageDealtFactor = 0.5f,
-                DamageTakenFactor = -0.5f,
+                DamageTakenFactor = 0.5f,
                 DeathScoreReduction = 1500f,
             },
             GaurenteedChanges = new NemesisGaurenteedChanges() {

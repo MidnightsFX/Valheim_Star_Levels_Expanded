@@ -43,6 +43,13 @@ namespace StarLevelSystem.modules.LevelSystem {
             return ValConfig.OverLevelCreaturesGetRerolledOnLoad.Value;
         }
 
+        // Tames with no stored level stay at level 1 instead of rolling. Inherited levels never reach the roll
+        // (they arrive as a level override or an already-written s_level), and over-level rerolls stay under
+        // OverLevelTamesGetRerolledOnLoad.
+        public static bool SkipRandomLevelForTame(Character character) {
+            return ValConfig.TamesSkipRandomLevelRoll.Value && character != null && character.m_nview != null && character.IsTamed();
+        }
+
         public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, int leveloverride = 0, bool allowRoll = true) {
             if (character == null || cZDO == null) {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
@@ -64,6 +71,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (allowRoll == false) {
                     return clevel <= 0 ? 0 : clevel;
                 }
+                // Returned level 1 is persisted to s_level by StartZOwnerCreatureRoutines, so this only happens once.
+                if (clevel <= 0 && SkipRandomLevelForTame(character)) { return 1; }
                 int min_level = 0;
 
                 // Global key based generator built levelup replaces default, if it exists, otherwise its null
@@ -76,7 +85,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 float distance_level_modifier = 1;
                 SortedDictionary<int, float> distance_levelup_bonuses = DetermineDistanceBonus(character.transform.position);
-                SortedDictionary<int, float> levelup_chances = DetermineLevelupChance(creature_settings, biome_settings, conditional_levelup);
+                SortedDictionary<int, float> levelup_chances = DetermineLevelupChance(creature_settings, biome_settings, conditional_levelup, ConditionalScaleSystem.GetConditionalNightMultiplier(biome), character.IsBoss(), out float generatorNightMultiplier);
 
                 if (biome_settings != null) {
                     distance_level_modifier = biome_settings.DistanceScaleModifier;
@@ -93,6 +102,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (creature_settings != null && creature_settings.NightSettings != null && creature_settings.NightSettings.NightLevelUpChanceScaler != 1) {
                     nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
                 }
+                // The NightMultiplier of the generators that built the chosen table, applied only while it is night.
+                nightScaleBonus *= LevelGeneratorResolver.NightFactor(generatorNightMultiplier);
 
                 // Zone system bonus
                 float zoneScaleBonus = 1f;
@@ -165,15 +176,38 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static SortedDictionary<int, float> DetermineLevelupChance(CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null, SortedDictionary<int, float> customLevelup = null) {
+            return DetermineLevelupChance(creature_settings, biome_settings, customLevelup, 1f, false, out _);
+        }
+
+        // As above, also returning the generator NightMultiplier that belongs to whichever table won, so it follows the
+        // same precedence. customNightMultiplier is the multiplier of customLevelup.
+        public static SortedDictionary<int, float> DetermineLevelupChance(CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, SortedDictionary<int, float> customLevelup, float customNightMultiplier, bool isBoss, out float generatorNightMultiplier) {
             SortedDictionary<int, float> levelup_chances = LevelSystemData.SLE_Level_Settings.DefaultCreatureLevelUpChance;
-            if (levelup_chances == null) { levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance; }
-            if (customLevelup != null) { levelup_chances = customLevelup; }
+            generatorNightMultiplier = LevelSystemData.SLE_Level_Settings.DefaultGeneratorNightMultiplier;
+            if (levelup_chances == null) {
+                levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
+                generatorNightMultiplier = 1f;
+            }
+            if (customLevelup != null) {
+                levelup_chances = customLevelup;
+                generatorNightMultiplier = customNightMultiplier;
+            }
 
             if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null) {
                 levelup_chances = biome_settings.CustomCreatureLevelUpChance;
+                generatorNightMultiplier = biome_settings.GeneratorNightMultiplier;
+            }
+            // A boss curve is a statement about bosses wherever they stand, so it outranks the biome (and conditional)
+            // table of whatever biome the boss happens to be in. A creature-specific entry still wins: it names this
+            // boss outright.
+            SortedDictionary<int, float> bossChances = LevelSystemData.SLE_Level_Settings?.BossCreatureLevelUpChance;
+            if (isBoss && bossChances != null && bossChances.Count > 0) {
+                levelup_chances = bossChances;
+                generatorNightMultiplier = LevelSystemData.SLE_Level_Settings.BossGeneratorNightMultiplier;
             }
             if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) {
                 levelup_chances = creature_settings.CustomCreatureLevelUpChance;
+                generatorNightMultiplier = creature_settings.GeneratorNightMultiplier;
             }
             return levelup_chances;
         }
@@ -207,10 +241,14 @@ namespace StarLevelSystem.modules.LevelSystem {
             SortedDictionary<int, float> LevelUpWithBonus = new SortedDictionary<int, float>() { };
             LevelUpWithBonus.AddRange<int, float>(creature_levelup_chance);
             if (levelup_bonus != null) {
+                // A bonus below the table's lowest level is not added as a new level: it would be the first key walked,
+                // so a generator starting at MinLevel 3 could roll level 1 near a distance ring. Bonuses still raise the
+                // table's own levels and can still extend it upward.
+                int lowestLevel = LevelUpWithBonus.Count > 0 ? LevelUpWithBonus.Keys.First() : int.MinValue;
                 foreach (KeyValuePair<int, float> kvp in levelup_bonus) {
                     if (LevelUpWithBonus.ContainsKey(kvp.Key)) {
                         LevelUpWithBonus[kvp.Key] += (kvp.Value * distance_influence);
-                    } else {
+                    } else if (kvp.Key > lowestLevel) {
                         LevelUpWithBonus[kvp.Key] = (kvp.Value * distance_influence);
                     }
                 }
@@ -242,6 +280,28 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             // Rolled level is always N+1 due to 1 star being level 2
             return selected_level;
+        }
+
+        // The chance (0-1) of each level DetermineLevelRollResult picks from this table when no distance bonus applies.
+        // Mirrors its walk: a level is picked by any roll at or above its threshold that no lower level already took, and
+        // the cap level (or the last level) takes every roll that is left. Keys are levels, so stars + 1.
+        public static SortedDictionary<int, float> ComputeLevelDistribution(SortedDictionary<int, float> table, int maxLevel, float nightBonus = 1f, float zoneBonus = 1f) {
+            SortedDictionary<int, float> distribution = new SortedDictionary<int, float>();
+            if (table == null || table.Count == 0) { return distribution; }
+
+            float unclaimed = 100f;   // rolls below every threshold walked so far
+            int index = 0;
+            foreach (KeyValuePair<int, float> kvp in table) {
+                index++;
+                if (kvp.Key >= maxLevel || index == table.Count) {
+                    distribution[kvp.Key] = unclaimed / 100f;
+                    break;
+                }
+                float threshold = Mathf.Clamp(kvp.Value * nightBonus * zoneBonus, 0f, 100f);
+                distribution[kvp.Key] = Mathf.Max(0f, unclaimed - threshold) / 100f;
+                unclaimed = Mathf.Min(unclaimed, threshold);
+            }
+            return distribution;
         }
 
         public static int DeterministicDetermineTreeLevel(GameObject go) {

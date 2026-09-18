@@ -99,7 +99,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
             float score = GetScore(player); // Current score before applying changes
 
             score += (dmgDealtMeleeTrend * cfg.MeleeDamageDealtFactor) + (dmgDealtRangedTrend * cfg.RangedDamageDealtFactor) + (NemesisSystem.PlayerScore.DamageDealtMagic * cfg.MagicDamageDealtFactor);
-            score -= dmgTakenTrend * cfg.DamageTakenFactor;
+            // DamageTakenFactor is a magnitude: taking damage always lowers the score. The shipped default was
+            // written as -0.5, which the subtraction here turned into a score GAIN for getting hit.
+            score -= dmgTakenTrend * Mathf.Abs(cfg.DamageTakenFactor);
             score += NemesisSystem.PlayerScore.BossKills * cfg.BossKillBonus;
 
             // Decay the score towards neutral over time, neutral can be a naturally easy, hard or balanced target.
@@ -142,6 +144,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         public static void RecordBossKill(string prefabName) {
             if (NemesisSystem.PlayerScore == null || string.IsNullOrEmpty(prefabName)) { return; }
+            // Consumed (and reset) by the next UpdateScore as BossKills * BossKillBonus. Only the history was
+            // being recorded, so the bonus never applied.
+            NemesisSystem.PlayerScore.BossKills++;
             if (NemesisSystem.PlayerScore.BossKillsHistory.ContainsKey(prefabName) == false) {
                 NemesisSystem.PlayerScore.BossKillsHistory.Add(prefabName, 1);
             } else {

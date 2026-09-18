@@ -276,17 +276,34 @@ namespace StarLevelSystem.modules.UI {
             const float LabelWidth = 150f, SliderWidth = 150f, ValueWidth = 60f;
             const float ChartX = 420f;
             const float ColTop = 46f;
-            const float ChartFullH = 300f;
-            const float ChartHalfH = 146f;
+            // Biome caps: a cell per capped biome, either auto-tuned from Max stars or typed in by hand.
+            const float CellW = 169f;
+            const float CapLabelW = 104f;
+            const float CapFieldW = 48f;
+            const float CapHeaderH = 26f;
+            const float CapRowH = 30f;
+            const int PerRow = 5;
+            // The notes under the caps are usually empty, so the block is measured from the bottom of the page rather
+            // than parked under a full-height chart. Everything the caps do not need goes to the charts and the column.
+            const float NotesH = 38f;
             float chartW = PageW - ChartX;
+
+            List<Heightmap.Biome> cappedBiomes = staged.biomeCapOriginals.Keys
+                .OrderBy(b => staged.biomeCapOriginals[b]).ThenBy(b => (int)b).ToList();
+            int capRows = Mathf.Max(1, Mathf.CeilToInt(cappedBiomes.Count / (float)PerRow));
+            float capsY = PageH - NotesH - CapHeaderH - capRows * CapRowH;
+            float chartTop = ColTop + 40f;
+            float chartFullH = capsY - 10f - chartTop;
+            float chartHalfH = (chartFullH - 8f) * 0.5f;
 
             GameObject intro = ConfigUI.AddTextRow(parent, PageW, 40f, "$sls_cfg_distribution_intro", 14, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
             ConfigUI.PositionRow(intro, 0f, 0f);
 
-            // The settings outgrow the page once bosses have a section of their own, so the column scrolls. Rows that
-            // only apply to some curve styles - or only while bosses are configured separately - are switched off rather
-            // than laid out again: a vertical layout group skips inactive children, so the space they took collapses.
-            ConfigUI.CreateScroll(parent, 0f, ColTop, LeftColWidth, PageH - ColTop, out Transform left, out float lw);
+            // The caps and their notes run the full width of the page, so the settings column stops above them. It still
+            // outgrows that once bosses have a section of their own, so it scrolls. Rows that only apply to some curve
+            // styles - or only while bosses are configured separately - are switched off rather than laid out again: a
+            // vertical layout group skips inactive children, so the space they took collapses.
+            ConfigUI.CreateScroll(parent, 0f, ColTop, LeftColWidth, capsY - ColTop - 6f, out Transform left, out float lw);
 
             shownMinStars = staged.MinStars;
             shownMaxStars = staged.maxStars;
@@ -314,10 +331,10 @@ namespace StarLevelSystem.modules.UI {
                     bossGaussianRow.SetActive(style == LevelupCalculationStyle.Gaussian);
                 }
                 // One tall chart while bosses follow the creature curve, two half-height ones once they have their own.
-                distributionChart.SetRect(ChartX, ColTop + 40f, chartW, separate ? ChartHalfH : ChartFullH);
+                distributionChart.SetRect(ChartX, chartTop, chartW, separate ? chartHalfH : chartFullH);
                 distributionChart.SetTitle(separate ? "Creatures" : "");
                 bossChart.SetVisible(separate);
-                if (separate) { bossChart.SetRect(ChartX, ColTop + 40f + ChartHalfH + 8f, chartW, ChartHalfH); }
+                if (separate) { bossChart.SetRect(ChartX, chartTop + chartHalfH + 8f, chartW, chartHalfH); }
                 RefreshDistribution();
             }
 
@@ -388,26 +405,20 @@ namespace StarLevelSystem.modules.UI {
 
             GameObject caption = ConfigUI.AddTextRow(parent, chartW, 36f, "$sls_cfg_distribution_caption", 13, GUIManager.Instance.ValheimBeige, TextAnchor.MiddleCenter);
             ConfigUI.PositionRow(caption, ChartX, ColTop);
-            distributionChart = new LevelDistributionChart(parent, ChartX, ColTop + 40f, chartW, ChartFullH);
-            bossChart = new LevelDistributionChart(parent, ChartX, ColTop + 40f + ChartHalfH + 8f, chartW, ChartHalfH);
+            distributionChart = new LevelDistributionChart(parent, ChartX, chartTop, chartW, chartFullH);
+            bossChart = new LevelDistributionChart(parent, ChartX, chartTop + chartHalfH + 8f, chartW, chartHalfH);
             bossChart.SetTitle("Bosses");
 
-            // Biome star caps: a cell per capped biome, either auto-tuned from Max stars or typed in by hand.
-            const float CellW = 169f;
-            const float CapLabelW = 104f;
-            const float CapFieldW = 48f;
-            const int PerRow = 5;
-            float belowChart = ColTop + 40f + ChartFullH + 10f;
-            ConfigUI.AddText(parent, 0f, belowChart, 170f, 24f, "$sls_cfg_distribution_caps_header", 15, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            ConfigUI.AddToggle(parent, 176f, belowChart + 1f, 22f, staged.biomeCapAuto, OnBiomeCapAutoChanged);
-            WithTip(ConfigUI.AddText(parent, 204f, belowChart, 300f, 24f, "$sls_cfg_distribution_caps_auto", 13, TextAnchor.MiddleLeft).gameObject,
+            ConfigUI.AddText(parent, 0f, capsY, 170f, 24f, "$sls_cfg_distribution_caps_header", 15, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            ConfigUI.AddToggle(parent, 176f, capsY + 1f, 22f, staged.biomeCapAuto, OnBiomeCapAutoChanged);
+            WithTip(ConfigUI.AddText(parent, 204f, capsY, 300f, 24f, "$sls_cfg_distribution_caps_auto", 13, TextAnchor.MiddleLeft).gameObject,
                 Tip(ValConfig.AutoTuneBiomeStarCaps));
 
             int cell = 0;
-            foreach (Heightmap.Biome capped in staged.biomeCapOriginals.Keys.OrderBy(b => staged.biomeCapOriginals[b]).ThenBy(b => (int)b)) {
+            foreach (Heightmap.Biome capped in cappedBiomes) {
                 Heightmap.Biome biome = capped;   // capture per iteration
                 float cellX = (cell % PerRow) * CellW;
-                float cellY = belowChart + 26f + (cell / PerRow) * 30f;
+                float cellY = capsY + CapHeaderH + (cell / PerRow) * CapRowH;
                 ConfigUI.AddText(parent, cellX, cellY, CapLabelW, 28f, BiomeName(biome), 13, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimBeige);
                 InputField field = ConfigUI.AddTextField(parent, cellX + CapLabelW + 2f, cellY, CapFieldW, staged.CapFor(biome).ToString(),
                     text => CommitBiomeCap(biome, text), InputField.ContentType.IntegerNumber);
@@ -417,7 +428,7 @@ namespace StarLevelSystem.modules.UI {
                 cell++;
             }
 
-            float belowCaps = belowChart + 26f + Mathf.Max(1, Mathf.CeilToInt(biomeCapFields.Count / (float)PerRow)) * 30f + 4f;
+            float belowCaps = capsY + CapHeaderH + capRows * CapRowH + 4f;
             distributionNotesText = ConfigUI.AddText(parent, 0f, belowCaps, PageW, PageH - belowCaps, "", 13, TextAnchor.UpperLeft, GUIManager.Instance.ValheimOrange);
 
             // Lays the charts out for the current mode and draws everything.

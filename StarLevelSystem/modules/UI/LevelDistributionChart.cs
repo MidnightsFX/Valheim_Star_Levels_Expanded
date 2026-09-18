@@ -11,6 +11,7 @@ namespace StarLevelSystem.modules.UI {
     // labels are pooled and re-laid out on every SetData, because the page redraws it on every slider tick.
     internal class LevelDistributionChart {
         private const float LabelH = 18f;
+        private const float TitleH = 16f;
         private const float PadX = 6f;
         private const int MaxValueLabels = 16;   // above this, bars are too narrow to carry a percentage each
         private const int MaxAxisLabels = 12;
@@ -28,6 +29,10 @@ namespace StarLevelSystem.modules.UI {
         // Not readonly: the page splits one full-height chart into two half-height ones when bosses get their own curve.
         private float plotW;
         private float plotH;
+        // Where the plot starts inside the chart, which is also where a value label sitting on top of a full-height bar
+        // ends. A title takes a strip of its own above that, so the two cannot collide.
+        private float plotTop;
+        private float rectX, rectY, rectW, rectH;
         private readonly List<Image> bars = new List<Image>();
         private readonly List<Text> valueLabels = new List<Text>();
         private readonly List<Text> axisLabels = new List<Text>();
@@ -64,22 +69,34 @@ namespace StarLevelSystem.modules.UI {
         // Moves and resizes the whole chart. The caller redraws with SetData afterwards, since bar and label positions
         // are worked out from the plot size there.
         internal void SetRect(float x, float y, float w, float h) {
-            rootRect.sizeDelta = new Vector2(w, h);
-            rootRect.anchoredPosition = new Vector2(x, -y);
-            plotW = w - 2 * PadX;
-            plotH = h - 2 * LabelH - 8f;
+            rectX = x;
+            rectY = y;
+            rectW = w;
+            rectH = h;
+            ApplyRect();
+        }
+
+        private void ApplyRect() {
+            float titleStrip = string.IsNullOrEmpty(titleText.text) ? 0f : TitleH;
+            rootRect.sizeDelta = new Vector2(rectW, rectH);
+            rootRect.anchoredPosition = new Vector2(rectX, -rectY);
+            plotTop = titleStrip + LabelH + 4f;
+            plotW = rectW - 2 * PadX;
+            plotH = rectH - plotTop - LabelH - 4f;
             plot.sizeDelta = new Vector2(plotW, plotH);
+            plot.anchoredPosition = new Vector2(PadX, -plotTop);
             axisRect.sizeDelta = new Vector2(plotW, 1f);
-            emptyText.rectTransform.sizeDelta = new Vector2(w, h);
+            emptyText.rectTransform.sizeDelta = new Vector2(rectW, rectH);
         }
 
         internal void SetVisible(bool visible) {
             root.SetActive(visible);
         }
 
-        // A short label in the top-left strip, for telling two charts apart. Empty hides it.
+        // A short label in a strip of its own above the bars, for telling two charts apart. Empty gives the strip back.
         internal void SetTitle(string text) {
             titleText.text = text ?? "";
+            ApplyRect();
         }
 
         // chances: star level -> chance (0-1), in ascending star order.
@@ -114,7 +131,7 @@ namespace StarLevelSystem.modules.UI {
                     Text value = LabelAt(valueLabels, i, 11);
                     value.text = FormatPercent(chance);
                     // Just above the bar's top, measured from the chart root's top-left.
-                    PlaceLabel(value, centerX, LabelH + 4f + (plotH - barH) - LabelH);
+                    PlaceLabel(value, centerX, plotTop + (plotH - barH) - LabelH);
                 }
                 bool stepped = i % axisStep == 0;
                 if (stepped || i == n - 1) {
@@ -123,7 +140,7 @@ namespace StarLevelSystem.modules.UI {
                     if (stepped == false && lastLabeled >= 0 && (i - lastLabeled) * slot < 28f) { axisUsed--; }
                     Text axisLabel = LabelAt(axisLabels, axisUsed, 11);
                     axisLabel.text = chances[i].Key.ToString();
-                    PlaceLabel(axisLabel, centerX, LabelH + 4f + plotH + 3f);
+                    PlaceLabel(axisLabel, centerX, plotTop + plotH + 3f);
                     axisUsed++;
                     lastLabeled = i;
                 }

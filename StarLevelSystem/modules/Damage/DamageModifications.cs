@@ -158,7 +158,7 @@ namespace StarLevelSystem.modules.Damage {
             return damageRecievedModifiers;
         }
 
-        internal static Dictionary<CreaturePerLevelAttribute, float> DetermineCharacterPerLevelStats(BiomeSpecificSetting biome_settings, CreatureSpecificSetting creature_settings) {
+        internal static Dictionary<CreaturePerLevelAttribute, float> DetermineCharacterPerLevelStats(BiomeSpecificSetting biome_settings, CreatureSpecificSetting creature_settings, bool isBoss = false) {
             Dictionary<CreaturePerLevelAttribute, float> creaturePerLevelSettings = new Dictionary<CreaturePerLevelAttribute, float>()
             {
                 { CreaturePerLevelAttribute.DamagePerLevel, 0f },
@@ -173,6 +173,14 @@ namespace StarLevelSystem.modules.Damage {
                 foreach (var entry in biome_settings.CreaturePerLevelValueModifiers) {
                     creaturePerLevelSettings[entry.Key] = entry.Value;
                 }
+            }
+            // A boss per-level value is a statement about bosses wherever they stand, so it outranks the biome
+            // value of whatever biome the boss happens to be standing in - the same precedence
+            // LevelSelection.DetermineLevelupChance gives a boss levelup curve. The creature block below still
+            // wins: it names this boss outright.
+            if (isBoss) {
+                creaturePerLevelSettings[CreaturePerLevelAttribute.HealthPerLevel] = ValConfig.BossEnemyHealthMultiplier.Value;
+                creaturePerLevelSettings[CreaturePerLevelAttribute.DamagePerLevel] = ValConfig.BossEnemyDamageMultiplier.Value;
             }
             if (creature_settings != null && creature_settings.CreaturePerLevelValueModifiers != null) {
                 foreach (var entry in creature_settings.CreaturePerLevelValueModifiers) {

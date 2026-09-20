@@ -152,7 +152,7 @@ namespace StarLevelSystem.Data
 
             //Logger.LogDebug("Selecting creature Damage Recieved, Per Level and base values.");
             characterEntry.DamageRecievedModifiers = DamageModifications.DetermineCreatureDamageRecievedModifiers(biomeSettings, creatureSettings);
-            characterEntry.CreaturePerLevelValueModifiers = DamageModifications.DetermineCharacterPerLevelStats(biomeSettings, creatureSettings);
+            characterEntry.CreaturePerLevelValueModifiers = DamageModifications.DetermineCharacterPerLevelStats(biomeSettings, creatureSettings, character.IsBoss());
             characterEntry.CreatureBaseValueModifiers = DamageModifications.DetermineCreatureBaseStats(biomeSettings, creatureSettings);
             // Then whatever the spawn that created this creature gave it on top (nemesis bosses and minions).
             ApplyPersistedStatOverrides(characterEntry.ZDO, characterEntry);

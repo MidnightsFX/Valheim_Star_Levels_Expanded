@@ -764,6 +764,11 @@ namespace StarLevelSystem.modules.UI {
             public HashSet<string> raidsOn;
             public Dictionary<string, StagedRaidSpawn> raidSpawns;
 
+            // Raid creature density, 1-6. raidDensityBase is the density the file's numbers were written at, so every
+            // spawn count the slider derives is scaled from the snapshot rather than from the last slider position.
+            public int raidDensity;
+            public int raidDensityBase;
+
             // Nemesis system. enableNemesis is a ConfigEntry; the rest live in the NemesisSettings YAML.
             public bool enableNemesis;
             public float nemCooldown, nemInfluence, nemMinSpawn;
@@ -891,6 +896,8 @@ namespace StarLevelSystem.modules.UI {
                     }
                 }
                 s.raidSpawns = SnapshotRaidSpawns(s.raidSource);
+                s.raidDensity = ClampRaidDensity(s.raidSource?.GlobalSettings?.RaidCreatureDensity ?? DefaultRaidDensity);
+                s.raidDensityBase = s.raidDensity;
                 return s;
             }
 
@@ -1048,6 +1055,7 @@ namespace StarLevelSystem.modules.UI {
                 foreach (ModifierType type in modifierOn.Keys) {
                     if (o.modifierOn.TryGetValue(type, out HashSet<string> other) == false || SetsEqual(modifierOn[type], other) == false) { return false; }
                 }
+                if (raidDensity != o.raidDensity) { return false; }
                 if (SetsEqual(raidsOn, o.raidsOn) == false || RaidSpawnsMatch(raidSpawns, o.raidSpawns) == false) { return false; }
                 if (locationReset.Matches(o.locationReset) == false) { return false; }
                 return NemesisMatches(o);

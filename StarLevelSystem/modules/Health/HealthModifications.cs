@@ -26,23 +26,15 @@ namespace StarLevelSystem.modules.Health {
 
             float currentMaxHealth = chara.GetMaxHealth();
             float maxHealthBase = chara.GetMaxHealthBase();
-            float targetCreatureHealth;
-            if (cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth] != 1 || cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel] > 0) {
-                float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
-                float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
-                float hp = (basehp + perlvlhp);
-                targetCreatureHealth = hp;
-                //Logger.LogDebug($"Setting max HP to: {hp} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
-            } else {
-                if (chara.IsBoss()) {
-                    chealth *= ValConfig.BossEnemyHealthMultiplier.Value;
-                    //Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.BossEnemyHealthMultiplier.Value} = {chealth}");
-                } else {
-                    chealth *= ValConfig.EnemyHealthMultiplier.Value;
-                    //Logger.LogDebug($"Setting max HP to: {chara.m_health} * {ValConfig.EnemyHealthMultiplier.Value} = {chealth}");
-                }
-                targetCreatureHealth = chealth;
-            }
+            // Bosses are not special-cased here: DetermineCharacterPerLevelStats already resolved
+            // HealthPerLevel from the boss config entry for anything IsBoss(). Applying the per-level value
+            // unconditionally is also what keeps a zero HealthPerLevel meaning "no bonus per star" rather
+            // than "no health" - the old shortcut branch multiplied base health by the per-level value and
+            // handed a creature configured at 0 per star a max health of 0.
+            float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
+            float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
+            float targetCreatureHealth = basehp + perlvlhp;
+            //Logger.LogDebug($"Setting max HP to: {targetCreatureHealth} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
 
             if (ForceUpdateHealth || currentMaxHealth != targetCreatureHealth) {
                 float vanillaMaxHealth = maxHealthBase * (float)chara.GetLevel();

@@ -24,6 +24,8 @@ namespace StarLevelSystem.Data
                 DisableAllRaids = false,
                 GlobalRaidIntervalScalar = 1f,
                 GlobalRaidChanceScalar = 1f,
+                // The counts every raid below is written with. Moving this on the Raids page rescales them.
+                RaidCreatureDensity = 3,
             },
             Raids = new List<RaidDefinition>()
             {

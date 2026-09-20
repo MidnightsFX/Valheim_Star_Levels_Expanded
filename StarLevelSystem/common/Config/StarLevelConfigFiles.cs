@@ -169,6 +169,12 @@ namespace StarLevelSystem.common {
 #         SizePerLevel: 0.05
 #       RequiredModifiers: { Fire: Major }
 #
+# --- Boss per-level health and damage ---
+# For anything the game counts as a boss, BossEnemyHealthMultiplier and
+# BossEnemyDamageMultiplier in the main .cfg replace the biome's HealthPerLevel
+# and DamagePerLevel, the same way a boss levelup curve outranks a biome one.
+# A CreatureConfiguration entry naming that boss still wins over both.
+#
 # --- DistanceLevelBonus ---
 # Extra levelup chance by distance (metres) from the world center or starter
 # temple (see DistanceBonusIsFromStarterTemple in the main .cfg). Each band's
@@ -454,6 +460,16 @@ namespace StarLevelSystem.common {
 #     PlayerBasedRaids: true         # raids target individual players
 #     GlobalRaidIntervalScalar: 1    # >1 = raids less often, <1 = more often
 #     GlobalRaidChanceScalar: 1      # scales every raid's activation chance
+#     RaidCreatureDensity: 3         # 1-6, how crowded the raids below already are
+#
+# RaidCreatureDensity is a record, not a multiplier: nothing reads it while a
+# raid runs. The quick configure panel's ""Raid creature density"" slider
+# rewrites every SpawnGroupSize and MaxSpawned below when you move it (never
+# below 1) and stamps where it left them here, so the next move rescales from
+# the file as written instead of compounding. 3 is the shipped numbers, 1 is
+# roughly vanilla sized and 6 is not meant to be survivable. Edit the slider
+# rather than this number - changing it by hand only makes the next slider
+# move scale by the wrong amount.
 #
 # --- Raids ---
 # Each raid: what unlocks it, how it announces itself, and what it spawns.

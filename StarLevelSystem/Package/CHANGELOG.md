@@ -1,3 +1,12 @@
+**1.16.0**
+ ---
+ ```
+- Quick configure raids page: a Raid creature density slider (1-6, default 3) rescales every raid's creatures per wave and max alive
+- Fixed BossSummoner spawning summons inside rocks: outdoor summons now try several spots and reject any blocked by rock, altar or building geometry
+- Fixed BossEnemyHealthMultiplier and BossEnemyDamageMultiplier being ignored: the biome HealthPerLevel/DamagePerLevel was overriding them, so the quick configure boss HP and damage per star sliders did nothing. Per-creature config still wins over both
+- Fixed an HP per star of 0 giving a creature 0 health instead of its base health
+ ```
+
 **1.15.0**
  ---
  ```

@@ -140,6 +140,7 @@ namespace StarLevelSystem.modules.UI {
             multiplayerExampleText = null;
             nemesisWarningText = null;
             nemesisActionViews.Clear();
+            ClearRaidPageReferences();
             ClearLocationResetReferences();
         }
 

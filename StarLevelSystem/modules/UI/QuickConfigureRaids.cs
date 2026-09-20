@@ -19,6 +19,38 @@ namespace StarLevelSystem.modules.UI {
         private const float MinSpawnInterval = 1f;
         private const float MaxSpawnInterval = 3600f;
 
+        private const int MinRaidDensity = 1;
+        private const int MaxRaidDensity = 6;
+        internal const int DefaultRaidDensity = 3;
+
+        // Density 1-6 to the share of each raid's configured creature counts that is actually used. 3 is the shipped
+        // numbers, which are already well above vanilla; 1 cuts them to roughly the size of a vanilla raid and 6
+        // triples them. Kept as a hand-written table rather than a curve so each step is a deliberate difficulty.
+        private static readonly float[] RaidDensityScale = { 0.4f, 0.65f, 1f, 1.6f, 2.2f, 3f };
+        private static readonly string[] RaidDensityNames = { "Vanilla", "Light", "Standard", "Heavy", "Brutal", "Impossible" };
+
+        internal static int ClampRaidDensity(int density) => Mathf.Clamp(density, MinRaidDensity, MaxRaidDensity);
+
+        private static float RaidDensityScalar(int density) => RaidDensityScale[ClampRaidDensity(density) - 1];
+
+        // What the staged counts are multiplied by relative to the numbers in the file. 1 while the slider has not been
+        // moved off the density the file was written at.
+        private static float RaidDensityRatio() {
+            return RaidDensityScalar(staged.raidDensity) / RaidDensityScalar(staged.raidDensityBase);
+        }
+
+        // Never below 1: thinning a raid out must not silently switch a creature off. An entry already at 0 is off on
+        // purpose (RaidRunner skips it entirely) and is left there.
+        //
+        // The clamp is the one place this is lossy. An entry that lands on 1 by clamping is written to the file as 1,
+        // indistinguishable from an entry that was always 1, so raising the density in a LATER session scales that 1
+        // as if it had been the raid's intent. Only entries small enough to clamp drift, and only across a save; the
+        // alternative is scaling at spawn time, which is not what this setting does.
+        private static int ScaleSpawnCount(int count, float ratio, int max) {
+            if (count <= 0) { return count; }
+            return Mathf.Clamp(Mathf.RoundToInt(count * ratio), 1, max);
+        }
+
         // One creature line of one raid. Keyed by position in the raid list rather than by name, because nothing stops
         // two raids sharing a name, and PrefabName is kept so a file that changed underneath us is not written blind.
         private class StagedRaidSpawn {
@@ -26,6 +58,10 @@ namespace StarLevelSystem.modules.UI {
             internal int GroupSize;
             internal int MaxAlive;
             internal float Interval;
+            // The two counts as the file holds them, which is what the density slider always scales from. Keeping them
+            // means sliding away and back lands on the original numbers instead of compounding rounding each step.
+            internal int FileGroupSize;
+            internal int FileMaxAlive;
 
             internal bool SameAs(StagedRaidSpawn other) {
                 return other != null && GroupSize == other.GroupSize && MaxAlive == other.MaxAlive && Interval == other.Interval;
@@ -48,6 +84,8 @@ namespace StarLevelSystem.modules.UI {
                         GroupSize = entry.SpawnGroupSize,
                         MaxAlive = entry.MaxSpawned,
                         Interval = entry.SpawnInterval,
+                        FileGroupSize = entry.SpawnGroupSize,
+                        FileMaxAlive = entry.MaxSpawned,
                     };
                 }
             }
@@ -65,6 +103,21 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
         //  Page
         // ------------------------------------------------------------------------------------------------
+
+        // Live views the density slider drives. Cleared with the rest of the page references when the panel closes.
+        private class RaidSpawnFields {
+            internal StagedRaidSpawn Spawn;
+            internal InputField Group;
+            internal InputField Max;
+        }
+
+        private static readonly List<RaidSpawnFields> raidSpawnFields = new List<RaidSpawnFields>();
+        private static Text raidDensityNote;
+
+        private static void ClearRaidPageReferences() {
+            raidSpawnFields.Clear();
+            raidDensityNote = null;
+        }
 
         private static void BuildRaidsPage(Transform parent) {
             const float LeftColWidth = 430f;
@@ -86,8 +139,19 @@ namespace StarLevelSystem.modules.UI {
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v), Tip(ValConfig.ServerTimeBetweenRaidStartChecks)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v), Tip(ValConfig.MaxRaidAttemptsPerPlayer)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", 1f, 20f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v), Tip(ValConfig.MaxActiveRaids)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid creature density", MinRaidDensity, MaxRaidDensity, staged.raidDensity, true, v => OnRaidDensityChanged((int)v)),
+                    Tip("RaidCreatureDensity", $"How crowded every raid is, {MinRaidDensity} to {MaxRaidDensity}. {DefaultRaidDensity} is the numbers RaidSettings.yaml holds now; " +
+                        $"{MinRaidDensity} thins every raid back to roughly vanilla sized and {MaxRaidDensity} is not meant to be survivable. " +
+                        "Moving it rewrites each creature's Each and Max alive on the right, never below 1, and always scales from the " +
+                        "numbers in the file - so sliding back where you started puts the raids back exactly.")),
             };
             ConfigUI.LayoutColumn(left, 0f, colStartY);
+
+            // Under the column, because the slider itself only shows 1-6 and the numbers it moves are behind the Spawns
+            // buttons on the right.
+            float noteY = colStartY + left.Count * (RowHeight + RowGap);
+            raidDensityNote = ConfigUI.AddText(parent, 0f, noteY, LeftColWidth, RowHeight, "", 13, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            RefreshRaidDensityNote();
 
             // Right side - scrollable list of every configured raid, each with an enable/disable toggle and its spawns
             // behind a Spawns button. Disabled raids keep their config in RaidSettings.yaml and are marked Enabled = false.
@@ -188,6 +252,7 @@ namespace StarLevelSystem.modules.UI {
                 interval.SetTextWithoutNotify(FormatInterval(spawn.Interval));
             }, InputField.ContentType.DecimalNumber);
             WithTip(interval.gameObject, Tip("SpawnInterval", "Seconds between this creature's waves. The raid keeps spawning it until it hits Max alive."));
+            raidSpawnFields.Add(new RaidSpawnFields { Spawn = spawn, Group = group, Max = max });
             return row;
         }
 
@@ -196,17 +261,58 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // ------------------------------------------------------------------------------------------------
+        //  Creature density
+        // ------------------------------------------------------------------------------------------------
+
+        private static void OnRaidDensityChanged(int density) {
+            if (staged == null) { return; }
+            density = ClampRaidDensity(density);
+            if (staged.raidDensity == density) { return; }
+            staged.raidDensity = density;
+
+            // Re-derived from the file's numbers rather than from what the boxes hold, so the slider never compounds
+            // its own rounding. Anything typed into Each or Max alive before the slider moved is re-derived with the
+            // rest -- the slider sets all of them, and the boxes are for fine tuning afterwards.
+            float ratio = RaidDensityRatio();
+            foreach (StagedRaidSpawn spawn in staged.raidSpawns.Values) {
+                spawn.GroupSize = ScaleSpawnCount(spawn.FileGroupSize, ratio, MaxSpawnGroupSize);
+                spawn.MaxAlive = ScaleSpawnCount(spawn.FileMaxAlive, ratio, MaxSpawnAlive);
+            }
+
+            foreach (RaidSpawnFields fields in raidSpawnFields) {
+                fields.Group.SetTextWithoutNotify(fields.Spawn.GroupSize.ToString());
+                fields.Max.SetTextWithoutNotify(fields.Spawn.MaxAlive.ToString());
+            }
+            RefreshRaidDensityNote();
+        }
+
+        private static void RefreshRaidDensityNote() {
+            if (raidDensityNote == null || staged == null) { return; }
+            float ratio = RaidDensityRatio();
+            string name = RaidDensityNames[ClampRaidDensity(staged.raidDensity) - 1];
+            raidDensityNote.text = Mathf.Approximately(ratio, 1f)
+                ? $"{name} - raids spawn the creature counts in RaidSettings.yaml."
+                : $"{name} - every raid's creature counts x{ratio.ToString("0.##", CultureInfo.InvariantCulture)}, at least 1 each.";
+        }
+
+        // ------------------------------------------------------------------------------------------------
         //  Save
         // ------------------------------------------------------------------------------------------------
 
-        // Per-raid enable/disable and the three spawn numbers this page shows; every other per-raid and per-spawn
-        // setting is preserved.
+        // Per-raid enable/disable, the three spawn numbers this page shows and the density they were scaled to; every
+        // other per-raid and per-spawn setting is preserved.
         private static void SaveRaids(List<string> failures, List<string> warnings) {
             RaidConfiguration live = RaidsData.SLE_Raid_Settings;
             if (live?.Raids == null) { return; }
-            if (SetsEqual(staged.raidsOn, baseline.raidsOn) && RaidSpawnsMatch(staged.raidSpawns, baseline.raidSpawns)) { return; }
+            if (staged.raidDensity == baseline.raidDensity
+                && SetsEqual(staged.raidsOn, baseline.raidsOn)
+                && RaidSpawnsMatch(staged.raidSpawns, baseline.raidSpawns)) { return; }
 
             RaidConfiguration copy = CopyForEdit(YamlConfigManager.RaidSettings, live);
+            // The counts written below are the ones this density produced, so the stamp has to go with them: the next
+            // slider move reads it back as the density the file's numbers sit at.
+            if (copy.GlobalSettings == null) { copy.GlobalSettings = new GlobalRaidSettings(); }
+            copy.GlobalSettings.RaidCreatureDensity = staged.raidDensity;
             for (int raidIndex = 0; raidIndex < copy.Raids.Count; raidIndex++) {
                 RaidDefinition raid = copy.Raids[raidIndex];
                 if (raid == null) { continue; }

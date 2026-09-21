@@ -142,6 +142,7 @@ namespace StarLevelSystem.modules.UI {
             nemesisActionViews.Clear();
             ClearRaidPageReferences();
             ClearLocationResetReferences();
+            ClearLootPageReferences();
         }
 
         // ------------------------------------------------------------------------------------------------

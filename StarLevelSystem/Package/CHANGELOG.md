@@ -1,3 +1,12 @@
+
+**1.17.0**
+ ---
+ ```
+- New quick configure Loot page
+- Zone levels, raid cooldowns, Nemesis remote bosses and location reset timers are now match worldID not name
+- A zone data file that records no world is no longer loaded
+ ```
+
 **1.16.0**
  ---
  ```

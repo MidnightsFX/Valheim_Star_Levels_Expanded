@@ -252,6 +252,8 @@ namespace StarLevelSystem.modules.UI {
             }
             list.Add(new PageDef { Title = "Level Progression", Build = BuildScalingPage });
             list.Add(new PageDef { Title = "Level Distribution", Build = BuildDistributionPage, OnShow = RefreshDistribution });
+            // After the level pages: the estimate is worked at the Max stars they set, so it re-reads it on show.
+            list.Add(new PageDef { Title = "Loot", Build = BuildLootPage, OnShow = RefreshLootEstimates });
             list.Add(new PageDef { Title = "Health & Damage", Build = BuildStatsPage, OnShow = UpdateExampleMath });
             list.Add(new PageDef { Title = "Modifiers", Build = BuildModifiersPage });
             list.Add(new PageDef { Title = "Raids", Build = BuildRaidsPage });
@@ -468,6 +470,19 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
                 ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
                 SaveRaids(failures, warnings);
+
+                // Loot - the per-level scales are ConfigEntries; the distance rings are in the LootSettings YAML.
+                ValConfig.LootDropCalculationType.Value = staged.loot.style.ToString();
+                ValConfig.PerLevelLootScale.Value = staged.loot.perLevelScale;
+                ValConfig.PerLevelLootChanceScale.Value = staged.loot.perLevelChanceScale;
+                ValConfig.ChanceBaseChancePerLevel.Value = staged.loot.chanceBase;
+                ValConfig.ScaleAllLootByLevel.Value = staged.loot.scaleAllLoot;
+                ValConfig.LootEggsDropIncreaseStacks.Value = staged.loot.eggStacks;
+                ValConfig.PerLevelTreeLootScale.Value = staged.loot.treeScale;
+                ValConfig.PerLevelMineRockLootScale.Value = staged.loot.rockScale;
+                ValConfig.PerLevelDestructibleLootScale.Value = staged.loot.destructibleScale;
+                ValConfig.PerLevelBirdLootScale.Value = staged.loot.birdScale;
+                SaveLoot(failures, warnings);
 
                 // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
                 ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
@@ -778,6 +793,9 @@ namespace StarLevelSystem.modules.UI {
             // Location reset: two ConfigEntries plus the LocationResetSettings YAML. See QuickConfigureLocationReset.cs.
             public StagedLocationReset locationReset;
 
+            // Loot: the per-level loot scales plus the LootSettings YAML distance rings. See QuickConfigureLoot.cs.
+            public StagedLoot loot;
+
             public int MinStars => Mathf.Max(0, Mathf.Min(generator.MinLevel, generator.MaxLevel) - 1);
 
             // The span of levels the generator covers, which picks its LevelupChanceTablesBySpan entry.
@@ -887,6 +905,7 @@ namespace StarLevelSystem.modules.UI {
                 }
 
                 s.locationReset = StagedLocationReset.Snapshot();
+                s.loot = StagedLoot.Snapshot();
 
                 s.raidSource = RaidsData.SLE_Raid_Settings;
                 s.raidsOn = new HashSet<string>();
@@ -1058,6 +1077,7 @@ namespace StarLevelSystem.modules.UI {
                 if (raidDensity != o.raidDensity) { return false; }
                 if (SetsEqual(raidsOn, o.raidsOn) == false || RaidSpawnsMatch(raidSpawns, o.raidSpawns) == false) { return false; }
                 if (locationReset.Matches(o.locationReset) == false) { return false; }
+                if (loot.Matches(o.loot) == false) { return false; }
                 return NemesisMatches(o);
             }
         }

@@ -50,42 +50,82 @@ namespace StarLevelSystem.common {
         internal const string LocationResetStateFileName = "LocationResetState.dat";
         internal static String locationResetStatePath => PerWorldStatePath(LocationResetStateFileName);
 
-        private static string perWorldCacheWorld;
+        private static string perWorldCacheKey;
         private static readonly Dictionary<string, string> perWorldPathCache = new Dictionary<string, string>();
 
-        // Resolves a world-state file to a per-world path, seeding it once from the legacy shared
-        // file so pre-existing data carries over. Seeding every world with the legacy data is safe:
-        // the loaders validate the world name recorded inside the file and start fresh on a
-        // mismatch, so only the world the data belongs to keeps it.
+        // The running world's name, reduced to something a file name can hold. Null when no world is
+        // loaded, and null on a client until the server's world info arrives (ZNet.m_world lands a
+        // little after ZNet.Awake).
+        private static string SanitizedWorldName() {
+            string world = ZNet.instance != null ? ZNet.instance.GetWorldName() : null;
+            if (string.IsNullOrEmpty(world)) { return null; }
+            foreach (char c in Path.GetInvalidFileNameChars()) {
+                world = world.Replace(c, '_');
+            }
+            return world;
+        }
+
+        // What identifies the world a state file belongs to: its unique id, with the name kept only so
+        // the files stay readable. A world's NAME identifies nothing -- two worlds can both be called
+        // "Test", a cloud copy and a local copy share a name, and deleting a world frees its name for
+        // the next one -- so keying state on the name alone is how one world ends up playing with
+        // another's zone levels, raid cooldowns and location reset stamps. m_uid is drawn per world when
+        // it is created and lives in its .fwl, so it survives renames and is never reused.
+        // Null when no world is resolved yet; nothing world-specific can be read or written in that state.
+        internal static string CurrentWorldStateKey() {
+            string name = SanitizedWorldName();
+            if (name == null) { return null; }
+            long uid = ZNet.instance.GetWorld()?.m_uid ?? 0L;
+            // 0 only for a save made before worlds carried an id, where the name is all there is.
+            return uid != 0L ? $"{name}-{uid:x}" : name;
+        }
+
+        // Resolves a world-state file to a path unique to the running world, seeding it from the file
+        // this world used while these were keyed on the world name alone, and failing that from the
+        // single shared file every world used before that. Each loader re-checks the world recorded
+        // inside what it reads, so a seeded file that turns out to be another world's is discarded
+        // rather than played.
+        //
+        // Seeding copies and never moves. A name match is not proof of ownership -- most of all on a
+        // client, where the world being resolved is the SERVER's and may share its name with one of
+        // this player's own worlds -- so the source has to stay where it is for the world it really
+        // belongs to. The cost is that two worlds sharing a name can both seed from the same file
+        // once; from their first save on they have their own id-keyed files and never meet again.
         internal static string PerWorldStatePath(string fileName) {
             string dir = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData);
-            string world = ZNet.instance != null ? ZNet.instance.GetWorldName() : null;
-            if (string.IsNullOrEmpty(world)) {
-                // No world loaded yet (menu-time access): fall back to the legacy shared path.
+            string key = CurrentWorldStateKey();
+            if (key == null) {
+                // No world loaded yet (menu-time access): fall back to the legacy shared path. Nothing
+                // may be WRITTEN there -- a state file with no world recorded in it is a file every
+                // world afterwards reads as its own.
                 return Path.Combine(dir, fileName);
             }
-            if (perWorldCacheWorld != world) {
+            if (perWorldCacheKey != key) {
                 perWorldPathCache.Clear();
-                perWorldCacheWorld = world;
+                perWorldCacheKey = key;
             }
             if (perWorldPathCache.TryGetValue(fileName, out string cached)) { return cached; }
 
-            string sanitized = world;
-            foreach (char c in Path.GetInvalidFileNameChars()) {
-                sanitized = sanitized.Replace(c, '_');
-            }
-            string suffixedPath = Path.Combine(dir, Path.GetFileNameWithoutExtension(fileName) + "." + sanitized + Path.GetExtension(fileName));
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string extension = Path.GetExtension(fileName);
+            string worldPath = Path.Combine(dir, $"{baseName}.{key}{extension}");
             try {
-                string legacyPath = Path.Combine(dir, fileName);
-                if (File.Exists(suffixedPath) == false && File.Exists(legacyPath)) {
-                    Directory.CreateDirectory(dir);
-                    File.Copy(legacyPath, suffixedPath);
+                if (File.Exists(worldPath) == false) {
+                    string nameOnlyPath = Path.Combine(dir, $"{baseName}.{SanitizedWorldName()}{extension}");
+                    string sharedPath = Path.Combine(dir, fileName);
+                    string source = File.Exists(nameOnlyPath) && nameOnlyPath != worldPath ? nameOnlyPath
+                        : (File.Exists(sharedPath) ? sharedPath : null);
+                    if (source != null) {
+                        Directory.CreateDirectory(dir);
+                        File.Copy(source, worldPath);
+                        Logger.LogInfo($"Carried {Path.GetFileName(source)} over to this world's own state file, {Path.GetFileName(worldPath)}.");
+                    }
                 }
             } catch (Exception e) {
                 Logger.LogWarning($"Could not migrate {fileName} to a per-world file: {e.Message}");
             }
-            perWorldPathCache[fileName] = suffixedPath;
-            return suffixedPath;
+            perWorldPathCache[fileName] = worldPath;
+            return worldPath;
         }
         internal const string LocationResetCatalogFileName = "LocationResetCatalog.yaml";
         internal static String locationResetCatalogPath = Path.Combine(Paths.ConfigPath, StarLevelSystem, SavedData, LocationResetCatalogFileName);

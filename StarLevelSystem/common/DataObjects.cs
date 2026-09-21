@@ -2200,6 +2200,11 @@ namespace StarLevelSystem.common
         public class ZoneSystemSaveData {
             public List<ZoneData> Zones { get; set; } = new List<ZoneData>();
             public string WorldName { get; set; }
+            // Which world this geometry and these levels belong to. The name above cannot answer that on
+            // its own (see ValConfig.CurrentWorldStateKey) and was all that used to stand between two
+            // same-named worlds sharing one set of zone levels. Omitted while 0, which is every file
+            // written before this existed -- those fall back to the name check.
+            public long WorldUid { get; set; }
             // Which clock the LastDecayTimestamp values in this file are expressed in. A plain
             // settable string on purpose: a get-only computed member here is what broke the whole
             // round-trip once already (see the note above ZoneData), and a string cannot throw the

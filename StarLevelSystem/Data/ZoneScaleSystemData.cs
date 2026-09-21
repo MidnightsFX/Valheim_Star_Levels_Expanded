@@ -210,7 +210,7 @@ namespace StarLevelSystem.Data {
         // prefix on world unload, raising SettingChanged after zone state has already been torn down.
         internal static void OnDecayClockChanged(object sender, EventArgs e) {
             if (!zonesBuilt || ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
-            if (EnsureClockMode()) { SaveZoneData(); zonesDirty = false; }
+            if (EnsureClockMode()) { PersistZones(); }
         }
 
         private static IEnumerator DecayZoneLevels() {
@@ -220,13 +220,13 @@ namespace StarLevelSystem.Data {
                 // missed ResetState. ClockNow dereferences ZNet in GameTime mode.
                 if (ZNet.instance == null) { continue; }
                 if (!zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) {
-                    if (zonesDirty) { SaveZoneData(); zonesDirty = false; }
+                    if (zonesDirty) { PersistZones(); }
                     continue;
                 }
                 // Re-base before measuring anything: a pass that spanned a clock change would either
                 // wipe every zone or stop decaying entirely. Persist straight away so a crash before
                 // the next tick cannot leave the file's marker disagreeing with its stamps.
-                if (EnsureClockMode()) { SaveZoneData(); zonesDirty = false; continue; }
+                if (EnsureClockMode()) { PersistZones(); continue; }
 
                 double now = ClockNow(stampedClock);
                 float decayRate = ValConfig.ZoneDecayLevelsPerHour.Value; // zone levels lost per hour of the configured clock
@@ -235,8 +235,7 @@ namespace StarLevelSystem.Data {
                     // doesn't cause a sudden catch-up drop. Persisted rather than in-memory only, or
                     // a restart reinstates that drop from the stale stamps still on disk.
                     foreach (var zone in ZoneScaleSystemData.Zones) { zone.LastDecayTimestamp = now; }
-                    SaveZoneData();
-                    zonesDirty = false;
+                    PersistZones();
                     continue;
                 }
                 List<ZoneData> changedZones = new List<ZoneData>();
@@ -283,7 +282,7 @@ namespace StarLevelSystem.Data {
                     ZoneScaleSystem.DrawMinimapOverlay();
                 }
                 // Flush any kill/decay changes accumulated since the last save.
-                if (zonesDirty) { SaveZoneData(); zonesDirty = false; }
+                if (zonesDirty) { PersistZones(); }
             }
         }
 
@@ -347,34 +346,52 @@ namespace StarLevelSystem.Data {
         // a stale level downward. Guarded here rather than at each call site because BuildZoneMap
         // runs on clients too (they need the geometry for the minimap overlay) and would otherwise
         // write a zone file of their own.
-        internal static void SaveZoneData() {
-            if (ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
+        // Returns whether the file was actually written, so a caller can keep the dirty flag and try
+        // again rather than dropping the changes it was about to persist.
+        internal static bool SaveZoneData() {
+            if (ZNet.instance == null || !ZNet.instance.IsServer()) { return false; }
+            // Without a resolved world there is no world-specific file to write: PerWorldStatePath falls
+            // back to the shared one, and a zone file carrying no world of its own is a file that every
+            // world loaded afterwards adopts as its own progression. Not reachable on a server in
+            // practice (the world is set before the main scene loads); skipping costs one pass worth of
+            // changes, while writing it is the cross-world bleed itself.
+            string worldName = ZNet.instance.GetWorldName();
+            if (string.IsNullOrEmpty(worldName)) {
+                Logger.LogWarning("Not saving zone data: no world is resolved yet, so it cannot be written to this world's own file.");
+                return false;
+            }
             try {
                 ValConfig.GetSavedDataSecondaryConfigDirectoryPath();
                 var saveData = new ZoneSystemSaveData {
                     Zones = ZoneScaleSystemData.Zones,
-                    // Left null when the name is not available yet (m_world is populated a little
-                    // after ZNet comes up). OmitDefaults then drops the key, and LoadZoneData skips
-                    // its world check on an empty name, so the file still loads. A placeholder like
-                    // "unknown" would match no world at all and force a rebuild instead.
-                    WorldName = ZNet.instance.GetWorldName(),
+                    WorldName = worldName,
+                    // The identity LoadZoneData actually checks. 0 only on a world old enough to carry
+                    // no id of its own, where the name is the best answer available.
+                    WorldUid = ZNet.instance.GetWorld()?.m_uid ?? 0L,
                     // What the stamps in this file ARE. Writing the configured clock here instead
                     // would mislabel a file saved between a config change and the re-base tick, and
                     // the next load would trust the label over the stamps.
                     DecayClock = stampedClock.ToString()
                 };
                 File.WriteAllText(ValConfig.zoneDataSavedDataPath, DataObjects.yamlSerializer.Serialize(saveData));
+                return true;
             } catch (Exception e) {
                 Logger.LogWarning($"Failed to save zone data: {e.Message}");
+                return false;
             }
+        }
+
+        // Writes the file and clears the dirty flag only once the write has actually happened, so a save
+        // that was skipped or failed is retried on the next pass instead of being silently dropped.
+        private static void PersistZones() {
+            if (SaveZoneData()) { zonesDirty = false; }
         }
 
         // Flushes pending zone data to disk if dirty; invoked on world save (see ZoneSavePatches).
         internal static void FlushPendingSave() {
             if (!zonesDirty) { return; }
             if (ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
-            SaveZoneData();
-            zonesDirty = false;
+            PersistZones();
         }
 
         internal static ZoneLoadResult LoadZoneData() {
@@ -385,13 +402,7 @@ namespace StarLevelSystem.Data {
                 string yaml = File.ReadAllText(path);
                 ZoneSystemSaveData loaded = DeserializeSaveData(yaml, Path.GetFileName(path));
                 if (loaded?.Zones == null || loaded.Zones.Count == 0) { return ZoneLoadResult.NoData; }
-                string currentWorld = ZNet.instance?.GetWorldName() ?? "";
-                if (!string.IsNullOrEmpty(loaded.WorldName) && loaded.WorldName != currentWorld) {
-                    // Another world's file sitting at this world's path (usually the legacy-file
-                    // migration). Nothing here belongs to this world, so it is safe to overwrite.
-                    Logger.LogInfo($"Zone data is for a different world ({loaded.WorldName} vs {currentWorld}), rebuilding.");
-                    return ZoneLoadResult.NoData;
-                }
+                if (!BelongsToCurrentWorld(loaded)) { return ZoneLoadResult.NoData; }
                 Zones = loaded.Zones;
                 // Normalize persisted ids to the deterministic cell-based scheme so authority ids
                 // match what clients derive from a fresh build (ignores any stale build-order id).
@@ -411,6 +422,32 @@ namespace StarLevelSystem.Data {
                 Logger.LogWarning($"Failed to load zone data: {e.Message}");
                 return ZoneLoadResult.Unreadable;
             }
+        }
+
+        // Whether a loaded file is this world's progression. Checked on top of the per-world file name
+        // because that name is only ever as unique as the world's name is, and because the file may have
+        // just been carried into this world's slot by the migration in ValConfig.PerWorldStatePath.
+        // Anything that fails here is another world's file sitting at this world's path, so it is safe
+        // to overwrite with a fresh build.
+        private static bool BelongsToCurrentWorld(ZoneSystemSaveData loaded) {
+            long currentUid = ZNet.instance?.GetWorld()?.m_uid ?? 0L;
+            string currentWorld = ZNet.instance?.GetWorldName() ?? "";
+            if (loaded.WorldUid != 0L && currentUid != 0L) {
+                if (loaded.WorldUid == currentUid) { return true; }
+                Logger.LogInfo($"Zone data belongs to a different world (id {loaded.WorldUid:x} vs {currentUid:x}), rebuilding.");
+                return false;
+            }
+            // Written before world ids were recorded (or read on a world old enough not to have one):
+            // the name is the only identity either side can offer. The next save adds the id.
+            if (!string.IsNullOrEmpty(loaded.WorldName)) {
+                if (loaded.WorldName == currentWorld) { return true; }
+                Logger.LogInfo($"Zone data is for a different world ({loaded.WorldName} vs {currentWorld}), rebuilding.");
+                return false;
+            }
+            // No world recorded at all. This used to be taken as close enough and loaded, which is
+            // exactly how one unidentified file could become every world's starting zone levels.
+            Logger.LogInfo("Zone data names no world of its own, so it cannot be matched to this one; rebuilding.");
+            return false;
         }
 
         // Strict first so an unrecognised key is reported, tolerant second so it costs one key

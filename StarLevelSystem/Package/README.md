@@ -410,6 +410,14 @@ There are three core parts to configuring loot drops, but many options to modify
 - nonCharacterSpecificLoot | this controls all non-character based loot drops
 - distanceLootModifier | this allows distance scaling of loot, similar to how distance level scaling works
 
+The Loot page of the quick configure panel (Mod Config button) covers how much loot a level is worth without editing YAML:
+the loot scaling style (`LootDropCalculationType`), loot and drop chance per star (`PerLevelLootScale`,
+`PerLevelLootChanceScale`, `ChanceBaseChancePerLevel`), whether loot that never scales does
+(`ScaleAllLootByLevel`), the per-level scales for trees, rocks, destructibles and birds, and the
+`distanceLootModifier` rings below. Beside them it works those numbers through a real drop table - a Troll's own, read
+from the loaded world - at no stars, at your Max stars, and inside the furthest ring, so a slider can be judged by the
+loot it produces. Which creatures and objects have a custom table at all still lives in `LootSettings.yaml`.
+
 #### Character Specific Loot configuration
 Lets take a look at the character specific loot drop. Here is one of the example configurations, and it is here to address a specific challenge.
 Oozers create blobs when they die, this scales with the level of the creature. However, when you have a very high level oozer you can end up with 20,30 or more blobs.

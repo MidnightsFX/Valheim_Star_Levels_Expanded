@@ -796,12 +796,12 @@ namespace StarLevelSystem.modules.UI {
         // follows the star sliders, and that range moving on its own is a cap change: counting it as a curve edit wrote
         // the seed over the hand-written table (or referenced generators) the world actually rolls from, so moving Max
         // stars alone made high-star creatures several times more common.
-        private static bool GeneratorEdited(LevelGenerator staged, LevelGenerator opened, bool openedInline) {
-            if (openedInline || staged == null || opened == null) { return GeneratorsEqual(staged, opened) == false; }
-            LevelGenerator sameRange = CloneGenerator(staged);
+        private static bool GeneratorEdited(LevelGenerator current, LevelGenerator opened, bool openedInline) {
+            if (openedInline || current == null || opened == null) { return GeneratorsEqual(current, opened) == false; }
+            LevelGenerator sameRange = CloneGenerator(current);
             sameRange.MaxLevel = opened.MaxLevel;
             // Max stars pulls Min down with it when it drops below; that is still the slider, not a chosen start.
-            if (staged.MinLevel == Mathf.Min(opened.MinLevel, staged.MaxLevel)) { sameRange.MinLevel = opened.MinLevel; }
+            if (current.MinLevel == Mathf.Min(opened.MinLevel, current.MaxLevel)) { sameRange.MinLevel = opened.MinLevel; }
             return GeneratorsEqual(sameRange, opened) == false;
         }
 

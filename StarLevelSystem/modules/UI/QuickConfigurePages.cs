@@ -880,12 +880,12 @@ namespace StarLevelSystem.modules.UI {
                 string desc = ModifierDescriptions.TryGetValue(modName, out string d) ? d : "";
                 // Keyed by the internal name, which is what Modifiers.yaml holds, with the name creatures carry in game
                 // beside it: an admin who has only seen "Burning" in a creature's name would not otherwise find "Fire".
-                string label = Prettify(modName);
+                string rowLabel = Prettify(modName);
                 string inGame = ModifierInGameName(modName);
-                if (inGame.Length > 0 && string.Equals(inGame, label, StringComparison.OrdinalIgnoreCase) == false) {
-                    label += $"  {MutedColorTag}({inGame})</color>";
+                if (inGame.Length > 0 && string.Equals(inGame, rowLabel, StringComparison.OrdinalIgnoreCase) == false) {
+                    rowLabel += $"  {MutedColorTag}({inGame})</color>";
                 }
-                AddToggleEntry(content, width, 48f, label, desc, enabled.Contains(modName), on => {
+                AddToggleEntry(content, width, 48f, rowLabel, desc, enabled.Contains(modName), on => {
                     if (on) { staged.modifierOn[type].Add(modName); }
                     else { staged.modifierOn[type].Remove(modName); }
                 });

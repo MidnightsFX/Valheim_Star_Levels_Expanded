@@ -801,11 +801,47 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // NearBaseOnly: any player base area (workbench, fire, bed...) within this many metres of the player counts
+        // as being at base. Wider than vanilla's own 20m count, so a player moving about a large base still counts.
+        internal const float NearBaseRadius = 30f;
+
+        // Key in ZNet.m_serverSyncedPlayerData, the dictionary each client sends the server every 2s with its position.
+        internal const string SyncedBaseValueKey = "SLS_raidBaseValue";
+
+        // Runs for the local player on each vanilla base recount (RaidPatches.PublishRaidBaseValue). The client is the
+        // only machine guaranteed to have the pieces around the player loaded, so it does the counting.
+        internal static void PublishLocalBaseValue(Player player) {
+            if (ZNet.instance == null || player == null) { return; }
+            ZNet.instance.m_serverSyncedPlayerData[SyncedBaseValueKey] = EffectArea.GetBaseValue(player.transform.position, NearBaseRadius).ToString();
+        }
+
+        // Counting base areas here only works where they are loaded: around the host, or on a dedicated server only
+        // the world centre, since its ZNetScene builds objects around a reference position that never moves. Every
+        // base elsewhere read as "not in base", so no near-base raid could fire there. The count the player's client
+        // reports is taken as well and the larger wins; a client that does not send it falls back to vanilla's 20m one.
+        internal static int GetPlayerBaseValue(Vector3 position, string playerPlatformID) {
+            int baseValue = EffectArea.GetBaseValue(position, NearBaseRadius);
+            if (PlatformUserID.TryParse(playerPlatformID, out PlatformUserID platformUserID)) {
+                ZNetPeer peer = SLSExtensions.GetPeerByPlatformUserID(platformUserID);
+                if (peer != null) { baseValue = Mathf.Max(baseValue, ReportedBaseValue(peer.m_serverSyncedPlayerData)); }
+            }
+            return baseValue;
+        }
+
+        private static int ReportedBaseValue(Dictionary<string, string> playerData) {
+            if (playerData.TryGetValue(SyncedBaseValueKey, out string raw) || playerData.TryGetValue("baseValue", out raw)) {
+                if (int.TryParse(raw, out int value)) { return value; }
+            }
+            return 0;
+        }
+
         internal static List<RaidDefinition> GetValidRaidsForPlayer(Vector3 position, string playerPlatformID) {
             //Logger.LogDebug("Starting valid raid check");
             List<RaidDefinition> playerAvailableRaids = new List<RaidDefinition>();
             //Logger.LogDebug("Base area check");
-            bool inBase = EffectArea.IsPointInsideArea(position, EffectArea.Type.PlayerBase, 30f);
+            int baseValue = GetPlayerBaseValue(position, playerPlatformID);
+            bool inBase = baseValue > 0;
+            Logger.LogRaid($"Player {playerPlatformID} has {baseValue} base area(s) within {NearBaseRadius}m.");
             //Logger.LogDebug("Biome check ");
             if (WorldGenerator.instance == null) return playerAvailableRaids;
             Heightmap.Biome biome = WorldGenerator.instance.GetBiome(position);

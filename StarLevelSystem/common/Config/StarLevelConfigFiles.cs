@@ -27,6 +27,12 @@ namespace StarLevelSystem.common {
             // The ProtectionRule shorthand converter has to be in place before anything parses. It is the
             // only reason `PlayerBuiltPiece: Block` still works alongside the expanded mapping form.
             YamlFormat.AddTypeConverter(new ProtectionRuleYamlConverter());
+            // Enums whose zero member is not a harmless fallback for a misspelled value. Faction's is Players, which
+            // put raid and nemesis creatures on the player's side; TrainingDummy is the "keep the creature's own
+            // faction" value those spawns already default to. LevelupCalculationStyle's is Gaussian; Linear is what an
+            // omitted style means.
+            TolerantEnumConverter.SetFallback(typeof(Character.Faction), Character.Faction.TrainingDummy);
+            TolerantEnumConverter.SetFallback(typeof(LevelupCalculationStyle), LevelupCalculationStyle.Linear);
 
             LevelSettings = Register(new YamlConfigFile<CreatureLevelSettings>(ValConfig.LevelSettingsFileName) {
                 RpcName = "SLS_LevelsRPC",
@@ -41,8 +47,8 @@ namespace StarLevelSystem.common {
                 Header = ColorSettingsHeader,
                 Defaults = () => Colorization.defaultColorizationSettings,
                 Apply = Colorization.ApplyLoaded,
-                // Colours are cosmetic and the merge-in of missing default keys makes a partial file
-                // workable, so a broken edit reverting to built-ins matches how this behaved before.
+                // Colours are cosmetic and Colorization.ApplyLoaded merges in missing default keys, so a partial
+                // file is workable and a broken edit reverting to built-ins matches how this behaved before.
                 OnFailure = ConfigFailurePolicy.RevertToDefaults,
                 AllowAdminEdit = true,
             });
@@ -127,7 +133,10 @@ namespace StarLevelSystem.common {
 # This file is SERVER AUTHORITATIVE: the server's copy is synced to every
 # client, so edit it on the server (or hosting player). Edits apply live.
 # Levels vs stars: level 1 has no stars, level 2 = 1 star, level 3 = 2 stars.
-# The MaxLevel / MaxBossLevel settings in the main .cfg cap everything here.
+# Star caps: MaxLevel in the main .cfg caps creatures unless their biome sets a
+# BiomeMaxLevelOverride, and an active boss-conditional tier replaces that biome's
+# range in turn. MaxBossLevel caps bosses wherever they stand. A creature entry's
+# CreatureMaxLevelOverride beats all of these.
 #
 # --- Levelup chances ---
 # Every chance table is 'level: chance', the percent chance for a creature to
@@ -152,7 +161,7 @@ namespace StarLevelSystem.common {
 #       NightSettings:
 #         NightLevelUpChanceScaler: 1.5 # higher levels more likely at night
 #     Meadows:
-#       BiomeMaxLevelOverride: 4        # hard level cap inside this biome
+#       BiomeMaxLevelOverride: 4        # star cap inside this biome (bosses use MaxBossLevel)
 #       CreatureSpawnsDisabled: [ Troll ]
 #
 # --- CreatureConfiguration ---
@@ -257,6 +266,11 @@ namespace StarLevelSystem.common {
 # ConditionalBossKeyOrder lists boss keys from earliest to latest progression,
 # and the latest defeated key that has an entry applies. Tiers update as soon
 # as a boss key is set or removed; no relog needed.
+#
+# The active tier replaces the biome's own curve AND its level range: creatures
+# there roll between the tier generators' MinLevel and MaxLevel, whatever
+# BiomeMinLevelOverride / BiomeMaxLevelOverride say. A creature entry with its
+# own curve still wins, and bosses keep MaxBossLevel.
 #
 #   ConditionalBossKeyOrder:
 #   - defeated_eikthyr
@@ -491,7 +505,7 @@ namespace StarLevelSystem.common {
 #       RequiredPlayerKeys: [ KilledTroll ]        # per-player keys (all needed)
 #       AnyRequiredPlayerKeys: []    # any one of these is enough
 #       NotRequiredGlobalKeys: []    # blocks the raid when present
-#       NearBaseOnly: false
+#       NearBaseOnly: false          # true: only while the player is within 30m of a base piece (workbench, fire, bed...)
 #       PauseIfNoPlayerInArea: true
 #     Spawns:
 #     - PrefabName: Draugr
@@ -505,8 +519,8 @@ namespace StarLevelSystem.common {
 #                                    # Raid and nemesis spawns are always woken, so cave dwellers such as
 #                                    # Ulv and Fenring_Cultist engage immediately instead of spawning asleep.
 #       Faction: Undead
-#       LevelMin: 3
-#       LevelMax: 10
+#       LevelMin: 3                  # rolled levels are raised to at least this
+#       LevelMax: 10                 # and capped here; 0 or left out = MaxLevel from the main .cfg
 #       UseRaidLevelSystem: true     # roll levels from the tables below
 #       CustomCreatureLevelUpChance: { 3: 100, 5: 50, 10: 5 }
 #       LevelupGeneratorRefs: []     # or reference LevelSettings generators

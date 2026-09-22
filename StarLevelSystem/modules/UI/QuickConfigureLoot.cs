@@ -197,10 +197,10 @@ namespace StarLevelSystem.modules.UI {
             // the object's vanilla drop table, not the creature multiplier above.
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Trees, rocks and the rest"));
             ScrollRow(left, lw, 34f, t => ConfigUI.AddTextRow(t, lw, 34f, "$sls_cfg_loot_objects_help", 12, GUIManager.Instance.ValheimBeige));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Tree wood per level", 0f, MaxObjectLootScale, lt.treeScale, false, v => lt.treeScale = v), Tip(ValConfig.PerLevelTreeLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Rock ore per level", 0f, MaxObjectLootScale, lt.rockScale, false, v => lt.rockScale = v), Tip(ValConfig.PerLevelMineRockLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Destructible loot per level", 0f, MaxObjectLootScale, lt.destructibleScale, false, v => lt.destructibleScale = v), Tip(ValConfig.PerLevelDestructibleLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Bird loot per level", 0f, MaxObjectLootScale, lt.birdScale, false, v => lt.birdScale = v), Tip(ValConfig.PerLevelBirdLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Tree wood per level", 0f, Mathf.Max(MaxObjectLootScale, lt.treeScale), lt.treeScale, false, v => lt.treeScale = v), Tip(ValConfig.PerLevelTreeLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Rock ore per level", 0f, Mathf.Max(MaxObjectLootScale, lt.rockScale), lt.rockScale, false, v => lt.rockScale = v), Tip(ValConfig.PerLevelMineRockLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Destructible loot per level", 0f, Mathf.Max(MaxObjectLootScale, lt.destructibleScale), lt.destructibleScale, false, v => lt.destructibleScale = v), Tip(ValConfig.PerLevelDestructibleLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Bird loot per level", 0f, Mathf.Max(MaxObjectLootScale, lt.birdScale), lt.birdScale, false, v => lt.birdScale = v), Tip(ValConfig.PerLevelBirdLootScale)));
 
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Distance bonus"));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "Loot rises with distance", lt.distanceBonus, v => {
@@ -271,7 +271,7 @@ namespace StarLevelSystem.modules.UI {
             InputField field = null;
             field = ConfigUI.AddTextField(parent, x, 0f, RingFieldW, FormatLootBonus(value), text => {
                 float committed = value;
-                if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)) {
+                if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)) {
                     committed = Mathf.Clamp(parsed, 0f, MaxRingBonus);
                 }
                 value = committed;

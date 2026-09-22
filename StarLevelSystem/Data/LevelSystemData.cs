@@ -32,7 +32,13 @@ namespace StarLevelSystem.Data
             "defeated_fader",
         };
 
-        public static DataObjects.CreatureLevelSettings SLE_Level_Settings = DefaultConfiguration;
+        // Assigned in the static constructor, which runs after every field initializer. An initializer here ran before
+        // DefaultConfiguration's (initializers run in textual order), so this was null until the first config load.
+        public static DataObjects.CreatureLevelSettings SLE_Level_Settings;
+
+        static LevelSystemData() {
+            SLE_Level_Settings = DefaultConfiguration;
+        }
 
         public static readonly DataObjects.CreatureLevelSettings DefaultConfiguration = new DataObjects.CreatureLevelSettings()
         {
@@ -566,6 +572,7 @@ namespace StarLevelSystem.Data
         // LevelSettings.yaml, so all three routes run identically.
         internal static void ApplyLoaded(DataObjects.CreatureLevelSettings parsed) {
             SLE_Level_Settings = parsed;
+            AuthoredLevelSettings = CopyOf(parsed);
             // Before ApplyLevelupGenerators, so its Table fallback warnings are reported for this load.
             LevelGenerator.ClearWarnings();
             ValidateLevelSettings(parsed);
@@ -589,6 +596,25 @@ namespace StarLevelSystem.Data
         }
 
         private static Coroutine runningAttributeUpdate;
+
+        // The level settings as the file wrote them, taken before ApplyLevelupGenerators expands generators into the
+        // chance tables of the live copy. Editors save from this: saving the live copy wrote every expansion back over the
+        // hand-written table it had replaced, so removing a generator later could no longer bring that table back. Null
+        // until the first load, when the live settings are still the untouched defaults.
+        internal static DataObjects.CreatureLevelSettings AuthoredLevelSettings { get; private set; }
+
+        // A deep copy through the file's own yaml format, so it holds exactly what a save would write.
+        private static DataObjects.CreatureLevelSettings CopyOf(DataObjects.CreatureLevelSettings settings) {
+            if (settings == null) { return null; }
+            try {
+                // LevelSettings is still unassigned during the first load, which runs from inside its registration.
+                YamlFormat format = YamlConfigManager.LevelSettings?.EffectiveFormat ?? YamlFormat.Default;
+                return format.Deserializer.Deserialize<DataObjects.CreatureLevelSettings>(format.Serializer.Serialize(settings));
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not keep a copy of the level settings as written; the config panel will save the expanded curves: {e.Message}");
+                return null;
+            }
+        }
 
         // Reports settings that load fine but cannot do what was meant. Runs once per apply, so these show up
         // when the file is loaded rather than on every spawn that reads them.

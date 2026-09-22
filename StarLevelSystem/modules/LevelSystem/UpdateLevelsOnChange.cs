@@ -14,11 +14,17 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class UpdateLevelsOnChange {
 
+        private static Coroutine pendingLevelPass;
+
         public static void ModifyLoadedCreatureLevels(object s, EventArgs e) {
             // Do not run before the area is loaded
-            if (Player.m_localPlayer == null) { return; }
+            if (Player.m_localPlayer == null || ZNetScene.instance == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            TaskRunner.Run().StartCoroutine(ModifyLoadedCreaturesLevels());
+            // Dragging a cap slider raises one change per step, and each pass queues corrections that stick. Restart the
+            // wait on every change so one pass walks the creatures once the value has settled, instead of one pass per
+            // intermediate cap running over the same creatures at once.
+            if (pendingLevelPass != null) { TaskRunner.Run().StopCoroutine(pendingLevelPass); }
+            pendingLevelPass = TaskRunner.Run().StartCoroutine(ModifyLoadedCreaturesLevels());
         }
 
         public static void UpdateFishMaxLevel() {
@@ -35,26 +41,30 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static IEnumerator ModifyLoadedCreaturesLevels() {
+            // Realtime: a singleplayer pause (where the config panel opens) stops scaled time.
+            yield return new WaitForSecondsRealtime(1f);
             int updated = 0;
-            IEnumerable<GameObject> creatures = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<Character>() != null || obj.GetComponent<Humanoid>());
-            foreach (GameObject creature in creatures) {
+            // A snapshot, since the walk spans frames and creatures come and go meanwhile.
+            List<Character> creatures = new List<Character>(Character.GetAllCharacters());
+            foreach (Character chara in creatures) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
                     yield return new WaitForEndOfFrame();
                     Physics.SyncTransforms();
                 }
-                if (creature == null) { continue; }
-                Character chara = creature.GetComponent<Character>();
-                if (chara == null) { chara = creature.GetComponent<Humanoid>(); }
-                if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
+                if (chara == null || chara.IsPlayer() || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
 
-                if (chara.GetLevel() <= ValConfig.MaxLevel.Value) { continue; }
+                // Only creatures the over-level correction would act on: the same gate and the same bound it uses, so a
+                // creature sitting legitimately at its cap is left alone.
+                if (LevelSelection.OverLevelRerollEnabled(chara) == false) { continue; }
+                LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
+                if (chara.GetLevel() <= LevelSelection.GetMaxCreatureLevel(chara, creatureSettings, biomeSettings, biome)) { continue; }
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
 
                 CreatureSetupControl.CreatureSetup(chara, cce.Level);
                 //LevelUI.InvalidateCacheEntry(chara);
             }
-            yield break;
+            pendingLevelPass = null;
         }
 
         public static void UpdateTreeSizeOnConfigChange(object s, EventArgs e) {

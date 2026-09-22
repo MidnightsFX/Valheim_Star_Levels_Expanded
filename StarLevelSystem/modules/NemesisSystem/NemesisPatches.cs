@@ -3,6 +3,7 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.LevelSystem;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -37,7 +38,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 Logger.LogNemesis($"Rolling for potential Nemesis boss creation {roll} <= {NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance}");
                 if (roll > NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance) { return; }
 
-                int level = Mathf.Min(ValConfig.MaxLevel.Value, Mathf.RoundToInt(killer.m_level * UnityEngine.Random.Range(NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMinLevelBonus, NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMaxLevelBonus)));
+                // The nemesis is spawned as a boss, so it is bounded by the boss cap it will be measured against once it
+                // exists - the bare MaxLevel is a star count and is not that bound.
+                LevelSelection.SelectCreatureBiomeSettings(killer.gameObject, out _, out CreatureSpecificSetting killerSettings, out BiomeSpecificSetting killerBiomeSettings, out Heightmap.Biome killerBiome);
+                int maxLevel = LevelSelection.GetMaxCreatureLevel(killer, killerSettings, killerBiomeSettings, killerBiome, asBoss: true);
+                int level = Mathf.Min(maxLevel, Mathf.RoundToInt(killer.m_level * UnityEngine.Random.Range(NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMinLevelBonus, NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMaxLevelBonus)));
 
                 NemesisMiniboss mb = new NemesisMiniboss();
                 mb.BossSpawn = new NemesisSpawn() {

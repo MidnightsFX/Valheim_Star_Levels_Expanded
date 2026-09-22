@@ -22,14 +22,33 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
             if (cacheValid == false) { RebuildCache(); }
 
-            if (CurrentGlobalKeyConditionalLevelup.TryGetValue(biome, out SortedDictionary<int, float> gen)) { return gen; }
+            if (CurrentGlobalKeyConditionalLevelup.TryGetValue(EntryBiome(biome), out SortedDictionary<int, float> gen)) { return gen; }
             return null;
         }
 
         // NightMultiplier of the generators behind GetConditionalLevelupChance for this biome, 1 when none apply.
         internal static float GetConditionalNightMultiplier(Heightmap.Biome biome) {
             if (GetConditionalLevelupChance(biome) == null) { return 1f; }
-            return resolvedByBiome.TryGetValue(biome, out List<LevelGenerator> generators) ? LevelGeneratorResolver.NightMultiplierOf(generators) : 1f;
+            return resolvedByBiome.TryGetValue(EntryBiome(biome), out List<LevelGenerator> generators) ? LevelGeneratorResolver.NightMultiplierOf(generators) : 1f;
+        }
+
+        // The level range (stars + 1) the active tier gives a creature in this biome: the tier replaces the biome's
+        // Min/Max as well as its curve. Only where the tier is the curve the creature rolls from - a creature entry with
+        // its own curve outranks it. Bosses are the caller's concern: MaxBossLevel caps them wherever they stand.
+        internal static bool TryGetConditionalLevelRange(Heightmap.Biome biome, CreatureSpecificSetting creature_settings, out int minLevel, out int maxLevel) {
+            minLevel = 0;
+            maxLevel = 0;
+            if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) { return false; }
+            SortedDictionary<int, float> table = GetConditionalLevelupChance(biome);
+            if (table == null || table.Count == 0) { return false; }
+            minLevel = Math.Max(1, table.Keys.First());
+            maxLevel = Math.Max(minLevel, table.Keys.Last());
+            return true;
+        }
+
+        // The biome's own entry within the active tier, else that tier's 'All' entry as its fallback.
+        private static Heightmap.Biome EntryBiome(Heightmap.Biome biome) {
+            return CurrentGlobalKeyConditionalLevelup.ContainsKey(biome) ? biome : Heightmap.Biome.All;
         }
 
         private static void RebuildCache() {

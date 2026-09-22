@@ -10,7 +10,13 @@ namespace StarLevelSystem.Data
 {
     public static class RaidsData
     {
-        public static RaidConfiguration SLE_Raid_Settings = DefaultConfiguration;
+        // Assigned in the static constructor, which runs after every field initializer. An initializer here ran before
+        // DefaultConfiguration's (initializers run in textual order), so this was null until the first config load.
+        public static RaidConfiguration SLE_Raid_Settings;
+
+        static RaidsData() {
+            SLE_Raid_Settings = DefaultConfiguration;
+        }
 
         internal static Dictionary<string, RaidDefinition> RaidsByName = new Dictionary<string, RaidDefinition>();
 

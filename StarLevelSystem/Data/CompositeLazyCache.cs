@@ -215,8 +215,8 @@ namespace StarLevelSystem.Data
             // ever having their ZDO corrected. That includes the biome settings: DetermineLevel resolves
             // them for its gate, so omitting them here made the two bounds drift (and the HUD loop the
             // invalidate/rebuild cycle) whenever a BiomeMaxLevelOverride was configured.
-            LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out _, out BiomeSpecificSetting overlevelBiomeSettings, out _);
-            int maxlevel = LevelSelection.GetMaxCreatureLevel(chara, characterEntry.CreatureSettings, overlevelBiomeSettings);
+            LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out _, out BiomeSpecificSetting overlevelBiomeSettings, out Heightmap.Biome overlevelBiome);
+            int maxlevel = LevelSelection.GetMaxCreatureLevel(chara, characterEntry.CreatureSettings, overlevelBiomeSettings, overlevelBiome);
             if (LevelSelection.OverLevelRerollEnabled(chara) && clevel > maxlevel)
             {
                 // Rebuild level?

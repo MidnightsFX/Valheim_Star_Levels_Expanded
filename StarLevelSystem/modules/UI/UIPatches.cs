@@ -208,5 +208,14 @@ namespace StarLevelSystem.modules.UI {
                 QuickConfigureTool.QueueTutorial(__instance);
             }
         }
+
+        // While the quick configure panel is open, Escape belongs to it. Skipping the pause menu's update on that frame
+        // stops the same key press from also hiding the menu underneath.
+        [HarmonyPatch(typeof(Menu), nameof(Menu.Update))]
+        public static class QuickConfigureTakesEscape {
+            public static bool Prefix() {
+                return QuickConfigureTool.TakeEscape() == false;
+            }
+        }
     }
 }

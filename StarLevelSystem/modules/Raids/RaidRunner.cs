@@ -253,12 +253,16 @@ namespace StarLevelSystem.modules.Raids {
                             levelupChance = LevelSelection.DetermineLevelupChance(null, null, rmonitor.RaidSpawnDef.CustomCreatureLevelUpChance, 1f, false, out generatorNight);
                         }
                         SortedDictionary<int, float> levelupDistanceBonus = LevelSelection.DetermineDistanceBonus(selectedSpawn);
+                        // LevelMax 0 means the entry sets no cap of its own: MaxLevel from the main .cfg applies (stars + 1).
+                        int raidLevelCap = rmonitor.RaidSpawnDef.LevelMax > 0 ? rmonitor.RaidSpawnDef.LevelMax : ValConfig.MaxLevel.Value + 1;
 
                         int spawns = 0;
                         while(spawns < rmonitor.RaidSpawnDef.SpawnGroupSize) {
                             int level = 0;
                             if (rmonitor.RaidSpawnDef.UseRaidLevelSystem) {
-                                level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1, LevelGeneratorResolver.NightFactor(generatorNight));
+                                level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), raidLevelCap, levelupChance, levelupDistanceBonus, 1, LevelGeneratorResolver.NightFactor(generatorNight));
+                                // LevelMin is a floor on the roll, under the cap.
+                                level = Mathf.Min(Mathf.Max(level, rmonitor.RaidSpawnDef.LevelMin), raidLevelCap);
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
                             } else {
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");

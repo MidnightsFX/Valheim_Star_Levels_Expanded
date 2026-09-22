@@ -221,9 +221,12 @@ namespace StarLevelSystem.common {
         private static ZPackage SendFileAsZPackage(YamlConfigFile file) {
             ZPackage package = new ZPackage();
             try {
-                package.Write(File.Exists(file.Path) ? File.ReadAllText(file.Path) : file.SerializeCurrent());
+                // What this machine applied, not what is on disk. Under KeepLastGood a file that fails to load
+                // stays on disk while the owner keeps its last good values; sending the disk handed every
+                // joining client that broken text, which each then failed to parse and ran on its own values.
+                package.Write(file.LastAppliedText ?? file.SerializeCurrent());
             } catch (Exception e) {
-                Logger.LogError($"Could not read {file.FileName} to send to peers: {e.Message}");
+                Logger.LogError($"Could not prepare {file.FileName} to send to peers: {e.Message}");
                 package.Write("");
             }
             return package;

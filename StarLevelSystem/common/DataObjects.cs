@@ -29,7 +29,31 @@ namespace StarLevelSystem.common
         // read as either a bare action scalar or a full mapping; it only claims ProtectionRule, so no
         // other config type is affected.
         public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
-        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
+        // DisableAliases as in YamlFormat: an object reused by reference would otherwise come out as &a1 / *a1 anchors,
+        // which read as corruption in the files and debug dumps this also writes.
+        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).DisableAliases().ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
+
+        // For payloads another peer sent. A message that does not parse is logged instead of thrown out of the RPC
+        // coroutine that received it, and an empty one comes back as false rather than as a null the handler then
+        // dereferences. value is null whenever this returns false.
+        internal static bool TryDeserialize<T>(string yaml, string what, out T value) where T : class {
+            value = null;
+            if (string.IsNullOrWhiteSpace(yaml)) {
+                Logger.LogWarning($"Received an empty {what}.");
+                return false;
+            }
+            try {
+                value = yamlDeserializer.Deserialize<T>(yaml);
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not read a received {what}: {e.Message}");
+                return false;
+            }
+            if (value == null) {
+                Logger.LogWarning($"Received an empty {what}.");
+                return false;
+            }
+            return true;
+        }
 
         //public static IDeserializer yamlDeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlSerializerJsonCompat = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).JsonCompatible().Build();
@@ -600,7 +624,7 @@ namespace StarLevelSystem.common
             [DefaultValue(0)]
             public int BiomeMinLevelOverride { get; set; }
 
-            [Description("Maximum level override for creatures in this biome.")]
+            [Description("Star cap for creatures in this biome, replacing MaxLevel here. Bosses use MaxBossLevel instead, and an active boss-conditional tier replaces this cap with its own range.")]
             public int BiomeMaxLevelOverride { get; set; }
 
             [Description("How strong distance effects are in this biome. 1.0 = no change, 2.0 = 2x stronger, 0.5 = 50% weaker.")]
@@ -1427,7 +1451,10 @@ namespace StarLevelSystem.common
             public Character.Faction Faction { get; set; } = Character.Faction.TrainingDummy;
             [DefaultValue(1)]
             public int LevelMin { get; set; } = 1;
-            public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;
+            // 0 = no raid-specific cap: RaidRunner uses the MaxLevel setting instead. A constant, so [DefaultValue] can
+            // match it for OmitDefaults; initializing from ValConfig.MaxLevel froze whatever MaxLevel was at parse time.
+            [DefaultValue(0)]
+            public int LevelMax { get; set; } = 0;
             [DefaultValue(true)]
             public bool UseRaidLevelSystem { get; set; } = true;
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
@@ -2188,10 +2215,12 @@ namespace StarLevelSystem.common
                 return pos.x >= MinX && pos.x < MaxX && pos.z >= MinZ && pos.z < MaxZ;
             }
 
+            // A multiplier on every level-up threshold, so it must start at the neutral 1 and only grow: the raw
+            // (ZoneLevel - 1) * bonus it used to return dropped below 1 for any bonus under 1, which made creatures in a
+            // levelled zone WEAKER, and jumped from 1 at zone level 1 to the bare bonus at zone level 2.
             internal float GetLevelBonus() {
                 if (ZoneLevel <= 1) { return 1f; }
-                float bonus = (ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
-                return bonus;
+                return 1f + (ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
             }
         }
 

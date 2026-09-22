@@ -22,12 +22,23 @@ namespace StarLevelSystem.modules.LevelSystem {
         // CompositeLazyCache.StartZOwnerCreatureRoutines MUST use this same bound. If they drift, a creature
         // sitting at exactly the maximum re-rolls a fresh random level on every cache build while nothing
         // ever writes the correction back to its ZDO - which turns the per-frame EnemyHud cache check into
-        // a permanent invalidate/rebuild loop.
-        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null) {
-            int max_level = (character != null && character.IsBoss()) ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value;
-            if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
-            if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
-            return max_level + 1;
+        // a permanent invalidate/rebuild loop. Every caller therefore passes the creature's biome too: the active
+        // conditional tier for that biome is part of the bound.
+        //
+        // Bosses are capped by MaxBossLevel wherever they stand. A biome cap or a conditional tier describes that
+        // biome's own creatures, the same way a boss curve outranks the biome and conditional curves. Everything
+        // else starts at MaxLevel, which BiomeMaxLevelOverride replaces, which the active conditional tier's range
+        // replaces. A creature entry's CreatureMaxLevelOverride beats all of them.
+        // asBoss measures a creature against the boss cap before it is one (a Nemesis promotion).
+        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, bool? asBoss = null) {
+            bool boss = asBoss ?? (character != null && character.IsBoss());
+            int max_level = (boss ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value) + 1;
+            if (boss == false) {
+                if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride + 1; }
+                if (ConditionalScaleSystem.TryGetConditionalLevelRange(biome, creature_settings, out _, out int conditionalMax)) { max_level = conditionalMax; }
+            }
+            if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride + 1; }
+            return max_level;
         }
 
         // Whether this creature's level may be rerolled/corrected when it is loaded above the maximum.
@@ -62,7 +73,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             // Already includes the +1 star offset, so this is directly comparable to the stored ZDO level.
-            int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings);
+            int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings, biome);
             //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > max_level}");
             if (clevel <= 0 || (OverLevelRerollEnabled(character) && clevel > max_level)) {
                 // Strict ZDO-owner authority: only the roller (the ZDO owner) ever rolls a level.
@@ -73,14 +84,19 @@ namespace StarLevelSystem.modules.LevelSystem {
                 }
                 // Returned level 1 is persisted to s_level by StartZOwnerCreatureRoutines, so this only happens once.
                 if (clevel <= 0 && SkipRandomLevelForTame(character)) { return 1; }
-                int min_level = 0;
-
                 // Global key based generator built levelup replaces default, if it exists, otherwise its null
                 SortedDictionary<int, float> conditional_levelup = ConditionalScaleSystem.GetConditionalLevelupChance(biome);
 
-                if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
-                if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
-                min_level += 1;
+                // Stars + 1, like the bound above, and resolved the same way: the biome floor and the active conditional
+                // tier's floor describe the biome's own creatures, so bosses skip both as they skip the matching caps.
+                int min_level = 1;
+                if (character.IsBoss() == false) {
+                    if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride + 1; }
+                    if (ConditionalScaleSystem.TryGetConditionalLevelRange(biome, creature_settings, out int conditionalMin, out _)) { min_level = conditionalMin; }
+                }
+                if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride + 1; }
+                // A floor above the cap would write a level the over-level correction then takes back on every load.
+                min_level = Math.Min(min_level, max_level);
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 float distance_level_modifier = 1;
@@ -188,14 +204,16 @@ namespace StarLevelSystem.modules.LevelSystem {
                 levelup_chances = LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance;
                 generatorNightMultiplier = 1f;
             }
-            if (customLevelup != null) {
-                levelup_chances = customLevelup;
-                generatorNightMultiplier = customNightMultiplier;
-            }
-
             if (biome_settings != null && biome_settings.CustomCreatureLevelUpChance != null) {
                 levelup_chances = biome_settings.CustomCreatureLevelUpChance;
                 generatorNightMultiplier = biome_settings.GeneratorNightMultiplier;
+            }
+            // The active conditional tier replaces the biome's curve, so it is applied after it. Biome curves include
+            // the 'All' biome's, which is merged into every biome, so the other order let one curve on 'All' switch
+            // the whole conditional system off.
+            if (customLevelup != null) {
+                levelup_chances = customLevelup;
+                generatorNightMultiplier = customNightMultiplier;
             }
             // A boss curve is a statement about bosses wherever they stand, so it outranks the biome (and conditional)
             // table of whatever biome the boss happens to be in. A creature-specific entry still wins: it names this
@@ -267,7 +285,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
                 //}
                 if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count) {
-                    selected_level = kvp.Key;
+                    // Stopping at the cap is not enough: a table that starts above it (or skips past it) would hand
+                    // back a level the caller forbade. A maxLevel of 0 or less means no cap was given.
+                    selected_level = maxLevel > 0 ? Math.Min(kvp.Key, maxLevel) : kvp.Key;
                     if (ValConfig.EnableDebugOutputLevelRolls.Value) {
                         float bonus = 0;
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
@@ -294,7 +314,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             foreach (KeyValuePair<int, float> kvp in table) {
                 index++;
                 if (kvp.Key >= maxLevel || index == table.Count) {
-                    distribution[kvp.Key] = unclaimed / 100f;
+                    // Clamped the same way the roller clamps its result.
+                    distribution[maxLevel > 0 ? Math.Min(kvp.Key, maxLevel) : kvp.Key] = unclaimed / 100f;
                     break;
                 }
                 float threshold = Mathf.Clamp(kvp.Value * nightBonus * zoneBonus, 0f, 100f);

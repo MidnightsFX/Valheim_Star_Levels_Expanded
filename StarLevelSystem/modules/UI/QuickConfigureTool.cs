@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
 
@@ -201,6 +202,7 @@ namespace StarLevelSystem.modules.UI {
             overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.45f);
             overlay.AddComponent<ConfigUI.ConfigUIInputGuard>().Hold();
             overlay.AddComponent<MainMenuGuard>();
+            overlay.AddComponent<EscapeCloser>();
 
             panel = GUIManager.Instance.CreateWoodpanel(
                 parent: overlay.transform,
@@ -294,6 +296,56 @@ namespace StarLevelSystem.modules.UI {
             ClosePanel();
         }
 
+        // Escape (or the gamepad's back button) closes the topmost thing: the discard prompt, else the panel, which asks
+        // first when there are unsaved edits. Called every frame by the overlay and by the Menu.Update prefix in UIPatches,
+        // whichever runs first; both then report the key as taken, so the pause menu under the panel does not also act on
+        // it. Without that, Escape hid the pause menu (unpausing the game with the panel still up) and after that did
+        // nothing at all, because the panel's input block makes the menu ignore the key.
+        private static int escapeFrame = -1;
+        // Whether a text box had focus at the end of the last frame. See EditingText.
+        private static bool textFocusedLastFrame;
+
+        internal static bool TakeEscape() {
+            // The frame after one that was taken counts as taken too: a gamepad button reads as pressed until ZInput next
+            // updates (from Game.Update), which can fall on either side of the two callers, so the next frame's first
+            // caller could see the same press again.
+            if (escapeFrame >= 0 && Time.frameCount - escapeFrame <= 1) { return true; }
+            if (overlay == null) { return false; }
+            bool escape = ZInput.GetKeyDown(KeyCode.Escape) || ZInput.GetButtonDown("JoyButtonB");
+            // The pause menu also hides on the gamepad's menu button. The panel does not act on it, but the menu must not
+            // either: once hidden it cannot come back while the panel's input block is up.
+            bool menuButton = ZInput.GetButtonDown("JoyMenu");
+            if (escape == false && menuButton == false) { return false; }
+            escapeFrame = Time.frameCount;
+            // Keys that belong to something on top: the console closes itself on Escape, a text box cancels its edit.
+            if (escape == false || global::Console.IsVisible() || UnifiedPopup.IsVisible() || EditingText()) { return true; }
+            if (confirmOverlay != null) { CloseConfirm(); } else { RequestClose(); }
+            return true;
+        }
+
+        // Checked against the end of the last frame as well as now: the text box handles Escape itself from the
+        // EventSystem's update, which drops its focus the moment it cancels the edit, and that update may already have
+        // run this frame by the time the key is checked here.
+        private static bool EditingText() {
+            return textFocusedLastFrame || TextFieldFocused();
+        }
+
+        private static bool TextFieldFocused() {
+            GameObject selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            InputField field = selected != null ? selected.GetComponent<InputField>() : null;
+            return field != null && field.isFocused;
+        }
+
+        private class EscapeCloser : MonoBehaviour {
+            public void Update() {
+                TakeEscape();
+            }
+
+            public void LateUpdate() {
+                textFocusedLastFrame = TextFieldFocused();
+            }
+        }
+
         // Closing by any route finishes the first-time setup: the welcome page promises that the X is enough.
         private static void ClosePanel() {
             if (tutorialMode) {
@@ -313,6 +365,7 @@ namespace StarLevelSystem.modules.UI {
             pages = null;
             pageRoots = null;
             tutorialMode = false;
+            textFocusedLastFrame = false;
             ClearPageReferences();
         }
 
@@ -427,6 +480,20 @@ namespace StarLevelSystem.modules.UI {
             List<string> failures = new List<string>();
             List<string> warnings = new List<string>();
             try {
+                // Every YAML document is built and dry-run first (see SaveYaml): a refusal stops the save before anything
+                // has been written, instead of after the ConfigEntry writes below, which take effect as they are made.
+                pendingYaml = new List<PendingYaml>();
+                SaveLevelSettings(failures, warnings);
+                SaveModifiers(failures, warnings);
+                SaveRaids(failures, warnings);
+                SaveLoot(failures, warnings);
+                SaveNemesis(failures, warnings);
+                SaveLocationReset(failures, warnings);
+                if (failures.Count > 0) {
+                    message = string.Join(" ", failures);
+                    return false;
+                }
+
                 ValConfig.EnableDistanceLevelScalingBonus.Value = staged.enableDistance;
                 ValConfig.EnableMapRingsForDistanceBonus.Value = staged.enableDistanceOverlay;
                 ValConfig.EnableZoneScalingBonus.Value = staged.enableZone;
@@ -460,16 +527,12 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.AutoTuneBiomeStarCaps.Value = staged.biomeCapAuto;
                 ValConfig.ModifierIconDisplayStyle.Value = staged.displayStyle.ToString();
 
-                SaveLevelSettings(failures, warnings);
-                SaveModifiers(failures, warnings);
-
                 // Raids - plain BepInEx ConfigEntries; "Enable SLS Raids" is the inverse of vanilla raids.
                 ValConfig.UseVanillaRaidConfiguration.Value = !staged.enableSlsRaids;
                 ValConfig.RaidEventRate.Value = staged.raidEventRate;
                 ValConfig.ServerTimeBetweenRaidStartChecks.Value = staged.raidCheckMinutes;
                 ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
                 ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
-                SaveRaids(failures, warnings);
 
                 // Loot - the per-level scales are ConfigEntries; the distance rings are in the LootSettings YAML.
                 ValConfig.LootDropCalculationType.Value = staged.loot.style.ToString();
@@ -482,17 +545,18 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.PerLevelMineRockLootScale.Value = staged.loot.rockScale;
                 ValConfig.PerLevelDestructibleLootScale.Value = staged.loot.destructibleScale;
                 ValConfig.PerLevelBirdLootScale.Value = staged.loot.birdScale;
-                SaveLoot(failures, warnings);
 
                 // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
                 ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
-                SaveNemesis(failures, warnings);
 
                 // Location reset - the master switch and sweep budget are ConfigEntries; the rest is in the
                 // LocationResetSettings YAML.
                 ValConfig.EnableLocationReset.Value = staged.locationReset.masterSwitch;
                 ValConfig.LocationResetSweepBudgetMs.Value = staged.locationReset.sweepBudgetMs;
-                SaveLocationReset(failures, warnings);
+
+                foreach (PendingYaml doc in pendingYaml) {
+                    ApplyYaml(doc.File, doc.Yaml, doc.Label, failures, warnings);
+                }
 
                 // A remote admin's ConfigEntry writes above are local-only until Jotunn is told to push
                 // them. On a host this is a no-op.
@@ -501,6 +565,8 @@ namespace StarLevelSystem.modules.UI {
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
                 message = $"Saving failed: {e.Message}";
                 return false;
+            } finally {
+                pendingYaml = null;
             }
 
             if (failures.Count > 0) {
@@ -544,7 +610,8 @@ namespace StarLevelSystem.modules.UI {
                 Logger.LogInfo($"The server accepted {name}. {message}");
                 if (panel != null && staged != null) {
                     baseline = StagedConfig.Snapshot();
-                    SetStatus($"{name} saved on the server.", string.IsNullOrEmpty(message));
+                    // The message carries the server's warnings, including a failed disk write.
+                    SetStatus(string.IsNullOrEmpty(message) ? $"{name} saved on the server." : $"{name} saved on the server. {message}", string.IsNullOrEmpty(message));
                 }
                 return;
             }
@@ -564,8 +631,31 @@ namespace StarLevelSystem.modules.UI {
             return file.EffectiveFormat.Deserializer.Deserialize<T>(YamlConfigManager.SerializeForEdit(file, live));
         }
 
+        // A document built by a Save* step, checked and waiting for SaveStaged to apply it.
+        private struct PendingYaml {
+            internal YamlConfigFile File;
+            internal string Yaml;
+            internal string Label;
+        }
+
+        // Only set while SaveStaged runs.
+        private static List<PendingYaml> pendingYaml;
+
+        // Checked now, applied later. SaveStaged runs every Save* step before it writes any ConfigEntry, so a document
+        // refused here stops the whole save while nothing has changed yet. Off-host the server still has the final say;
+        // this dry run catches what it would refuse before the ConfigEntry changes are pushed.
         private static void SaveYaml<T>(YamlConfigFile<T> file, T value, string label, List<string> failures, List<string> warnings) where T : class {
-            ApplyYaml(file, YamlConfigManager.SerializeForEdit(file, value), label, failures, warnings);
+            string yaml = YamlConfigManager.SerializeForEdit(file, value);
+            ValidationReport report = file.DryRun(yaml, out string parseError);
+            if (parseError != null) {
+                failures.Add($"{label} were not saved: {file.FileName} was rejected because {parseError}.");
+                return;
+            }
+            if (report.HasErrors) {
+                failures.Add($"{label} were not saved: {string.Join(" ", report.Errors.ToArray())}");
+                return;
+            }
+            pendingYaml.Add(new PendingYaml { File = file, Yaml = yaml, Label = label });
         }
 
         private static void SaveLevelSettings(List<string> failures, List<string> warnings) {
@@ -579,7 +669,9 @@ namespace StarLevelSystem.modules.UI {
             Dictionary<Heightmap.Biome, int> changedCaps = staged.ChangedBiomeCaps(live);
             if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && changedCaps.Count == 0) { return; }
 
-            CreatureLevelSettings settings = CopyForEdit(YamlConfigManager.LevelSettings, live);
+            // From the settings as written, not the live copy: the live one has every generator already expanded into the
+            // chance tables, and saving it wrote those expansions over the hand-written tables in the file.
+            CreatureLevelSettings settings = CopyForEdit(YamlConfigManager.LevelSettings, LevelSystemData.AuthoredLevelSettings ?? live);
             settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
             if (curveChanged) {
                 settings.DefaultLevelupGenerators = new List<LevelGenerator> { CloneGenerator(staged.generator) };
@@ -592,8 +684,8 @@ namespace StarLevelSystem.modules.UI {
                     settings.BossLevelupGenerators = new List<LevelGenerator> { CloneGenerator(staged.bossGenerator) };
                     settings.BossLevelupGeneratorRefs = null;
                 } else {
-                    // The table is built from these generators on load, so it goes when they do; leaving it behind would
-                    // keep bosses on a curve the page says they no longer have.
+                    // With the toggle off the page shows bosses on the creature curve, so a boss table goes with the
+                    // generators; leaving it behind would keep bosses on a curve the page says they no longer have.
                     settings.BossLevelupGenerators = null;
                     settings.BossLevelupGeneratorRefs = null;
                     settings.BossCreatureLevelUpChance = null;
@@ -699,6 +791,20 @@ namespace StarLevelSystem.modules.UI {
                 && a.NightMultiplier == b.NightMultiplier;
         }
 
+        // Whether the admin changed a curve, measured against the one the page opened on. A generator the file holds
+        // inline is the curve, so any difference counts. Otherwise the page's generator is only a seed whose range
+        // follows the star sliders, and that range moving on its own is a cap change: counting it as a curve edit wrote
+        // the seed over the hand-written table (or referenced generators) the world actually rolls from, so moving Max
+        // stars alone made high-star creatures several times more common.
+        private static bool GeneratorEdited(LevelGenerator staged, LevelGenerator opened, bool openedInline) {
+            if (openedInline || staged == null || opened == null) { return GeneratorsEqual(staged, opened) == false; }
+            LevelGenerator sameRange = CloneGenerator(staged);
+            sameRange.MaxLevel = opened.MaxLevel;
+            // Max stars pulls Min down with it when it drops below; that is still the slider, not a chosen start.
+            if (staged.MinLevel == Mathf.Min(opened.MinLevel, staged.MaxLevel)) { sameRange.MinLevel = opened.MinLevel; }
+            return GeneratorsEqual(sameRange, opened) == false;
+        }
+
         private static bool SetsEqual(HashSet<string> a, HashSet<string> b) {
             if (a == null || b == null) { return a == b; }
             return a.SetEquals(b);
@@ -742,11 +848,16 @@ namespace StarLevelSystem.modules.UI {
             // ValConfig.MaxLevel, and every edit on the page keeps the generator's range at the stars shown.
             public int maxStars;
             public LevelGenerator generator;
+            // Whether generator came from an inline DefaultLevelupGenerators entry. When it did not, the world rolls a
+            // hand-written table (or generators referenced by name) and generator is only a seed. See GeneratorEdited.
+            public bool generatorInline;
 
             // Bosses roll from the creature curve unless one is configured for them. bossGenerator is kept seeded either
             // way, so turning the toggle on starts from something sensible rather than from nothing.
             public bool bossCurveOn;
             public LevelGenerator bossGenerator;
+            // As generatorInline, for BossLevelupGenerators.
+            public bool bossGeneratorInline;
 
             // Table style thresholds keyed by span, values in key order, seeded from LevelupChanceTablesBySpan.
             public Dictionary<int, List<float>> tables;
@@ -847,8 +958,10 @@ namespace StarLevelSystem.modules.UI {
                 CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
                 s.generator = SeedGenerator(settings, s.maxStars);
+                s.generatorInline = settings?.DefaultLevelupGenerators?.Any(g => g != null) == true;
                 s.bossCurveOn = (settings?.BossLevelupGenerators?.Count ?? 0) > 0 || (settings?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
                 s.bossGenerator = SeedBossGenerator(settings, s.maxBossLevel, s.generator);
+                s.bossGeneratorInline = settings?.BossLevelupGenerators?.Any(g => g != null) == true;
                 s.tables = new Dictionary<int, List<float>>();
                 if (settings?.LevelupChanceTablesBySpan != null) {
                     foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in settings.LevelupChanceTablesBySpan) {
@@ -975,7 +1088,7 @@ namespace StarLevelSystem.modules.UI {
             public bool BossCurveDiffers(StagedConfig other) {
                 if (bossCurveOn != other.bossCurveOn) { return true; }
                 if (bossCurveOn == false) { return false; }
-                if (GeneratorsEqual(bossGenerator, other.bossGenerator) == false) { return true; }
+                if (GeneratorEdited(bossGenerator, other.bossGenerator, other.bossGeneratorInline)) { return true; }
                 return bossGenerator.LevelupCalculationStyle == LevelupCalculationStyle.Table
                     && TableEqual(tables, other.tables, BossTableSpan) == false;
             }
@@ -1010,7 +1123,7 @@ namespace StarLevelSystem.modules.UI {
             // Whether the curve the page shows is no longer the one the world rolls from: the generator was changed, or it
             // is Table style and the table it reads was.
             public bool CurveDiffers(StagedConfig other) {
-                if (GeneratorsEqual(generator, other.generator) == false) { return true; }
+                if (GeneratorEdited(generator, other.generator, other.generatorInline)) { return true; }
                 return generator.LevelupCalculationStyle == LevelupCalculationStyle.Table && TableEqual(tables, other.tables, TableSpan) == false;
             }
 

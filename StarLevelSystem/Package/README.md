@@ -282,6 +282,10 @@ ConditionalCreatureLevelupChance:
 Add keys from modded bosses where they belong in your progression. An entry whose key is not in the list only applies while no
 listed boss has been defeated. The tier changes as soon as a boss key is set or removed, for creatures spawned after that.
 
+The active tier replaces the biome's levelup chances and its level range: creatures there roll between the tier generators'
+`MinLevel` and `MaxLevel`, whatever `BiomeMinLevelOverride` / `BiomeMaxLevelOverride` say. An `All` entry inside a tier is the
+fallback for biomes the tier does not name. A creature entry with its own curve still wins, and bosses keep `MaxBossLevel`.
+
 ### Nemesis System
 The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
 
@@ -560,7 +564,8 @@ Below is an example of many of the details that can be configured for a given ra
     Faction: Demon                # Faction this creature will be assigned to Valid options: Players, AnimalsVeg, ForestMonsters, Undead, Demon, MountainMonsters, SeaMonsters, PlainsMonsters, Boss, MistlandsMonsters, Dverger, PlayerSpawned
     MaxSpawned: 3                 # Maximum number of this creature that can be alive (from this specific spawn group)
     SpawnGroupSize: 2             # Number of creatures to spawn at once
-    LevelMax: 3                   # Max level, if using RaidLevelSystem
+    LevelMin: 1                   # Min level, if using RaidLevelSystem: rolled levels are raised to at least this
+    LevelMax: 3                   # Max level, if using RaidLevelSystem. 0 or left out uses MaxLevel from the main config
     UseRaidLevelSystem: true      # Wether to use the default leveling system or the custom level defintion defined here
     ModifiersNotAllowed:          # Modifiers the creature can't get
     - Poison

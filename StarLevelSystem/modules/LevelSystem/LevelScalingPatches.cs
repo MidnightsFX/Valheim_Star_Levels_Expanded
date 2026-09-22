@@ -9,6 +9,12 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static class ZoneTracker {
             [HarmonyPrefix]
             static void TrackZoneDeath(Character __instance) {
+                // OnDeath also runs on every peer that plays a synced death animation (vanilla returns for non-owners
+                // inside it), which counted one kill per peer in range: count on the owner only. Tames and training
+                // dummies are not the wildlife a zone level measures - slaughtering livestock levelled up the base.
+                // Players never get here: Player.OnDeath does not call the base method.
+                if (__instance.m_nview == null || __instance.m_nview.IsValid() == false || __instance.m_nview.IsOwner() == false) { return; }
+                if (__instance.IsTamed() || __instance.m_faction == Character.Faction.TrainingDummy) { return; }
                 ZoneScaleSystem.OnCreatureKilled(__instance.transform.position);
             }
         }

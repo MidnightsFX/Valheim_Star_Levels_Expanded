@@ -82,6 +82,8 @@ namespace StarLevelSystem.modules.UI {
         private static readonly Color NemesisColor = new Color(0.8f, 0.58f, 0.95f);
         private static readonly Color InactiveColor = new Color(0.6f, 0.6f, 0.6f);
         private const string WarningColorTag = "<color=#FBBF24>";
+        // Beige, for text that sits beside a brighter label rather than replacing it.
+        private const string MutedColorTag = "<color=#CDBE91>";
 
         private static Sprite DistanceExample;
         private static Sprite ZoneExample;
@@ -837,17 +839,17 @@ namespace StarLevelSystem.modules.UI {
 
             List<GameObject> left = new List<GameObject> {
                 ConfigUI.AddHeaderRow(parent, LeftColWidth, "Creature modifiers"),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, 6f, staged.maxMajor, true, v => staged.maxMajor = (int)v), Tip(ValConfig.MaxMajorModifiersPerCreature)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, 6f, staged.maxMinor, true, v => staged.maxMinor = (int)v), Tip(ValConfig.MaxMinorModifiersPerCreature)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, Mathf.Max(6f, staged.maxMajor), staged.maxMajor, true, v => staged.maxMajor = (int)v), Tip(ValConfig.MaxMajorModifiersPerCreature)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, Mathf.Max(6f, staged.maxMinor), staged.maxMinor, true, v => staged.maxMinor = (int)v), Tip(ValConfig.MaxMinorModifiersPerCreature)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v), Tip(ValConfig.ChanceMajorModifier)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v), Tip(ValConfig.ChanceMinorModifier)),
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Limit modifier count to star level", staged.limitToStarLevel, v => staged.limitToStarLevel = v), Tip(ValConfig.LimitCreatureModifiersToCreatureStarLevel)),
                 ConfigUI.AddHeaderRow(parent, LeftColWidth, "Boss modifiers"),
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Bosses can have modifiers", staged.enableBossMods, v => staged.enableBossMods = v), Tip(ValConfig.EnableBossModifiers)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v), Tip(ValConfig.ChanceOfBossModifier)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, 6f, staged.maxBossMods, true, v => staged.maxBossMods = (int)v), Tip(ValConfig.MaxBossModifiersPerBoss)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, Mathf.Max(6f, staged.maxBossMods), staged.maxBossMods, true, v => staged.maxBossMods = (int)v), Tip(ValConfig.MaxBossModifiersPerBoss)),
                 ConfigUI.AddHeaderRow(parent, LeftColWidth, "Modifier display"),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max name prefixes", 0f, 6f, staged.prefixLimit, true, v => staged.prefixLimit = (int)v), Tip(ValConfig.LimitCreatureModifierPrefixes)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max name prefixes", 0f, Mathf.Max(6f, staged.prefixLimit), staged.prefixLimit, true, v => staged.prefixLimit = (int)v), Tip(ValConfig.LimitCreatureModifierPrefixes)),
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Minor modifiers first in name", staged.minorFirst, v => staged.minorFirst = v), Tip(ValConfig.MinorModifiersFirstInName)),
                 WithTip(ConfigUI.AddEnumCycleRow(parent, LeftColWidth, LeftLabelWidth, 150f, "Icon display style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i), Tip(ValConfig.ModifierIconDisplayStyle)),
             };
@@ -876,7 +878,14 @@ namespace StarLevelSystem.modules.UI {
             foreach (string name in dict.Keys.OrderBy(n => n)) {
                 string modName = name;   // capture for the closure
                 string desc = ModifierDescriptions.TryGetValue(modName, out string d) ? d : "";
-                AddToggleEntry(content, width, 48f, Prettify(modName), desc, enabled.Contains(modName), on => {
+                // Keyed by the internal name, which is what Modifiers.yaml holds, with the name creatures carry in game
+                // beside it: an admin who has only seen "Burning" in a creature's name would not otherwise find "Fire".
+                string label = Prettify(modName);
+                string inGame = ModifierInGameName(modName);
+                if (inGame.Length > 0 && string.Equals(inGame, label, StringComparison.OrdinalIgnoreCase) == false) {
+                    label += $"  {MutedColorTag}({inGame})</color>";
+                }
+                AddToggleEntry(content, width, 48f, label, desc, enabled.Contains(modName), on => {
                     if (on) { staged.modifierOn[type].Add(modName); }
                     else { staged.modifierOn[type].Remove(modName); }
                 });
@@ -894,6 +903,22 @@ namespace StarLevelSystem.modules.UI {
 
         // "ResistPierce" -> "Resist Pierce", "BossSummoner" -> "Boss Summoner".
         private static string Prettify(string name) => Regex.Replace(name, "(\\B[A-Z])", " $1");
+
+        // What this modifier calls a creature in game: the prefix it puts in front of the name ("Burning Greydwarf"), or
+        // its suffix for one that only ever takes a suffix ("Greydwarf of the Flames"). Localized, so it reads as it does
+        // in the world. Empty when the modifier names nothing, or when the language file has no translation for its
+        // token - the list then shows the internal name on its own rather than a raw token.
+        private static string ModifierInGameName(string modName) {
+            if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modName, out CreatureModifierDefinition def) == false || def == null) { return ""; }
+            string token = def.NamingConvention == NameSelectionStyle.RandomLast ? def.NameSuffix : def.NamePrefix;
+            if (string.IsNullOrEmpty(token)) { token = def.NameSuffix; }
+            if (string.IsNullOrEmpty(token)) { return ""; }
+
+            string localized = ConfigUI.L(token);
+            // Valheim answers with "[token]" for a token it has no translation for.
+            if (string.IsNullOrEmpty(localized) || localized.StartsWith("[") || localized.Contains("$")) { return ""; }
+            return localized;
+        }
 
         // ------------------------------------------------------------------------------------------------
         //  Nemesis
@@ -916,18 +941,18 @@ namespace StarLevelSystem.modules.UI {
             ConfigUI.CreateScroll(parent, 0f, scrollY, LeftW, scrollH, out Transform left, out float lw);
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Nemesis settings"));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "Enable Nemesis system", staged.enableNemesis, v => staged.enableNemesis = v), Tip(ValConfig.EnableNemesisSystem)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Action cooldown (sec)", 0f, 120f, staged.nemCooldown, false, v => staged.nemCooldown = v), Tip("NemesisActionCooldownSeconds", "Seconds every Nemesis action waits after any one of them fires, level changes and spawns alike.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Influence radius (m)", 0f, 1000f, staged.nemInfluence, false, v => staged.nemInfluence = v), Tip("NemesisInfluenceRadius", "How far from you a creature can spawn and still trigger a Nemesis spawn. Level changes ignore this.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Min spawn distance (m)", 0f, 500f, staged.nemMinSpawn, false, v => staged.nemMinSpawn = v), Tip("NemesisMinSpawnDistance", "Nemesis spawns are kept at least this far away, so an ambush never lands in your lap.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Action cooldown (sec)", Mathf.Min(0f, staged.nemCooldown), Mathf.Max(120f, staged.nemCooldown), staged.nemCooldown, false, v => staged.nemCooldown = v), Tip("NemesisActionCooldownSeconds", "Seconds every Nemesis action waits after any one of them fires, level changes and spawns alike.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Influence radius (m)", Mathf.Min(0f, staged.nemInfluence), Mathf.Max(1000f, staged.nemInfluence), staged.nemInfluence, false, v => staged.nemInfluence = v), Tip("NemesisInfluenceRadius", "How far from you a creature can spawn and still trigger a Nemesis spawn. Level changes ignore this.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Min spawn distance (m)", Mathf.Min(0f, staged.nemMinSpawn), Mathf.Max(500f, staged.nemMinSpawn), staged.nemMinSpawn, false, v => staged.nemMinSpawn = v), Tip("NemesisMinSpawnDistance", "Nemesis spawns are kept at least this far away, so an ambush never lands in your lap.")));
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Score system"));
             ScrollRow(left, lw, 96f, t => ConfigUI.AddTextRow(t, lw, 96f, "$sls_cfg_nemesis_score_help", 12, GUIManager.Instance.ValheimBeige));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Neutral score", 0f, 20000f, staged.neutralScore, true, v => { staged.neutralScore = v; RefreshNemesisDescriptions(); }), Tip("NeutralScore", "The score everything drifts back towards. Actions with a threshold above it make the world harder, below it easier.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Min score", 0f, 20000f, staged.minScore, true, v => { staged.minScore = v; RefreshNemesisDescriptions(); }), Tip("MinScore", "The lowest the score can fall. A threshold outside the Min to Max range never fires.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Max score", 0f, 20000f, staged.maxScore, true, v => { staged.maxScore = v; RefreshNemesisDescriptions(); }), Tip("MaxScore", "The highest the score can climb. A threshold outside the Min to Max range never fires.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Decay per update", 0f, 2000f, staged.decayPerUpdate, true, v => staged.decayPerUpdate = v), Tip("DecayPerUpdate", "How far the score moves back towards Neutral on every update, so a good or bad run fades with time.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Score interval (sec)", 1f, 120f, staged.scoreInterval, true, v => staged.scoreInterval = v), Tip("ScoreIntervalSeconds", "Seconds between score recalculations. Damage dealt and taken are averaged over the last few of these.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Boss-kill bonus", 0f, 5000f, staged.bossKillBonus, true, v => staged.bossKillBonus = v), Tip("BossKillBonus", "Score gained for killing a boss near you, which pushes the world towards its harder actions.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Death score reduction", 0f, 5000f, staged.deathReduction, true, v => staged.deathReduction = v), Tip("DeathScoreReduction", "Score lost when you die. A large value makes the system ease off quickly after a bad fight.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Neutral score", Mathf.Min(0f, staged.neutralScore), Mathf.Max(20000f, staged.neutralScore), staged.neutralScore, IsWhole(staged.neutralScore), v => { staged.neutralScore = v; RefreshNemesisDescriptions(); }), Tip("NeutralScore", "The score everything drifts back towards. Actions with a threshold above it make the world harder, below it easier.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Min score", Mathf.Min(0f, staged.minScore), Mathf.Max(20000f, staged.minScore), staged.minScore, IsWhole(staged.minScore), v => { staged.minScore = v; RefreshNemesisDescriptions(); }), Tip("MinScore", "The lowest the score can fall. A threshold outside the Min to Max range never fires.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Max score", Mathf.Min(0f, staged.maxScore), Mathf.Max(20000f, staged.maxScore), staged.maxScore, IsWhole(staged.maxScore), v => { staged.maxScore = v; RefreshNemesisDescriptions(); }), Tip("MaxScore", "The highest the score can climb. A threshold outside the Min to Max range never fires.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Decay per update", Mathf.Min(0f, staged.decayPerUpdate), Mathf.Max(2000f, staged.decayPerUpdate), staged.decayPerUpdate, IsWhole(staged.decayPerUpdate), v => staged.decayPerUpdate = v), Tip("DecayPerUpdate", "How far the score moves back towards Neutral on every update, so a good or bad run fades with time.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Score interval (sec)", Mathf.Min(1f, staged.scoreInterval), Mathf.Max(120f, staged.scoreInterval), staged.scoreInterval, IsWhole(staged.scoreInterval), v => staged.scoreInterval = v), Tip("ScoreIntervalSeconds", "Seconds between score recalculations. Damage dealt and taken are averaged over the last few of these.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Boss-kill bonus", Mathf.Min(0f, staged.bossKillBonus), Mathf.Max(5000f, staged.bossKillBonus), staged.bossKillBonus, IsWhole(staged.bossKillBonus), v => staged.bossKillBonus = v), Tip("BossKillBonus", "Score gained for killing a boss near you, which pushes the world towards its harder actions.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Death score reduction", Mathf.Min(0f, staged.deathReduction), Mathf.Max(5000f, staged.deathReduction), staged.deathReduction, IsWhole(staged.deathReduction), v => staged.deathReduction = v), Tip("DeathScoreReduction", "Score lost when you die. A large value makes the system ease off quickly after a bad fight.")));
 
             // Right - every configured action, in the order they are checked.
             ConfigUI.CreateScroll(parent, RightX, scrollY, rightW, scrollH, out Transform right, out float rw);
@@ -965,7 +990,7 @@ namespace StarLevelSystem.modules.UI {
             ConfigUI.PositionRow(chance, TextX, SliderTop);
             // Same range as the score sliders, widened if the file already holds something outside it, so building the page
             // never clamps a configured value.
-            GameObject threshold = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "Score threshold", Mathf.Min(0f, action.Threshold), Mathf.Max(20000f, action.Threshold), action.Threshold, true, v => { action.Threshold = v; RefreshNemesisDescriptions(); }), Tip("ScoreThreshold", "The score this action needs. Above Neutral it fires when you are at or above it, below Neutral when you are at or below it."));
+            GameObject threshold = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "Score threshold", Mathf.Min(0f, action.Threshold), Mathf.Max(20000f, action.Threshold), action.Threshold, IsWhole(action.Threshold), v => { action.Threshold = v; RefreshNemesisDescriptions(); }), Tip("ScoreThreshold", "The score this action needs. Above Neutral it fires when you are at or above it, below Neutral when you are at or below it."));
             ConfigUI.PositionRow(threshold, TextX, SliderTop + RowHeight);
             GameObject level = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "Level bonus", Mathf.Min(-10, action.LevelBonus), Mathf.Max(10, action.LevelBonus), action.LevelBonus, true, v => { action.LevelBonus = (int)v; RefreshNemesisDescriptions(); }), Tip("LevelBonus", "Levels added to the creatures this action touches. Negative values take levels away."));
             ConfigUI.PositionRow(level, TextX, SliderTop + 2 * RowHeight);

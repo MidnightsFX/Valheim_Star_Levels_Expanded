@@ -1,4 +1,24 @@
 
+**1.18.0**
+ ---
+ ```
+- MaxBossLevel now caps bosses everywhere. Bosses above it are corrected on load.
+- Boss-conditional tiers now set the biome's level range, fall back to the tier's All entry, and are no longer overridden by a biome curve
+- Raid LevelMin is now applied; LevelMax 0 or left out uses MaxLevel
+- NearBaseOnly raids now work on dedicated servers
+- Fixed a ColorSettings.yaml missing DefaultLevelColorization breaking creature setup
+- Fixed Nemesis minibosses being capped a star low and ignoring MaxBossLevel
+- Fixed zone kills counting tames, training dummies and once per nearby player
+- Fixed a misspelled Faction putting raid and Nemesis creatures on the player's side
+- Fixed rolled levels going over the cap when a chance table starts above it
+- Changing MaxLevel or MaxBossLevel re-checks loaded creatures once, leaving those at their cap alone
+- Clients pick up edits to their own client-side settings without reconnecting
+- Quick configure 
+	- keeps hand-written level curves: moving Max stars alone no longer replaces one, and saves no longer overwrite them
+	- lists each modifier's in-game name next to its config name
+	- saves check every file before writing, Escape closes the panel, sliders keep out-of-range values, decimals work on comma locales
+ ```
+
 **1.17.0**
  ---
  ```

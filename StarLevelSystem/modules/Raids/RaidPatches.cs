@@ -66,6 +66,17 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // The server picks near-base raids but cannot see the pieces around a player on a dedicated server, so the
+        // client counts them for it. See RaidControl.GetPlayerBaseValue.
+        [HarmonyPatch(typeof(Player), nameof(Player.UpdateBaseValue))]
+        internal static class PublishRaidBaseValue {
+            public static void Postfix(Player __instance) {
+                // Only runs for the local player. Vanilla recounts every 2s and zeroes the timer when it does.
+                if (__instance.m_baseValueUpdateTimer != 0f) { return; }
+                RaidControl.PublishLocalBaseValue(__instance);
+            }
+        }
+
         // Maybe we just disable this whole class?
         [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.Awake))]
         public static class RandEventSystemAwakePatch {

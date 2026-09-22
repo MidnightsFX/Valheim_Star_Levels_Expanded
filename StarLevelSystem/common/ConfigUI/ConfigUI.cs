@@ -1,6 +1,7 @@
 using Jotunn.Managers;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -298,8 +299,9 @@ namespace StarLevelSystem.common {
 
         // --- Numbers ----------------------------------------------------------------------------------
 
+        // Invariant, matching how typed values are parsed: under a comma-decimal culture this showed "1,50".
         internal static string Fmt(float v, bool whole) {
-            return whole ? ((int)Mathf.Round(v)).ToString() : v.ToString("0.00");
+            return whole ? ((int)Mathf.Round(v)).ToString(CultureInfo.InvariantCulture) : v.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
         // Jotunn has no CreateSlider, so this is hand-built out of the pieces Unity's Slider expects and
@@ -393,7 +395,9 @@ namespace StarLevelSystem.common {
             // Commit typed values on enter or focus loss: unparseable text snaps back to the slider, then
             // clamp, then normalise what is displayed.
             box.onEndEdit.AddListener(str => {
-                if (float.TryParse(str, out float v) == false) { v = slider.value; }
+                // Invariant, with a comma taken as the decimal point: Unity's decimal field accepts both, and the
+                // current culture read "1.5" on a German system (or "1,5" on an English one) as a grouped 15.
+                if (float.TryParse(str.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float v) == false) { v = slider.value; }
                 v = Mathf.Clamp(v, min, max);
                 if (wholeNumbers) { v = Mathf.Round(v); }
                 box.SetTextWithoutNotify(Fmt(v, wholeNumbers));

@@ -135,10 +135,10 @@ namespace StarLevelSystem.modules.UI {
             // Left column - global raid settings.
             List<GameObject> left = new List<GameObject> {
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true), Tip("UseVanillaRaidConfiguration", "On, StarLevelSystem runs its own raids. Off, Valheim's own raid events are used instead and nothing on this page applies.")),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", 0.1f, 10f, staged.raidEventRate, false, v => staged.raidEventRate = v), Tip(ValConfig.RaidEventRate)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", Mathf.Min(0.1f, staged.raidEventRate), Mathf.Max(10f, staged.raidEventRate), staged.raidEventRate, false, v => staged.raidEventRate = v), Tip(ValConfig.RaidEventRate)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v), Tip(ValConfig.ServerTimeBetweenRaidStartChecks)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v), Tip(ValConfig.MaxRaidAttemptsPerPlayer)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", 1f, 20f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v), Tip(ValConfig.MaxActiveRaids)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", Mathf.Min(1f, staged.maxActiveRaids), Mathf.Max(20f, staged.maxActiveRaids), staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v), Tip(ValConfig.MaxActiveRaids)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid creature density", MinRaidDensity, MaxRaidDensity, staged.raidDensity, true, v => OnRaidDensityChanged((int)v)),
                     Tip("RaidCreatureDensity", $"How crowded every raid is, {MinRaidDensity} to {MaxRaidDensity}. {DefaultRaidDensity} is the numbers RaidSettings.yaml holds now; " +
                         $"{MinRaidDensity} thins every raid back to roughly vanilla sized and {MaxRaidDensity} is not meant to be survivable. " +
@@ -246,7 +246,7 @@ namespace StarLevelSystem.modules.UI {
             }, InputField.ContentType.IntegerNumber);
             WithTip(max.gameObject, Tip("MaxSpawned", "How many of this creature may be alive at once from this raid. 0 stops it spawning at all."));
             interval = ConfigUI.AddTextField(row.transform, SpawnIntervalX, 0f, SpawnFieldW + 10f, FormatInterval(spawn.Interval), text => {
-                if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value)) {
+                if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float value)) {
                     spawn.Interval = Mathf.Clamp(value, MinSpawnInterval, MaxSpawnInterval);
                 }
                 interval.SetTextWithoutNotify(FormatInterval(spawn.Interval));

@@ -15,13 +15,15 @@ namespace StarLevelSystem.modules
 {
     public static class Colorization
     {
-        public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;
+        // Declared first: static initializers run in textual order, and the live settings below start out pointing at
+        // this. The other way round left them null until the first config load.
         internal static CreatureColorizationSettings defaultColorizationSettings = new CreatureColorizationSettings()
         {
             CharacterSpecificColorization = ColorizationData.characterColorizationData,
             DefaultLevelColorization = ColorizationData.defaultColorizationData,
             CharacterColorGenerators = ColorizationData.defaultColorGenerators,
         };
+        public static CreatureColorizationSettings creatureColorizationSettings = defaultColorizationSettings;
 
         public static List<Color> mapRingColors = new List<Color>();
         public static List<Color> zoneOverlayColors = new List<Color>();
@@ -61,6 +63,10 @@ namespace StarLevelSystem.modules
         // whatever produced them.
         internal static void ApplyLoaded(DataObjects.CreatureColorizationSettings parsed) {
             {
+                // A file without a DefaultLevelColorization section parses it as null. The merge below then threw after
+                // the settings were already assigned, leaving a null colour table that broke every creature setup for
+                // the rest of the session. The header promises a partial file falls back to the built-in colours.
+                if (parsed.DefaultLevelColorization == null) { parsed.DefaultLevelColorization = new Dictionary<int, ColorDef>(); }
                 creatureColorizationSettings = parsed;
                 // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
                 foreach (var entry in defaultColorizationSettings.DefaultLevelColorization) {

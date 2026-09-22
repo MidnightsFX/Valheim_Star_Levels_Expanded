@@ -199,6 +199,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
                         }
                         // Locally remove (reliable reference removal on the machine that selected it)
                         NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Remove(nemBoss);
+                        // A host owns the file, so persist the removal as a dedicated server does in ApplyNemesisBossRemove.
+                        // That also moves the config sync off the text this list was loaded from, which still names the boss.
+                        if (ZNet.instance != null && ZNet.instance.IsServer()) {
+                            YamlConfigManager.WriteCurrentToDisk(YamlConfigManager.NemesisSettings);
+                        }
                     } else {
                         continue;
                     }

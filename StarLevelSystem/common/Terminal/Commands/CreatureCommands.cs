@@ -64,8 +64,8 @@ namespace StarLevelSystem.common
             // Clamp to this creature's own maximum, otherwise OverLevelCreaturesGetRerolledOnLoad
             // would reroll the level away on the next load.
             LevelSelection.SelectCreatureBiomeSettings(closest.gameObject, out string creatureName,
-                out DataObjects.CreatureSpecificSetting creatureSettings, out DataObjects.BiomeSpecificSetting biomeSettings, out _);
-            int maxLevel = LevelSelection.GetMaxCreatureLevel(closest, creatureSettings, biomeSettings);
+                out DataObjects.CreatureSpecificSetting creatureSettings, out DataObjects.BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
+            int maxLevel = LevelSelection.GetMaxCreatureLevel(closest, creatureSettings, biomeSettings, biome);
             if (level > maxLevel)
             {
                 args.Output.Warning($"{level} is above {creatureName}'s maximum level of {maxLevel}; using {maxLevel}.");

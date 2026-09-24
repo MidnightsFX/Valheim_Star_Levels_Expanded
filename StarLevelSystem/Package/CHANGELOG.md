@@ -1,4 +1,12 @@
 
+**1.18.2**
+ ---
+ ```
+- API attribute changes (base, per-level, damage received, flat damage bonus) are now saved on the creature, so they survive reloads, ownership changes and config reloads, and every player sees them
+- New API SetCreatureSpawnManaged: SLS still scales the creature, but never deletes it, copies it or changes its level
+- Spawn-rate removals now happen at the end of the frame, like disabled-spawn removals
+ ```
+
 **1.18.1**
  ---
  ```

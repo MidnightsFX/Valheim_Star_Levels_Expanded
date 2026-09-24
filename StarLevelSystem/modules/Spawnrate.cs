@@ -19,6 +19,10 @@ namespace StarLevelSystem.modules
             if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && chara.IsBoss()) {
                 return false;
             }
+            // Another mod spawned this creature deliberately and owns whether it exists (see SetCreatureSpawnManaged).
+            if (CompositeLazyCache.IsSpawnManaged(chara)) {
+                return false;
+            }
             bool isTame = chara.IsTamed();
             if (isTame && ValConfig.SpawnMultiplicationAppliesToTames.Value == false) {
                 return false;
@@ -75,7 +79,11 @@ namespace StarLevelSystem.modules
                 // Chance to reduce spawnrate, if triggered this creature will be queued for deletion
                 if (randv >= spawnrate) {
                     if (Logger.IsDebugEnabled) { Logger.LogDebug($"Spawn Reducer| Selecting {ccEntry.RefCreatureName} for deletion."); }
-                    ZNetScene.instance.Destroy(chara.gameObject);
+                    // Deferred to the end of the frame like the disabled-spawn path: this can run in the frame the
+                    // creature was instantiated (InitialDelayBeforeSetup 0), where destroying it immediately breaks
+                    // vanilla setup, and where the mod that spawned it may not have marked it spawn-managed yet.
+                    // Tames were already gated above (SpawnMultiplicationAppliesToTames), so they are not spared again.
+                    TaskRunner.Run().StartCoroutine(DestroyCoroutine(chara.gameObject, spareTames: false));
                     return true;
                 }
             }
@@ -85,12 +93,15 @@ namespace StarLevelSystem.modules
 
         // Delayed destruction of an object so that it can finish being setup- otherwise there are lots of vanilla scripts that explode
         // Since apparently instanciating and destroying something in the same frame breaks vanilla assumptions :sigh:
-        internal static IEnumerator DestroyCoroutine(GameObject go) {
+        internal static IEnumerator DestroyCoroutine(GameObject go, bool spareTames = true) {
             yield return new WaitForEndOfFrame();
             if (go != null) {
                 // recheck tame status | TODO: Config to override allowing deletion of tames?
                 Character chara = go.GetComponent<Character>();
-                if (chara != null && chara.m_tamed) { yield break; }
+                if (spareTames && chara != null && chara.m_tamed) { yield break; }
+                // Re-checked here as well as where the deletion was chosen: a mod may mark its creature later in
+                // the frame it was instantiated in.
+                if (chara != null && CompositeLazyCache.IsSpawnManaged(chara)) { yield break; }
                 // Remove drops before destroying the creature to ensure that we don't litter drops everywhere
                 CharacterDrop cd = go.GetComponent<CharacterDrop>();
                 if (cd != null) { GameObject.Destroy(cd); }

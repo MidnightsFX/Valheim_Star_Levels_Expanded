@@ -51,6 +51,41 @@ StarLevelSystem.API.AddNewModifier(
 );
 ```
 
+### Attribute changes are saved on the creature
+
+The attribute setters (`SetCreatureBaseAttribute`, `SetCreaturePerLevelAttribute`,
+`SetCreatureDamageReceivedModifier`, `SetCreatureFlatDamageBonus` and their `SetAll...` forms) are
+saved on the creature's ZDO when the call comes from the machine that **owns** the creature. Every
+later rebuild of its stats reapplies them: another player's game, the next owner after a handoff,
+a reload, a Star Level System config reload. Set a value once, when you spawn or first adjust the
+creature, and it sticks.
+
+A call from a machine that does not own the creature changes only that machine's view, as before.
+
+Saved damage-received and flat damage-bonus values are the base the creature's own modifiers stack
+on after a rebuild: a Resist modifier still lowers a saved resistance, and Flame still adds to a
+saved fire bonus.
+
+### Creatures your mod spawns
+
+If your mod spawns a creature on purpose and its existence and level matter (a quest or bounty
+target, say), mark it spawn-managed on the machine that owns it:
+
+```csharp
+StarLevelSystem.API.SetCreatureSpawnManaged(creature, true);
+```
+
+Star Level System keeps scaling a spawn-managed creature (stats, modifiers, colour, HUD), but it
+never:
+- deletes it or spawns copies of it for a biome or creature spawn-rate modifier;
+- deletes it because its spawns are disabled in that biome (by day or at night);
+- rerolls or clamps its level when it is above the configured maximum.
+
+Call it in the frame you spawn the creature, since Star Level System's own setup waits
+`InitialDelayBeforeSetup` first. Call it again when the creature loads if it may have been spawned
+before your mod made this call. Guard on `SupportsSpawnManaged`: an older Star Level System returns
+`false`.
+
 ---
 
 ## Location Resets

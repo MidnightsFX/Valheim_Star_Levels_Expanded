@@ -184,8 +184,9 @@ namespace StarLevelSystem.Data
             if (IsZOwner(chara) == false) { return; }
             if (characterEntry.Level == 0) { characterEntry.Level = 1; }
 
-            // Destroy character if its selected for deletion
-            if (characterEntry.ShouldDelete && chara.m_tamed == false) {
+            // Destroy character if its selected for deletion. A creature another mod manages the spawn of is
+            // never removed by a disabled-spawn rule: that mod put it there on purpose (a bounty target).
+            if (characterEntry.ShouldDelete && chara.m_tamed == false && IsSpawnManaged(chara) == false) {
                 TaskRunner.Run().StartCoroutine(Spawnrate.DestroyCoroutine(chara.gameObject));
                 return;
             }
@@ -345,44 +346,62 @@ namespace StarLevelSystem.Data
         // and 1.5x damage after a server restart. Stored like SLS_MODSV2; null or empty dictionaries write nothing.
         public static void SetStatOverrides(Character chara, Dictionary<CreatureBaseAttribute, float> baseStats, Dictionary<CreaturePerLevelAttribute, float> perLevelStats)
         {
-            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { return; }
+            PersistStatOverrides(chara, SLS_BASE_STATS, baseStats);
+            PersistStatOverrides(chara, SLS_PERLEVEL_STATS, perLevelStats);
+        }
+
+        // Merges one stat dictionary into what the creature's ZDO already carries under `key` and writes the result
+        // back, so the next cache build on any peer applies it again. Merged rather than replaced so an API caller
+        // setting one attribute keeps the others a spawn definition (or an earlier call) stored. Only the ZDO owner
+        // writes: a non-owner's write would be overwritten by the owner's next sync anyway, and would fight it.
+        public static void PersistStatOverrides<TKey>(Character chara, string key, Dictionary<TKey, float> values)
+        {
+            if (values == null || values.Count == 0) { return; }
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null || IsZOwner(chara) == false) { return; }
             ZDO zdo = chara.m_nview.GetZDO();
-            if (baseStats != null && baseStats.Count > 0) {
-                zdo.Set(SLS_BASE_STATS, DataObjects.yamlSerializerJsonCompat.Serialize(baseStats));
-            }
-            if (perLevelStats != null && perLevelStats.Count > 0) {
-                zdo.Set(SLS_PERLEVEL_STATS, DataObjects.yamlSerializerJsonCompat.Serialize(perLevelStats));
+            Dictionary<TKey, float> merged = ReadPersistedStats<TKey>(zdo, key, chara.name) ?? new Dictionary<TKey, float>();
+            foreach (KeyValuePair<TKey, float> stat in values) { merged[stat.Key] = stat.Value; }
+            zdo.Set(key, DataObjects.yamlSerializerJsonCompat.Serialize(merged));
+        }
+
+        // A value this build cannot parse is skipped with a warning rather than failing the build, which would
+        // leave the creature without a cache entry for the whole session.
+        private static Dictionary<TKey, float> ReadPersistedStats<TKey>(ZDO zdo, string key, string creatureName)
+        {
+            if (zdo == null) { return null; }
+            string yaml = zdo.GetString(key, null);
+            if (string.IsNullOrEmpty(yaml)) { return null; }
+            try {
+                return DataObjects.yamlDeserializer.Deserialize<Dictionary<TKey, float>>(yaml);
+            } catch (System.Exception e) {
+                Logger.LogWarning($"Could not read the saved {key} stat overrides of {creatureName}; ignoring them. {e.Message}");
+                return null;
             }
         }
 
+        private static void ApplyPersistedStats<TKey>(ZDO zdo, string key, string creatureName, Dictionary<TKey, float> target)
+        {
+            if (target == null) { return; }
+            Dictionary<TKey, float> stats = ReadPersistedStats<TKey>(zdo, key, creatureName);
+            if (stats == null) { return; }
+            foreach (KeyValuePair<TKey, float> stat in stats) { target[stat.Key] = stat.Value; }
+        }
+
         // Merges the persisted overrides onto the biome/creature-derived dictionaries of a freshly built entry.
-        // A value this build cannot parse is skipped with a warning rather than failing the build, which would
-        // leave the creature without a cache entry for the whole session.
         private static void ApplyPersistedStatOverrides(ZDO zdo, CharacterCacheEntry entry)
         {
             if (zdo == null || entry == null) { return; }
-            string baseYaml = zdo.GetString(SLS_BASE_STATS, null);
-            if (string.IsNullOrEmpty(baseYaml) == false) {
-                try {
-                    Dictionary<CreatureBaseAttribute, float> baseStats = DataObjects.yamlDeserializer.Deserialize<Dictionary<CreatureBaseAttribute, float>>(baseYaml);
-                    if (baseStats != null) {
-                        foreach (KeyValuePair<CreatureBaseAttribute, float> stat in baseStats) { entry.CreatureBaseValueModifiers[stat.Key] = stat.Value; }
-                    }
-                } catch (System.Exception e) {
-                    Logger.LogWarning($"Could not read the saved base stat overrides of {entry.RefCreatureName}; ignoring them. {e.Message}");
-                }
-            }
-            string perLevelYaml = zdo.GetString(SLS_PERLEVEL_STATS, null);
-            if (string.IsNullOrEmpty(perLevelYaml) == false) {
-                try {
-                    Dictionary<CreaturePerLevelAttribute, float> perLevelStats = DataObjects.yamlDeserializer.Deserialize<Dictionary<CreaturePerLevelAttribute, float>>(perLevelYaml);
-                    if (perLevelStats != null) {
-                        foreach (KeyValuePair<CreaturePerLevelAttribute, float> stat in perLevelStats) { entry.CreaturePerLevelValueModifiers[stat.Key] = stat.Value; }
-                    }
-                } catch (System.Exception e) {
-                    Logger.LogWarning($"Could not read the saved per-level stat overrides of {entry.RefCreatureName}; ignoring them. {e.Message}");
-                }
-            }
+            ApplyPersistedStats(zdo, SLS_BASE_STATS, entry.RefCreatureName, entry.CreatureBaseValueModifiers);
+            ApplyPersistedStats(zdo, SLS_PERLEVEL_STATS, entry.RefCreatureName, entry.CreaturePerLevelValueModifiers);
+            ApplyPersistedStats(zdo, SLS_DMGRECV_STATS, entry.RefCreatureName, entry.DamageRecievedModifiers);
+            ApplyPersistedStats(zdo, SLS_DMGBONUS_STATS, entry.RefCreatureName, entry.CreatureDamageBonus);
+        }
+
+        public static bool IsSpawnManaged(Character chara)
+        {
+            if (chara == null || chara.m_nview == null) { return false; }
+            ZDO zdo = chara.m_nview.GetZDO();
+            return zdo != null && zdo.GetBool(SLS_SPAWN_MANAGED, false);
         }
 
         private static void DetermineCreatureSpawnRate(CharacterCacheEntry characterEntry, BiomeSpecificSetting biomeSettings, CreatureSpecificSetting creatureSettings) {

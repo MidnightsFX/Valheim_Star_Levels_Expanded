@@ -47,7 +47,10 @@ namespace StarLevelSystem.modules.LevelSystem {
         // CompositeLazyCache.StartZOwnerCreatureRoutines MUST both use this same check: if the
         // correction is gated off while the roll gate is not, an over-level creature re-rolls a fresh
         // level on every cache build while nothing ever writes the correction back to its ZDO.
+        // A spawn-managed creature's level belongs to the mod that spawned it (a bounty's level is part of the
+        // bounty), so it is never rerolled or clamped - through this same shared gate, so both sites agree.
         public static bool OverLevelRerollEnabled(Character character) {
+            if (CompositeLazyCache.IsSpawnManaged(character)) { return false; }
             if (character != null && character.m_nview != null && character.IsTamed()) {
                 return ValConfig.OverLevelTamesGetRerolledOnLoad.Value;
             }

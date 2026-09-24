@@ -84,9 +84,18 @@ namespace StarLevelSystem.common
         // NemesisMinion) gave one creature, serialized like SLS_MODSV2. They used to live only in the session
         // cache entry built at spawn time, so a remote Nemesis boss lost its 4x health and 1.5x damage the first
         // time that entry was rebuilt: on every restart, on ownership handoff, and whenever the hud refreshed its
-        // modifier list. See CompositeLazyCache.SetStatOverrides.
+        // modifier list. See CompositeLazyCache.SetStatOverrides. The API's attribute setters write here too
+        // (CompositeLazyCache.PersistStatOverrides), for the same reason.
         public static readonly string SLS_BASE_STATS = "SLS_BASESTATS";
         public static readonly string SLS_PERLEVEL_STATS = "SLS_LVLSTATS";
+        // The DamageRecievedModifiers / CreatureDamageBonus values another mod set through the API. Applied when
+        // the cache entry is built, before modifier setup, so a Resist or Flame modifier stacks on top of them.
+        public static readonly string SLS_DMGRECV_STATS = "SLS_DRSTATS";
+        public static readonly string SLS_DMGBONUS_STATS = "SLS_DBSTATS";
+        // A creature another mod spawned and owns the existence and level of (an EpicLoot bounty target, say).
+        // SLS still gives it stats, modifiers and colour, but never deletes or multiplies it for spawn-rate or
+        // disabled-spawn rules, and never rerolls or clamps its level. See APIReciever.SetCreatureSpawnManaged.
+        public static readonly string SLS_SPAWN_MANAGED = "SLS_EXTMGD";
         // Marks a creature SLS spawned awake on purpose. MonsterAI.m_fallAsleepDistance isn't networked, so a
         // client that later takes ownership re-instantiates from the prefab and would put the creature back to
         // sleep; this flag is what survives handoff and reload. See CreatureSleepPatches.

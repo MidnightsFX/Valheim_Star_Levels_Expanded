@@ -546,8 +546,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 int determinedLevel = LevelSelection.DetermineLevel(item.gameObject, creature_name, creature_settings, biome_settings, ValConfig.FishMaxLevel.Value);
                 // not sure we need max quality set high
                 item.m_itemData.m_shared.m_maxQuality = ValConfig.FishMaxLevel.Value + 1;
+                // Before SetQuality, which sizes the fish from it
+                item.m_itemData.m_shared.m_scaleByQuality = UpdateLevelsOnChange.FishScalePerLevel();
                 item.SetQuality(determinedLevel);
-                item.m_itemData.m_shared.m_scaleByQuality = ValConfig.FishSizeScalePerLevel.Value;
                 item.Save();
             }
 

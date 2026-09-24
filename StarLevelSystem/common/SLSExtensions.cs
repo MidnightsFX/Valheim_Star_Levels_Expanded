@@ -282,7 +282,11 @@ namespace StarLevelSystem.common
                         dmgsum += wepdmg;
                         //Logger.LogDebug($"Checking damage of {defweapon.name} - dmg:{wepdmg}");
                     }
-                    dmg = dmgsum / noid.m_defaultItems.Count();
+                    // No default items (skeletons, for one): leave dmg at 0 so the current-weapon fallback below
+                    // applies. Dividing by the empty count gave 0/0 = NaN, which slipped past that fallback and the
+                    // clamp and came out as a flat 100.
+                    int weaponCount = noid.m_defaultItems.Count();
+                    if (weaponCount > 0) { dmg = dmgsum / weaponCount; }
                     break;
 
                 case DamageEstimateType.Lowest:

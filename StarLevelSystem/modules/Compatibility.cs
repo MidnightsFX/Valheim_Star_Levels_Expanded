@@ -27,6 +27,12 @@ namespace StarLevelSystem.modules
         public static bool CustomRaidsCompatActive => IsCustomRaidsEnabled && ValConfig.EnableCustomRaidsCompat.Value;
 
 
+        private const string DropThatGUID = "asharppen.valheim.drop_that";
+        private const string DropThatSessionManagerTypeName = "DropThat.Drop.CharacterDropSystem.Managers.CharacterDropSessionManager";
+        // Drop That 3.1.5 and older lose track of which config each CharacterDrop entry came from on Valheim 1.0.x,
+        // so ModifyDrop finds nothing to apply until 3.1.6.
+        private static readonly System.Version DropThatCharacterDropTrackingFixed = new System.Version(3, 1, 6);
+
         private static Type DropThatCharacterDropSessionManager;
         public static bool DropThatCharacterModifyAvailable => DropThatCharacterModifyDrop != null;
 
@@ -42,15 +48,27 @@ namespace StarLevelSystem.modules
                 Dictionary<string, BepInEx.BaseUnityPlugin> plugins = BepInExUtils.GetPlugins();
                 if (plugins == null) { return; }
                 //Logger.LogDebug($"Checking for mod compatibility... {string.Join(",", plugins.Keys)}");
-                if (plugins.Keys.Contains("asharppen.valheim.drop_that")) {
+                // Drop That's Awake has already run here: the soft BepInDependency on it (StarLevelSystem.cs) makes
+                // BepInEx load it first, and GetPlugins only lists plugins that have an instance.
+                if (plugins.TryGetValue(DropThatGUID, out BepInEx.BaseUnityPlugin dropThat)) {
                     IsDropThatEnabled = true;
-                    DropThatCharacterDropSessionManager = Type.GetType("DropThat.Drop.CharacterDropSystem.Managers.CharacterDropSessionManager, DropThat");
+                    // Resolve the type from the loaded plugin's own assembly. Its assembly is named Valheim.DropThat,
+                    // not DropThat, so the old assembly-qualified Type.GetType("..., DropThat") never bound and
+                    // Drop That's item modifiers were never applied to the creature loot SLS drops.
+                    DropThatCharacterDropSessionManager = dropThat?.GetType().Assembly.GetType(DropThatSessionManagerTypeName);
                     if (DropThatCharacterDropSessionManager != null) {
                         DropThatCharacterModifyDrop = DropThatCharacterDropSessionManager.GetMethod("ModifyDrop", BindingFlags.Public | BindingFlags.Static,
                             null, new[] { typeof(GameObject), typeof(List<KeyValuePair<GameObject, int>>), typeof(int) }, null);
                     }
                     if (DropThatCharacterModifyAvailable == false) {
                         Logger.LogWarning("Warning: DropThat compat method (CharacterDropSessionManager.ModifyDrop) not found; DropThat item modifiers will not be applied to creature loot.");
+                    } else {
+                        System.Version dropThatVersion = dropThat.Info?.Metadata?.Version;
+                        if (dropThatVersion != null && dropThatVersion < DropThatCharacterDropTrackingFixed) {
+                            Logger.LogWarning($"Drop That {dropThatVersion} detected; its creature drop modifiers need Drop That {DropThatCharacterDropTrackingFixed} or newer on this Valheim version and will not apply until it is updated.");
+                        } else {
+                            Logger.LogInfo("Drop That detected; its item modifiers will be applied to creature loot.");
+                        }
                     }
                 }
                 if (plugins.Keys.Contains("com.Fire.FiresGhettoNetworkMod")) {

@@ -304,7 +304,8 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$alert_suffix1",
                         NamingConvention = NameSelectionStyle.RandomBoth,
                         //visualEffect
-                        SetupEvent = Alert.Setup
+                        SetupEvent = Alert.Setup,
+                        TeardownEvent = Alert.Teardown
                     }
                 },
                 { ModifierNames.Big.ToString(), new CreatureModifierDefinition()

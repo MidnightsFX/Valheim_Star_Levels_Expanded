@@ -1,4 +1,15 @@
 
+**1.18.1**
+ ---
+ ```
+- Updated DropThat compatibility for 1.0
+- Fixed Fire and Poison Nova on creatures with no default weapons (skeletons, for one) using a flat 100 damage estimate instead of the weapon they hold
+- SoulEater, Splitter and Evolving now only run on the game that controls the dying creature.
+- LifeLink only passes damage to a living, untamed creature that is not hostile to the boss.
+	- LifeLink's passed-on damage no longer triggers the attacker's on-hit effects a second time
+- Fixed Alert's hearing range growing every time the config reloaded. Removing Alert now restores the original range
+ ```
+
 **1.18.0**
  ---
  ```

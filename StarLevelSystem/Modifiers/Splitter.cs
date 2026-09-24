@@ -21,7 +21,10 @@ namespace StarLevelSystem.Modifiers
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class CharacterOnDeath {
             public static void Prefix(Character __instance) {
-                if (__instance == null || __instance.IsPlayer()) {
+                // Owner only, like vanilla's own death work: a creature with a death animation runs OnDeath from
+                // the animation event on every client that plays it, and each of those spawned its own set of
+                // networked splits.
+                if (__instance == null || __instance.IsPlayer() || __instance.m_nview == null || __instance.m_nview.IsOwner() == false) {
                     return;
                 }
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);

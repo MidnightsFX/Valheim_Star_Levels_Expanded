@@ -22,7 +22,10 @@ namespace StarLevelSystem.Modifiers {
         [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
         public static class SoulEaterAndEvolveOnDeath {
             private static void Prefix(Character __instance) {
-                if (__instance == null || __instance.IsPlayer() || __instance.m_lastHit == null) {
+                // Owner only, like vanilla's own death work: a creature with a death animation runs OnDeath from
+                // the animation event on every client that plays it, which counted the kill (and could level the
+                // killer) once per client.
+                if (__instance == null || __instance.IsPlayer() || __instance.m_nview == null || __instance.m_nview.IsOwner() == false || __instance.m_lastHit == null) {
                     return;
                 }
                 Character chara = __instance.m_lastHit.GetAttacker();

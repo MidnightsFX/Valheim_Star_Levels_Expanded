@@ -1,4 +1,5 @@
 ﻿using JetBrains.Annotations;
+using Jotunn;
 using Jotunn.Entities;
 using Jotunn.Managers;
 using MonoMod.Utils;
@@ -837,6 +838,7 @@ namespace StarLevelSystem.common
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(VisualEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
+                    FixMocksIfAddedLate(prefab_obj);
                     GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(VisualEffect);
                     CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockFixedGO);
                 }
@@ -844,9 +846,21 @@ namespace StarLevelSystem.common
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(SecondaryEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
+                    FixMocksIfAddedLate(prefab_obj);
                     GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(SecondaryEffect);
                     CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockFixedGO);
                 }
+            }
+
+            // Jotunn resolves a fixReference CustomPrefab's JVLmock_ references only in its ZNetScene.Awake
+            // pass. A modifier first loaded after that -- Modifiers.yaml hot-reloaded, or synced from the
+            // server once in-world -- would keep its mocks until the next world load; for the death novas
+            // that is an AudioSource still on the bundled mock mixer, which ignores the volume sliders.
+            // Do what that pass does, now.
+            private static void FixMocksIfAddedLate(CustomPrefab prefab) {
+                if (ZNetScene.instance == null || prefab.Prefab == null || prefab.FixReference == false) { return; }
+                prefab.Prefab.FixReferences(true);
+                prefab.FixReference = false;
             }
 
             public void LoadAPIGameObjects() {

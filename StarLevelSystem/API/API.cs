@@ -138,6 +138,7 @@ namespace StarLevelSystem
         /// <summary>
         /// Sets the creatures level, this applies immediately.
         /// If you want the creature to be resized to its new level, you must call ApplyCreatureUpdates after this.
+        /// Saved on the creature whichever peer calls it: a peer that does not own the creature forwards the call to the owner.
         /// </summary>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="newLevel">The new level to set the creature to</param>
@@ -183,9 +184,9 @@ namespace StarLevelSystem
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attribute">The enum value of which attribute to get: BaseHealth = 0, BaseDamage = 1, AttackSpeed = 2, Speed = 3, Size = 4</param>
@@ -211,9 +212,9 @@ namespace StarLevelSystem
         /// this applies immediately
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures attributes</param>
@@ -241,9 +242,9 @@ namespace StarLevelSystem
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attribute">The enum value of which attribute to get: HealthPerLevel = 0, DamagePerLevel = 1, SpeedPerLevel = 2, AttackSpeedPerLevel = 3, SizePerLevel = 4</param>
@@ -269,9 +270,9 @@ namespace StarLevelSystem
         /// this applies immediately
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures attributes</param>
@@ -301,9 +302,9 @@ namespace StarLevelSystem
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
@@ -329,9 +330,9 @@ namespace StarLevelSystem
         /// 1.0 = 100% damage taken, 0.5 = 50% damage taken, 2.0 = 200% damage taken
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
@@ -359,9 +360,9 @@ namespace StarLevelSystem
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
@@ -386,9 +387,9 @@ namespace StarLevelSystem
         /// this applies immediately
         /// </summary>
         /// <remarks>
-        /// Persisted on the creature when called by its ZDO owner, so the value survives a reload, an ownership
-        /// handoff and a Star Level System config reload, and every other peer sees it. A call from a peer that does
-        /// not own the creature changes only that peer's view.
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
         /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
@@ -405,6 +406,8 @@ namespace StarLevelSystem
 
         /// <summary>
         /// Applies DamageBonuses, PerLevel, BaseAttributes, speed, size, health, damage, etc to the creature
+        /// A peer that does not own the creature applies what it can see at once and forwards the call to the owner,
+        /// which saves the results (size, health, damage) on the creature.
         /// </summary>
         /// <param name="creatureId">The creature's Character class</param>
         /// returns>bool success</returns>
@@ -420,13 +423,13 @@ namespace StarLevelSystem
         /// Marks a creature your mod spawned and owns the existence and level of (a quest or bounty target, say).
         /// Star Level System keeps giving it stats, modifiers and colour, but never deletes or multiplies it for
         /// spawn-rate or disabled-spawn rules, and never rerolls or clamps its level.
-        /// Only the creature's ZDO owner can set this. Call it in the frame you spawn the creature (Star Level System's
-        /// own setup waits InitialDelayBeforeSetup), and again when it loads if it may have been spawned before your
-        /// mod made this call.
+        /// Saved on the creature whichever peer calls it: a peer that does not own the creature forwards the call to the
+        /// owner. Call it in the frame you spawn the creature (Star Level System's own setup waits
+        /// InitialDelayBeforeSetup), and again when it loads if it may have been spawned before your mod made this call.
         /// </summary>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="managed">True to mark the creature, false to hand it back to Star Level System's spawn rules</param>
-        /// returns>bool success; false when this peer does not own the creature or Star Level System is too old (see SupportsSpawnManaged)</returns>
+        /// returns>bool success; false when the creature is not networked or Star Level System is too old (see SupportsSpawnManaged)</returns>
         public static bool SetCreatureSpawnManaged(Character creatureId, bool managed = true) {
             return (bool)Call(SetCreatureSpawnManagedMethod, false, creatureId, managed);
         }
@@ -463,7 +466,8 @@ namespace StarLevelSystem
         /// <param name="modifierName">The modifiers name</param>
         /// <param name="modifierType">The modifiers type Major (0), Minor (1), and Boss (2)</param>
         /// <param name="update">If true applies updates to the creature to rebuild the creatures name and other stats</param>
-        /// returns>bool success</returns>
+        /// returns>bool success, as this peer saw it. Saved on the creature whichever peer calls it: a peer that does not
+        /// own the creature forwards the call to the owner.</returns>
         public static bool AddModifierToTargetCreature(Character creatureId, string modifierName, int modifierType, bool update = true) {
             return (bool)AddModifierToCreature.Invoke(null, new object[] { creatureId, modifierName, modifierType, update });
         }

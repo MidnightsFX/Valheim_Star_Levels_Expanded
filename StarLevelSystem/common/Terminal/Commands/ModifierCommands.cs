@@ -1,4 +1,5 @@
 using StarLevelSystem.Data;
+using StarLevelSystem.modules;
 using StarLevelSystem.modules.Modifiers;
 using System;
 using System.Collections.Generic;
@@ -60,7 +61,9 @@ namespace StarLevelSystem.common
             foreach (Character chara in nearbyCreatures)
             {
                 if (chara.IsPlayer()) { continue; }
-                CreatureModifiers.AddCreatureModifier(chara, modtype, modname.ToString());
+                // Through the API path so the change persists on creatures another player owns: it is replayed on
+                // the owner rather than written here, where only the owner's write sticks.
+                APIReciever.AddModifierToCreature(chara, modname.ToString(), (int)modtype);
                 applied++;
             }
             args.Output.Info($"Added {modtype} {modname} to {applied} nearby creatures.");

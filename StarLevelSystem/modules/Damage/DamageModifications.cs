@@ -37,6 +37,10 @@ namespace StarLevelSystem.modules.Damage {
 
         internal static void ApplyDamageModification(Character creature, CharacterCacheEntry cDetails, bool updateCache = false) {
             if (creature.m_nview == null || cDetails == null) { return; }
+            // Everything below is a ZDO write, and RunCharacterSetup runs on every peer that loads the creature. Only
+            // the owner writes: it is also the only one that reads these, when its creature attacks (DamagePatches).
+            // A non-owner's write here also reset any SoulEater growth the owner had added on top of dmgmod.
+            if (creature.m_nview.IsOwner() == false) { return; }
             //float per_level_mod = cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.DamagePerLevel];
             float dmgmod = cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage];
 

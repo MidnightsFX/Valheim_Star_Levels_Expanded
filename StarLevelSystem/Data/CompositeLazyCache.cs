@@ -62,6 +62,16 @@ namespace StarLevelSystem.Data
             return character.m_nview.IsOwner();
         }
 
+        // Whether a creature's ZDO carries a finished roll: a stored level and a stored modifier set. The owner writes
+        // both in one StartZOwnerCreatureRoutines pass (s_level even when it rolled 1, SLS_MODSV2 even when it rolled
+        // no modifiers - SelectModifiersForCreature then returns the "None" entry), so any peer that sees both can set
+        // the creature up from its ZDO without rolling. SLS_MODIFIERS is the pre-V2 storage older saves still carry.
+        // At most three ZDO lookups: CreatureSetupQueue asks this once per poll for every creature it is waiting on.
+        internal static bool HasRolledSetup(ZDO zdo) {
+            if (zdo == null || zdo.GetInt(ZDOVars.s_level, 0) <= 0) { return false; }
+            return zdo.GetString(SLS_MODSV2, null) != null || zdo.GetByteArray(SLS_MODIFIERS) != null;
+        }
+
         public static CharacterCacheEntry GetCacheEntry(ZDOID cid)
         {
             if (SessionCache.ContainsKey(cid)) {
@@ -135,10 +145,12 @@ namespace StarLevelSystem.Data
             bool isOwner = IsZOwner(character);
             characterEntry.Level = LevelSelection.DetermineLevel(character, characterEntry.ZDO, creatureSettings, biomeSettings, biome, leveloverride, allowRoll: isOwner);
 
-            // Update Level and health, for non-zowners, once it has been set.
+            // Update the local level for non-zowners once it has been set. Not their max health: SetupMaxHealth writes
+            // s_maxHealth to the ZDO, which only the owner may do (vanilla calls it on the owner alone, in
+            // Character.Awake). GetMaxHealth reads the ZDO, so a non-owner already shows the owner's value, and the
+            // vanilla base * level this used to write here clobbered the owner's SLS health whenever it won the race.
             if (isOwner == false && characterEntry.Level > 0 && character.m_level != characterEntry.Level) {
                 character.m_level = characterEntry.Level;
-                character.SetupMaxHealth();
             }
 
             // Build creature name. MUST come after the m_level correction above: the name builder budgets its
@@ -329,9 +341,13 @@ namespace StarLevelSystem.Data
             return StoredMods.Get();
         }
 
+        // Only the owner persists the list (strict ZDO-owner authority). A non-owner's call - an API call, which
+        // APIOwnerRelay also replays on the owner - still updates this peer's cache entry, so its own view changes at once.
         public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
-            chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlSerializerJsonCompat.Serialize(modifiers));
+            if (IsZOwner(chara)) {
+                chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlSerializerJsonCompat.Serialize(modifiers));
+            }
             CharacterCacheEntry cce = GetCacheEntry(chara);
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;

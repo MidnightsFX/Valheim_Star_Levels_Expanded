@@ -249,10 +249,11 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static void SetAndUpdateCharacterLevel(Character character, int level) {
             if (character == null) { return; }
             character.m_level = level;
+            // s_level and the max health SetupMaxHealth writes are ZDO values, which only the owner writes. The API
+            // replays a non-owner's call on the owner (APIOwnerRelay), so here a non-owner only updates its own view.
+            if (character.m_nview == null || character.m_nview.GetZDO() == null || character.m_nview.IsOwner() == false) { return; }
             character.SetupMaxHealth();
-            if (character.m_nview != null && character.m_nview.GetZDO() != null) {
-                character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
-            }
+            character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
         }
 
         // Consider decision tree for levelups to reduce iterations

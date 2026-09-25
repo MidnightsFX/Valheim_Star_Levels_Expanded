@@ -1,4 +1,19 @@
 
+**1.19.0**
+ ---
+ ```
+- Players no longer take control of creatures to set them up; they wait for the server to assign them
+- Other players no longer see an over-level creature at its old level before it is rerolled
+- Evolving and SoulEater growth is now applied by the game that controls the growing creature
+- Only the controlling game saves creature health, damage, size and modifiers, so other players no longer overwrite them
+- Nemesis spawners now wait for the server to assign them instead of taking control after 4 seconds
+- Raid spawn points found after the raid changed hands are now sent to the new controlling player
+- A raid whose spawn-point search was lost (e.g. the player left) now searches again after 60 seconds
+- Death Fire and Poison Nova sounds now follow the SFX volume slider
+- Location reset now restores ground paint properly and regrows grass across the whole reset area (1.0 fix)
+- sls-mod-give now sticks on creatures another player controls
+ ```
+
 **1.18.2**
  ---
  ```

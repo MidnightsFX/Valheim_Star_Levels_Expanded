@@ -1004,7 +1004,9 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
-        public static IEnumerator DetermineRemoteSpawnLocations(Vector3 origin, ListVectorZNetProperty resultset,  int numTargets, BoolZNetProperty pointsReady, float maxDistance = 300f, Heightmap.Biome targetBiome = Heightmap.Biome.None) {
+        // Hands its result to onComplete rather than writing it anywhere itself: the search spans many frames, and by
+        // the time it finishes the machine that started it may no longer own the runner (see RaidRunner.OnSpawnSearchComplete).
+        public static IEnumerator DetermineRemoteSpawnLocations(Vector3 origin, int numTargets, Action<List<SerializableVector3>> onComplete, float maxDistance = 300f, Heightmap.Biome targetBiome = Heightmap.Biome.None) {
             List<SerializableVector3> spawn_locations = new List<SerializableVector3>();
             //Logger.LogDebug($"Starting spawn destination in incrments of {range_increment} from x{origin.x} y{origin.y} z{origin.z}");
             int spawn_location_attempts = 0;
@@ -1102,14 +1104,7 @@ namespace StarLevelSystem.modules.Raids
             if (spawn_locations.Count < numTargets) {
                 Logger.LogWarning($"Unable to find the requested number of spawn points. Found {spawn_locations.Count} spawn locations");
             }
-            // The runner that started this coroutine can be destroyed while it runs (raid aborted,
-            // world unload); writing through its ZNetProperties would then throw on a dead ZNetView.
-            if (resultset.IsHostValid() == false || pointsReady.IsHostValid() == false) {
-                Logger.LogRaid("Raid spawn-point search finished after its runner was destroyed; discarding results.");
-                yield break;
-            }
-            resultset.ForceSet(spawn_locations);
-            pointsReady.ForceSet(true);
+            onComplete(spawn_locations);
             yield break;
         }
 

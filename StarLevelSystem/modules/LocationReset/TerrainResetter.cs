@@ -83,6 +83,10 @@ namespace StarLevelSystem.modules.LocationReset {
                     // vanilla's own TerrainModifier.PokeHeightmaps passes for this same delayed case.
                     if (heightmaps[h].TerrainVSModifier(modifier)) { heightmaps[h].Poke(2); }
                 }
+                // Disable first, as vanilla's TerrainComp.UpgradeTerrain does. Destroy only lands at the
+                // end of the frame, and until then the modifier is still in s_instances, so
+                // Heightmap.ApplyModifiers would bake it straight back into this frame's rebuild.
+                modifier.enabled = false;
                 nview.Destroy();
                 resets++;
             }
@@ -99,6 +103,7 @@ namespace StarLevelSystem.modules.LocationReset {
             int[] maskXs = new int[pointCount];
             int[] maskYs = new int[pointCount];
             float[] vertexRadiiSqr = new float[pointCount];
+            List<int> clearedPaint = new List<int>();
 
             for (int i = 0; i < heightmaps.Count; i++) {
                 Heightmap heightmap = heightmaps[i];
@@ -120,6 +125,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 bool changed = false;
+                clearedPaint.Clear();
                 int stride = comp.m_width + 1;
                 for (int y = 0; y < stride; y++) {
                     for (int x = 0; x < stride; x++) {
@@ -135,7 +141,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
                         if (comp.m_modifiedPaint[idx] && WithinAnySqr(maskXs, maskYs, vertexRadiiSqr, x, y)) {
                             comp.m_modifiedPaint[idx] = false;
-                            comp.m_paintMask[idx] = Color.clear;
+                            clearedPaint.Add(idx);
                             changed = true;
                             resets++;
                         }
@@ -143,14 +149,32 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 if (changed) {
-                    // Bumping the operation counter is what makes peers treat the new TCData as a
-                    // fresh edit rather than a stale copy of what they already have.
+                    // Peers reload on the ZDO's data revision, not on this counter. The counter only
+                    // tells their CheckLoad whether to refresh grass around m_lastOp* (exactly one new
+                    // op) or across the whole heightmap. A batch has no single point, so it names the
+                    // whole heightmap; otherwise peers would only regrow grass around the first crater.
                     comp.m_operations++;
-                    comp.m_lastOpPoint = centers[0];
-                    comp.m_lastOpRadius = radii[0];
+                    if (pointCount == 1) {
+                        comp.m_lastOpPoint = centers[0];
+                        comp.m_lastOpRadius = radii[0];
+                    } else {
+                        comp.m_lastOpPoint = heightmap.transform.position;
+                        comp.m_lastOpRadius = heightmap.m_width * scale / 2f;
+                    }
                     comp.Save();
-                    // Delayed regeneration, as above: CustomLateUpdate rather than an immediate rebuild.
-                    heightmap.Poke(2);
+
+                    // Immediate rebuild, not Poke(2), because the paint we just cleared has to be
+                    // re-seeded from the rebuilt mask. Since 1.0, TerrainComp.m_paintMask is not
+                    // scratch for unmodified vertices: Initialize seeds it from the heightmap's mask,
+                    // and PaintCleared reads it back (getMask while a Poke(1) is pending, and the
+                    // Deep North neighbour median unconditionally). Leaving the old paint, or a blank
+                    // colour with zero alpha, there would let the next brush stroke bake it back in.
+                    // The rebuild also consumes any Poke(2) that ResetModifiers queued on this map.
+                    heightmap.Poke();
+                    for (int c = 0; c < clearedPaint.Count; c++) {
+                        int idx = clearedPaint[c];
+                        comp.m_paintMask[idx] = heightmap.GetPaintMask(idx % stride, idx / stride);
+                    }
                 }
             }
 

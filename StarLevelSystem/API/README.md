@@ -55,12 +55,14 @@ StarLevelSystem.API.AddNewModifier(
 
 The attribute setters (`SetCreatureBaseAttribute`, `SetCreaturePerLevelAttribute`,
 `SetCreatureDamageReceivedModifier`, `SetCreatureFlatDamageBonus` and their `SetAll...` forms) are
-saved on the creature's ZDO when the call comes from the machine that **owns** the creature. Every
-later rebuild of its stats reapplies them: another player's game, the next owner after a handoff,
-a reload, a Star Level System config reload. Set a value once, when you spawn or first adjust the
-creature, and it sticks.
+saved on the creature's ZDO whichever machine calls them. Every later rebuild of its stats reapplies
+them: another player's game, the next owner after a handoff, a reload, a Star Level System config
+reload. Set a value once, when you spawn or first adjust the creature, and it sticks.
 
-A call from a machine that does not own the creature changes only that machine's view, as before.
+Only the machine that **owns** the creature writes its ZDO. A call from any other machine applies
+there at once and is forwarded to the owner, which saves it a moment later. A creature nobody owns
+is taken by the calling machine first. The same holds for `SetCreatureLevel`,
+`AddModifierToTargetCreature`, `ApplyCreatureUpdates` and `SetCreatureSpawnManaged`.
 
 Saved damage-received and flat damage-bonus values are the base the creature's own modifiers stack
 on after a rebuild: a Resist modifier still lowers a saved resistance, and Flame still adds to a
@@ -69,7 +71,7 @@ saved fire bonus.
 ### Creatures your mod spawns
 
 If your mod spawns a creature on purpose and its existence and level matter (a quest or bounty
-target, say), mark it spawn-managed on the machine that owns it:
+target, say), mark it spawn-managed:
 
 ```csharp
 StarLevelSystem.API.SetCreatureSpawnManaged(creature, true);

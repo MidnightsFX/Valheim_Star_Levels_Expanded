@@ -154,6 +154,7 @@ namespace StarLevelSystem.common {
         internal static CustomRPC LocationApiResultRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
+        internal static CustomRPC DestroyViaOwnerRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<bool> EnableTerminalColors;
@@ -381,6 +382,9 @@ namespace StarLevelSystem.common {
             // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
             ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
+            // Client -> server: delete objects the client does not own. Server -> owning client: the same request,
+            // forwarded. Lets SLS delete a creature without a client ever claiming it; see OwnerRoutedDestroy.
+            DestroyViaOwnerRPC = NetworkManager.Instance.AddRPC("SLS_DestroyViaOwnerRPC", modules.OwnerRoutedDestroy.OnServerReceive, modules.OwnerRoutedDestroy.OnClientReceive);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             // Joining clients receive the current set of active remote-boss map pins.

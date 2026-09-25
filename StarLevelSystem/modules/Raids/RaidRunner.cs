@@ -20,6 +20,9 @@ namespace StarLevelSystem.modules.Raids {
         internal ListVectorZNetProperty RaidSpawnPoints;
         internal BoolZNetProperty RaidSpawnPointsReady;
         internal BoolZNetProperty RaidSpawnPointsGenerating;
+        // When the current spawn-point search began (ZNet seconds), so an owner can tell a search that is still running
+        // somewhere from one whose machine is gone. See SpawnSearchOverdue.
+        internal DoubleZNetProperty RaidSpawnPointsGeneratingStart;
         internal RaidMonitorListZNetProperty ActiveRaidSpawns;
         // True only once the raid has actually committed (spawn points validated + start message sent). Gates the
         // forced environment so a raid that aborts during spawn-point search never changes the weather.
@@ -34,6 +37,14 @@ namespace StarLevelSystem.modules.Raids {
 
         private bool networkReady;
         private double Endtime = 0;
+
+        // Carries a finished spawn-point search to the runner's owner when the machine that ran it no longer is.
+        private const string RPC_SpawnPointsFound = "SLS_RaidSpawnPointsFound";
+        // How long a spawn-point search may run before the owner assumes it was lost and starts another. A search yields
+        // 0.1s every 10 failed attempts and gives up after roughly 200 + 3 * EventRange of them, so even one that finds
+        // nothing ends in about 5s at the default 96m range. Starting a second search early costs only the work: the
+        // first result to arrive is kept (see StoreSpawnPoints).
+        private const double SpawnSearchTimeoutSeconds = 60d;
 
         // ZDO-backed values cached against the ZDO's DataRevision. Every BinaryFormatter-based
         // ZNetProperty.Get() is a full deserialize, and Update used to run several of them on every
@@ -51,6 +62,7 @@ namespace StarLevelSystem.modules.Raids {
         private double raidStartTimeCache;
         private bool spawnPointsReadyCache;
         private bool spawnPointsGeneratingCache;
+        private double spawnPointsGeneratingStartCache;
         private List<SerializableVector3> spawnPointsCache;
         private List<RaidMonitor> activeSpawnsCache = new List<RaidMonitor>();
 
@@ -77,6 +89,7 @@ namespace StarLevelSystem.modules.Raids {
             raidStartTimeCache = RaitStartTime.Get();
             spawnPointsReadyCache = RaidSpawnPointsReady.Get();
             spawnPointsGeneratingCache = RaidSpawnPointsGenerating.Get();
+            spawnPointsGeneratingStartCache = RaidSpawnPointsGeneratingStart.Get();
             spawnPointsCache = RaidSpawnPoints.Get();
             try {
                 activeSpawnsCache = ActiveRaidSpawns.Get();
@@ -106,6 +119,8 @@ namespace StarLevelSystem.modules.Raids {
 
             if ((bool)Znet) {
                 ConnectZData();
+                // Here rather than in ConnectZData, which Update can call again; a second Register throws.
+                Znet.Register<ZPackage>(RPC_SpawnPointsFound, ReceiveSpawnPoints);
             }
         }
 
@@ -118,11 +133,20 @@ namespace StarLevelSystem.modules.Raids {
             // A runner rebuilt from a ZDO written before the prefab was registered (1.13.0 and earlier) is a
             // leftover: its raid ended long ago, or its owner left before EndRaid could delete it, and until now no
             // machine could load it -- every client near it logged "Missing prefab hash" on every object pass
-            // instead. There is nothing worth resuming, so the first machine to load one deletes it along with its
-            // ZDO. This runs ahead of the vanilla-raid gate so the leftovers go even where SLS raids are off.
+            // instead. There is nothing worth resuming, so its owner deletes it along with its ZDO. This runs ahead of
+            // the vanilla-raid gate so the leftovers go even where SLS raids are off.
+            //
+            // Only the owner: every other machine just leaves it alone. This used to run on whichever machine loaded it
+            // first, and EndRaid claims the runner before deleting it -- a client taking an object the server assigns,
+            // once per player standing nearby. Nothing is lost by waiting. The runner is persistent, so the server hands
+            // an unowned one to a peer that has it in its active area within a couple of seconds
+            // (ZDOMan.ReleaseNearbyZDOS), and that peer has it loaded and deletes it on its next Update. Returning here
+            // also keeps a non-owner from treating a leftover's state as a live raid (pins, weather) in the meantime.
             if (runnerRegisteredCache == false) {
-                Logger.LogRaid($"Deleting a raid runner left behind by an earlier version at {transform.position}.");
-                EndRaid(destroyCreatures: false);
+                if (Znet.IsOwner()) {
+                    Logger.LogRaid($"Deleting a raid runner left behind by an earlier version at {transform.position}.");
+                    EndRaid(destroyCreatures: false);
+                }
                 return;
             }
 
@@ -178,15 +202,19 @@ namespace StarLevelSystem.modules.Raids {
             // Wait until the raid definition has replicated.
             if (raid == null) { return; }
 
-            // TODO: fallback for if/when the owner who starts generating points exits the game immediately etc
             if (spawnPointsReadyCache == false && spawnPointsGeneratingCache == false) {
-                TaskRunner.Run().StartCoroutine(RaidControl.DetermineRemoteSpawnLocations(this.transform.position, RaidSpawnPoints, raid.SpawnPoints, RaidSpawnPointsReady, raid.EventRange));
-                RaidSpawnPointsGenerating.Set(true);
+                StartSpawnPointSearch(raid);
                 return;
             }
 
-            // Wait until raid positions are identified.
+            // Wait until raid positions are identified. The search runs on the machine that owned the runner when it
+            // began, which can leave the game (or unload the runner) before it finishes; then nothing would ever set the
+            // ready flag, and the raid sat here for good. Once a search is long overdue, start another.
             if (spawnPointsReadyCache == false && spawnPointsGeneratingCache == true) {
+                if (SpawnSearchOverdue()) {
+                    Logger.LogRaid($"Raid spawn-point search at {transform.position} never finished; searching again.");
+                    StartSpawnPointSearch(raid);
+                }
                 return;
             }
 
@@ -525,6 +553,8 @@ namespace StarLevelSystem.modules.Raids {
         // Force-deletes every tracked raid creature. Prefers the ZDO-backed spawner list, which the owner keeps current:
         // RaidSpawners is only filled on a machine that has owned the raid, and on a former owner it misses anything
         // spawned after the hand-off. Must run while the view still holds its ZDO (see EndRaid).
+        // By now other players may own some of the creatures (or nobody may), so each is deleted by its owner rather
+        // than claimed here first; see OwnerRoutedDestroy.
         private void ForceDestroyTrackedCreatures() {
             // Skip if the network is shutting down.
             if (ZDOMan.instance == null || ZNetScene.instance == null) { return; }
@@ -532,18 +562,72 @@ namespace StarLevelSystem.modules.Raids {
                 ? ActiveRaidSpawns.Get()
                 : RaidSpawners;
             if (spawnersToClean == null) { return; }
+            List<ZDOID> tracked = new List<ZDOID>();
             foreach (var raidmon in spawnersToClean) {
-                foreach (ZDOID spawned in raidmon.GetSpawnedZDOIDs() ) {
-                    ZDO zdo = ZDOMan.instance.GetZDO(spawned);
-                    if (zdo == null) { continue; }
-                    ZNetView nv = ZNetScene.instance.FindInstance(zdo);
-                    if (nv == null) { continue; }
-                    if (nv != null) {
-                        nv.ClaimOwnership();
-                        ZNetScene.instance.Destroy(nv.gameObject);
-                    }
-                }
+                tracked.AddRange(raidmon.GetSpawnedZDOIDs());
             }
+            OwnerRoutedDestroy.Request(tracked);
+        }
+
+        // Owner only. The flags are written before the coroutine starts because StartCoroutine runs it up to its first
+        // yield on the spot, and a search whose attempts all succeed never yields: it can finish, and set the ready
+        // flag, before StartCoroutine returns.
+        private void StartSpawnPointSearch(RaidDefinition raid) {
+            RaidSpawnPointsGeneratingStart.Set(ZNet.instance.GetTimeSeconds());
+            RaidSpawnPointsGenerating.Set(true);
+            TaskRunner.Run().StartCoroutine(RaidControl.DetermineRemoteSpawnLocations(this.transform.position, raid.SpawnPoints, OnSpawnSearchComplete, raid.EventRange));
+        }
+
+        // Whether the running search has gone on so long that whatever ran it must be gone: its machine left the game or
+        // unloaded the runner, or the coroutine threw. Measured from the start time on the ZDO, so it holds across
+        // owners; that applies to a search this machine started as well, since its coroutine can throw too. A generating
+        // runner without a start time (0) predates it and is restarted at once. Absolute, so a world clock that has
+        // moved backwards cannot leave the runner waiting.
+        private bool SpawnSearchOverdue() {
+            return Math.Abs(ZNet.instance.GetTimeSeconds() - spawnPointsGeneratingStartCache) > SpawnSearchTimeoutSeconds;
+        }
+
+        // Runs on the machine that ran the search, which by now may not own the runner: the search spans many frames,
+        // and the server (or a mod arbitrating ownership) can hand the runner to another player meanwhile. This used to
+        // ForceSet the result, which claimed the runner back first -- a client-side ownership change fighting the one
+        // the server just made. The result goes to whoever owns the runner instead.
+        private void OnSpawnSearchComplete(List<SerializableVector3> points) {
+            // The runner can go while the search runs: the raid ended, this player moved out of range, or the world
+            // unloaded. If the raid is still going elsewhere, its owner searches again once this one is overdue.
+            if (Znet == null || Znet.IsValid() == false) {
+                Logger.LogRaid("Raid spawn-point search finished after its runner was unloaded here; discarding results.");
+                return;
+            }
+            if (Znet.IsOwner()) {
+                StoreSpawnPoints(points);
+                return;
+            }
+            Logger.LogRaid($"Raid spawn-point search at {transform.position} finished after the runner changed owner; sending the points to its owner.");
+            ZPackage package = new ZPackage();
+            package.Write(points.Count);
+            foreach (SerializableVector3 point in points) { package.Write((Vector3)point); }
+            // Routed to the owner this machine knows of, and to every peer when it knows of none; only the owner acts on it.
+            Znet.InvokeRPC(RPC_SpawnPointsFound, package);
+        }
+
+        // The owner receiving another machine's search result.
+        private void ReceiveSpawnPoints(long sender, ZPackage package) {
+            if (Znet == null || Znet.IsValid() == false) { return; }
+            // Ownership moved again while this was in flight. Dropped rather than chased: the owner searches again itself
+            // once the search is overdue.
+            if (Znet.IsOwner() == false) { return; }
+            int count = package.ReadInt();
+            List<SerializableVector3> points = new List<SerializableVector3>(count);
+            for (int i = 0; i < count; i++) { points.Add(package.ReadVector3()); }
+            StoreSpawnPoints(points);
+        }
+
+        // Owner only. A search restarted by SpawnSearchOverdue and the one it replaced can both finish; the first result
+        // stands, so a raid that has committed to its points never has them swapped under it.
+        private void StoreSpawnPoints(List<SerializableVector3> points) {
+            if (RaidSpawnPointsReady.Get()) { return; }
+            RaidSpawnPoints.Set(points);
+            RaidSpawnPointsReady.Set(true);
         }
 
         private void ConnectZData() {
@@ -552,6 +636,7 @@ namespace StarLevelSystem.modules.Raids {
             RaidSpawnPoints = new ListVectorZNetProperty("SLS_RAID_SPAWN_POINTS", Znet, null);
             RaidSpawnPointsReady = new BoolZNetProperty("SLS_RAID_SPAWN_READY", Znet, false);
             RaidSpawnPointsGenerating = new BoolZNetProperty("SLS_RAID_SPAWN_GEN", Znet, false);
+            RaidSpawnPointsGeneratingStart = new DoubleZNetProperty("SLS_RAID_SPAWN_GEN_START", Znet, 0);
             ActiveRaidSpawns = new RaidMonitorListZNetProperty("SLS_RAID_SPAWNS_ACTIVE", Znet, new List<RaidMonitor>());
             RaidStarted = new BoolZNetProperty("SLS_RAID_STARTED", Znet, false);
             RaidWindDownStart = new DoubleZNetProperty("SLS_RAID_WINDDOWN", Znet, 0);

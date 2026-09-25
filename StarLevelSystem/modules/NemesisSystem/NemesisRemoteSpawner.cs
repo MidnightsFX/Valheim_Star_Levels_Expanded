@@ -17,11 +17,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Time-based: the old frame-count waits (120/240 ticks) ran 4x longer on a 15fps server
         // than on a 60fps client.
         private const float WarmupSeconds = 2f;
-        // A non-owner that has the area loaded waits longer, giving the authoritative owner (if any) first
-        // chance; if the ZDO is ownerless (owner released after the placer moved away) it then claims + spawns.
-        private const float NonOwnerClaimSeconds = 4f;
         private float warmup = 0f;
         private int diagTick = 0;
+        private bool loggedWaitingForOwner = false;
 
         public void Awake() {
             znv = GetComponent<ZNetView>();
@@ -51,17 +49,17 @@ namespace StarLevelSystem.modules.NemesisSystem {
             // Wait until the zone/objects around this spawner are fully loaded on this machine.
             if (ZNetScene.instance == null || !ZNetScene.instance.IsAreaReady(transform.position)) { Diag("area not ready"); return; }
 
-            // Not the owner: give the authoritative owner a grace period, then take over and claim it so the
-            // machine that actually loaded this area drives the spawn (covers an ownerless ZDO after recreation).
+            // Not the owner: leave it to the one that is. The placeholder is persistent, so the server hands it to a
+            // player as soon as it lies in that player's active area (ZDOMan.ReleaseNearbyZDOS) and that player's copy
+            // spawns the boss; until then nobody is close enough to meet it. This copy used to claim an ownerless
+            // placeholder after a grace period, which is the client-side ownership change SLS no longer makes, and
+            // spawned the boss wherever this client merely had the area loaded.
             if (!znv.IsOwner()) {
-                if (warmup < NonOwnerClaimSeconds) {
-                    if (warmup == 0f) { Logger.LogInfo($"[NemesisRemote] spawner loaded but not owner at {transform.position} (owner={znv.GetZDO()?.GetOwner()}); grace period before claiming."); }
-                    warmup += Time.deltaTime;
-                    return;
+                if (!loggedWaitingForOwner) {
+                    Logger.LogInfo($"[NemesisRemote] spawner loaded but not owner at {transform.position} (owner={znv.GetZDO()?.GetOwner()}); waiting for the server to assign it.");
+                    loggedWaitingForOwner = true;
                 }
-                Logger.LogInfo($"[NemesisRemote] spawner claiming ownership at {transform.position} (owner was {znv.GetZDO()?.GetOwner()}).");
-                znv.ClaimOwnership();
-                return; // re-enter next frame as owner
+                return;
             }
 
             //if (znv.GetZDO().GetBool(KeyPlaced, false)) { DestroySelf(); return; }

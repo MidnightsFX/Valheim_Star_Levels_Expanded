@@ -1,4 +1,16 @@
 
+**1.19.1**
+ ---
+ ```
+- Ulvs now swim with their own walk cycle; vanilla gives them the player's swim animation, which their rig cannot play, so they slid across water frozen
+- Raid, summoned, split and grown-up creatures no longer get extra copies from the spawn-rate multiplier
+	- Copies of raid Ulvs spawned asleep on the lake bed and filled the log with "kinematic body" warnings
+	- Also covers spawn with a level, creatures dropped as loot, and sls-creature-setlevel
+- Raid creatures now spawn upright instead of at a random tilt
+- Abomination has default loot: Root and Guck scale with stars, the trophy stays a single drop
+- Fixed Jotunn sometimes treating SLS as part of Jotunn at startup, which also renamed its network messages
+ ```
+
 **1.19.0**
  ---
  ```

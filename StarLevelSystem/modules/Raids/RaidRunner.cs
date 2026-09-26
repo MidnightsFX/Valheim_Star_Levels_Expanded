@@ -295,7 +295,11 @@ namespace StarLevelSystem.modules.Raids {
                             } else {
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");
                             }
-                            GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, UnityEngine.Random.rotation);
+                            // Yaw only, as vanilla spawners do. Random.rotation also rolls pitch and roll, and physics never
+                            // rights a character (its body's rotation is frozen): Character.UpdateRotation scales its turn
+                            // rate by the remaining yaw error, so a tipped creature only straightens while it is turning.
+                            Quaternion spawnRotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+                            GameObject spawnedCreature = GameObject.Instantiate(creaturePrefab, selectedSpawn, spawnRotation);
                             spawns += 1;
 
                             // Not every configured prefab is a creature -- army_charred_spawners spawns

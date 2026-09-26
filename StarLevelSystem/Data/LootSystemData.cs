@@ -11,6 +11,37 @@ namespace StarLevelSystem.Data
         public static LootSettings DefaultDropConfiguration = new LootSettings()
         {
             CharacterSpecificLoot = new Dictionary<string, List<ExtendedCharacterDrop>>() {
+                // Vanilla drops (Root 5, Guck 3-5, trophy 50%) all have m_levelMultiplier off, so nothing
+                // scales with stars. Scale the materials; the trophy stays a single drop.
+                { "Abomination", new List<ExtendedCharacterDrop>() {
+                    new ExtendedCharacterDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "Root",
+                                Min = 5,
+                                Max = 5,
+                            },
+                        },
+                    new ExtendedCharacterDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "Guck",
+                                Min = 3,
+                                Max = 5,
+                            },
+                        },
+                    new ExtendedCharacterDrop{
+                            Drop = new Drop
+                            {
+                                Prefab = "TrophyAbomination",
+                                Min = 1,
+                                Max = 1,
+                                Chance = 0.5f
+                            },
+                            DoesNotScale = true,
+                        }
+                    }
+                },
                 { "BlobElite", new List<ExtendedCharacterDrop>() {
                     new ExtendedCharacterDrop{
                             Drop = new Drop

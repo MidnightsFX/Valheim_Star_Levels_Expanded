@@ -101,6 +101,15 @@ namespace StarLevelSystem.modules.CreatureSetup {
         internal static void CreatureSetup(Character __instance, int leveloverride = 0, bool multiply = true, float delay = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
             if (delay < 0f) { delay = 0f; }
 
+            // The queue cannot carry multiply:false: Character.Awake already queued this creature with multiply:true
+            // during Instantiate, so this call is dropped as a duplicate. Record the opt-out on the ZDO instead, which is
+            // what Spawnrate.CheckSetApplySpawnrate reads. Otherwise raid, summon and split spawns get spawn-rate clones
+            // built from the bare prefab -- for a raid Ulv, a sleeping cave Ulv (kinematic while asleep) on the lake bed.
+            // Owner only, like every other roll; whoever just instantiated a creature owns it.
+            if (multiply == false && __instance != null && __instance.m_nview != null && __instance.m_nview.IsValid() && __instance.m_nview.IsOwner()) {
+                __instance.m_nview.GetZDO().Set(SLS_SPAWN_MULT, true);
+            }
+
             CreatureSetupQueue.Enqueue(__instance, leveloverride, multiply, delay, requiredModifiers, notAllowedModifiers);
         }
     }

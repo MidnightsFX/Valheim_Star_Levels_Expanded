@@ -7,6 +7,7 @@ using Jotunn.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
+using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.NemesisSystem;
 using StarLevelSystem.modules.Raids;
@@ -26,18 +27,21 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.19.0";
+        public const string PluginVersion = "1.19.1";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
         // https://valheim-modding.github.io/Jotunn/tutorials/localization.html
-        public static CustomLocalization Localization = LocalizationManager.Instance.GetLocalization();
+        // Set in Awake, not here: a static initialiser can run before BepInEx has registered this plugin, and Jotunn
+        // then attributes the whole mod - its RPC names included - to Jotunn itself for the rest of the session.
+        public static CustomLocalization Localization;
         public static AssetBundle EmbeddedResourceBundle;
         public static Harmony HarmonyInstance { get; private set; }
         public static ManualLogSource Log;
 
         public void Awake()
         {
+            Localization = LocalizationManager.Instance.GetLocalization();
             Log = this.Logger;
             cfg = new ValConfig(Config);
             cfg.SetupConfigRPCs();
@@ -63,6 +67,7 @@ namespace StarLevelSystem
             PrefabManager.OnVanillaPrefabsAvailable += UpdateLevelsOnChange.UpdateFishMaxLevel;
             PrefabManager.OnVanillaPrefabsAvailable += UpdateLevelsOnChange.UpdateFishScaleByQuality;
             PrefabManager.OnVanillaPrefabsAvailable += UIHudControl.SetDefaultStar;
+            PrefabManager.OnVanillaPrefabsAvailable += SwimAnimationModifications.ApplyToPrefabs;
             PrefabManager.OnVanillaPrefabsAvailable += NemesisRemoteSpawnControl.LoadAssets;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
             MinimapManager.OnVanillaMapDataLoaded += DistanceScaleSystem.DelayedMinimapSetup;

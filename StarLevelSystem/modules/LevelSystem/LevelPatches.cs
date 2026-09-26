@@ -200,11 +200,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                     if (evolveKills > 0) { grownZDO.Set(SLS_EVOLVE, evolveKills); }
                 }
 
-                // multiply:false below is dropped by the CreatureSetupQueue dedupe- Character.Awake already
-                // enqueued this creature with multiply:true during Instantiate- so mark the ZDO directly, the
-                // same way SetupChildCharacter does for bred offspring.
-                grownZDO.Set(SLS_SPAWN_MULT, true);
-
                 Logger.LogDebug($"Grown up {grownup.m_name} inheriting level {level} from child.");
                 CreatureSetupControl.CreatureSpawnerSetup(grownup, level, multiply: false);
             }

@@ -200,14 +200,8 @@ namespace StarLevelSystem.modules.UI {
         // (common/ConfigUI/QuickConfigBroker), which patches it once with a private Harmony instance
         // keyed on the launcher object name -- so several mods carrying that folder cannot double-patch it.
 
-        // First-time setup. Start runs on every visit to the start scene, including the return from a world, and
-        // before the intro cinematic has even begun; QueueTutorial waits for the real menu and acts once a session.
-        [HarmonyPatch(typeof(FejdStartup), nameof(FejdStartup.Start))]
-        public static class OpenSetupTutorialOnMainMenu {
-            public static void Postfix(FejdStartup __instance) {
-                QuickConfigureTool.QueueTutorial(__instance);
-            }
-        }
+        // The first-time setup no longer needs a FejdStartup.Start hook: QuickConfigureTool.Init queues it on the shared
+        // startup popup queue (common/ConfigUI), which waits for the main menu itself.
 
         // While the quick configure panel is open, Escape belongs to it. Skipping the pause menu's update on that frame
         // stops the same key press from also hiding the menu underneath.

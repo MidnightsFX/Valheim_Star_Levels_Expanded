@@ -126,6 +126,16 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private static void ClearPageReferences() {
+            ClearDistributionReferences();
+            ClearDistanceRingReferences();
+            ClearStatsReferences();
+            ClearNemesisReferences();
+            ClearRaidPageReferences();
+            ClearLocationResetReferences();
+            ClearLootPageReferences();
+        }
+
+        private static void ClearDistributionReferences() {
             minStarsSlider = null;
             maxStarsSlider = null;
             bossMinStarsSlider = null;
@@ -137,14 +147,17 @@ namespace StarLevelSystem.modules.UI {
             tableThresholdField = null;
             tableStatusText = null;
             tablePrefillText = null;
+        }
+
+        private static void ClearStatsReferences() {
             trollExampleText = null;
             elderExampleText = null;
             multiplayerExampleText = null;
+        }
+
+        private static void ClearNemesisReferences() {
             nemesisWarningText = null;
             nemesisActionViews.Clear();
-            ClearRaidPageReferences();
-            ClearLocationResetReferences();
-            ClearLootPageReferences();
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -213,6 +226,17 @@ namespace StarLevelSystem.modules.UI {
             // Center the column within the page root so it isn't left-biased.
             float colOffsetX = Mathf.Max(0f, (PageW - ColWidth) * 0.5f);
             ConfigUI.LayoutColumn(column, colOffsetX, 2f);
+        }
+
+        private static void ResetScalingPage() {
+            staged.enableDistance = DefaultOf(ValConfig.EnableDistanceLevelScalingBonus);
+            staged.enableDistanceOverlay = DefaultOf(ValConfig.EnableMapRingsForDistanceBonus);
+            staged.showNoMapRing = DefaultOf(ValConfig.ShowNoMapRingLevel);
+            staged.enableZone = DefaultOf(ValConfig.EnableZoneScalingBonus);
+            staged.enableZoneOverlay = DefaultOf(ValConfig.EnableZoneMapOverlay);
+            staged.showNoMapZone = DefaultOf(ValConfig.ShowNoMapZoneLevel);
+            CreatureLevelSettings shipped = ShippedDefaults(YamlConfigManager.LevelSettings);
+            staged.enableConditional = shipped != null && shipped.EnableConditionalCreatureLevelupChance;
         }
 
         // One scaling system: a main toggle with a description and an example image, over one or two indented sub
@@ -353,15 +377,18 @@ namespace StarLevelSystem.modules.UI {
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Creature curve"));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
+                staged.shippedCurve = null;
                 ShowStyleRows();
                 RefreshTableRows(true);
                 RefreshDistribution();
             }), Tip("LevelupCalculationStyle", "How the chance falls away from Min to Max stars. Linear spreads it evenly, Exponential makes high stars rare, Gaussian favours the middle of the range, and Table uses the values you type below.")));
             chanceRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
+                if (v != staged.generator.LevelUpChance) { staged.shippedCurve = null; }
                 staged.generator.LevelUpChance = v;
                 RefreshDistribution();
             }), Tip("LevelUpChance", "How likely a creature is to pass the first star level, which sets how far up the curve creatures usually get. Gaussian uses it to narrow the bell instead.")));
             gaussianRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
+                if (v != staged.generator.GaussianOffset) { staged.shippedCurve = null; }
                 staged.generator.GaussianOffset = v;
                 RefreshDistribution();
             }), Tip("GaussianOffset", "Moves the peak of the bell curve: -1 towards Min stars, +1 towards Max stars.")));
@@ -370,8 +397,11 @@ namespace StarLevelSystem.modules.UI {
             tableThresholdField = tableRow.GetComponentInChildren<InputField>();
             tableStatusRow = ScrollRow(left, lw, 50f, t => ConfigUI.AddTextRow(t, lw, 50f, "", 12, GUIManager.Instance.ValheimBeige));
             tableStatusText = tableStatusRow.GetComponentInChildren<Text>();
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v),
-                Tip("NightMultiplier", "Multiplies these chances at night only, so creatures spawn with more stars after dark. 1 leaves them alone.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => {
+                if (v != staged.generator.NightMultiplier) { staged.shippedCurve = null; }
+                staged.generator.NightMultiplier = v;
+                RefreshDistribution();
+            }), Tip("NightMultiplier", "Multiplies these chances at night only, so creatures spawn with more stars after dark. 1 leaves them alone.")));
 
             // Bosses. The star cap applies whether or not they have a curve of their own, so it sits outside the toggle.
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Bosses"));
@@ -439,12 +469,19 @@ namespace StarLevelSystem.modules.UI {
             ShowBossRows();
         }
 
+        private static void ResetDistributionPage() {
+            staged.ResetDistribution(ShippedDefaults(YamlConfigManager.LevelSettings));
+        }
+
         // Min and Max both rewrite the generator's range, so whichever curve is picked always tapers across exactly the
         // stars shown. Each keeps Min <= Max by moving the other slider. The value boxes also report their value when
         // they merely lose focus, so a value the slider already showed is not an edit.
         private static void OnMinStarsChanged(int minStars) {
             if (staged == null || minStars == shownMinStars) { return; }
             shownMinStars = minStars;
+            // Max stars pulling Min down sets the generator before it moves this slider. Only a Min picked here is a
+            // change to the curve itself.
+            if (staged.generator.MinLevel != minStars + 1) { staged.shippedCurve = null; }
             staged.generator.MinLevel = minStars + 1;
             if (minStars > staged.maxStars && maxStarsSlider != null) {
                 maxStarsSlider.value = minStars;   // its listener moves maxStars up to match
@@ -495,12 +532,18 @@ namespace StarLevelSystem.modules.UI {
             UpdateExampleMath();
         }
 
+        // The creature curve the page shows. Until it is changed that is what the world rolls today, which may be a
+        // hand-written table that no generator describes; after Reset page, the shipped one.
+        private static SortedDictionary<int, float> ShownCreatureCurve() {
+            if (staged.shippedCurve != null) { return staged.shippedCurve; }
+            return staged.CurveDiffers(baseline) ? StagedCurveTable(staged.generator, staged.TableSpan) : LiveDefaultTable();
+        }
+
         private static void RefreshDistribution() {
             if (staged == null || baseline == null || distributionChart == null) { return; }
 
-            // Until the curve is changed, show what the world rolls today, which may be a hand-written table that no
-            // generator describes. The cap matches LevelSelection.GetMaxCreatureLevel before biome overrides.
-            SortedDictionary<int, float> table = staged.CurveDiffers(baseline) ? StagedCurveTable(staged.generator, staged.TableSpan) : LiveDefaultTable();
+            // The cap matches LevelSelection.GetMaxCreatureLevel before biome overrides.
+            SortedDictionary<int, float> table = ShownCreatureCurve();
             distributionChart.SetData(ToStarSeries(LevelSelection.ComputeLevelDistribution(table, staged.maxStars + 1)));
 
             if (bossChart != null && staged.bossCurveOn) {
@@ -746,6 +789,18 @@ namespace StarLevelSystem.modules.UI {
             UpdateExampleMath();
         }
 
+        private static void ResetStatsPage() {
+            staged.creatureHpPerLevel = DefaultOf(ValConfig.EnemyHealthMultiplier);
+            staged.creatureDmgPerLevel = DefaultOf(ValConfig.EnemyDamageLevelMultiplier);
+            staged.bossHpPerLevel = DefaultOf(ValConfig.BossEnemyHealthMultiplier);
+            staged.bossDmgPerLevel = DefaultOf(ValConfig.BossEnemyDamageMultiplier);
+            staged.mpHealth = DefaultOf(ValConfig.EnableMultiplayerEnemyHealthScaling);
+            staged.mpHealthMod = DefaultOf(ValConfig.MultiplayerEnemyHealthModifier);
+            staged.mpDamage = DefaultOf(ValConfig.EnableMultiplayerEnemyDamageScaling);
+            staged.mpDamageMod = DefaultOf(ValConfig.MultiplayerEnemyDamageModifier);
+            staged.mpRequiredPlayers = DefaultOf(ValConfig.MultiplayerScalingRequiredPlayersNearby);
+        }
+
         private static Text AddExampleCard(Transform parent, float x, float y, float w, float h, string trophyPrefab) {
             const float IconSize = 64f;
             const float TextX = IconSize + 12f;
@@ -869,6 +924,36 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
+        private static void ResetModifiersPage() {
+            staged.maxMajor = DefaultOf(ValConfig.MaxMajorModifiersPerCreature);
+            staged.maxMinor = DefaultOf(ValConfig.MaxMinorModifiersPerCreature);
+            staged.chanceMajor = DefaultOf(ValConfig.ChanceMajorModifier);
+            staged.chanceMinor = DefaultOf(ValConfig.ChanceMinorModifier);
+            staged.limitToStarLevel = DefaultOf(ValConfig.LimitCreatureModifiersToCreatureStarLevel);
+            staged.enableBossMods = DefaultOf(ValConfig.EnableBossModifiers);
+            staged.chanceBoss = DefaultOf(ValConfig.ChanceOfBossModifier);
+            staged.maxBossMods = DefaultOf(ValConfig.MaxBossModifiersPerBoss);
+            staged.prefixLimit = DefaultOf(ValConfig.LimitCreatureModifierPrefixes);
+            staged.minorFirst = DefaultOf(ValConfig.MinorModifiersFirstInName);
+            staged.displayStyle = Enum.TryParse(DefaultOf(ValConfig.ModifierIconDisplayStyle), out ModifierDisplayStyle style) ? style : ModifierDisplayStyle.Stars;
+
+            // Each listed modifier takes its shipped on/off. One the shipped file does not have (added by hand or by
+            // another mod) has no default to go back to, so it keeps its setting.
+            CreatureModifierCollection shipped = ShippedDefaults(YamlConfigManager.ModifierSettings);
+            ResetModifierToggles(ModifierType.Boss, staged.modifierSource?.BossModifiers, shipped?.BossModifiers);
+            ResetModifierToggles(ModifierType.Major, staged.modifierSource?.MajorModifiers, shipped?.MajorModifiers);
+            ResetModifierToggles(ModifierType.Minor, staged.modifierSource?.MinorModifiers, shipped?.MinorModifiers);
+        }
+
+        private static void ResetModifierToggles(ModifierType type, Dictionary<string, CreatureModifierConfiguration> listed, Dictionary<string, CreatureModifierConfiguration> shipped) {
+            if (listed == null || shipped == null) { return; }
+            HashSet<string> on = staged.modifierOn[type];
+            foreach (string name in listed.Keys) {
+                if (shipped.TryGetValue(name, out CreatureModifierConfiguration config) == false || config == null) { continue; }
+                if (config.Enabled) { on.Add(name); } else { on.Remove(name); }
+            }
+        }
+
         // Adds a category header followed by one toggle row per modifier defined in that category.
         private static void AddModifierCategory(Transform content, float width, string label, ModifierType type, Dictionary<string, CreatureModifierConfiguration> dict) {
             if (dict == null || dict.Count == 0) { return; }
@@ -963,6 +1048,33 @@ namespace StarLevelSystem.modules.UI {
             }
 
             RefreshNemesisDescriptions();
+        }
+
+        private static void ResetNemesisPage() {
+            staged.enableNemesis = DefaultOf(ValConfig.EnableNemesisSystem);
+            NemesisConfiguration shipped = ShippedDefaults(YamlConfigManager.NemesisSettings);
+            if (shipped == null) { return; }
+            staged.nemCooldown = shipped.NemesisActionCooldownSeconds;
+            staged.nemInfluence = shipped.NemesisInfluenceRadius;
+            staged.nemMinSpawn = shipped.NemesisMinSpawnDistance;
+            NemesisScore score = shipped.ScoreSystem ?? new NemesisScore();
+            staged.neutralScore = score.NeutralScore;
+            staged.minScore = score.MinScore;
+            staged.maxScore = score.MaxScore;
+            staged.decayPerUpdate = score.DecayPerUpdate;
+            staged.scoreInterval = score.ScoreIntervalSeconds;
+            staged.bossKillBonus = score.BossKillBonus;
+            staged.deathReduction = score.DeathScoreReduction;
+            // Actions the shipped file does not have keep their settings, as a modifier the shipped file lacks does.
+            Dictionary<string, NemesisChanceEntry> shippedOps = shipped.ChanceChanges?.CreatureOps;
+            if (shippedOps == null) { return; }
+            foreach (KeyValuePair<string, StagedNemesisAction> action in staged.nemesisActions) {
+                if (shippedOps.TryGetValue(action.Key, out NemesisChanceEntry op) == false || op == null) { continue; }
+                action.Value.Enabled = op.Enabled;
+                action.Value.Chance = op.Chance;
+                action.Value.Threshold = op.ScoreThreshold;
+                action.Value.LevelBonus = op.LevelBonus;
+            }
         }
 
         // Rows inside a scroll view must size themselves through a LayoutElement (see ConfigUI.NewLayoutRow). This hosts

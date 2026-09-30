@@ -652,11 +652,11 @@ namespace StarLevelSystem.modules.LocationReset {
                 bool blocked = false;
                 for (int i = 0; i < zones.Count; i++) {
                     // Both halves matter. A player just outside the safe radius can still have the
-                    // chunk loaded, and a loaded chunk is one whose objects are live in somebody's
+                    // chunk loaded, and a loaded chunk is one whose objects are live in this process's
                     // scene -- including the dungeon interior, which shares this chunk's coordinates
                     // 5000m up.
                     if (LocationResetManager.PlayersNearby(zones[i], cfg.PlayerSafeRadius) == false
-                            && ZoneSystem.instance.IsZoneLoaded(zones[i]) == false) { continue; }
+                            && ZoneLoader.IsLive(zones[i]) == false) { continue; }
                     blocking = zones[i];
                     blocked = true;
                     break;

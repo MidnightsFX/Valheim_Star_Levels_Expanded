@@ -1,4 +1,17 @@
 
+**1.20.0**
+ ---
+ ```
+- The first-time setup now shows once per user rather than once per mod manager profile; the record is shared by every profile, in ModQuickConfig/FirstRun.cfg next to your Valheim saves
+- Welcome and notice popups from mods sharing the Mod Config button now open one at a time, in order, instead of on top of each other
+- New Distance Rings page in the quick configure panel: add, remove and move the map's level rings, edit each ring's bonus, and chart what it does
+- Loot distance rings can now be added, removed and moved from the Loot page, not just tuned
+- Every quick configure page has a Reset page button that puts that page back to the defaults; nothing is written until you Save
+- Location resets no longer take over a zone the server already has loaded while a dungeon in it is still loading its rooms; the reset used to unload that live zone when it finished
+- Players now get the boss defeat keys (and ones like KilledTroll) the world already has when they join or respawn, so raids needing player keys open for everyone and not just whoever got the kill (GrantWorldDefeatKeysOnJoin)
+- Raids are smaller: every raid creature's MaxSpawned is cut to about two thirds. RaidSettings.yaml resets to the new defaults; the old file is backed up next to it
+ ```
+
 **1.19.1**
  ---
  ```

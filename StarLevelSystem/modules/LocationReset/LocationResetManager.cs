@@ -240,7 +240,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 // This block is transient by nature -- somebody walking past a chunk should not cost
                 // it a whole cycle -- so it gets a couple of short retries before being written off.
                 bool playerNear = PlayersNearby(zone, cfg.PlayerSafeRadius);
-                if (playerNear || ZoneSystem.instance.IsZoneLoaded(zone)) {
+                if (playerNear || ZoneLoader.IsLive(zone)) {
                     PlayerBlockedZones++;
                     // Reported separately: "somebody is standing here" and "this chunk happens to be
                     // loaded" have very different causes and used to share one message.

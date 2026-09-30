@@ -338,6 +338,50 @@ namespace StarLevelSystem.modules.Raids
             MarkPlayerRaidDataDirty();
         }
 
+        // Killing a creature that carries a defeat key (every boss, plus the likes of the Troll's KilledTroll) sets a
+        // world key for everyone, but the matching player key only lands on whoever gets credit for the kill:
+        // vanilla's Character.OnDeath queues it on the one client that owned the creature, and a key share mod
+        // (ValheimCommunityPatch) widens that to players online and nearby. Anyone offline or elsewhere at the time,
+        // anyone new to the world, and every kill made before such a mod was installed or set with setkey leaves
+        // players without the key, so raids gated on RequiredPlayerKeys never open for them. Catches the local
+        // player up from the world's own keys. Only defeat keys are copied: the rest of the global keys are world
+        // modifiers and progress flags that have no meaning as player keys.
+        internal static void GrantWorldDefeatKeys(Player player) {
+            if (player == null || ZoneSystem.instance == null) { return; }
+            List<string> granted = new List<string>();
+            foreach (string key in DefeatKeys()) {
+                // GetGlobalKey lowercases, as GlobalKeyAdd does when storing; the player key keeps the creature's own
+                // casing, which is what a real kill would have given them.
+                if (ZoneSystem.instance.GetGlobalKey(key) == false || player.HaveUniqueKey(key)) { continue; }
+                player.AddUniqueKey(key);
+                granted.Add(key);
+            }
+            if (granted.Count > 0) {
+                Logger.LogInfo($"Granted defeat key(s) this world already holds: {string.Join(", ", granted)}");
+            }
+        }
+
+        private static HashSet<string> defeatKeys;
+        private static ZNetScene defeatKeysScene;
+
+        // Every defeat key a registered creature can set, modded ones included. Rebuilt per ZNetScene, which is
+        // recreated with each world load, so creatures other mods register there are picked up.
+        private static HashSet<string> DefeatKeys() {
+            ZNetScene scene = ZNetScene.instance;
+            if (scene == null) { return new HashSet<string>(); }
+            if (defeatKeys != null && defeatKeysScene == scene) { return defeatKeys; }
+            HashSet<string> keys = new HashSet<string>();
+            foreach (GameObject prefab in scene.m_namedPrefabs.Values) {
+                if (prefab == null) { continue; }
+                Character character = prefab.GetComponent<Character>();
+                if (character == null || string.IsNullOrEmpty(character.m_defeatSetGlobalKey)) { continue; }
+                keys.Add(character.m_defeatSetGlobalKey);
+            }
+            defeatKeys = keys;
+            defeatKeysScene = scene;
+            return keys;
+        }
+
         private static bool playerRaidDataDirty = false;
 
         internal static void MarkPlayerRaidDataDirty() { playerRaidDataDirty = true; }

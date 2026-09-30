@@ -5,7 +5,9 @@
 > `Examples/` file referenced below was not copied; this mod registers its own panel.
 A widget kit for building config panels out of Jotunn's `GUIManager` primitives, plus a **shared
 launcher**: one button bottom-right of the main and pause menus that lists every loaded mod which has
-registered a panel.
+registered a panel. Alongside it, a **shared startup popup queue**, so popups that open by themselves on
+the main menu show one at a time, and a **per-user first-run record**, so a first-run tutorial greets a
+user once rather than once per mod manager profile.
 
 ## Dependency rule
 
@@ -94,6 +96,119 @@ unrelated mod pins the launcher UI at an old version. The alternative — handin
 newer copy mid-session — would leave every other assembly's cached `MethodInfo` pointing at a retired
 component, which fails silently and much worse.
 
+## Startup popups
+
+A popup that opens by itself on the main menu — a first-run tutorial, an update notice — goes through the
+shared queue instead of opening from its own `FejdStartup.Start` hook. With several mods each doing the
+latter, they all wait for the same moment and land on the same frame.
+
+```csharp
+ConfigUIStartupPopups.Enqueue("MyMod.UpdateNotice", ConfigUIStartupPopups.OrderNotice,
+    tryOpen: () => { ShowNotice(); return notice != null; },
+    isOpen:  () => notice != null);
+```
+
+Safe to call from `Awake`: the queue waits for the main menu itself, and anything still pending when the
+player starts a game shows on their return to the menu. A no-op on a dedicated server.
+
+**When it opens a popup.** The main menu must have been ready — no intro cinematic, `m_mainMenu` and
+`m_menuList` active, no `UnifiedPopup`, no connection-failed notice, and no kit panel open — for 1 s
+without a break before the first popup of a visit, and 0.5 s between popups. The gap is load-bearing: a
+closing panel is destroyed at the end of its frame, and its `MainMenuGuard` shows the main menu again
+then — under a popup opened on the same frame, which would never hide it again.
+
+**`tryOpen` and `isOpen`.** `tryOpen` returns true when its popup is now up; false (or a throw) means it
+declined, and the next popup gets its turn on the same frame. After that `isOpen` is polled every frame
+until it returns false. It must compare Unity objects with `!= null` — never `?.`, `??`,
+`ReferenceEquals` or `is null`, which do not see a destroyed object as gone. Queuing a pending key again
+replaces its callbacks; queuing the key that is showing is refused.
+
+**Order.** Lower first, equal orders in the order they were queued. Conventions:
+
+| Constant | Value | For |
+| --- | --- | --- |
+| `OrderWelcome` | 100 | first-run tutorials and welcomes |
+| `OrderNotice` | 200 | anything else: update notices, migration prompts |
+
+Offset within a band when a mod has several (`OrderWelcome + 10`).
+
+**"A kit panel is open"** means a direct child of `GUIManager.CustomGUIFront`, active, carrying a
+component whose type name is `ConfigUIInputGuard`. Every panel this kit builds has one — `CreatePanel`,
+the picker, the prompt, the launcher's list — whichever copy built it, and so should a mod's own overlay.
+That type name is part of the contract below.
+
+### The queue's frozen contract
+
+Same arrangement as the launcher, on **its own** `DontDestroyOnLoad` GameObject. Not on the launcher's:
+`ConfigUILauncher` only adds a broker to a launcher object it created itself, so had the queue created
+that object first, every older copy would find no broker there and lose the Mod Config button. Nor as a
+broker method: the broker belongs to whichever copy loaded first, and an older one would switch the queue
+off.
+
+```csharp
+internal const string QueueObjectName    = "ModStartupPopupQueue";
+internal const string QueueTypeName      = "StartupPopupQueue";
+internal const string PanelGuardTypeName = "ConfigUIInputGuard";
+internal const int    ContractVersion    = 1;
+
+public int  QueueVersion { get; }
+public bool Enqueue(string key, int order, Func<bool> tryOpen, Func<bool> isOpen);
+public void Cancel(string key);
+public bool IsQueued(string key);
+```
+
+The launcher's amendment rules apply unchanged: additive only.
+
+## First-run record
+
+Which first-run popups a user has seen, kept **once per user**. A flag in the mod's own cfg lives in one
+mod manager profile, and greets the same user again in every other profile. The record is a BepInEx-format
+file next to Valheim's own per-user files, which every profile shares:
+
+```
+%USERPROFILE%\AppData\LocalLow\IronGate\Valheim\ModQuickConfig\FirstRun.cfg
+```
+
+```ini
+[FirstRun]
+StarLevelSystem = 1
+```
+
+One line per mod, keyed by a plain identifier that never changes once shipped. The value is the newest
+**revision** of that mod's popup the user has seen; raise the revision in the mod to show a reworked
+tutorial again. A write never lowers a value. **Deleting the file brings every mod's popup back.** The
+folder, file and section names and the meaning of the value are frozen: every copy of this folder reads
+and writes the same file.
+
+Each mod keeps a per-profile override as a client setting, `ConfigEntry<FirstRunMode>`:
+
+| Value | Meaning |
+| --- | --- |
+| `Auto` | show once per user — the record decides |
+| `ShowNextLaunch` | show on the next launch in this profile, then back to `Auto` |
+| `Never` | never open by itself in this profile |
+
+```csharp
+ConfigUIFirstRun.QueueFirstRunPopup("MyMod", 1, ValConfig.FirstRunPopup, ConfigUIStartupPopups.OrderWelcome,
+    open: () => { OpenWelcome(); return welcome != null; },
+    isOpen: () => welcome != null);
+
+// in the popup's close, by whatever route:
+ConfigUIFirstRun.MarkSeen("MyMod", 1);
+```
+
+`ShowNextLaunch` is spent when the popup **opens**, not when it closes, so a popup that itself offers
+"show this again next launch" keeps that choice. A mod with no popup does none of this.
+
+Every read and write opens the file afresh rather than holding it for the session: the user may delete
+it while the game runs, and a held instance would write every other mod's line back into it. The record
+is never read or written on a dedicated server — it may run as the same Windows user, and must not mark
+that user's own tutorials seen. A record that exists but cannot be read counts as seen, with a warning,
+so an unreadable folder does not reopen the popup every launch.
+
+Retiring an older per-profile flag: `TakeLegacyEntry(cfg, section, key, out raw)` reads its value and
+drops the line, so the next save no longer writes it back. Migrate "already seen" with `MarkSeen`.
+
 ## Widgets
 
 Layout is **top-left origin**: `anchorMin = anchorMax = pivot = (0,1)`, `anchoredPosition = (x, -y)`.
@@ -154,6 +269,10 @@ Copy `Common/Config/UI/`, then:
    it is a per-machine UI preference).
 3. Replace `Examples/ExampleConfigPanel.cs` with your own panel and registration.
 4. Call your `Init()` from `Awake`.
+5. Only if the mod has a first-run popup: add a `ConfigEntry<FirstRunMode> FirstRunPopup` (Client config,
+   default `Auto`, not `IsAdminOnly`), pick a record key, and queue the popup as
+   `Examples/ExampleWelcomePopup.cs` does. Any other popup that opens by itself on the main menu goes
+   through `ConfigUIStartupPopups.Enqueue`.
 
 The broker patches `Menu.Start` with a private Harmony instance keyed on the frozen object name, so a
 second mod's copy cannot double-patch it and a plugin calling `Harmony.CreateAndPatchAll(assembly)`

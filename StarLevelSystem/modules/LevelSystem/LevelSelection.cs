@@ -257,9 +257,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         // Consider decision tree for levelups to reduce iterations
-        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f) {
-            int selected_level = 0;
-            // Build new levelup definitions with bonuses applied
+        // The levelup chances with a distance ring's bonus added, which is the table DetermineLevelRollResult walks. Also
+        // what the quick configure panel previews a ring with, so the two cannot drift apart.
+        public static SortedDictionary<int, float> ApplyLevelupBonus(SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence) {
             SortedDictionary<int, float> LevelUpWithBonus = new SortedDictionary<int, float>() { };
             LevelUpWithBonus.AddRange<int, float>(creature_levelup_chance);
             if (levelup_bonus != null) {
@@ -275,6 +275,13 @@ namespace StarLevelSystem.modules.LevelSystem {
                     }
                 }
             }
+            return LevelUpWithBonus;
+        }
+
+        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f) {
+            int selected_level = 0;
+            // Build new levelup definitions with bonuses applied
+            SortedDictionary<int, float> LevelUpWithBonus = ApplyLevelupBonus(creature_levelup_chance, levelup_bonus, distance_influence);
 
             int index = 0;
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {

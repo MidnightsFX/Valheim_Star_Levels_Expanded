@@ -18,6 +18,14 @@ namespace StarLevelSystem.modules.LocationReset {
             return manuallyLoaded.Contains(zone);
         }
 
+        // Whether the zone exists in this process's scene at all. Deliberately NOT IsZoneLoaded: that
+        // is also false for an existing zone while any object in it is still loading (a dungeon
+        // fetching its rooms), and treating that zone as unloaded would claim it and let Release tear
+        // down a zone this class never loaded.
+        internal static bool IsLive(Vector2s zone) {
+            return ZoneSystem.instance != null && ZoneSystem.instance.m_zones.ContainsKey(zone);
+        }
+
         // Poke the zone until vanilla reports it loaded. onResult receives whether it came up in time.
         //
         // adoptIfLoaded is for the forced admin reset. Valheim keeps the 3x3 zone block around every
@@ -26,15 +34,24 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static IEnumerator Load(Vector2s zone, float maxWaitSeconds, bool adoptIfLoaded, System.Action<bool> onResult) {
             if (ZoneSystem.instance == null) { onResult?.Invoke(false); yield break; }
 
-            if (ZoneSystem.instance.IsZoneLoaded(zone)) {
-                // Report success when adopting, but deliberately do NOT register the zone in
-                // manuallyLoaded: Release only tears down zones this class loaded, so a live zone a
-                // player is standing in is worked on in place and left standing afterwards.
-                onResult?.Invoke(adoptIfLoaded);
+            float deadline = Time.realtimeSinceStartup + Mathf.Max(1f, maxWaitSeconds);
+
+            if (IsLive(zone)) {
+                // Deliberately do NOT register the zone in manuallyLoaded: Release only tears down
+                // zones this class loaded, so a live zone a player is standing in is worked on in place
+                // and left standing afterwards.
+                if (adoptIfLoaded == false) { onResult?.Invoke(false); yield break; }
+
+                // Adopting still waits out anything mid-load in it, so the reset never works on a
+                // half-loaded zone.
+                while (ZoneSystem.instance.IsZoneLoaded(zone) == false) {
+                    if (Time.realtimeSinceStartup >= deadline) { onResult?.Invoke(false); yield break; }
+                    yield return null;
+                }
+                onResult?.Invoke(true);
                 yield break;
             }
 
-            float deadline = Time.realtimeSinceStartup + Mathf.Max(1f, maxWaitSeconds);
             manuallyLoaded.Add(zone);
 
             while (Time.realtimeSinceStartup < deadline) {

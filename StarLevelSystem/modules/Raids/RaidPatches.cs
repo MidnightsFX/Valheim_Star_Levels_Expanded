@@ -32,6 +32,10 @@ namespace StarLevelSystem.modules.Raids
         // between "dedicated client -> RPC up to the server" and "integrated host -> update the registry directly".
         private static bool CanSyncPrivateKeys() => ZNet.instance != null && Player.m_localPlayer != null;
 
+        // Set while the load-time catch-up adds keys, so its batch goes up to the server as one sync rather than one
+        // per key.
+        private static bool deferKeySync = false;
+
         // Registers the RaidRunner prefab into ZNetScene on every machine, the dedicated server included, so a
         // runner's persistent ZDO is rebuilt where it is loaded instead of logging "Missing prefab hash" on
         // every object pass. See RaidControl.EnsureRegisteredToZNetScene.
@@ -45,7 +49,7 @@ namespace StarLevelSystem.modules.Raids
         [HarmonyPatch(typeof(Player), nameof(Player.AddUniqueKey))]
         internal static class UpdatePlayerPrivateKeys {
             public static void Postfix() {
-                if (CanSyncPrivateKeys() == false) { return; }
+                if (deferKeySync || CanSyncPrivateKeys() == false) { return; }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }
@@ -58,10 +62,21 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // Game.SpawnPlayer loads the profile into the new local player on every join and respawn. The world's global
+        // keys arrived with the connection, well before the spawn, so the catch-up sees every kill made while this
+        // player was offline or away.
         [HarmonyPatch(typeof(Player), nameof(Player.Load))]
         internal static class SyncPlayerPrivateKeysOnLoad {
-            public static void Postfix() {
+            public static void Postfix(Player __instance) {
                 if (CanSyncPrivateKeys() == false) { return; }
+                if (__instance == Player.m_localPlayer && ValConfig.GrantWorldDefeatKeysOnJoin.Value) {
+                    deferKeySync = true;
+                    try {
+                        RaidControl.GrantWorldDefeatKeys(__instance);
+                    } finally {
+                        deferKeySync = false;
+                    }
+                }
                 TaskRunner.Instance.StartCoroutine(ValConfig.OnClientReceiveRequestForPrivateKeys(1, null));
             }
         }

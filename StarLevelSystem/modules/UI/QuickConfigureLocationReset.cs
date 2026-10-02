@@ -109,6 +109,31 @@ namespace StarLevelSystem.modules.UI {
                 return s;
             }
 
+            // Reset page: the two ConfigEntries and everything the page shows from the YAML go back to a freshly
+            // generated file. A group the shipped file does not have keeps its settings; its members, schedule and
+            // scope were never the page's to change.
+            internal void ResetToShipped(LocationResetConfiguration shipped) {
+                masterSwitch = DefaultOf(ValConfig.EnableLocationReset);
+                sweepBudgetMs = DefaultOf(ValConfig.LocationResetSweepBudgetMs);
+                if (shipped == null) { return; }
+                yamlEnabled = shipped.Enabled.GetValueOrDefault(false);
+                stampOnFirstSight = shipped.StampOnFirstSight;
+                playerSafeRadius = shipped.PlayerSafeRadius;
+                LocationResetDefaults defaults = shipped.Defaults ?? new LocationResetDefaults();
+                defaultResetHours = defaults.ResetHours;
+                defaultResetTerrain = defaults.ResetTerrain;
+                protectionRadius = defaults.ProtectionRadius;
+                containerDefaultLoot = (shipped.InPlaceRefresh ?? new LocationResetInPlace()).ContainerDefaultLoot;
+                biomeRates = shipped.BiomeRates != null ? new Dictionary<Heightmap.Biome, float>(shipped.BiomeRates) : new Dictionary<Heightmap.Biome, float>();
+                if (shipped.ResetGroups == null) { return; }
+                foreach (KeyValuePair<string, StagedResetGroup> group in groups) {
+                    if (shipped.ResetGroups.TryGetValue(group.Key, out LocationResetGroup source) == false || source == null) { continue; }
+                    group.Value.Enabled = source.Enabled.GetValueOrDefault(true);
+                    group.Value.ResetHours = source.ResetHours;
+                    group.Value.ResetTerrain = source.ResetTerrain;
+                }
+            }
+
             // The rate the sweep uses for a biome: its own entry, else the All entry, else 1.
             internal float RateFor(Heightmap.Biome biome) {
                 if (biomeRates.TryGetValue(biome, out float rate)) { return rate; }
@@ -202,6 +227,10 @@ namespace StarLevelSystem.modules.UI {
             }
 
             RefreshLocationResetViews();
+        }
+
+        private static void ResetLocationResetPage() {
+            staged.locationReset.ResetToShipped(ShippedDefaults(YamlConfigManager.LocationResetSettings));
         }
 
         private static void AddResetGroupEntry(Transform content, float width, string name, StagedResetGroup group) {

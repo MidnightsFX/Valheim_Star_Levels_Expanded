@@ -16,6 +16,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -154,6 +155,7 @@ namespace StarLevelSystem.common {
         internal static CustomRPC LocationApiResultRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
+        internal static CustomRPC DestroyViaOwnerRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
         public static ConfigEntry<bool> EnableTerminalColors;
@@ -283,6 +285,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> RaidExclusionRange;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
+        public static ConfigEntry<bool> GrantWorldDefeatKeysOnJoin;
 
         public static ConfigEntry<bool> EnableNemesisSystem;
         public static ConfigEntry<bool> EnableNemesisRemoteSpawning;
@@ -316,8 +319,13 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> ShowNoMapZoneLevel;
         public static ConfigEntry<float> ZoneOverlayColorTransparency;
         public static ConfigEntry<bool> ShowQuickConfigureButton;
-        public static ConfigEntry<bool> SetupTutorialComplete;
+        public static ConfigEntry<FirstRunMode> FirstTimeSetup;
         public static ConfigEntry<bool> AutoTuneBiomeStarCaps;
+
+        // The first-time setup's line in the shared per-user first-run record (common/ConfigUI). Never change the key
+        // once shipped; raise the revision to show a reworked setup to users who have seen this one.
+        internal const string FirstTimeSetupKey = "StarLevelSystem";
+        internal const int FirstTimeSetupRevision = 1;
 
         public static ConfigEntry<float> ConfigPollIntervalSeconds;
         public static ConfigEntry<float> ConfigApplyDelay;
@@ -349,6 +357,25 @@ namespace StarLevelSystem.common {
                 Logger.LogWarning($"Could not read the existing configuration file: {e.Message}");
                 return null;
             }
+        }
+
+        // The first-time setup used to mark itself done with a flag in this profile's config, which greeted the same user
+        // again in every new profile. That is now kept in the per-user record every profile shares, so an old "done" is
+        // carried across and the flag dropped from the file. A config file that names neither setting
+        // belongs to someone who installed and configured the mod before the setup existed, where it would interrupt
+        // rather than help, so that counts as done too. A fresh install has no file and gets the setup.
+        private void MigrateFirstTimeSetup() {
+            bool seen;
+            if (ConfigUIFirstRun.TakeLegacyEntry(cfg, "Client config", "SetupTutorialComplete", out string oldValue)) {
+                seen = bool.TryParse(oldValue, out bool complete) && complete;
+            } else {
+                seen = existingConfigText != null && Regex.IsMatch(existingConfigText, @"(?m)^\s*FirstTimeSetup\s*=") == false;
+            }
+            // A dedicated server has no setup to skip, and must not write the record on its user's behalf.
+            if (seen == false || GUIManager.IsHeadless()) { return; }
+            ConfigUIFirstRun.MarkSeen(FirstTimeSetupKey, FirstTimeSetupRevision);
+            Logger.LogInfo("Existing StarLevelSystem configuration found, so the first-time setup is recorded as seen. " +
+                "Set FirstTimeSetup to ShowNextLaunch to see it again.");
         }
 
         public void SetupConfigRPCs() {
@@ -385,6 +412,9 @@ namespace StarLevelSystem.common {
             // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
             ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
+            // Client -> server: delete objects the client does not own. Server -> owning client: the same request,
+            // forwarded. Lets SLS delete a creature without a client ever claiming it; see OwnerRoutedDestroy.
+            DestroyViaOwnerRPC = NetworkManager.Instance.AddRPC("SLS_DestroyViaOwnerRPC", modules.OwnerRoutedDestroy.OnServerReceive, modules.OwnerRoutedDestroy.OnClientReceive);
 
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             // Joining clients receive the current set of active remote-boss map pins.
@@ -453,22 +483,15 @@ namespace StarLevelSystem.common {
                 null,
                 new ConfigurationManagerAttributes { }));
             ShowQuickConfigureButton.SettingChanged += QuickConfigureTool.OnShowButtonChanged;
-            SetupTutorialComplete = Config.Bind("Client config", "SetupTutorialComplete", false,
-                new ConfigDescription("Set once the first-time setup has been shown on the main menu. Set to false to see it again the next time the main menu opens. An install that already had a config file before this setting existed starts at true, so the setup only greets fresh installs.",
+            FirstTimeSetup = Config.Bind("Client config", "FirstTimeSetup", FirstRunMode.Auto,
+                new ConfigDescription("Whether the first-time setup opens on the main menu. Auto shows it once per user: whether you have seen it is shared by every mod manager profile, in ModQuickConfig/FirstRun.cfg next to your Valheim saves. ShowNextLaunch shows it on the next launch and then goes back to Auto. Never stops it opening by itself in this profile. It can always be opened from the Mod Config button.",
                 null,
                 new ConfigurationManagerAttributes { }));
             AutoTuneBiomeStarCaps = Config.Bind("Client config", "AutoTuneBiomeStarCaps", true,
                 new ConfigDescription("On the quick configure panel's Level Distribution page, scale each biome's star cap with the Max stars slider. Turn this off to type each biome's cap in yourself on that page.",
                 null,
                 new ConfigurationManagerAttributes { }));
-            // A config file that predates this setting belongs to someone who has already installed and configured the
-            // mod by hand, so the first-time setup would interrupt rather than help: mark it done. A file that names
-            // the setting keeps whatever it says, and a fresh install has no file and gets the setup.
-            if (existingConfigText != null && existingConfigText.Contains("SetupTutorialComplete") == false) {
-                SetupTutorialComplete.Value = true;
-                Logger.LogInfo("Existing StarLevelSystem configuration found, skipping the first-time setup. " +
-                    "Set SetupTutorialComplete to false to see it.");
-            }
+            MigrateFirstTimeSetup();
 
 
             MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have. A biome's BiomeMaxLevelOverride or an active boss-conditional tier (LevelSettings.yaml) sets its own cap in place of this one, and bosses use MaxBossLevel.", false, 1, 200);
@@ -580,6 +603,7 @@ namespace StarLevelSystem.common {
             RaidExclusionRange = BindServerConfig("Raids", "RaidExclusionRange", 500f, "No raid starts within this many meters of a raid that is already running or winding down, whoever it belongs to and however it was started: the first raid in an area is the only raid. Applies to force-started raids too. 0 disables the check.", false, 0f, 5000f);
             RaidActiveTillDefeatedMaxSeconds = BindServerConfig("Raids", "RaidActiveTillDefeatedMaxSeconds", 300, "Only for raids with RaidActiveTillDefeated set in RaidSettings.yaml. Once such a raid's Duration has elapsed it stays active until its remaining creatures are dead, for at most this many seconds; then it winds down regardless, so a straggler stuck somewhere cannot hold a raid open forever. 0 winds every raid down as soon as its Duration elapses.", true, 0, 3600);
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
+            GrantWorldDefeatKeysOnJoin = BindServerConfig("Raids", "GrantWorldDefeatKeysOnJoin", true, "Each time a player joins the world or respawns, gives them the player key for every defeat this world has already recorded: the boss keys (defeated_eikthyr and so on) and creature ones such as KilledTroll. A kill only records that player key for whoever gets credit for it: in vanilla the one player whose game controlled the creature, and with a key share mod such as ValheimCommunityPatch the players online and nearby. Anyone offline, elsewhere, or new to the world never gets it, so raids using RequiredPlayerKeys stay closed to them. The key is saved on the character, just like a real kill, so it goes with that character to other worlds.");
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
             EnableNemesisRemoteSpawning = BindServerConfig("Nemesis", "EnableNemesisRemoteSpawning", false, "Enables ambient, server-driven remote spawning of Nemesis minibosses across the world (a second, finer gate lives in NemesisSettings.yaml under RemoteSpawning.Enabled).");
@@ -662,7 +686,7 @@ namespace StarLevelSystem.common {
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
-            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.", false, 0f);
+            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup. At 0, setup runs while the creature is still being spawned, before the mod that spawned it has finished with it (EpicLoot bounty targets, for one), so that first setup can use the wrong level and stats until the creature next loads.", false, 0f);
             FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
             ConfigPollIntervalSeconds = BindServerConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);
             // Read by ConfigChangeDebouncer. Most editors save by truncating and then writing, which the

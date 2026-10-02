@@ -1,4 +1,52 @@
 
+**1.20.0**
+ ---
+ ```
+- The first-time setup now shows once per user rather than once per mod manager profile; the record is shared by every profile, in ModQuickConfig/FirstRun.cfg next to your Valheim saves
+- Welcome and notice popups from mods sharing the Mod Config button now open one at a time, in order, instead of on top of each other
+- New Distance Rings page in the quick configure panel: add, remove and move the map's level rings, edit each ring's bonus, and chart what it does
+- Loot distance rings can now be added, removed and moved from the Loot page, not just tuned
+- Every quick configure page has a Reset page button that puts that page back to the defaults; nothing is written until you Save
+- Location resets no longer take over a zone the server already has loaded while a dungeon in it is still loading its rooms; the reset used to unload that live zone when it finished
+- Players now get the boss defeat keys (and ones like KilledTroll) the world already has when they join or respawn, so raids needing player keys open for everyone and not just whoever got the kill (GrantWorldDefeatKeysOnJoin)
+- Raids are smaller: every raid creature's MaxSpawned is cut to about two thirds. RaidSettings.yaml resets to the new defaults; the old file is backed up next to it
+ ```
+
+**1.19.1**
+ ---
+ ```
+- Ulvs now swim with their own walk cycle; vanilla gives them the player's swim animation, which their rig cannot play, so they slid across water frozen
+- Raid, summoned, split and grown-up creatures no longer get extra copies from the spawn-rate multiplier
+	- Copies of raid Ulvs spawned asleep on the lake bed and filled the log with "kinematic body" warnings
+	- Also covers spawn with a level, creatures dropped as loot, and sls-creature-setlevel
+- Raid creatures now spawn upright instead of at a random tilt
+- Abomination has default loot: Root and Guck scale with stars, the trophy stays a single drop
+- Fixed Jotunn sometimes treating SLS as part of Jotunn at startup, which also renamed its network messages
+ ```
+
+**1.19.0**
+ ---
+ ```
+- Players no longer take control of creatures to set them up; they wait for the server to assign them
+- Other players no longer see an over-level creature at its old level before it is rerolled
+- Evolving and SoulEater growth is now applied by the game that controls the growing creature
+- Only the controlling game saves creature health, damage, size and modifiers, so other players no longer overwrite them
+- Nemesis spawners now wait for the server to assign them instead of taking control after 4 seconds
+- Raid spawn points found after the raid changed hands are now sent to the new controlling player
+- A raid whose spawn-point search was lost (e.g. the player left) now searches again after 60 seconds
+- Death Fire and Poison Nova sounds now follow the SFX volume slider
+- Location reset now restores ground paint properly and regrows grass across the whole reset area (1.0 fix)
+- sls-mod-give now sticks on creatures another player controls
+ ```
+
+**1.18.2**
+ ---
+ ```
+- API attribute changes (base, per-level, damage received, flat damage bonus) are now saved on the creature, so they survive reloads, ownership changes and config reloads, and every player sees them
+- New API SetCreatureSpawnManaged: SLS still scales the creature, but never deletes it, copies it or changes its level
+- Spawn-rate removals now happen at the end of the frame, like disabled-spawn removals
+ ```
+
 **1.18.1**
  ---
  ```

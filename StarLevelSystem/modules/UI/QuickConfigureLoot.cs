@@ -38,8 +38,13 @@ namespace StarLevelSystem.modules.UI {
         // Rows that only apply to one loot style. Hidden rather than laid out again: the column is a scroll view, so a
         // vertical layout group collapses the space an inactive child took.
         private static readonly List<GameObject> lootChanceRampRows = new List<GameObject>();
-        // The ring header and its rows, hidden together while distance loot is off.
+        // The ring help, header and rows, hidden together while distance loot is off.
         private static readonly List<GameObject> lootRingRows = new List<GameObject>();
+        // The part of lootRingRows that is built again whenever a ring is added, removed or moves past another. It is
+        // the end of the column's scroll content, so rebuilding it in place keeps the column where it was scrolled to.
+        private static readonly List<GameObject> lootRingSection = new List<GameObject>();
+        private static Transform lootRingContent;
+        private static float lootRingContentW;
         // The drop table the estimate is worked on, and what it came from, resolved once when the page is built.
         private static List<LootSampleDrop> lootSample;
         private static bool lootSampleIsLive;
@@ -50,6 +55,9 @@ namespace StarLevelSystem.modules.UI {
             lootWarningText = null;
             lootChanceRampRows.Clear();
             lootRingRows.Clear();
+            lootRingSection.Clear();
+            lootRingContent = null;
+            lootRingContentW = 0f;
             lootSample = null;
             lootSampleIsLive = false;
         }
@@ -58,9 +66,8 @@ namespace StarLevelSystem.modules.UI {
         //  Staged configuration
         // ------------------------------------------------------------------------------------------------
 
-        // One distance ring from LootSettings.yaml. The distance itself is not editable here: the rings are shared with
-        // everything else that reads DistanceLootModifier, and moving a boundary is a different decision from tuning
-        // what it grants.
+        // One distance ring from LootSettings.yaml: a kill within Distance of the center (and past the ring before it)
+        // gets these bonuses. These are the loot system's own rings, not the level system's.
         private class StagedLootRing {
             internal int Distance;
             internal float MinBonus;
@@ -110,31 +117,56 @@ namespace StarLevelSystem.modules.UI {
                     rockScale = ValConfig.PerLevelMineRockLootScale.Value,
                     destructibleScale = ValConfig.PerLevelDestructibleLootScale.Value,
                     birdScale = ValConfig.PerLevelBirdLootScale.Value,
-                    rings = new List<StagedLootRing>(),
                 };
                 LootSettings loot = LootSystemData.SLS_Drop_Settings;
                 s.distanceBonus = loot != null && loot.EnableDistanceLootModifier;
-                if (loot?.DistanceLootModifier != null) {
-                    foreach (KeyValuePair<int, DistanceLootModifier> ring in loot.DistanceLootModifier) {
-                        if (ring.Value == null) { continue; }
-                        s.rings.Add(new StagedLootRing {
-                            Distance = ring.Key,
-                            MinBonus = ring.Value.MinAmountScaleFactorBonus,
-                            MaxBonus = ring.Value.MaxAmountScaleFactorBonus,
-                            ChanceBonus = ring.Value.ChanceScaleFactorBonus,
-                        });
-                    }
-                }
+                s.rings = RingsOf(loot);
                 return s;
             }
 
-            // Everything that lives in LootSettings.yaml.
-            internal bool YamlMatches(StagedLoot o) {
-                if (distanceBonus != o.distanceBonus || rings.Count != o.rings.Count) { return false; }
+            // Reset page: the ConfigEntries to their defaults and the distance section to a freshly generated file.
+            internal void ResetToShipped(LootSettings shipped) {
+                style = Enum.TryParse(DefaultOf(ValConfig.LootDropCalculationType), out LootFactorType parsed) ? parsed : LootFactorType.PerLevel;
+                perLevelScale = DefaultOf(ValConfig.PerLevelLootScale);
+                perLevelChanceScale = DefaultOf(ValConfig.PerLevelLootChanceScale);
+                chanceBase = DefaultOf(ValConfig.ChanceBaseChancePerLevel);
+                scaleAllLoot = DefaultOf(ValConfig.ScaleAllLootByLevel);
+                eggStacks = DefaultOf(ValConfig.LootEggsDropIncreaseStacks);
+                treeScale = DefaultOf(ValConfig.PerLevelTreeLootScale);
+                rockScale = DefaultOf(ValConfig.PerLevelMineRockLootScale);
+                destructibleScale = DefaultOf(ValConfig.PerLevelDestructibleLootScale);
+                birdScale = DefaultOf(ValConfig.PerLevelBirdLootScale);
+                distanceBonus = shipped != null && shipped.EnableDistanceLootModifier;
+                rings = RingsOf(shipped);
+            }
+
+            // Nearest first, which is the order the file keeps them in and the order a kill is matched against them.
+            private static List<StagedLootRing> RingsOf(LootSettings loot) {
+                List<StagedLootRing> rings = new List<StagedLootRing>();
+                if (loot?.DistanceLootModifier == null) { return rings; }
+                foreach (KeyValuePair<int, DistanceLootModifier> ring in loot.DistanceLootModifier) {
+                    if (ring.Value == null) { continue; }
+                    rings.Add(new StagedLootRing {
+                        Distance = ring.Key,
+                        MinBonus = ring.Value.MinAmountScaleFactorBonus,
+                        MaxBonus = ring.Value.MaxAmountScaleFactorBonus,
+                        ChanceBonus = ring.Value.ChanceScaleFactorBonus,
+                    });
+                }
+                return rings;
+            }
+
+            internal bool RingsMatch(StagedLoot o) {
+                if (rings.Count != o.rings.Count) { return false; }
                 for (int i = 0; i < rings.Count; i++) {
                     if (rings[i].SameAs(o.rings[i]) == false) { return false; }
                 }
                 return true;
+            }
+
+            // Everything that lives in LootSettings.yaml.
+            internal bool YamlMatches(StagedLoot o) {
+                return distanceBonus == o.distanceBonus && RingsMatch(o);
             }
 
             internal bool Matches(StagedLoot o) {
@@ -209,13 +241,11 @@ namespace StarLevelSystem.modules.UI {
             }), YamlTip(typeof(LootSettings), nameof(LootSettings.EnableDistanceLootModifier),
                 "Adds a bonus to loot scaling the further a kill is from the world center. These rings are LootSettings.yaml's own - they are " +
                 "not the distance rings the level system uses, and they are not drawn on the map.")));
-            if (lt.rings.Count == 0) {
-                ScrollRow(left, lw, 40f, t => ConfigUI.AddTextRow(t, lw, 40f, "$sls_cfg_loot_no_rings", 12, GUIManager.Instance.ValheimOrange));
-            } else {
-                lootRingRows.Add(ScrollRow(left, lw, 46f, t => ConfigUI.AddTextRow(t, lw, 46f, "$sls_cfg_loot_rings_help", 12, GUIManager.Instance.ValheimBeige)));
-                lootRingRows.Add(AddLootRingHeaderRow(left, lw));
-                foreach (StagedLootRing ring in lt.rings) { lootRingRows.Add(AddLootRingRow(left, lw, ring)); }
-            }
+            lootRingRows.Add(ScrollRow(left, lw, 46f, t => ConfigUI.AddTextRow(t, lw, 46f, "$sls_cfg_loot_rings_help", 12, GUIManager.Instance.ValheimBeige)));
+            // Last in the column, so it can be rebuilt in place. See lootRingSection.
+            lootRingContent = left;
+            lootRingContentW = lw;
+            BuildLootRingSection();
 
             // Right - the estimate.
             GameObject header = ConfigUI.AddHeaderRow(parent, rightW, "Loot estimate");
@@ -235,16 +265,40 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private const float RingDistanceX = 4f;
-        private const float RingDistanceW = 86f;
+        private const float RingDistanceW = 80f;
         private const float RingMinX = 96f;
         private const float RingMaxX = 158f;
         private const float RingChanceX = 220f;
         private const float RingFieldW = 56f;
 
+        // The rings' part of the column: a header and a row per ring, or a note when there are none, then the Add button.
+        // Built again from the staged rings whenever their number or order changes.
+        private static void BuildLootRingSection() {
+            foreach (GameObject row in lootRingSection) {
+                lootRingRows.Remove(row);
+                DiscardRow(row);
+            }
+            lootRingSection.Clear();
+            if (lootRingContent == null || staged?.loot == null) { return; }
+
+            Transform content = lootRingContent;
+            float w = lootRingContentW;
+            List<StagedLootRing> rings = staged.loot.rings;
+            if (rings.Count == 0) {
+                lootRingSection.Add(ScrollRow(content, w, 40f, t => ConfigUI.AddTextRow(t, w, 40f, "$sls_cfg_loot_no_rings", 12, GUIManager.Instance.ValheimOrange)));
+            } else {
+                lootRingSection.Add(AddLootRingHeaderRow(content, w));
+                foreach (StagedLootRing ring in rings) { lootRingSection.Add(AddLootRingRow(content, w, ring)); }
+            }
+            lootRingSection.Add(AddRingButtonRow(content, w, AddLootRing, Tip("Add ring",
+                "Adds a ring past the furthest one, as far beyond it as the last two are apart, with the same bonuses. Type over its distance to move it.")));
+            lootRingRows.AddRange(lootRingSection);
+        }
+
         private static GameObject AddLootRingHeaderRow(Transform content, float width) {
             GameObject row = ConfigUI.NewLayoutRow(content, width, 22f);
             Color color = GUIManager.Instance.ValheimYellow;
-            ConfigUI.AddText(row.transform, RingDistanceX, 0f, RingDistanceW, 22f, "Within", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, RingDistanceX, 0f, RingDistanceW, 22f, "Within (m)", 11, TextAnchor.MiddleLeft, color);
             ConfigUI.AddText(row.transform, RingMinX, 0f, RingFieldW, 22f, "Min", 11, TextAnchor.MiddleLeft, color);
             ConfigUI.AddText(row.transform, RingMaxX, 0f, RingFieldW, 22f, "Max", 11, TextAnchor.MiddleLeft, color);
             ConfigUI.AddText(row.transform, RingChanceX, 0f, RingFieldW + 10f, 22f, "Chance", 11, TextAnchor.MiddleLeft, color);
@@ -253,7 +307,12 @@ namespace StarLevelSystem.modules.UI {
 
         private static GameObject AddLootRingRow(Transform content, float width, StagedLootRing ring) {
             GameObject row = ConfigUI.NewLayoutRow(content, width, 32f);
-            ConfigUI.AddText(row.transform, RingDistanceX, 0f, RingDistanceW, 28f, $"{ring.Distance} m", 12, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimBeige);
+            InputField distance = null;
+            distance = ConfigUI.AddTextField(row.transform, RingDistanceX, 0f, RingDistanceW, ring.Distance.ToString(CultureInfo.InvariantCulture),
+                text => CommitLootRingDistance(ring, distance, text), InputField.ContentType.IntegerNumber);
+            WithTip(distance.gameObject, Tip("Distance",
+                $"Metres from the world center this ring reaches out to. A kill is matched to the first ring that reaches it, so each ring covers " +
+                $"from the one before it out to here. {MinRingDistance}-{MaxRingDistance}m, and no two rings at the same distance."));
 
             AddLootRingField(row.transform, RingMinX, ring.MinBonus, v => ring.MinBonus = v,
                 YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MinAmountScaleFactorBonus),
@@ -264,7 +323,48 @@ namespace StarLevelSystem.modules.UI {
             AddLootRingField(row.transform, RingChanceX, ring.ChanceBonus, v => ring.ChanceBonus = v,
                 YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.ChanceScaleFactorBonus),
                     "Added to the per-level drop chance ramp in this ring, so uncertain drops land more often out here."));
+            AddRingRemoveButton(row.transform, width, () => {
+                staged.loot.rings.Remove(ring);
+                BuildLootRingSection();
+                RefreshLootEstimates();
+            });
             return row;
+        }
+
+        private static void CommitLootRingDistance(StagedLootRing ring, InputField field, string text) {
+            if (staged?.loot == null) { return; }
+            int distance = ReadRingDistance(text, ring.Distance, staged.loot.rings.Where(r => r != ring).Select(r => r.Distance), "loot ring");
+            field.SetTextWithoutNotify(distance.ToString(CultureInfo.InvariantCulture));
+            if (distance == ring.Distance) { return; }
+            ring.Distance = distance;
+            // Only when it passed another ring: rebuilding under a box that was just clicked into would take the click.
+            if (SortByDistance(staged.loot.rings, r => r.Distance)) { BuildLootRingSection(); }
+            RefreshLootEstimates();
+        }
+
+        private static void AddLootRing() {
+            if (staged?.loot == null) { return; }
+            List<StagedLootRing> rings = staged.loot.rings;
+            if (NextRingDistance(rings.Select(r => r.Distance).ToList(), DefaultLootRingStep, out int distance) == false) {
+                SetStatus($"There is no room for another loot ring past {rings[rings.Count - 1].Distance} m.", false);
+                return;
+            }
+            StagedLootRing last = rings.Count > 0 ? rings[rings.Count - 1] : null;
+            rings.Add(new StagedLootRing {
+                Distance = distance,
+                MinBonus = last?.MinBonus ?? 0f,
+                MaxBonus = last?.MaxBonus ?? 0f,
+                ChanceBonus = last?.ChanceBonus ?? 0f,
+            });
+            BuildLootRingSection();
+            RefreshLootEstimates();
+        }
+
+        // Where the first loot ring goes when there are none: the shipped rings are this far apart.
+        private const int DefaultLootRingStep = 1250;
+
+        private static void ResetLootPage() {
+            staged.loot.ResetToShipped(ShippedDefaults(YamlConfigManager.LootSettingsFile));
         }
 
         private static void AddLootRingField(Transform parent, float x, float value, Action<float> onCommit, string tooltip) {
@@ -730,12 +830,16 @@ namespace StarLevelSystem.modules.UI {
 
             LootSettings copy = CopyForEdit(YamlConfigManager.LootSettingsFile, live);
             copy.EnableDistanceLootModifier = s.distanceBonus;
-            if (copy.DistanceLootModifier != null) {
+            if (s.RingsMatch(b) == false) {
+                // The rings are the whole section: added, removed and moved ones included. Written empty rather than
+                // left out when every ring was removed, so the file says so.
+                copy.DistanceLootModifier = new SortedDictionary<int, DistanceLootModifier>();
                 foreach (StagedLootRing ring in s.rings) {
-                    if (copy.DistanceLootModifier.TryGetValue(ring.Distance, out DistanceLootModifier target) == false || target == null) { continue; }
-                    target.MinAmountScaleFactorBonus = ring.MinBonus;
-                    target.MaxAmountScaleFactorBonus = ring.MaxBonus;
-                    target.ChanceScaleFactorBonus = ring.ChanceBonus;
+                    copy.DistanceLootModifier[ring.Distance] = new DistanceLootModifier {
+                        MinAmountScaleFactorBonus = ring.MinBonus,
+                        MaxAmountScaleFactorBonus = ring.MaxBonus,
+                        ChanceScaleFactorBonus = ring.ChanceBonus,
+                    };
                 }
             }
             SaveYaml(YamlConfigManager.LootSettingsFile, copy, "Loot settings", failures, warnings);

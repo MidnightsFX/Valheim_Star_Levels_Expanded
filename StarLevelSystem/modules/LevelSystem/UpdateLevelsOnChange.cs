@@ -40,6 +40,24 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
         }
 
+        // Disabled fish scaling keeps fish at their base size, whatever level they rolled.
+        public static float FishScalePerLevel() {
+            return ValConfig.EnableScalingFish.Value ? ValConfig.FishSizeScalePerLevel.Value : 0f;
+        }
+
+        // m_scaleByQuality lives in the item's shared data, which is never written to the ZDO, and vanilla applies
+        // it from ItemDrop.Load and Fish.Awake before any spawn patch runs. So every peer sets it on the prefabs
+        // (which new instances copy, and inventory items share) and on the instances already loaded.
+        public static void UpdateFishScaleByQuality() {
+            float scalePerLevel = FishScalePerLevel();
+            foreach (Fish fish in Resources.FindObjectsOfTypeAll<Fish>()) {
+                ItemDrop itemDrop = fish.GetComponent<ItemDrop>();
+                if (itemDrop != null) {
+                    itemDrop.m_itemData.m_shared.m_scaleByQuality = scalePerLevel;
+                }
+            }
+        }
+
         public static IEnumerator ModifyLoadedCreaturesLevels() {
             // Realtime: a singleplayer pause (where the config panel opens) stops scaled time.
             yield return new WaitForSecondsRealtime(1f);
@@ -82,6 +100,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static void UpdateFishSizeOnConfigChange(object s, EventArgs e) {
+            // Ahead of the area check: a server config sync lands while connecting, before the player exists, and
+            // the fish loaded after it take their scaling from the prefab.
+            UpdateFishScaleByQuality();
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
@@ -163,40 +184,19 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         public static IEnumerator UpdateAllFishOnConfigChangeCoroutine() {
             int updated = 0;
-            Dictionary<string, Vector3> FishSizeReference = new Dictionary<string, Vector3>();
-            IEnumerable<GameObject> loadedFish = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<Fish>() != null);
-            foreach (GameObject fish in loadedFish) {
+            float scalePerLevel = FishScalePerLevel();
+            foreach (Fish fish in Resources.FindObjectsOfTypeAll<Fish>()) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
                     yield return new WaitForEndOfFrame();
                     Physics.SyncTransforms();
                 }
-                Fish fishComp = fish.GetComponent<Fish>();
-                if (fishComp == null || fishComp.m_nview == null || fishComp.m_nview.GetZDO() == null) { continue; }
-                string fishname = Utils.GetPrefabName(fish.gameObject);
-                if (FishSizeReference.ContainsKey(fishname) == false) {
-                    FishSizeReference.Add(fishname, PrefabManager.Instance.GetPrefab(fishname).gameObject.transform.localScale);
-                }
-                if (ValConfig.EnableScalingFish.Value == false) {
-                    fishComp.transform.localScale = FishSizeReference[fishname];
-                    continue;
-                }
-
-                int storedLevel = fishComp.m_nview.GetZDO().GetInt(SLS_FISH, 0);
-                if (storedLevel > 1) {
-                    float scale = 1 + (ValConfig.FishSizeScalePerLevel.Value * storedLevel);
-                    //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
-                    fishComp.transform.localScale = FishSizeReference[fishname] * scale;
-                    continue;
-                }
+                if (fish == null || fish.m_nview == null || fish.m_nview.GetZDO() == null) { continue; }
                 ItemDrop id = fish.GetComponent<ItemDrop>();
-                if (id.m_itemData.m_quality > 1) {
-                    float scale = 1 + (ValConfig.FishSizeScalePerLevel.Value * id.m_itemData.m_quality);
-                    //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
-                    fishComp.transform.localScale = FishSizeReference[fishname] * scale;
-                    id.m_itemData.m_shared.m_scaleByQuality = ValConfig.FishSizeScalePerLevel.Value;
-                    id.Save();
-                }
+                if (id == null) { continue; }
+                // SetQuality resizes through vanilla's own formula, the same one ItemDrop.Load uses when the fish reloads.
+                id.m_itemData.m_shared.m_scaleByQuality = scalePerLevel;
+                id.SetQuality(id.m_itemData.m_quality);
             }
             yield break;
         }

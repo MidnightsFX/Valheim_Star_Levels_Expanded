@@ -19,6 +19,10 @@ namespace StarLevelSystem.modules.Health {
         }
 
         internal static void ApplyHealthModifications(Character chara, CharacterCacheEntry cDetails) {
+            // Max health and health live in the ZDO (GetMaxHealth/GetHealth read it), so a non-owner already shows the
+            // owner's values and has nothing to apply locally. Its SetMaxHealth would be a ZDO write to a creature it
+            // does not own, and its Heal an RPC to the owner from every peer with the creature loaded.
+            if (chara.m_nview == null || chara.m_nview.IsOwner() == false) { return; }
             float chealth = chara.m_health; // base creature health not current total health
             if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
                 chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;

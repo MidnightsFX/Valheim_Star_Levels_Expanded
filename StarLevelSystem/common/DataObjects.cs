@@ -1,4 +1,5 @@
 ﻿using JetBrains.Annotations;
+using Jotunn;
 using Jotunn.Entities;
 using Jotunn.Managers;
 using MonoMod.Utils;
@@ -84,9 +85,18 @@ namespace StarLevelSystem.common
         // NemesisMinion) gave one creature, serialized like SLS_MODSV2. They used to live only in the session
         // cache entry built at spawn time, so a remote Nemesis boss lost its 4x health and 1.5x damage the first
         // time that entry was rebuilt: on every restart, on ownership handoff, and whenever the hud refreshed its
-        // modifier list. See CompositeLazyCache.SetStatOverrides.
+        // modifier list. See CompositeLazyCache.SetStatOverrides. The API's attribute setters write here too
+        // (CompositeLazyCache.PersistStatOverrides), for the same reason.
         public static readonly string SLS_BASE_STATS = "SLS_BASESTATS";
         public static readonly string SLS_PERLEVEL_STATS = "SLS_LVLSTATS";
+        // The DamageRecievedModifiers / CreatureDamageBonus values another mod set through the API. Applied when
+        // the cache entry is built, before modifier setup, so a Resist or Flame modifier stacks on top of them.
+        public static readonly string SLS_DMGRECV_STATS = "SLS_DRSTATS";
+        public static readonly string SLS_DMGBONUS_STATS = "SLS_DBSTATS";
+        // A creature another mod spawned and owns the existence and level of (an EpicLoot bounty target, say).
+        // SLS still gives it stats, modifiers and colour, but never deletes or multiplies it for spawn-rate or
+        // disabled-spawn rules, and never rerolls or clamps its level. See APIReciever.SetCreatureSpawnManaged.
+        public static readonly string SLS_SPAWN_MANAGED = "SLS_EXTMGD";
         // Marks a creature SLS spawned awake on purpose. MonsterAI.m_fallAsleepDistance isn't networked, so a
         // client that later takes ownership re-instantiates from the prefab and would put the creature back to
         // sleep; this flag is what survives handoff and reload. See CreatureSleepPatches.
@@ -828,6 +838,7 @@ namespace StarLevelSystem.common
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(VisualEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
+                    FixMocksIfAddedLate(prefab_obj);
                     GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(VisualEffect);
                     CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockFixedGO);
                 }
@@ -835,9 +846,21 @@ namespace StarLevelSystem.common
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(SecondaryEffect);
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
+                    FixMocksIfAddedLate(prefab_obj);
                     GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(SecondaryEffect);
                     CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockFixedGO);
                 }
+            }
+
+            // Jotunn resolves a fixReference CustomPrefab's JVLmock_ references only in its ZNetScene.Awake
+            // pass. A modifier first loaded after that -- Modifiers.yaml hot-reloaded, or synced from the
+            // server once in-world -- would keep its mocks until the next world load; for the death novas
+            // that is an AudioSource still on the bundled mock mixer, which ignores the volume sliders.
+            // Do what that pass does, now.
+            private static void FixMocksIfAddedLate(CustomPrefab prefab) {
+                if (ZNetScene.instance == null || prefab.Prefab == null || prefab.FixReference == false) { return; }
+                prefab.Prefab.FixReferences(true);
+                prefab.FixReference = false;
             }
 
             public void LoadAPIGameObjects() {

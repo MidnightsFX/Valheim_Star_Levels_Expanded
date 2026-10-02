@@ -48,12 +48,18 @@ Below are a few examples of what you might see, and what the mod can do.
 
 ## First-time setup
 The first time you reach the main menu, a short setup opens and walks through level scaling, the star range and its spawn chances,
-creature health and damage, modifiers, raids, the Nemesis system and Location Reset. You can save from any page, or click the X to skip it. Either way
-it won't open again; set `SetupTutorialComplete` back to `false` in the BepInEx config to see it again. The same pages (without the
-welcome page) open from the Mod Config button on the main menu, or on the pause menu for hosts and admins.
+the distance rings, creature health and damage, modifiers, raids, the Nemesis system and Location Reset. You can save from any page, or click the X to skip it. Either way
+it won't open again, in this or any other mod manager profile: whether you have seen it is kept once per user, in
+`ModQuickConfig/FirstRun.cfg` next to your Valheim saves (`%USERPROFILE%\AppData\LocalLow\IronGate\Valheim` on Windows). Set
+`FirstTimeSetup` to `ShowNextLaunch` in the BepInEx config to see it again, or to `Never` to keep it closed in that profile. The same
+pages (without the welcome page) open from the Mod Config button on the main menu, or on the pause menu for hosts and admins.
+Each page has a Reset page button that puts just that page back to the mod's defaults; like any other edit, nothing is
+written until you Save.
 
 Upgrading rather than installing fresh? The setup stays out of your way: a config file that already exists when this
 version first runs means the mod has been configured already, so it is marked done without being shown.
+
+Other mods that share the Mod Config button can have a welcome of their own. They open one at a time, in turn, rather than on top of each other.
 
 ## Features
 
@@ -175,6 +181,11 @@ distanceLevelBonus:
 ```
 
 With the above configuration the region closest to start up to 1250m will only be able to spawn level 1 and 2 creatures. Between 1250m and 5000m creatures can spawn up to level 3, and beyond 5000m creatures can spawn up to level 4.
+
+The Distance Rings page of the quick configure panel (Mod Config button) edits `distanceLevelBonus` without touching YAML:
+add and remove rings, move them by typing a new distance, and type each ring's bonus as a list (`25, 15, 5` is levels 1, 2
+and 3; a ring that skips a level is shown and typed as `1:25, 3:5`). Beside the list it charts the star chances with no ring
+and past the ring you tick, on the curve from the Level Distribution page, weighted by the `All` biome's distance scale.
 
 
 Now, we've walked through a lot of the bonuses to level up chance but lets take a look at the base values too. 
@@ -418,7 +429,7 @@ The Loot page of the quick configure panel (Mod Config button) covers how much l
 the loot scaling style (`LootDropCalculationType`), loot and drop chance per star (`PerLevelLootScale`,
 `PerLevelLootChanceScale`, `ChanceBaseChancePerLevel`), whether loot that never scales does
 (`ScaleAllLootByLevel`), the per-level scales for trees, rocks, destructibles and birds, and the
-`distanceLootModifier` rings below. Beside them it works those numbers through a real drop table - a Troll's own, read
+`distanceLootModifier` rings below, which can be added, removed and moved as well as tuned. Beside them it works those numbers through a real drop table - a Troll's own, read
 from the loaded world - at no stars, at your Max stars, and inside the furthest ring, so a slider can be judged by the
 loot it produces. Which creatures and objects have a custom table at all still lives in `LootSettings.yaml`.
 
@@ -523,6 +534,12 @@ Each player's raid cooldown, and the server's own raid check schedule, are saved
 - `PlayerTime` - each player's own time in the world. A cooldown only counts down while that player is actually online, so logging out with 20 minutes left brings them back with 20 minutes left however long they were away, and other people's sessions do not shorten it.
 
 Neither clock runs while nobody is playing. Switching between them re-bases everyone's remaining cooldown, so nobody gains or loses raid time by the change.
+
+#### Player keys and boss kills
+
+`RequiredGlobalKeys` and `NotRequiredGlobalKeys` check the world's keys, which are the same for everyone. `RequiredPlayerKeys`, `AnyRequiredPlayerKeys` and `NotRequiredPlayerKeys` check each player's own keys, so players can be at different points. The shipped raids only use global keys.
+
+A kill that sets a key (every boss, plus creatures such as the Troll's `KilledTroll`) sets the world key for everyone, but the player key only for whoever gets credit. In vanilla that is the one player whose game controlled the boss; a key share mod such as ValheimCommunityPatch extends it to the players online and nearby. With `GrantWorldDefeatKeysOnJoin` (main config, on by default) SLS catches everyone else up: each time a player joins or respawns, they are given the player key for every defeat the world has already recorded, including kills made while they were offline and keys set with `setkey`. The key is saved on the character like a real kill, so it goes with that character to other worlds.
 
 #### How a raid ends
 

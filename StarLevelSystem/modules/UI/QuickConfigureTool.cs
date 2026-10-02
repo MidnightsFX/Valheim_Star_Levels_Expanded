@@ -4,7 +4,6 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -31,6 +30,7 @@ namespace StarLevelSystem.modules.UI {
         private const float SubRowHeight = ConfigUI.SubRowHeight;
         private const float RowGap = ConfigUI.RowGap;
         private const float NavButtonW = 170f;
+        private const float ResetButtonW = 150f;
 
         private const string LauncherEntry = "Star Level System";
 
@@ -38,6 +38,10 @@ namespace StarLevelSystem.modules.UI {
             internal string Title;
             internal Action<Transform> Build;
             internal Action OnShow;
+            // Puts the page's staged values back to the shipped defaults. Null for a page with nothing to reset.
+            internal Action Reset;
+            // Drops the references Build keeps to the page's widgets, so the page can be built again on its own.
+            internal Action ClearRefs;
         }
 
         // --- runtime state ---
@@ -51,6 +55,7 @@ namespace StarLevelSystem.modules.UI {
         private static Text titleText;
         private static Text statusText;
         private static GameObject backBtn;
+        private static GameObject resetBtn;
         private static GameObject nextBtn;
         private static GameObject finishBtn;
         private static Text nextCaption;
@@ -59,11 +64,6 @@ namespace StarLevelSystem.modules.UI {
         // difference between the two, so an edit that is put back is not an edit.
         private static StagedConfig staged;
         private static StagedConfig baseline;
-
-        // First-time setup: shown at most once a session. The FejdStartup it was queued on is kept so a new visit to the
-        // main menu can queue it again if the last one ended before the menu was ever ready.
-        private static bool tutorialShownThisSession;
-        private static FejdStartup tutorialQueuedOn;
 
         internal static void Init() {
             DistanceExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("distance_rings");
@@ -76,6 +76,7 @@ namespace StarLevelSystem.modules.UI {
             ConfigUILauncher.Init();
             ApplyRegistration();
             ConfigNetwork.EditResult += OnRemoteEditResult;
+            QueueFirstTimeSetup();
         }
 
         // SettingChanged handler for the client toggle.
@@ -137,33 +138,19 @@ namespace StarLevelSystem.modules.UI {
         //  First-time setup
         // ------------------------------------------------------------------------------------------------
 
-        // Called from the FejdStartup.Start postfix. Start runs before the intro cinematic, so this only queues: the
-        // coroutine lives on the FejdStartup, and dies with it if the player leaves the start scene first.
-        internal static void QueueTutorial(FejdStartup startup) {
-            if (startup == null || GUIManager.IsHeadless()) { return; }
-            if (ValConfig.SetupTutorialComplete.Value || tutorialShownThisSession || tutorialQueuedOn == startup) { return; }
-            tutorialQueuedOn = startup;
-            startup.StartCoroutine(OpenTutorialWhenMenuReady(startup));
+        // Queued once, from Init, on the startup popup queue every mod carrying common/ConfigUI shares: it waits for the
+        // main menu to settle and opens the popups one at a time, so this and another mod's welcome never land on the
+        // same frame. Whether this user has seen it is kept per user rather than per profile; see ConfigUIFirstRun.
+        private static void QueueFirstTimeSetup() {
+            ConfigUIFirstRun.QueueFirstRunPopup(ValConfig.FirstTimeSetupKey, ValConfig.FirstTimeSetupRevision,
+                ValConfig.FirstTimeSetup, ConfigUIStartupPopups.OrderWelcome, OpenFirstTimeSetup, () => overlay != null);
         }
 
-        private static IEnumerator OpenTutorialWhenMenuReady(FejdStartup startup) {
-            while (MainMenuReady(startup) == false) { yield return null; }
-            // The menu fades in once the cinematic ends; let it land before covering it.
-            yield return new WaitForSeconds(1f);
-            while (MainMenuReady(startup) == false) { yield return null; }
-            if (ValConfig.SetupTutorialComplete.Value || tutorialShownThisSession || panel != null) { yield break; }
+        // Declines when the panel is already up: someone reached it through Mod Config while this waited its turn.
+        private static bool OpenFirstTimeSetup() {
+            if (overlay != null) { return false; }
             OpenPanel(tutorial: true);
-        }
-
-        // PlayIntroCinematic keeps m_mainMenu hidden until the video stops, whether it ends, is skipped, or never plays.
-        // The menu list is inactive under the character and world pickers, which are not a moment to interrupt either.
-        private static bool MainMenuReady(FejdStartup startup) {
-            return startup != null
-                && CinematicsManager.IsStartedPlaying() == false
-                && startup.m_mainMenu != null && startup.m_mainMenu.activeInHierarchy
-                && startup.m_menuList != null && startup.m_menuList.activeInHierarchy
-                && UnifiedPopup.IsVisible() == false
-                && GUIManager.CustomGUIFront != null;
+            return overlay != null;
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -180,7 +167,6 @@ namespace StarLevelSystem.modules.UI {
             // Built fresh every time, so every widget starts from the current configuration.
             DestroyPanel();
             tutorialMode = tutorial;
-            if (tutorial) { tutorialShownThisSession = true; }
             staged = StagedConfig.Snapshot();
             baseline = StagedConfig.Snapshot();
             try {
@@ -238,6 +224,9 @@ namespace StarLevelSystem.modules.UI {
             float navY = PanelH - 56f;
             backBtn = WithTip(ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1)),
                 Tip("Back", "The previous page. Moving between pages keeps your edits; only Save writes them."));
+            // Between Back and Save rather than beside Next, so it is never where the eye expects to move on.
+            resetBtn = WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f - ResetButtonW - 16f, navY, ResetButtonW, "$sls_cfg_button_reset_page", ShowResetConfirm),
+                Tip("Reset page", "Puts every setting on this page back to the mod's default. The other pages keep their edits, and nothing is written until you Save."));
             WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f, navY, NavButtonW, "$sls_cfg_button_save", OnSaveClicked),
                 Tip("Save", "Writes every page's changes: the BepInEx settings and the YAML files behind them. The panel stays open."));
             nextBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "Next >", () => ShowPage(currentPage + 1)),
@@ -252,16 +241,77 @@ namespace StarLevelSystem.modules.UI {
             if (tutorial) {
                 list.Add(new PageDef { Title = "Welcome", Build = BuildWelcomePage });
             }
-            list.Add(new PageDef { Title = "Level Progression", Build = BuildScalingPage });
-            list.Add(new PageDef { Title = "Level Distribution", Build = BuildDistributionPage, OnShow = RefreshDistribution });
+            list.Add(new PageDef { Title = "Level Progression", Build = BuildScalingPage, Reset = ResetScalingPage });
+            list.Add(new PageDef { Title = "Level Distribution", Build = BuildDistributionPage, OnShow = RefreshDistribution, Reset = ResetDistributionPage, ClearRefs = ClearDistributionReferences });
+            // After the distribution: the preview adds each ring to the curve set there, so it re-reads it on show.
+            list.Add(new PageDef { Title = "Distance Rings", Build = BuildDistanceRingsPage, OnShow = RefreshDistanceRings, Reset = ResetDistanceRingsPage, ClearRefs = ClearDistanceRingReferences });
             // After the level pages: the estimate is worked at the Max stars they set, so it re-reads it on show.
-            list.Add(new PageDef { Title = "Loot", Build = BuildLootPage, OnShow = RefreshLootEstimates });
-            list.Add(new PageDef { Title = "Health & Damage", Build = BuildStatsPage, OnShow = UpdateExampleMath });
-            list.Add(new PageDef { Title = "Modifiers", Build = BuildModifiersPage });
-            list.Add(new PageDef { Title = "Raids", Build = BuildRaidsPage });
-            list.Add(new PageDef { Title = "Nemesis System", Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions });
-            list.Add(new PageDef { Title = "Location Reset", Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews });
+            list.Add(new PageDef { Title = "Loot", Build = BuildLootPage, OnShow = RefreshLootEstimates, Reset = ResetLootPage, ClearRefs = ClearLootPageReferences });
+            list.Add(new PageDef { Title = "Health & Damage", Build = BuildStatsPage, OnShow = UpdateExampleMath, Reset = ResetStatsPage, ClearRefs = ClearStatsReferences });
+            list.Add(new PageDef { Title = "Modifiers", Build = BuildModifiersPage, Reset = ResetModifiersPage });
+            list.Add(new PageDef { Title = "Raids", Build = BuildRaidsPage, Reset = ResetRaidsPage, ClearRefs = ClearRaidPageReferences });
+            list.Add(new PageDef { Title = "Nemesis System", Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions, Reset = ResetNemesisPage, ClearRefs = ClearNemesisReferences });
+            list.Add(new PageDef { Title = "Location Reset", Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews, Reset = ResetLocationResetPage, ClearRefs = ClearLocationResetReferences });
             return list;
+        }
+
+        // Builds one page again from the staged values, for when they changed under its widgets (Reset page). The page
+        // keeps its place in the panel; everything else, including the other pages, is left as it is.
+        private static void RebuildPage(int index) {
+            if (pageRoots == null || panel == null || index < 0 || index >= pageRoots.Length) { return; }
+            // A tooltip can be open over a widget that is about to go.
+            QuickConfigTooltip.Close();
+            GameObject old = pageRoots[index];
+            int sibling = old.transform.GetSiblingIndex();
+            // Hidden now, destroyed at the end of the frame: until then it still counts to layout and raycasts.
+            old.SetActive(false);
+            UnityEngine.Object.Destroy(old);
+
+            pages[index].ClearRefs?.Invoke();
+            GameObject root = ConfigUI.NewRect("Page" + index, panel.transform, Margin, ContentTop, PageW, PageH);
+            root.transform.SetSiblingIndex(sibling);
+            pageRoots[index] = root;
+            pages[index].Build(root.transform);
+            root.SetActive(index == currentPage);
+            if (index == currentPage) { pages[index].OnShow?.Invoke(); }
+        }
+
+        private static void ShowResetConfirm() {
+            if (pages == null || pages[currentPage].Reset == null) { return; }
+            ShowConfirm("$sls_cfg_reset_title", "$sls_cfg_reset_body", "$sls_cfg_button_reset_page", ResetCurrentPage);
+        }
+
+        private static void ResetCurrentPage() {
+            CloseConfirm();
+            if (staged == null || pages == null || pages[currentPage].Reset == null) { return; }
+            int page = currentPage;
+            try {
+                pages[page].Reset();
+                RebuildPage(page);
+            } catch (Exception e) {
+                Logger.LogWarning($"QuickConfigureTool could not reset the {pages[page].Title} page: {e}");
+                SetStatus($"Could not reset {pages[page].Title}: {e.Message}", false);
+                return;
+            }
+            SetStatus($"{pages[page].Title} is back to its defaults. Save to keep it.", true);
+        }
+
+        // --- defaults, for Reset page ---
+
+        private static T DefaultOf<T>(ConfigEntry<T> entry) => (T)entry.DefaultValue;
+
+        // A YAML file's shipped defaults, as a private copy. Several files hand back a shared static instance from
+        // Defaults, which must never be edited, and going through the file's own format means what a reset stages is
+        // exactly what a freshly generated file would hold.
+        private static T ShippedDefaults<T>(YamlConfigFile<T> file) where T : class {
+            if (file == null) { return null; }
+            try {
+                string yaml = file.SerializeDefaults();
+                return string.IsNullOrEmpty(yaml) ? null : file.EffectiveFormat.Deserializer.Deserialize<T>(yaml);
+            } catch (Exception e) {
+                Logger.LogWarning($"QuickConfigureTool could not read the defaults for {file.FileName}: {e.Message}");
+                return null;
+            }
         }
 
         private static void ShowPage(int page) {
@@ -273,6 +323,7 @@ namespace StarLevelSystem.modules.UI {
             titleText.text = $"StarLevelSystem - {pages[currentPage].Title}  (Page {currentPage + 1} of {pageRoots.Length})";
 
             backBtn.SetActive(currentPage > 0);
+            resetBtn.SetActive(pages[currentPage].Reset != null);
             bool last = currentPage == pageRoots.Length - 1;
             nextBtn.SetActive(!last);
             finishBtn.SetActive(last);
@@ -349,7 +400,7 @@ namespace StarLevelSystem.modules.UI {
         // Closing by any route finishes the first-time setup: the welcome page promises that the X is enough.
         private static void ClosePanel() {
             if (tutorialMode) {
-                ValConfig.SetupTutorialComplete.Value = true;
+                ConfigUIFirstRun.MarkSeen(ValConfig.FirstTimeSetupKey, ValConfig.FirstTimeSetupRevision);
             }
             DestroyPanel();
         }
@@ -395,6 +446,31 @@ namespace StarLevelSystem.modules.UI {
                 CloseConfirm();
                 OnFinishClicked();
             }, 36f);
+        }
+
+        // A two-button prompt in the same place as the discard one: back out, or go ahead. Escape backs out.
+        private static void ShowConfirm(string title, string body, string confirmLabel, UnityEngine.Events.UnityAction onConfirm) {
+            CloseConfirm();
+            const float W = 470f;
+            const float H = 190f;
+            const float ButtonW = 160f;
+
+            confirmOverlay = ConfigUI.NewUI("SLSQuickConfigureConfirm", GUIManager.CustomGUIFront.transform, typeof(Image));
+            StretchToParent(confirmOverlay);
+            confirmOverlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.35f);
+
+            GameObject box = GUIManager.Instance.CreateWoodpanel(
+                parent: confirmOverlay.transform,
+                anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f),
+                position: new Vector2(0f, 0f), width: W, height: H, draggable: false);
+
+            ConfigUI.AddText(box.transform, 0f, 16f, W, 30f, title, 20, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimYellow);
+            ConfigUI.AddText(box.transform, 20f, 54f, W - 40f, 50f, body, 14, TextAnchor.MiddleCenter);
+
+            float y = H - 64f;
+            float gap = (W - 2 * ButtonW) / 3f;
+            ConfigUI.AddButton(box.transform, gap, y, ButtonW, "$sls_cfg_button_keep_editing", CloseConfirm, 36f);
+            ConfigUI.AddButton(box.transform, 2 * gap + ButtonW, y, ButtonW, confirmLabel, onConfirm, 36f);
         }
 
         private static void CloseConfirm() {
@@ -671,17 +747,27 @@ namespace StarLevelSystem.modules.UI {
             bool bossCurveChanged = staged.BossCurveDiffers(baseline);
             List<int> changedSpans = staged.ChangedTableSpans(baseline);
             Dictionary<Heightmap.Biome, int> changedCaps = staged.ChangedBiomeCaps(live);
-            if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && changedCaps.Count == 0) { return; }
+            bool ringsChanged = LevelRingsMatch(staged.levelRings, baseline.levelRings) == false;
+            if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && changedCaps.Count == 0 && ringsChanged == false) { return; }
 
             // From the settings as written, not the live copy: the live one has every generator already expanded into the
             // chance tables, and saving it wrote those expansions over the hand-written tables in the file.
             CreatureLevelSettings settings = CopyForEdit(YamlConfigManager.LevelSettings, LevelSystemData.AuthoredLevelSettings ?? live);
             settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
-            if (curveChanged) {
+            if (curveChanged && staged.shippedCurve != null) {
+                // Reset page put the curve back to the shipped hand-written table, which no generator describes.
+                settings.DefaultCreatureLevelUpChance = new SortedDictionary<int, float>(staged.shippedCurve);
+                settings.DefaultLevelupGenerators = null;
+                settings.DefaultLevelupGeneratorRefs = null;
+            } else if (curveChanged) {
                 settings.DefaultLevelupGenerators = new List<LevelGenerator> { CloneGenerator(staged.generator) };
                 // The page shows and saves one curve. Referenced generators would be merged into it on load and quietly
                 // change every chance it showed.
                 settings.DefaultLevelupGeneratorRefs = null;
+            }
+            if (ringsChanged) {
+                // Written empty rather than left out when every ring was removed, so the file says so.
+                settings.DistanceLevelBonus = LevelRingsToYaml(staged.levelRings);
             }
             if (bossCurveChanged) {
                 if (staged.bossCurveOn) {
@@ -809,6 +895,25 @@ namespace StarLevelSystem.modules.UI {
             return GeneratorsEqual(sameRange, opened) == false;
         }
 
+        // Whether LevelSettings.yaml's default curve is exactly this hand-written table, with no generator over it. A file
+        // with no table rolls the built-in one, so that counts as it.
+        private static bool FileCurveIs(SortedDictionary<int, float> table) {
+            CreatureLevelSettings authored = LevelSystemData.AuthoredLevelSettings ?? LevelSystemData.SLE_Level_Settings;
+            if (authored == null) { return false; }
+            if (authored.DefaultLevelupGenerators?.Any(g => g != null) == true || (authored.DefaultLevelupGeneratorRefs?.Count ?? 0) > 0) { return false; }
+            return ChanceTablesEqual(authored.DefaultCreatureLevelUpChance ?? LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance, table);
+        }
+
+        // Keys and values, with room for the float round trip through YAML.
+        private static bool ChanceTablesEqual(SortedDictionary<int, float> a, SortedDictionary<int, float> b) {
+            if (a == null || b == null) { return a == b; }
+            if (a.Count != b.Count) { return false; }
+            foreach (KeyValuePair<int, float> entry in a) {
+                if (b.TryGetValue(entry.Key, out float other) == false || Mathf.Abs(entry.Value - other) > 0.00001f) { return false; }
+            }
+            return true;
+        }
+
         private static bool SetsEqual(HashSet<string> a, HashSet<string> b) {
             if (a == null || b == null) { return a == b; }
             return a.SetEquals(b);
@@ -855,6 +960,13 @@ namespace StarLevelSystem.modules.UI {
             // Whether generator came from an inline DefaultLevelupGenerators entry. When it did not, the world rolls a
             // hand-written table (or generators referenced by name) and generator is only a seed. See GeneratorEdited.
             public bool generatorInline;
+            // Set by Reset page when the shipped curve is a hand-written table: the page then shows and saves that table,
+            // and generator is only the seed shaped after it. Any edit to the curve clears it, handing the curve back to
+            // generator. Never set by a snapshot.
+            public SortedDictionary<int, float> shippedCurve;
+
+            // The distance rings, nearest first. See QuickConfigureDistanceRings.cs.
+            public List<StagedLevelRing> levelRings;
 
             // Bosses roll from the creature curve unless one is configured for them. bossGenerator is kept seeded either
             // way, so turning the toggle on starts from something sensible rather than from nothing.
@@ -866,8 +978,9 @@ namespace StarLevelSystem.modules.UI {
             // Table style thresholds keyed by span, values in key order, seeded from LevelupChanceTablesBySpan.
             public Dictionary<int, List<float>> tables;
 
-            // Biome star caps as they were when this snapshot was taken, and the MaxLevel they sat under. While caps are
-            // auto-tuned they are always scaled from these, so moving Max back and forth never compounds rounding.
+            // Biome star caps as they were when this snapshot was taken (or as shipped, after Reset page), and the MaxLevel
+            // they sat under. While caps are auto-tuned they are always scaled from these, so moving Max back and forth
+            // never compounds rounding.
             public Dictionary<Heightmap.Biome, int> biomeCapOriginals;
             public int biomeCapBaseMax;
             // Auto-tuning off means the caps are whatever was typed on the page instead, and Max stars leaves them alone.
@@ -984,6 +1097,8 @@ namespace StarLevelSystem.modules.UI {
                     }
                 }
                 s.biomeCapManual = new Dictionary<Heightmap.Biome, int>(s.biomeCapOriginals);
+                // As written: the save starts from the authored settings too.
+                s.levelRings = LevelRingsOf(LevelSystemData.AuthoredLevelSettings ?? settings);
 
                 if (!Enum.TryParse(ValConfig.ModifierIconDisplayStyle.Value, out ModifierDisplayStyle ds)) {
                     ds = ModifierDisplayStyle.Stars;
@@ -1116,6 +1231,42 @@ namespace StarLevelSystem.modules.UI {
                 foreach (Heightmap.Biome biome in biomeCapOriginals.Keys.ToList()) { biomeCapManual[biome] = CapFor(biome); }
             }
 
+            // Reset page on the distribution page: everything it shows goes back to what a freshly generated .cfg and
+            // LevelSettings.yaml hold, seeded the way Snapshot seeds from a file.
+            public void ResetDistribution(CreatureLevelSettings shipped) {
+                maxStars = DefaultOf(ValConfig.MaxLevel);
+                maxBossLevel = DefaultOf(ValConfig.MaxBossLevel);
+                biomeCapAuto = DefaultOf(ValConfig.AutoTuneBiomeStarCaps);
+
+                generator = SeedGenerator(shipped, maxStars);
+                // A shipped inline generator is an ordinary curve; a shipped table has to be saved as that table.
+                bool shippedInline = shipped?.DefaultLevelupGenerators?.Any(g => g != null) == true;
+                shippedCurve = shippedInline ? null
+                    : new SortedDictionary<int, float>(shipped?.DefaultCreatureLevelUpChance ?? LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance);
+                bossCurveOn = (shipped?.BossLevelupGenerators?.Count ?? 0) > 0 || (shipped?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
+                bossGenerator = SeedBossGenerator(shipped, maxBossLevel, generator);
+                // Spans the shipped file has no table for keep theirs: the save only ever writes a span, never removes one.
+                if (shipped?.LevelupChanceTablesBySpan != null) {
+                    foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in shipped.LevelupChanceTablesBySpan) {
+                        if (entry.Value != null) { tables[entry.Key] = entry.Value.Values.ToList(); }
+                    }
+                }
+
+                // Shipped caps for the biomes the file has an entry for, since the save only writes onto an existing one.
+                // A cap on a biome the shipped file does not cap is left where it is.
+                CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
+                if (shipped?.BiomeConfiguration != null && live?.BiomeConfiguration != null) {
+                    foreach (KeyValuePair<Heightmap.Biome, BiomeSpecificSetting> biome in shipped.BiomeConfiguration) {
+                        if (biome.Value == null || biome.Value.BiomeMaxLevelOverride <= 0) { continue; }
+                        if (live.BiomeConfiguration.TryGetValue(biome.Key, out BiomeSpecificSetting target) && target != null) {
+                            biomeCapOriginals[biome.Key] = biome.Value.BiomeMaxLevelOverride;
+                        }
+                    }
+                }
+                biomeCapBaseMax = maxStars;
+                biomeCapManual = new Dictionary<Heightmap.Biome, int>(biomeCapOriginals);
+            }
+
             // Biomes whose staged cap differs from what the live settings hold.
             public Dictionary<Heightmap.Biome, int> ChangedBiomeCaps(CreatureLevelSettings live) {
                 Dictionary<Heightmap.Biome, int> changed = new Dictionary<Heightmap.Biome, int>();
@@ -1129,8 +1280,10 @@ namespace StarLevelSystem.modules.UI {
             }
 
             // Whether the curve the page shows is no longer the one the world rolls from: the generator was changed, or it
-            // is Table style and the table it reads was.
+            // is Table style and the table it reads was. After Reset page it is the shipped table, measured against the
+            // file itself rather than the snapshot, so a save that wrote it stops counting it as a change.
             public bool CurveDiffers(StagedConfig other) {
+                if (shippedCurve != null) { return FileCurveIs(shippedCurve) == false; }
                 if (GeneratorEdited(generator, other.generator, other.generatorInline)) { return true; }
                 return generator.LevelupCalculationStyle == LevelupCalculationStyle.Table && TableEqual(tables, other.tables, TableSpan) == false;
             }
@@ -1188,11 +1341,13 @@ namespace StarLevelSystem.modules.UI {
                 if (scalars == false) { return false; }
 
                 if (GeneratorsEqual(generator, o.generator) == false) { return false; }
+                if (shippedCurve != null && CurveDiffers(o)) { return false; }
                 if (BossCurveDiffers(o)) { return false; }
                 if (tables.Count != o.tables.Count || tables.Keys.Any(span => TableEqual(tables, o.tables, span) == false)) { return false; }
                 foreach (Heightmap.Biome biome in biomeCapOriginals.Keys.Union(o.biomeCapOriginals.Keys)) {
                     if (CapFor(biome) != o.CapFor(biome)) { return false; }
                 }
+                if (LevelRingsMatch(levelRings, o.levelRings) == false) { return false; }
 
                 foreach (ModifierType type in modifierOn.Keys) {
                     if (o.modifierOn.TryGetValue(type, out HashSet<string> other) == false || SetsEqual(modifierOn[type], other) == false) { return false; }

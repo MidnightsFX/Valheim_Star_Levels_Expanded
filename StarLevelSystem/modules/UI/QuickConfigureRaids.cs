@@ -286,6 +286,55 @@ namespace StarLevelSystem.modules.UI {
             RefreshRaidDensityNote();
         }
 
+        // ------------------------------------------------------------------------------------------------
+        //  Reset page
+        // ------------------------------------------------------------------------------------------------
+
+        // The global settings, each raid's on/off and every spawn's numbers go back to the shipped file. Raids and
+        // spawns are matched to it by name, as listed; a raid the shipped file does not have keeps its settings, and its
+        // counts follow the density back to the shipped one the way the slider would move them.
+        private static void ResetRaidsPage() {
+            staged.enableSlsRaids = !DefaultOf(ValConfig.UseVanillaRaidConfiguration);
+            staged.raidEventRate = DefaultOf(ValConfig.RaidEventRate);
+            staged.raidCheckMinutes = DefaultOf(ValConfig.ServerTimeBetweenRaidStartChecks);
+            staged.maxRaidAttempts = DefaultOf(ValConfig.MaxRaidAttemptsPerPlayer);
+            staged.maxActiveRaids = DefaultOf(ValConfig.MaxActiveRaids);
+
+            RaidConfiguration shipped = ShippedDefaults(YamlConfigManager.RaidSettings);
+            int density = ClampRaidDensity(shipped?.GlobalSettings?.RaidCreatureDensity ?? DefaultRaidDensity);
+            // For the unmatched spawns: their file numbers sit at the old base density, and are carried to the new one.
+            float carry = RaidDensityScalar(density) / RaidDensityScalar(staged.raidDensityBase);
+            List<RaidDefinition> raids = staged.raidSource?.Raids;
+            if (raids != null) {
+                for (int raidIndex = 0; raidIndex < raids.Count; raidIndex++) {
+                    RaidDefinition raid = raids[raidIndex];
+                    if (raid == null) { continue; }
+                    RaidDefinition shippedRaid = shipped?.Raids?.FirstOrDefault(r => r != null && r.Name == raid.Name);
+                    if (shippedRaid != null) {
+                        if (shippedRaid.Enabled) { staged.raidsOn.Add(raid.Name); } else { staged.raidsOn.Remove(raid.Name); }
+                    }
+                    if (raid.Spawns == null) { continue; }
+                    for (int spawnIndex = 0; spawnIndex < raid.Spawns.Count; spawnIndex++) {
+                        if (staged.raidSpawns.TryGetValue(RaidSpawnKey(raidIndex, spawnIndex), out StagedRaidSpawn spawn) == false) { continue; }
+                        RaidSpawnEntry shippedSpawn = shippedRaid?.Spawns != null && spawnIndex < shippedRaid.Spawns.Count ? shippedRaid.Spawns[spawnIndex] : null;
+                        if (shippedSpawn != null && string.Equals(shippedSpawn.PrefabName, spawn.PrefabName, System.StringComparison.Ordinal)) {
+                            spawn.FileGroupSize = shippedSpawn.SpawnGroupSize;
+                            spawn.FileMaxAlive = shippedSpawn.MaxSpawned;
+                            spawn.Interval = shippedSpawn.SpawnInterval;
+                        } else {
+                            spawn.FileGroupSize = ScaleSpawnCount(spawn.FileGroupSize, carry, MaxSpawnGroupSize);
+                            spawn.FileMaxAlive = ScaleSpawnCount(spawn.FileMaxAlive, carry, MaxSpawnAlive);
+                        }
+                        spawn.GroupSize = spawn.FileGroupSize;
+                        spawn.MaxAlive = spawn.FileMaxAlive;
+                    }
+                }
+            }
+            // Every count above now sits at the shipped density, so that is the base the slider scales from.
+            staged.raidDensity = density;
+            staged.raidDensityBase = density;
+        }
+
         private static void RefreshRaidDensityNote() {
             if (raidDensityNote == null || staged == null) { return; }
             float ratio = RaidDensityRatio();

@@ -66,7 +66,9 @@ namespace StarLevelSystem.modules.Sizes {
                 //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
                 Physics.SyncTransforms();
             }
-            zview.m_zdo.Set(SLS_SIZE, creatureScale);
+            // Only the owner persists the size. A non-owner still applies it to its own instance above, but its write
+            // would race the owner's (a SoulEater bonus, say) through vanilla's highest-revision-wins ZDO sync.
+            if (zview.IsOwner()) { zview.m_zdo.Set(SLS_SIZE, creatureScale); }
         }
 
         internal static Vector3 GetSizeReferenceForObject(string name) {

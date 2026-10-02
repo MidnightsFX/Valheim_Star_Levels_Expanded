@@ -78,8 +78,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 }
 
                 if (NemesisSystemData.SLE_Nemesis_Settings.CreationRemovesSourceCreature) {
-                    killer.m_nview.ClaimOwnership();
-                    ZNetScene.instance.Destroy(killer.gameObject);
+                    // The killer may be simulated by another player; its owner deletes it (at once when that is us).
+                    OwnerRoutedDestroy.Request(killer.m_nview);
                 }
 
                 Player.MessageAllInRange(__instance.transform.position, 25f, MessageHud.MessageType.Center, "$SLS_Secret_warning");

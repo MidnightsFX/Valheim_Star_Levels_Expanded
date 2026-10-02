@@ -35,6 +35,7 @@ namespace StarLevelSystem
         private static readonly MethodInfo SetAllDamageBonus;
 
         private static readonly MethodInfo ApplyUpdatesToCreature;
+        private static readonly MethodInfo SetCreatureSpawnManagedMethod;
 
         private static readonly MethodInfo GetPossibleModifiersForType;
         private static readonly MethodInfo GetAllModifiersForCreature;
@@ -71,6 +72,11 @@ namespace StarLevelSystem
         /// </summary>
         public static bool SupportsLocationReset => ResetNamedLocationMethod != null;
 
+        /// <summary>
+        /// True when the installed Star Level System has SetCreatureSpawnManaged. Older builds make that call return false.
+        /// </summary>
+        public static bool SupportsSpawnManaged => SetCreatureSpawnManagedMethod != null;
+
         static API() {
             APIReciever = Type.GetType("StarLevelSystem.modules.APIReciever, StarLevelSystem");
             if (APIReciever == null) return;
@@ -93,6 +99,7 @@ namespace StarLevelSystem
             GetAllDamageBonus = APIReciever.GetMethod("GetAllDamageBonus", BindingFlags.Public | BindingFlags.Static);
             SetAllDamageBonus = APIReciever.GetMethod("SetAllDamageBonus", BindingFlags.Public | BindingFlags.Static);
             ApplyUpdatesToCreature = APIReciever.GetMethod("ApplyUpdatesToCreature", BindingFlags.Public | BindingFlags.Static);
+            SetCreatureSpawnManagedMethod = APIReciever.GetMethod("SetCreatureSpawnManaged", BindingFlags.Public | BindingFlags.Static);
             GetPossibleModifiersForType = APIReciever.GetMethod("GetPossibleModifiersForType", BindingFlags.Public | BindingFlags.Static);
             GetAllModifiersForCreature = APIReciever.GetMethod("GetAllModifiersForCreature", BindingFlags.Public | BindingFlags.Static);
             AddModifierToCreature = APIReciever.GetMethod("AddModifierToCreature", BindingFlags.Public | BindingFlags.Static);
@@ -131,6 +138,7 @@ namespace StarLevelSystem
         /// <summary>
         /// Sets the creatures level, this applies immediately.
         /// If you want the creature to be resized to its new level, you must call ApplyCreatureUpdates after this.
+        /// Saved on the creature whichever peer calls it: a peer that does not own the creature forwards the call to the owner.
         /// </summary>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="newLevel">The new level to set the creature to</param>
@@ -175,6 +183,11 @@ namespace StarLevelSystem
         /// This allows setting modifiers to any of a creatures base attributes (this value is applied once, flat addition)
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attribute">The enum value of which attribute to get: BaseHealth = 0, BaseDamage = 1, AttackSpeed = 2, Speed = 3, Size = 4</param>
         /// <param name="value">The value this attribute will be set to (overrides existing)</param>
@@ -198,6 +211,11 @@ namespace StarLevelSystem
         /// and sets their values for the creature
         /// this applies immediately
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures attributes</param>
         /// returns>bool success</returns>
@@ -223,6 +241,11 @@ namespace StarLevelSystem
         /// This allows setting modifiers to any of a creatures per level attributes (this value is applied once for every level)
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attribute">The enum value of which attribute to get: HealthPerLevel = 0, DamagePerLevel = 1, SpeedPerLevel = 2, AttackSpeedPerLevel = 3, SizePerLevel = 4</param>
         /// <param name="value">The value this attribute will be set to (overrides existing)</param>
@@ -246,6 +269,11 @@ namespace StarLevelSystem
         /// and sets their values for the creature
         /// this applies immediately
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures attributes</param>
         /// returns>bool success</returns>
@@ -273,6 +301,12 @@ namespace StarLevelSystem
         /// 1.0 = 100% damage taken, 0.5 = 50% damage taken, 2.0 = 200% damage taken
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="damageType">The enum value of which attribute to get: Blunt = 0, Slash = 1, Pierce = 2, Fire = 3, Frost = 4, Lightning = 5, Poison = 6, Spirit = 7, Chop = 8, Pickaxe = 9</param>
         /// <param name="value">The value this attribute will be set to (overrides existing)</param>
@@ -295,6 +329,12 @@ namespace StarLevelSystem
         /// Sets all of the creature damage recieved modifiers as a dictionary with the key as the enum (Blunt = 0, Slash = 1, Pierce = 2, Fire = 3, Frost = 4, Lightning = 5, Poison = 6, Spirit = 7, Chop = 8, Pickaxe = 9)
         /// 1.0 = 100% damage taken, 0.5 = 50% damage taken, 2.0 = 200% damage taken
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of creatures damage recived modifiers</param>
         public static bool SetAllCreatureDamageReceivedModifiers(Character creatureId, Dictionary<int, float> attributes) {
@@ -319,6 +359,12 @@ namespace StarLevelSystem
         /// Allows setting flat damage bonus values for a creature (this value is applied once, flat addition)
         /// this does not apply immediately and must be applied with ApplyCreatureUpdates
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="damageType">The enum value of which attribute to get: Blunt = 0, Slash = 1, Pierce = 2, Fire = 3, Frost = 4, Lightning = 5, Poison = 6, Spirit = 7, Chop = 8, Pickaxe = 9</param>
         /// <param name="value">The value this attribute will be set to (overrides existing)</param>
@@ -340,6 +386,12 @@ namespace StarLevelSystem
         /// Sets all of the creatures flat damage bonuses as a dictionary with the key as the enum (Blunt = 0, Slash = 1, Pierce = 2, Fire = 3, Frost = 4, Lightning = 5, Poison = 6, Spirit = 7, Chop = 8, Pickaxe = 9)
         /// this applies immediately
         /// </summary>
+        /// <remarks>
+        /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
+        /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
+        /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures flat damage bonuses</param>
         /// returns>bool success</returns>
@@ -354,11 +406,32 @@ namespace StarLevelSystem
 
         /// <summary>
         /// Applies DamageBonuses, PerLevel, BaseAttributes, speed, size, health, damage, etc to the creature
+        /// A peer that does not own the creature applies what it can see at once and forwards the call to the owner,
+        /// which saves the results (size, health, damage) on the creature.
         /// </summary>
         /// <param name="creatureId">The creature's Character class</param>
         /// returns>bool success</returns>
         public static bool ApplyCreatureUpdates(Character creatureId) {
             return (bool)ApplyUpdatesToCreature.Invoke(null, new object[] { creatureId });
+        }
+
+        ////////////////////////////////////////
+        /// SPAWN MANAGEMENT
+        ////////////////////////////////////////
+
+        /// <summary>
+        /// Marks a creature your mod spawned and owns the existence and level of (a quest or bounty target, say).
+        /// Star Level System keeps giving it stats, modifiers and colour, but never deletes or multiplies it for
+        /// spawn-rate or disabled-spawn rules, and never rerolls or clamps its level.
+        /// Saved on the creature whichever peer calls it: a peer that does not own the creature forwards the call to the
+        /// owner. Call it in the frame you spawn the creature (Star Level System's own setup waits
+        /// InitialDelayBeforeSetup), and again when it loads if it may have been spawned before your mod made this call.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// <param name="managed">True to mark the creature, false to hand it back to Star Level System's spawn rules</param>
+        /// returns>bool success; false when the creature is not networked or Star Level System is too old (see SupportsSpawnManaged)</returns>
+        public static bool SetCreatureSpawnManaged(Character creatureId, bool managed = true) {
+            return (bool)Call(SetCreatureSpawnManagedMethod, false, creatureId, managed);
         }
 
         ////////////////////////////////////////
@@ -393,7 +466,8 @@ namespace StarLevelSystem
         /// <param name="modifierName">The modifiers name</param>
         /// <param name="modifierType">The modifiers type Major (0), Minor (1), and Boss (2)</param>
         /// <param name="update">If true applies updates to the creature to rebuild the creatures name and other stats</param>
-        /// returns>bool success</returns>
+        /// returns>bool success, as this peer saw it. Saved on the creature whichever peer calls it: a peer that does not
+        /// own the creature forwards the call to the owner.</returns>
         public static bool AddModifierToTargetCreature(Character creatureId, string modifierName, int modifierType, bool update = true) {
             return (bool)AddModifierToCreature.Invoke(null, new object[] { creatureId, modifierName, modifierType, update });
         }

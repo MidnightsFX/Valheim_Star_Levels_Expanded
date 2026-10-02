@@ -47,7 +47,10 @@ namespace StarLevelSystem.modules.LevelSystem {
         // CompositeLazyCache.StartZOwnerCreatureRoutines MUST both use this same check: if the
         // correction is gated off while the roll gate is not, an over-level creature re-rolls a fresh
         // level on every cache build while nothing ever writes the correction back to its ZDO.
+        // A spawn-managed creature's level belongs to the mod that spawned it (a bounty's level is part of the
+        // bounty), so it is never rerolled or clamped - through this same shared gate, so both sites agree.
         public static bool OverLevelRerollEnabled(Character character) {
+            if (CompositeLazyCache.IsSpawnManaged(character)) { return false; }
             if (character != null && character.m_nview != null && character.IsTamed()) {
                 return ValConfig.OverLevelTamesGetRerolledOnLoad.Value;
             }
@@ -246,16 +249,17 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static void SetAndUpdateCharacterLevel(Character character, int level) {
             if (character == null) { return; }
             character.m_level = level;
+            // s_level and the max health SetupMaxHealth writes are ZDO values, which only the owner writes. The API
+            // replays a non-owner's call on the owner (APIOwnerRelay), so here a non-owner only updates its own view.
+            if (character.m_nview == null || character.m_nview.GetZDO() == null || character.m_nview.IsOwner() == false) { return; }
             character.SetupMaxHealth();
-            if (character.m_nview != null && character.m_nview.GetZDO() != null) {
-                character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
-            }
+            character.m_nview.GetZDO().Set(ZDOVars.s_level, level);
         }
 
         // Consider decision tree for levelups to reduce iterations
-        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f) {
-            int selected_level = 0;
-            // Build new levelup definitions with bonuses applied
+        // The levelup chances with a distance ring's bonus added, which is the table DetermineLevelRollResult walks. Also
+        // what the quick configure panel previews a ring with, so the two cannot drift apart.
+        public static SortedDictionary<int, float> ApplyLevelupBonus(SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence) {
             SortedDictionary<int, float> LevelUpWithBonus = new SortedDictionary<int, float>() { };
             LevelUpWithBonus.AddRange<int, float>(creature_levelup_chance);
             if (levelup_bonus != null) {
@@ -271,6 +275,13 @@ namespace StarLevelSystem.modules.LevelSystem {
                     }
                 }
             }
+            return LevelUpWithBonus;
+        }
+
+        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f) {
+            int selected_level = 0;
+            // Build new levelup definitions with bonuses applied
+            SortedDictionary<int, float> LevelUpWithBonus = ApplyLevelupBonus(creature_levelup_chance, levelup_bonus, distance_influence);
 
             int index = 0;
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {

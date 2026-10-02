@@ -240,7 +240,16 @@ namespace StarLevelSystem.modules.Modifiers {
                     if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { numBossMods = creature_settings.MaxBossModifiers; }
                     float chanceForBossMod = ValConfig.ChanceOfBossModifier.Value;
                     if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceForBossMod = creature_settings.ChanceForBossModifier; }
-                    creatureModifiers = CreatureModifiers.SelectModifiers(character, creatureName, biome, level, isBoss: true, maxBossMods: numBossMods, chanceBossMods: chanceForBossMod, requiredModifiers: requiredModifiers, notAllowedModifiers: notAllowedModifiers);
+                    int numMajorModsonBoss = ValConfig.MaxMajorModifiersPerBoss.Value;
+                    if (creature_settings != null && creature_settings.MaxMajorModifiers > -1) { numMajorModsonBoss = creature_settings.MaxMajorModifiers; }
+                    float chanceForMajorModsOnBoss = ValConfig.ChanceOfMajorModifierOnBoss.Value;
+                    if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceForMajorModsOnBoss = creature_settings.ChanceForMajorModifier; }
+                    int numMinorModsonBoss = ValConfig.MaxMinorModifiersPerBoss.Value;
+                    if (creature_settings != null && creature_settings.MaxMinorModifiers > -1) { numMinorModsonBoss = creature_settings.MaxMinorModifiers; }
+                    float chanceForMinorModsonBoss = ValConfig.ChanceOfMinorModifierOnBoss.Value;
+                    if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceForMinorModsonBoss = creature_settings.ChanceForMinorModifier; }
+
+                    creatureModifiers = CreatureModifiers.SelectModifiers(character, creatureName, biome, level, isBoss: true, maxBossMods: numBossMods, chanceBossMods: chanceForBossMod, maxMajorModsonBoss: numMajorModsonBoss, chanceMajorModsonBoss: chanceForMajorModsOnBoss, maxMinorModsonBoss: numMinorModsonBoss, chanceMinorModsonBoss: chanceForMinorModsonBoss, requiredModifiers: requiredModifiers, notAllowedModifiers: notAllowedModifiers);
                 }
                 else
                 {
@@ -261,7 +270,7 @@ namespace StarLevelSystem.modules.Modifiers {
             return creatureModifiers;
         }
 
-        public static Dictionary<string, ModifierType> SelectModifiers(Character character, string creatureName, Heightmap.Biome biome, int level, int maxMajorMods = 0, float chanceMajorMods = 1f, int maxMinorMods = 0, float chanceMinorMods = 1f, bool isBoss = false, int maxBossMods = 0, float chanceBossMods = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
+        public static Dictionary<string, ModifierType> SelectModifiers(Character character, string creatureName, Heightmap.Biome biome, int level, int maxMajorMods = 0, float chanceMajorMods = 1f, int maxMinorMods = 0, float chanceMinorMods = 1f, bool isBoss = false, int maxBossMods = 0, float chanceBossMods = 1f, int maxMajorModsonBoss = 0, float chanceMajorModsonBoss = 1f, int maxMinorModsonBoss = 0, float chanceMinorModsonBoss = 1f, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null) {
             //Logger.LogDebug($"{character} - {creatureName} - {biome} - {level} - majmax: {maxMajorMods} - majchance: {chanceMajorMods} - maxminor: {maxMinorMods} - {isBoss} - maxboss: {maxBossMods} - chanceboss: {chanceBossMods} - reqmods: {requiredModifiers} - unallowedmods: {notAllowedModifiers}");
 
             Dictionary<string, ModifierType> selectedMods = new Dictionary<string, ModifierType>();
@@ -302,6 +311,17 @@ namespace StarLevelSystem.modules.Modifiers {
                 foreach (var mod in bossMods) {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Boss); }
                 }
+
+                List<string> majorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMajorModsonBoss, maxMajorModsonBoss, level, 0, ModifierType.Major, requiredMajorMods, notAllowedModifiers);
+                foreach (var mod in bossMods) {
+                    if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Major); }
+                }
+
+                List<string> minorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMinorModsonBoss, maxMinorModsonBoss, level, 0, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
+                foreach (var mod in bossMods) {
+                    if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Minor); }
+                }
+
                 return selectedMods;
             }
 

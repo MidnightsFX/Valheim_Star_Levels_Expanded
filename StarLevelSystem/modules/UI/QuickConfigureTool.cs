@@ -520,8 +520,12 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.ChanceMinorModifier.Value = staged.chanceMinor;
                 ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value = staged.limitToStarLevel;
                 ValConfig.EnableBossModifiers.Value = staged.enableBossMods;
-                ValConfig.ChanceOfBossModifier.Value = staged.chanceBoss;
                 ValConfig.MaxBossModifiersPerBoss.Value = staged.maxBossMods;
+                ValConfig.ChanceOfBossModifier.Value = staged.chanceBoss;
+                ValConfig.MaxMajorModifiersPerBoss.Value = staged.maxMajorOnBoss;
+                ValConfig.ChanceOfMajorModifierOnBoss.Value = staged.chanceMajorOnBoss;
+                ValConfig.MaxMinorModifiersPerBoss.Value = staged.maxMinorOnBoss;
+                ValConfig.ChanceOfMinorModifierOnBoss.Value = staged.chanceMinorOnBoss;
                 ValConfig.LimitCreatureModifierPrefixes.Value = staged.prefixLimit;
                 ValConfig.MinorModifiersFirstInName.Value = staged.minorFirst;
                 ValConfig.AutoTuneBiomeStarCaps.Value = staged.biomeCapAuto;
@@ -870,8 +874,8 @@ namespace StarLevelSystem.modules.UI {
             public bool biomeCapAuto;
             public Dictionary<Heightmap.Biome, int> biomeCapManual;
 
-            public int maxMajor, maxMinor, maxBossMods, prefixLimit;
-            public float chanceMajor, chanceMinor, chanceBoss;
+            public int maxMajor, maxMinor, maxBossMods, maxMajorOnBoss, maxMinorOnBoss, prefixLimit;
+            public float chanceMajor, chanceMinor, chanceBoss, chanceMinorOnBoss, chanceMajorOnBoss;
             public bool limitToStarLevel, enableBossMods, minorFirst;
             public ModifierDisplayStyle displayStyle;
 
@@ -942,6 +946,10 @@ namespace StarLevelSystem.modules.UI {
                     enableBossMods = ValConfig.EnableBossModifiers.Value,
                     chanceBoss = ValConfig.ChanceOfBossModifier.Value,
                     maxBossMods = ValConfig.MaxBossModifiersPerBoss.Value,
+                    chanceMajorOnBoss = ValConfig.ChanceOfMajorModifierOnBoss.Value,
+                    maxMajorOnBoss = ValConfig.MaxMajorModifiersPerBoss.Value,
+                    chanceMinorOnBoss = ValConfig.ChanceOfMinorModifierOnBoss.Value,
+                    maxMinorOnBoss = ValConfig.MaxMinorModifiersPerBoss.Value,
                     prefixLimit = ValConfig.LimitCreatureModifierPrefixes.Value,
                     minorFirst = ValConfig.MinorModifiersFirstInName.Value,
                     biomeCapAuto = ValConfig.AutoTuneBiomeStarCaps.Value,
@@ -1168,8 +1176,10 @@ namespace StarLevelSystem.modules.UI {
                     && maxStars == o.maxStars && maxBossLevel == o.maxBossLevel
                     && mpHealth == o.mpHealth && mpDamage == o.mpDamage
                     && mpHealthMod == o.mpHealthMod && mpDamageMod == o.mpDamageMod && mpRequiredPlayers == o.mpRequiredPlayers
-                    && maxMajor == o.maxMajor && maxMinor == o.maxMinor && maxBossMods == o.maxBossMods && prefixLimit == o.prefixLimit
+                    && maxMajor == o.maxMajor && maxMinor == o.maxMinor && maxBossMods == o.maxBossMods && maxMajorOnBoss == o.maxMajorOnBoss 
+                    && maxMinorOnBoss == o.maxMinorOnBoss && prefixLimit == o.prefixLimit
                     && chanceMajor == o.chanceMajor && chanceMinor == o.chanceMinor && chanceBoss == o.chanceBoss
+                    && chanceMajorOnBoss == o.chanceMajorOnBoss && chanceMinorOnBoss == o.chanceMinorOnBoss
                     && limitToStarLevel == o.limitToStarLevel && enableBossMods == o.enableBossMods && minorFirst == o.minorFirst
                     && displayStyle == o.displayStyle && biomeCapAuto == o.biomeCapAuto
                     && enableSlsRaids == o.enableSlsRaids && raidEventRate == o.raidEventRate

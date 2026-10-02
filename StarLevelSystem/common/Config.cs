@@ -228,8 +228,12 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> ChanceMajorModifier;
         public static ConfigEntry<float> ChanceMinorModifier;
         public static ConfigEntry<bool> EnableBossModifiers;
-        public static ConfigEntry<float> ChanceOfBossModifier;
         public static ConfigEntry<int> MaxBossModifiersPerBoss;
+        public static ConfigEntry<float> ChanceOfBossModifier;
+        public static ConfigEntry<int> MaxMajorModifiersPerBoss;
+        public static ConfigEntry<float> ChanceOfMajorModifierOnBoss;
+        public static ConfigEntry<int> MaxMinorModifiersPerBoss;
+        public static ConfigEntry<float> ChanceOfMinorModifierOnBoss;
         public static ConfigEntry<bool> SplittersInheritLevel;
         public static ConfigEntry<int> LimitCreatureModifierPrefixes;
         public static ConfigEntry<bool> MinorModifiersFirstInName;
@@ -612,10 +616,18 @@ namespace StarLevelSystem.common {
             ChanceMajorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
             ChanceMinorModifier = BindServerConfig("Modifiers", "ChanceMinorModifier", 0.25f, "The chance that a creature will have a minor modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
             ChanceMinorModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
+
             EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Bosses can spawn with modifiers.");
-            ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 0.75f, "The chance that a boss will have a modifier.", false, 0, 1f);
+            MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of boss modifiers that a boss can have.", false, 0);
+            ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 1f, "The chance that a boss will have a boss modifier.", false, 0, 1f);
             ChanceOfBossModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
-            MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.", false, 0);
+            MaxMajorModifiersPerBoss = BindServerConfig("Modifiers", "MaxMajorModifiersPerBoss", 2, "The maximum number of major modifiers that a boss can have.", false, 0);
+            ChanceOfMajorModifierOnBoss = BindServerConfig("Modifiers", "ChanceOfMajorModifierOnBoss", 0.5f, "The chance that a boss will have a major modifier.", false, 0, 1f);
+            ChanceOfMajorModifierOnBoss.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
+            MaxMinorModifiersPerBoss = BindServerConfig("Modifiers", "MaxMinorModifiersPerBoss", 2, "The maximum number of minor modifiers that a boss can have.", false, 0);
+            ChanceOfMinorModifierOnBoss = BindServerConfig("Modifiers", "ChanceOfMinorModifierOnBoss", 0.5f, "The chance that a boss will have a minor modifier.", false, 0, 1f);
+            ChanceOfMinorModifierOnBoss.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
+            
             SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Creatures spawned from the Splitter modifier inherit the level of the parent creature.");
             LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.", false, 0);
             LimitCreatureModifierPrefixes.SettingChanged += CreatureModifiersData.ModifierNamingChanged;

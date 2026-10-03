@@ -312,26 +312,31 @@ namespace StarLevelSystem.modules.Modifiers {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Boss); }
                 }
 
-                List<string> majorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMajorModsonBoss, maxMajorModsonBoss, level, 0, ModifierType.Major, requiredMajorMods, notAllowedModifiers);
-                foreach (var mod in bossMods) {
+                // Share the star-level budget across categories; "None" does not use a slot.
+                int existingMods = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
+                List<string> majorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMajorModsonBoss, maxMajorModsonBoss, level, existingMods, ModifierType.Major, requiredMajorMods, notAllowedModifiers);
+                foreach (var mod in majorModsonBoss) {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Major); }
                 }
 
-                List<string> minorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMinorModsonBoss, maxMinorModsonBoss, level, 0, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
-                foreach (var mod in bossMods) {
+                existingMods = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
+                List<string> minorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMinorModsonBoss, maxMinorModsonBoss, level, existingMods, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
+                foreach (var mod in minorModsonBoss) {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Minor); }
                 }
 
                 return selectedMods;
             }
 
-            // Select a major modifiers
+            // Major modifiers get first use of the shared star-level budget.
             List<string> majorMods = SelectCreatureModifiers(creatureName, biome, chanceMajorMods, maxMajorMods, level, 0, ModifierType.Major, requiredMajorMods, notAllowedModifiers);
             foreach (var mod in majorMods) {
                 if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Major); }
             }
 
-            List<string> minorMods = SelectCreatureModifiers(creatureName, biome, chanceMinorMods, maxMinorMods, level, majorMods.Count, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
+            // Count actual selected modifiers so "None" does not block a minor modifier.
+            int selectedMajorCount = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
+            List<string> minorMods = SelectCreatureModifiers(creatureName, biome, chanceMinorMods, maxMinorMods, level, selectedMajorCount, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
             foreach (var mod in minorMods) {
                 if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Minor); }
             }

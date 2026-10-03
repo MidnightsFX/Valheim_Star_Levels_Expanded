@@ -130,6 +130,13 @@ namespace StarLevelSystem.modules.Raids
                     return false;
                 }
 
+                // Reached when the vanilla/CustomRaids selection picks an SLS raid on its own, so it gets the same boss
+                // check as SLS's own selection. The 'event' and sls-raid-spawn force-starts come in elsewhere.
+                if (RaidControl.IsBossNear(pos, out string nearBoss)) {
+                    Logger.LogRaid($"Not starting raid '{raidDef.Name}' at {pos}: {nearBoss}.");
+                    return false;
+                }
+
                 RaidControl.DispatchForcedRaid(raidDef, pos);
                 return false;
             }

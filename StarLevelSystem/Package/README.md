@@ -554,11 +554,13 @@ While you are inside a raid's area the vanilla event banner at the top of the sc
 
 Raids never stack. Before a raid starts, the server checks for any raid still in the world within `RaidExclusionRange` (main config, default 500m), running or winding down, whoever it belongs to and however it was started, and skips the new one. The first raid in an area is the only raid; other players elsewhere are still considered. `sls-raid-spawn` is refused the same way.
 
+Raids also leave boss fights alone. A player within `RaidBossExclusionRange` (main config, default 100m, the distance the boss health bar shows from) of a living boss is skipped, and considered again on the next raid check. Any creature the game treats as a boss counts, modded bosses and Nemesis minibosses included. `sls-raid-spawn` and the `event` command still start a raid there, with a warning from `sls-raid-spawn`.
+
 Below is an example of many of the details that can be configured for a given raid
 ```
 - Name: foresttrolls              # Each raid has its own name, these should be unique or can be incorrectly selected
   Duration: 180                   # Duration of the raid, in seconds
-  RaidCoolDownMinutes: 120        # The number of minutes between when this raid triggers and the player becomes eligble for a new raid
+  RaidCoolDownMinutes: 240        # The number of minutes between when this raid triggers and the player becomes eligble for a new raid
   ForceEnvironment: Crypt         # Environment that will be set when the raid starts available options: Clear, Misty, Darklands_dark, DeepForest_Mist, Heath_clear, InfectedMine, GDKing, Rain, LightRain, ThunderStorm, Eikthyr, Fader, 
                                   #  GoblinKing, nofogts, SwampRain, Bonemass, Snow, SnowStorm, Twilight_Clear, Twilight_Snow, Twilight_SnowStorm, Moder, Crypt, CryptHildir, Ghosts, Queen, SunkenCrypt, Mistlands_clear, Mistlands_rain, 
   Activation:                     #  Mistlands_thunder, Ashlands_ashrain, Ashlands_ashrain_clear, Ashlands_CinderRain, Ashlands_meteorshower, Ashlands_misty, Ashlands_SeaStorm, Ashlands_storm, Caves, CavesHildir
@@ -640,6 +642,7 @@ These modifiers are attainable by most creatures, and are typically the more imp
 | ResistPierce     |      Reduces damage taken from Pierce     |                                                                 BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction                                                                |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/pierceResist.png?raw=true" width="64" height="64">     |
 |  ResistSlash     |      Reduces damage taken from Slash      |                                                                 BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction                                                                |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/slashResist.png?raw=true" width="64" height="64">     |
 |  ResistBlunt     |      Reduces damage taken from Blunt      |                                                                 BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction                                                                |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/bluntResist.png?raw=true" width="64" height="64">     |
+|   Reflection     | Can reflect projectiles back along their arc; shots that glance off its edge deflect elsewhere and can hit other players or creatures | BasePower = chance (0-1) to reflect a projectile PerLevelIncrease = additional chance per level Config ReflectedDamage = fraction of the projectile's damage the reflected shot keeps |      |
 
 
 #### Minor Modifiers

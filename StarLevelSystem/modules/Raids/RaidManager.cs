@@ -172,6 +172,12 @@ namespace StarLevelSystem.modules.Raids {
                         Logger.LogRaid($"Skipping raids for {playerRaids.Key}: {blockedBy}.");
                         continue;
                     }
+                    // Nor on a boss fight. Their cooldown is left alone, so the next check picks them up again once
+                    // they have moved off or the boss is dead.
+                    if (RaidControl.IsBossNear(raidPosition, out string nearBoss)) {
+                        Logger.LogRaid($"Skipping raids for {playerRaids.Key}: {nearBoss}.");
+                        continue;
+                    }
 
 
                     // Check available raids to see which one could activate

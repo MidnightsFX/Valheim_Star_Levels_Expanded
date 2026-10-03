@@ -1,4 +1,15 @@
 
+**1.20.1**
+ ---
+ ```
+- Adds Reflection, a new major modifier that can send projectiles back the way they came, or off to the side on a glancing hit.
+- Servers with their own list of major modifiers need to add Reflection to it before it appears.
+- Players now wait much longer between raids.
+- Raids no longer start on a player who is near a boss.
+- Fixes a hole that let a modified client change server configs or run admin commands by pretending to be an admin who is online.
+- Fixes a hole that let a modified client get around the distance and cooldown limits on location resets by pretending to be another player who is online.
+ ```
+
 **1.20.0**
  ---
  ```

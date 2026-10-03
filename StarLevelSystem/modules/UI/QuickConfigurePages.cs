@@ -65,6 +65,7 @@ namespace StarLevelSystem.modules.UI {
             { "EitrDrain", "Its attacks drain your eitr. Dodging avoids it; blocking or parrying lessens it." },
             { "Brutal", "Increases the creature's attack speed." },
             { "ElementalChaos", "Adds random elemental damage on each hit." },
+            { "Reflection", "Can send projectiles back along their arc; glancing shots deflect into others." },
         };
 
         private static readonly Dictionary<string, string> BossKeyNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {

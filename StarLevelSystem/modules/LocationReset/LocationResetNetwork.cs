@@ -1,3 +1,4 @@
+using HarmonyLib;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -15,7 +16,7 @@ namespace StarLevelSystem.modules.LocationReset {
     // happens to be hosting.
     //
     // This is a dedicated RPC pair rather than a ride on the existing console-command relay
-    // (ClientCommandRequestRPC). That relay carries a command name and string arguments and answers
+    // (TerminalNetwork). That relay carries a command name and string arguments and answers
     // with lines of coloured text for a terminal, which cannot express a typed result or reach a
     // caller's callback; encoding API calls as console strings and scraping the reply would be a
     // worse contract in both directions.
@@ -29,10 +30,47 @@ namespace StarLevelSystem.modules.LocationReset {
     //     player's base, ward, bed or tombstone;
     //   - a radius clamp, so one request cannot span a continent;
     //   - a proximity check, so a peer can only ask about ground it is actually standing near;
-    //   - a per-peer cooldown on anything that mutates.
+    //   - a per-client cooldown on anything that mutates.
     //
     // Those four are the whole envelope. They are configurable so an owner can tighten or open them.
+    //
+    // The last two only mean something if the server knows who is asking, which is why this is not a
+    // CustomRPC. CustomRPC rides ZRoutedRpc, whose sender id is written by the sending client and
+    // relayed untouched by the server, so a modified client could name any other online peer: borrow
+    // that player's position to pass the proximity check, rotate through uids to dodge the cooldown,
+    // and have the answer delivered to someone else. Both directions use the peer connection itself
+    // (ZNetPeer.m_rpc) instead, as TerminalNetwork and ConfigNetwork's edit channel do. A ZRpc handler
+    // is bound to the socket the call arrived on: the server reads the requester from that socket, and
+    // a client registers the result handler only on its connection to the server, so nothing else can
+    // answer its requests.
+    //
+    // What that cannot fix: the position the proximity check reads is the one each client reports for
+    // itself, so a client modified to lie about where it stands still gets past it. It has to lie
+    // about its own position now, rather than borrow another player's.
     internal static class LocationResetNetwork {
+
+        // GUID-prefixed: every connection has one table of RPC name hashes, shared with vanilla and every
+        // other mod, and a second Register under the same hash silently replaces the first.
+        private const string RequestRpc = StarLevelSystem.PluginGUID + ".LocationApiRequest";
+        private const string ResultRpc = StarLevelSystem.PluginGUID + ".LocationApiResult";
+
+        // A ZRpc call goes out as one socket message, unsliced. Steam refuses a reliable message over
+        // 512 KB, and the socket then retries it forever, holding up everything queued behind it. This is
+        // the slice size Jotunn's CustomRPC uses for the same reason.
+        private const int MaxPayloadBytes = 250000;
+
+        // ZNet registers its own per-connection RPCs here, on both ends of every connection: on the server
+        // once per client, and on a client once, for its link to the server.
+        [HarmonyPatch(typeof(ZNet), nameof(ZNet.OnNewConnection))]
+        private static class ZNet_OnNewConnection_Patch {
+            private static void Postfix(ZNet __instance, ZNetPeer peer) {
+                if (__instance.IsServer()) {
+                    peer.m_rpc.Register<ZPackage>(RequestRpc, OnServerReceiveRequest);
+                } else {
+                    peer.m_rpc.Register<ZPackage>(ResultRpc, OnClientReceiveResult);
+                }
+            }
+        }
 
         internal enum Op : byte {
             ResetNamed = 0,
@@ -90,13 +128,26 @@ namespace StarLevelSystem.modules.LocationReset {
                 Logger.LogLocationResetWarning($"SLS-API: cannot send {op} to the server - not in a world.");
                 return false;
             }
-            ZNetPeer server = ZNet.instance.GetServerPeer();
+            // Null until the handshake with the server has finished, as well as when there is no server.
+            ZRpc server = ZNet.instance.GetServerRPC();
             if (server == null) {
                 Logger.LogLocationResetWarning($"SLS-API: cannot send {op} to the server - no server connection.");
                 return false;
             }
 
             int requestId = nextRequestId++;
+            ZPackage package = new ZPackage();
+            package.Write(requestId);
+            package.Write((byte)op);
+            WriteDictionary(package, args);
+            // Only reachable by a caller passing absurdly long strings, but checked before anything is
+            // left pending, so it fails the same way as having no server rather than as a timeout.
+            if (package.Size() > MaxPayloadBytes) {
+                Logger.LogLocationResetWarning($"SLS-API: cannot send {op} to the server - the request is " +
+                    $"{package.Size()} bytes, over the {MaxPayloadBytes} one message may carry.");
+                return false;
+            }
+
             if (onResult != null) {
                 pending[requestId] = new Pending() {
                     Op = op,
@@ -106,16 +157,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 StartExpiryLoop();
             }
 
-            ZPackage package = new ZPackage();
-            package.Write(requestId);
-            package.Write((byte)op);
-            WriteDictionary(package, args);
-            ValConfig.LocationApiRequestRPC.SendPackage(server.m_uid, package);
+            server.Invoke(RequestRpc, package);
             return true;
         }
 
-        // Client handler: the server's answer to one request.
-        internal static IEnumerator OnClientReceiveResult(long sender, ZPackage package) {
+        // Client handler: the server's answer to one request. Registered only on the connection to the
+        // server, so another client cannot answer in its place.
+        private static void OnClientReceiveResult(ZRpc rpc, ZPackage package) {
             int requestId = package.ReadInt();
             Dictionary<string, object> result = ReadDictionary(package);
 
@@ -123,7 +171,6 @@ namespace StarLevelSystem.modules.LocationReset {
                 pending.Remove(requestId);
                 Invoke(entry, result);
             }
-            yield return null;
         }
 
         // A consumer's callback must never take the RPC handler down with it.
@@ -169,8 +216,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Drop everything in flight. A world change invalidates every pending answer, and leaving
         // them to time out one by one would fire stale callbacks into a different world.
         internal static void Reset() {
-            // Peer ids are not stable across worlds, so carrying cooldowns over would throttle
-            // whoever inherits an id and let whoever does not off entirely.
+            // Server side: a cooldown belongs to the world it was spent in.
             lastMutatingRequest.Clear();
 
             List<Pending> orphans = new List<Pending>(pending.Values);
@@ -189,13 +235,21 @@ namespace StarLevelSystem.modules.LocationReset {
         // Server side
         // ---------------------------------------------------------------------------------------
 
-        // When each peer last asked for something that changes state. Queries are not counted: they
+        // When each client last asked for something that changes state. Queries are not counted: they
         // are read-only, and rate-limiting them would break a mod that legitimately polls a few
         // locations to decide whether to act.
-        private static readonly Dictionary<long, float> lastMutatingRequest = new Dictionary<long, float>();
+        //
+        // Keyed on the account the connection belongs to (the socket's host name, a Steam or platform
+        // id) rather than the peer uid. The uid is chosen by the client at the handshake and is new on
+        // every connect, so a uid-keyed cooldown would start over each time the client rejoined.
+        private static readonly Dictionary<string, float> lastMutatingRequest = new Dictionary<string, float>();
 
-        internal static IEnumerator OnServerReceiveRequest(long sender, ZPackage package) {
-            if (IsServer == false) { yield break; }
+        // Server handler. The requester is read from the socket the call arrived on, which the client
+        // cannot choose, so proximity, cooldown and the reply all belong to whoever actually sent it.
+        private static void OnServerReceiveRequest(ZRpc rpc, ZPackage package) {
+            ZNetPeer requester = ZNet.instance.GetPeer(rpc);
+            // Not ready means the handshake has not finished, so this is not yet a player in the world.
+            if (requester == null || requester.IsReady() == false) { return; }
 
             int requestId = package.ReadInt();
             Op op = (Op)package.ReadByte();
@@ -203,40 +257,70 @@ namespace StarLevelSystem.modules.LocationReset {
 
             Dictionary<string, object> result;
             try {
-                result = Dispatch(sender, op, args, requestId);
+                result = Dispatch(requester, op, args, requestId);
             } catch (Exception e) {
-                Logger.LogLocationResetWarning($"A {op} request from peer {sender} failed: {e}");
+                Logger.LogLocationResetWarning($"A {op} request from {Describe(requester)} failed: {e}");
                 result = Failure(ResetSummary.CodeServerError, $"the server failed to handle the {op} request.");
             }
 
             // A reset answers later, from its own completion callback, so Dispatch returns null for
             // one it accepted. Everything else answers now.
-            if (result != null) { Reply(sender, requestId, result); }
-            yield return null;
+            if (result != null) { Reply(requester, requestId, result); }
         }
 
-        internal static void Reply(long sender, int requestId, Dictionary<string, object> result) {
+        private static void Reply(ZNetPeer peer, int requestId, Dictionary<string, object> result) {
             if (IsServer == false) { return; }
-            // The peer may have disconnected while a Safe-mode reset was waiting.
-            if (ZNet.instance.GetPeer(sender) == null) { return; }
+            // The peer may have disconnected while a Safe-mode reset was waiting. A disconnected peer is
+            // dropped from the list, and a reconnect is a new ZNetPeer that never sent this request.
+            if (ZNet.instance.GetPeers().Contains(peer) == false) { return; }
 
+            ZPackage package = EncodeResult(requestId, result);
+
+            // Per-chunk detail is the one part of any answer that grows with the request, so a wide reset
+            // with includeDetail is what can outgrow one message. Drop the detail rather than the answer:
+            // the outcome and counters are what a caller acts on, and a reset that ran must not come back
+            // looking like one that failed.
+            if (package.Size() > MaxPayloadBytes
+                    && result.TryGetValue("zones", out object zones) && zones is List<Dictionary<string, object>> detail
+                    && detail.Count > 0) {
+                Logger.LogLocationResetWarning($"The answer to {Describe(peer)} was {package.Size()} bytes; " +
+                    $"sending it without its {detail.Count} chunk details.");
+                result["zones"] = new List<Dictionary<string, object>>();
+                package = EncodeResult(requestId, result);
+            }
+            if (package.Size() > MaxPayloadBytes) {
+                Logger.LogLocationResetWarning($"The answer to {Describe(peer)} was {package.Size()} bytes, " +
+                    $"over the {MaxPayloadBytes} one message may carry; sending a refusal instead.");
+                package = EncodeResult(requestId, Failure(ResetSummary.CodeServerError,
+                    "the server's answer was too large to send."));
+            }
+
+            peer.m_rpc.Invoke(ResultRpc, package);
+        }
+
+        private static ZPackage EncodeResult(int requestId, Dictionary<string, object> result) {
             ZPackage package = new ZPackage();
             package.Write(requestId);
             WriteDictionary(package, result);
-            ValConfig.LocationApiResultRPC.SendPackage(sender, package);
+            return package;
         }
 
-        private static Dictionary<string, object> Dispatch(long sender, Op op, Dictionary<string, object> args, int requestId) {
+        // For the log: the name the player joined with, and the account the connection belongs to.
+        private static string Describe(ZNetPeer peer) {
+            return $"{peer.m_playerName} ({peer.m_socket.GetHostName()})";
+        }
+
+        private static Dictionary<string, object> Dispatch(ZNetPeer peer, Op op, Dictionary<string, object> args, int requestId) {
             switch (op) {
                 case Op.ResetNamed:
                 case Op.ResetRadius:
-                    return DispatchReset(sender, op, args, requestId);
+                    return DispatchReset(peer, op, args, requestId);
 
                 case Op.Register: {
-                    if (CooldownBlocked(sender, out string reason)) { return Failure(ResetSummary.CodeCooldown, reason); }
-                    NoteMutatingRequest(sender);
+                    if (CooldownBlocked(peer, out string reason)) { return Failure(ResetSummary.CodeCooldown, reason); }
+                    NoteMutatingRequest(peer);
                     bool ok = APIReciever.LocalRegister(
-                        Str(args, "name"), SourceFor(sender, args), Flt(args, "resetHours"),
+                        Str(args, "name"), SourceFor(peer, args), Flt(args, "resetHours"),
                         Str(args, "resetSchedule"), Int(args, "mode"), Bool(args, "resetTerrain"),
                         Flt(args, "terrainRadius"), Flt(args, "extraTerrainRadius"), Bool(args, "resetInterior"),
                         Flt(args, "minDistance"), Flt(args, "maxDistance"), Bool(args, "enabled"));
@@ -244,9 +328,9 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 case Op.Unregister: {
-                    if (CooldownBlocked(sender, out string reason)) { return Failure(ResetSummary.CodeCooldown, reason); }
-                    NoteMutatingRequest(sender);
-                    return Scalar(LocationResetData.UnregisterAPIResetTarget(Str(args, "name"), SourceFor(sender, args)));
+                    if (CooldownBlocked(peer, out string reason)) { return Failure(ResetSummary.CodeCooldown, reason); }
+                    NoteMutatingRequest(peer);
+                    return Scalar(LocationResetData.UnregisterAPIResetTarget(Str(args, "name"), SourceFor(peer, args)));
                 }
 
                 case Op.LastReset:
@@ -285,7 +369,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // reset, in which case the summary is sent from the completion callback once the routine
         // finishes (minutes later for a Safe request), or it refused and sent that refusal through
         // the same callback. Only the guards in this method answer inline.
-        private static Dictionary<string, object> DispatchReset(long sender, Op op, Dictionary<string, object> args, int requestId) {
+        private static Dictionary<string, object> DispatchReset(ZNetPeer peer, Op op, Dictionary<string, object> args, int requestId) {
             string target = op == Op.ResetNamed ? Str(args, "name") : "";
             Vector3 center = Pos(args);
             float requestedRadius = Flt(args, "radius");
@@ -294,19 +378,19 @@ namespace StarLevelSystem.modules.LocationReset {
             // These two are the server's own envelope on a client request rather than anything the
             // reset machinery knows about, so they are refused here. They still answer in the summary
             // shape, because a caller's follow-up logic reads the same keys either way.
-            if (CooldownBlocked(sender, out string cooldown)) {
+            if (CooldownBlocked(peer, out string cooldown)) {
                 return ResetSummary.Refused(ResetSummary.CodeCooldown, cooldown, center, requestedRadius, safety, target).ToDictionary();
             }
-            if (WithinReach(sender, center, out string reach) == false) {
+            if (WithinReach(peer, center, out string reach) == false) {
                 return ResetSummary.Refused(ResetSummary.CodeTooFar, reach, center, requestedRadius, safety, target).ToDictionary();
             }
 
             float radius = Mathf.Min(requestedRadius, ValConfig.ClientLocationResetMaxRadius.Value);
             if (radius < requestedRadius) {
-                Logger.LogLocationReset($"Peer {sender} asked for a {requestedRadius:0}m reset; clamped to {radius:0}m.");
+                Logger.LogLocationReset($"{Describe(peer)} asked for a {requestedRadius:0}m reset; clamped to {radius:0}m.");
             }
 
-            NoteMutatingRequest(sender);
+            NoteMutatingRequest(peer);
 
             LocationResetControl.ResetRequest request = new LocationResetControl.ResetRequest() {
                 Center = center,
@@ -319,13 +403,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 SafeWaitSeconds = Flt(args, "safeWaitSeconds"),
                 IncludeDetail = Bool(args, "includeDetail"),
                 Source = string.IsNullOrEmpty(target)
-                    ? $"API (peer {sender}) r={radius:0}"
-                    : $"API (peer {sender}) '{target}'",
+                    ? $"API (peer {peer.m_uid}) r={radius:0}"
+                    : $"API (peer {peer.m_uid}) '{target}'",
             };
 
             // Captured for the closure rather than read again later: the routine outlives this call,
-            // and `sender` and `requestId` are what tie its answer back to the right caller.
-            long replyTo = sender;
+            // and `peer` and `requestId` are what tie its answer back to the right caller.
+            ZNetPeer replyTo = peer;
             int replyId = requestId;
 
             // Null either way. RequestReset invokes this callback exactly once whatever it decides --
@@ -339,31 +423,25 @@ namespace StarLevelSystem.modules.LocationReset {
         // on the far side of the world that nobody is anywhere near, which is both the most abusable
         // shape this RPC has and never what a legitimate caller wants -- a mod resetting a dungeon
         // does it for the player standing in front of one.
-        private static bool WithinReach(long sender, Vector3 center, out string reason) {
+        private static bool WithinReach(ZNetPeer peer, Vector3 center, out string reason) {
             reason = null;
             float limit = ValConfig.ClientLocationResetMaxDistance.Value;
             if (limit <= 0f) { return true; }
-
-            ZNetPeer peer = ZNet.instance?.GetPeer(sender);
-            if (peer == null) {
-                reason = "the requesting peer is no longer connected.";
-                return false;
-            }
 
             Vector3 delta = peer.m_refPos - center;
             delta.y = 0f;
             if (delta.magnitude <= limit) { return true; }
 
             reason = $"the requested position is {delta.magnitude:0}m away, beyond the {limit:0}m a client may reach.";
-            Logger.LogLocationResetWarning($"Peer {sender} asked to reset a position {delta.magnitude:0}m from where it is standing; refused.");
+            Logger.LogLocationResetWarning($"{Describe(peer)} asked to reset a position {delta.magnitude:0}m from where it is standing; refused.");
             return false;
         }
 
-        private static bool CooldownBlocked(long sender, out string reason) {
+        private static bool CooldownBlocked(ZNetPeer peer, out string reason) {
             reason = null;
             float cooldown = ValConfig.ClientLocationResetCooldownSeconds.Value;
             if (cooldown <= 0f) { return false; }
-            if (lastMutatingRequest.TryGetValue(sender, out float last) == false) { return false; }
+            if (lastMutatingRequest.TryGetValue(peer.m_socket.GetHostName(), out float last) == false) { return false; }
 
             float elapsed = Time.realtimeSinceStartup - last;
             if (elapsed >= cooldown) { return false; }
@@ -371,20 +449,16 @@ namespace StarLevelSystem.modules.LocationReset {
             return true;
         }
 
-        private static void NoteMutatingRequest(long sender) {
-            lastMutatingRequest[sender] = Time.realtimeSinceStartup;
-        }
-
-        internal static void ForgetPeer(long sender) {
-            lastMutatingRequest.Remove(sender);
+        private static void NoteMutatingRequest(ZNetPeer peer) {
+            lastMutatingRequest[peer.m_socket.GetHostName()] = Time.realtimeSinceStartup;
         }
 
         // A relayed registration is attributed to the peer as well as to the mod that asked, so a
         // registration that turns up in sls-loc-api can be traced to a machine and not just a GUID.
-        private static string SourceFor(long sender, Dictionary<string, object> args) {
+        private static string SourceFor(ZNetPeer peer, Dictionary<string, object> args) {
             string sourceId = Str(args, "sourceId");
             if (string.IsNullOrWhiteSpace(sourceId)) { sourceId = "unknown"; }
-            return $"{sourceId} (client {sender})";
+            return $"{sourceId} (client {peer.m_uid})";
         }
 
         // ---------------------------------------------------------------------------------------

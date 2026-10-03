@@ -95,7 +95,7 @@ namespace StarLevelSystem.common
                 output.Error($"Only server admins can run {command.Canonical} from a client.");
                 return;
             }
-            ZNetPeer server = ZNet.instance.GetServerPeer();
+            ZRpc server = ZNet.instance.GetServerRPC();
             if (server == null)
             {
                 output.Error($"No server connection, so {command.Canonical} cannot be sent.");
@@ -104,7 +104,7 @@ namespace StarLevelSystem.common
 
             responseTerminal = consoleArgs.Context;
             output.Info($"Asked the server to run {command.Canonical}; its output follows.");
-            ValConfig.ClientCommandRequestRPC.SendPackage(server.m_uid, BuildRequest(command.Canonical, args));
+            TerminalNetwork.SendRequest(server, BuildRequest(command.Canonical, args));
         }
 
         // Server side of the relay. The caller has already established that the sender is an admin.

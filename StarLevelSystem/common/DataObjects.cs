@@ -1370,8 +1370,10 @@ namespace StarLevelSystem.common
             public bool RaidActiveTillDefeated { get; set; } = true;
             [DefaultValue(12)]
             public int SpawnPoints { get; set; } = 12;
-            [DefaultValue(120f)]
-            public float RaidCoolDownMinutes { get; set; } = 120f;
+            // Written files omit this while it sits at the default, so raising the default reaches existing
+            // RaidSettings.yaml files without a RaidVersion reset; only a hand-set cooldown keeps its value.
+            [DefaultValue(240f)]
+            public float RaidCoolDownMinutes { get; set; } = 240f;
             public RaidActivation Activation { get; set; } = new RaidActivation();
             public List<RaidSpawnEntry> Spawns { get; set; } = new List<RaidSpawnEntry>();
             [DefaultValue(96f)]

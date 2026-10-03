@@ -26,7 +26,7 @@ namespace StarLevelSystem.common
         private const float BatchSeconds = 0.5f;
 
         private readonly Terminal terminal;
-        private readonly long peer;
+        private readonly ZNetPeer peer;
         private readonly bool remote;
         private readonly List<KeyValuePair<OutputLevel, string>> pending;
         private float lastFlush;
@@ -37,9 +37,9 @@ namespace StarLevelSystem.common
             remote = false;
         }
 
-        private TerminalOutput(long senderUid)
+        private TerminalOutput(ZNetPeer requester)
         {
-            peer = senderUid;
+            peer = requester;
             remote = true;
             pending = new List<KeyValuePair<OutputLevel, string>>();
             lastFlush = Time.realtimeSinceStartup;
@@ -49,8 +49,8 @@ namespace StarLevelSystem.common
         // no terminal, in which case the line still reaches the log.
         internal static TerminalOutput Local(Terminal context) => new TerminalOutput(context);
 
-        // The request arrived over the network; lines go back to that peer.
-        internal static TerminalOutput Remote(long senderUid) => new TerminalOutput(senderUid);
+        // The request arrived over the network; lines go back down that peer's own connection.
+        internal static TerminalOutput Remote(ZNetPeer requester) => new TerminalOutput(requester);
 
         internal void Info(string message, bool log = true) => Write(OutputLevel.Info, message, log);
         internal void Detail(string message, bool log = true) => Write(OutputLevel.Detail, message, log);
@@ -96,7 +96,7 @@ namespace StarLevelSystem.common
             if (remote == false || pending.Count == 0) { return; }
             lastFlush = Time.realtimeSinceStartup;
 
-            if (ZNet.instance == null || ZNet.instance.IsServer() == false || ZNet.instance.GetPeer(peer) == null)
+            if (ZNet.instance == null || ZNet.instance.IsServer() == false || ZNet.instance.GetPeers().Contains(peer) == false)
             {
                 pending.Clear();
                 return;
@@ -110,7 +110,7 @@ namespace StarLevelSystem.common
                 package.Write(line.Value);
             }
             pending.Clear();
-            ValConfig.CommandOutputRPC.SendPackage(peer, package);
+            TerminalNetwork.SendOutput(peer, package);
         }
 
         internal static void LogLine(OutputLevel level, string message)

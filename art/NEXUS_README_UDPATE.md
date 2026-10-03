@@ -360,6 +360,8 @@ Config: BasePower = base damage reduction, PerLevelIncrease = per level addition
 Config: BasePower = base damage reduction, PerLevelIncrease = per level additional damage reduction[/*]
 [*][b]ResistBlunt[/b] - Reduces damage taken from Blunt.
 Config: BasePower = base damage reduction, PerLevelIncrease = per level additional damage reduction[/*]
+[*][b]Reflection[/b] - Can reflect projectiles back along their arc; shots that glance off its edge deflect elsewhere and can hit other players or creatures.
+Config: BasePower = chance (0-1) to reflect a projectile, PerLevelIncrease = additional chance per level, ReflectedDamage = fraction of the projectile's damage the reflected shot keeps[/*]
 [/list]
 
 

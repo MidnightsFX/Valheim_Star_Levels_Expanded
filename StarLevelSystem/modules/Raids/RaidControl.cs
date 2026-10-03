@@ -129,17 +129,45 @@ namespace StarLevelSystem.modules.Raids
             return true;
         }
 
-        // The nearest RaidRunner ZDO within range of pos, or null. Reads the sector index directly rather than
-        // walking the whole ZDO table (GetAllZDOsWithPrefab), which on a mature world is a several-hundred
-        // millisecond stall. A sector is one zone (64m) square; every sector that could hold a point within range
-        // is covered, and out-of-grid sectors map to bucket 0, whose contents the distance test rejects.
+        // The nearest RaidRunner ZDO within range of pos, or null.
         internal static ZDO FindNearestRaidRunnerZDO(Vector3 pos, float range, out float distance) {
+            int prefabHash = RaidRunnerPrefabName.GetStableHashCode();
+            return FindNearestZDO(pos, range, zdo => zdo.GetPrefab() == prefabHash, Utils.DistanceXZ, out distance);
+        }
+
+        // Whether a boss is within RaidBossExclusionRange of pos, so a raid does not land on a boss
+        // fight; nearBoss names the nearest one when there is. Counts what the game treats as a boss: any prefab with
+        // Character.m_boss, plus Nemesis minibosses, which are made bosses per creature and carry SLS_NEMESIS_BOSS on
+        // their ZDO because m_boss is not networked. Read from ZDOs since a dedicated server has no creatures loaded
+        // around its players. Measured in 3D: a dungeon's rooms sit 5000m above its entrance, and a boss in there is
+        // not near a player outside on the ground.
+        internal static bool IsBossNear(Vector3 pos, out string nearBoss) {
+            nearBoss = null;
+            float range = ValConfig.RaidBossExclusionRange.Value;
+            if (range <= 0f || IndexCharacterPrefabs() == false) { return false; }
+            ZDO boss = FindNearestZDO(pos, range, IsBossZDO, Vector3.Distance, out float distance);
+            if (boss == null) { return false; }
+            GameObject prefab = ZNetScene.instance.GetPrefab(boss.GetPrefab());
+            nearBoss = $"{(prefab != null ? prefab.name : "a boss")} is {distance:0}m away";
+            return true;
+        }
+
+        private static bool IsBossZDO(ZDO zdo) {
+            if (characterPrefabIsBoss.TryGetValue(zdo.GetPrefab(), out bool prefabIsBoss) == false) { return false; }
+            return prefabIsBoss || zdo.GetBool(SLS_NEMESIS_BOSS, false);
+        }
+
+        // The nearest ZDO within range of pos that match accepts, or null. Reads the sector index directly rather
+        // than walking the whole ZDO table (GetAllZDOsWithPrefab), which on a mature world is a several-hundred
+        // millisecond stall. A sector is one zone (64m) square; every sector that could hold a point within range
+        // is covered, and out-of-grid sectors map to bucket 0, whose contents the distance test rejects. measure
+        // must never come out shorter than the XZ distance, or a match outside the covered sectors would be missed.
+        private static ZDO FindNearestZDO(Vector3 pos, float range, Func<ZDO, bool> match, Func<Vector3, Vector3, float> measure, out float distance) {
             distance = float.MaxValue;
             if (ZDOMan.instance == null || ZoneSystem.instance == null) { return null; }
             List<ZDO>[] bySector = ZDOMan.instance.m_objectsBySector;
             if (bySector == null) { return null; }
 
-            int prefabHash = RaidRunnerPrefabName.GetStableHashCode();
             Vector2s centre = ZoneSystem.GetZone(pos);
             int reach = Mathf.CeilToInt(range / ZoneSystem.instance.m_zoneSize) + 1;
             ZDO nearest = null;
@@ -150,8 +178,8 @@ namespace StarLevelSystem.modules.Raids
                     List<ZDO> sector = bySector[index];
                     if (sector == null) { continue; }
                     foreach (ZDO zdo in sector) {
-                        if (zdo == null || zdo.GetPrefab() != prefabHash) { continue; }
-                        float d = Utils.DistanceXZ(zdo.GetPosition(), pos);
+                        if (zdo == null || match(zdo) == false) { continue; }
+                        float d = measure(zdo.GetPosition(), pos);
                         if (d < range && d < distance) {
                             nearest = zdo;
                             distance = d;
@@ -361,25 +389,35 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
-        private static HashSet<string> defeatKeys;
-        private static ZNetScene defeatKeysScene;
+        private static ZNetScene characterIndexScene;
+        private static HashSet<string> defeatKeys = new HashSet<string>();
+        // Every registered Character prefab, by the hash ZDO.GetPrefab reports, mapped to whether it is a boss.
+        private static Dictionary<int, bool> characterPrefabIsBoss = new Dictionary<int, bool>();
 
-        // Every defeat key a registered creature can set, modded ones included. Rebuilt per ZNetScene, which is
-        // recreated with each world load, so creatures other mods register there are picked up.
+        // Every defeat key a registered creature can set, modded ones included.
         private static HashSet<string> DefeatKeys() {
+            return IndexCharacterPrefabs() ? defeatKeys : new HashSet<string>();
+        }
+
+        // Indexes the registered Character prefabs for the defeat key catch-up and the boss check. Rebuilt per
+        // ZNetScene, which is recreated with each world load, so creatures other mods register there are picked up.
+        // False while there is no scene to read.
+        private static bool IndexCharacterPrefabs() {
             ZNetScene scene = ZNetScene.instance;
-            if (scene == null) { return new HashSet<string>(); }
-            if (defeatKeys != null && defeatKeysScene == scene) { return defeatKeys; }
+            if (scene == null) { return false; }
+            if (characterIndexScene == scene) { return true; }
             HashSet<string> keys = new HashSet<string>();
-            foreach (GameObject prefab in scene.m_namedPrefabs.Values) {
-                if (prefab == null) { continue; }
-                Character character = prefab.GetComponent<Character>();
-                if (character == null || string.IsNullOrEmpty(character.m_defeatSetGlobalKey)) { continue; }
-                keys.Add(character.m_defeatSetGlobalKey);
+            Dictionary<int, bool> characters = new Dictionary<int, bool>();
+            foreach (KeyValuePair<int, GameObject> prefab in scene.m_namedPrefabs) {
+                Character character = prefab.Value != null ? prefab.Value.GetComponent<Character>() : null;
+                if (character == null) { continue; }
+                characters[prefab.Key] = character.m_boss;
+                if (string.IsNullOrEmpty(character.m_defeatSetGlobalKey) == false) { keys.Add(character.m_defeatSetGlobalKey); }
             }
             defeatKeys = keys;
-            defeatKeysScene = scene;
-            return keys;
+            characterPrefabIsBoss = characters;
+            characterIndexScene = scene;
+            return true;
         }
 
         private static bool playerRaidDataDirty = false;

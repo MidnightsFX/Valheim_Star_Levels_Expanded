@@ -4,14 +4,15 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 
 #pragma warning disable IDE0130
 namespace StarLevelSystem.common {
 #pragma warning restore IDE0130
 
-    // Server -> client sync for yaml config files.
+    // Server -> client sync for yaml config files, and the opt-in admin edit channel.
     //
-    // One Jotunn CustomRPC per file, carrying the file's text verbatim in a ZPackage. Jotunn's
+    // Sync is one Jotunn CustomRPC per file, carrying the file's text verbatim in a ZPackage. Jotunn's
     // SynchronizationManager already handles ConfigEntry sync for anything marked IsAdminOnly; this is
     // the equivalent for the structured half of a mod's configuration, which BepInEx knows nothing about.
     //
@@ -19,14 +20,31 @@ namespace StarLevelSystem.common {
     // AddRPC wants stateless delegates, so the obvious implementation ends up with one hand-written
     // Send/Receive/Update trio per config file. A lambda that captures the file and CALLS an iterator
     // method (the lambda itself cannot contain yield) collapses all of them into the three below.
+    //
+    // The edit channel is deliberately not a CustomRPC. CustomRPC rides ZRoutedRpc, whose sender id is
+    // written by the sending client and relayed untouched by the server, so any client could claim to be
+    // an admin. Edits use the peer connection itself (ZNetPeer.m_rpc), as vanilla's RPC_RemoteCommand
+    // does. A ZRpc handler is bound to the socket the call arrived on: the server reads the uploader's
+    // identity from that socket, and a client registers the result handler only on its connection to the
+    // server, so nothing else can answer its upload.
     internal static class ConfigNetwork {
         private static bool initialized;
         private static Harmony harmony;
         private static readonly HashSet<string> usedRpcNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Files with an open edit channel. Their handlers are registered per connection, so the list is
+        // all that has to be remembered here.
+        private static readonly List<YamlConfigFile> editableFiles = new List<YamlConfigFile>();
+        private static bool connectionPatchApplied;
+
         // Both directions of the admin edit channel carry this, so the payload can grow later without a
         // second compatibility break.
         private const byte EditProtocolVersion = 1;
+
+        // A ZRpc call goes out as one socket message, unsliced. Steam refuses a reliable message over
+        // 512 KB, and the socket then retries it forever, holding up everything queued behind it. This is
+        // the slice size Jotunn's CustomRPC uses for the same reason.
+        private const int MaxEditRequestBytes = 250000;
 
         // Raised on the requesting admin's client when the server answers an upload: (file, accepted,
         // message). message carries the refusal reason, or any validation warnings on an accept.
@@ -83,22 +101,64 @@ namespace StarLevelSystem.common {
 
             // A separate channel rather than a status byte on the one above: that payload shape already
             // ships, and an extra name-hashed channel costs nothing while old clients simply never use it.
-            string editName = file.RpcName + "_Edit";
-            if (usedRpcNames.Add(editName) == false) {
-                Logger.LogError($"Config RPC name '{editName}' is already in use; {file.FileName} will not " +
-                    "accept admin edits.");
-                return;
-            }
+            editableFiles.Add(file);
+            PatchNewConnection();
 
-            file.EditRpc = NetworkManager.Instance.AddRPC(editName,
-                (sender, package) => OnServerReceiveEdit(file, sender, package),
-                (sender, package) => OnClientReceiveEditResult(file, sender, package));
+            // Registering after Init is supported, so a file can arrive while connections are already open,
+            // and those never pass through OnNewConnection again.
+            if (ZNet.instance != null) {
+                foreach (ZNetPeer peer in ZNet.instance.GetPeers()) { RegisterEditRpcs(ZNet.instance, peer, file); }
+            }
         }
+
+        // Applied once the first file opens an edit channel, not from Init, so a mod that never sets
+        // AllowAdminEdit adds nothing to its connections.
+        //
+        // This mirrors Common/Terminal/TerminalNetwork.cs rather than sharing code with it: the two folders
+        // have to stay independently droppable into another mod, which is the same reason each carries its
+        // own Harmony instance. Do not "fix" this by extracting a helper.
+        private static void PatchNewConnection() {
+            if (connectionPatchApplied) { return; }
+            try {
+                MethodInfo target = AccessTools.Method(typeof(ZNet), "OnNewConnection");
+                if (target == null) {
+                    Logger.LogError("ZNet.OnNewConnection not found; admins cannot edit server configs remotely.");
+                    return;
+                }
+                harmony.Patch(target, postfix: new HarmonyMethod(
+                    AccessTools.Method(typeof(ConfigNetwork), nameof(RegisterConnectionRpcs))));
+                connectionPatchApplied = true;
+            } catch (Exception e) {
+                Logger.LogError($"Could not patch ZNet.OnNewConnection for admin config edits: {e.Message}");
+            }
+        }
+
+        // ZNet registers its own per-connection RPCs here, on both ends of every connection: on the server
+        // once per client, and on a client once, for its link to the server.
+        private static void RegisterConnectionRpcs(ZNet __instance, ZNetPeer peer) {
+            foreach (YamlConfigFile file in editableFiles) { RegisterEditRpcs(__instance, peer, file); }
+        }
+
+        private static void RegisterEditRpcs(ZNet znet, ZNetPeer peer, YamlConfigFile file) {
+            if (znet.IsServer()) {
+                peer.m_rpc.Register<ZPackage>(EditRequestRpc(file), (rpc, package) => OnServerReceiveEdit(file, rpc, package));
+            } else {
+                peer.m_rpc.Register<ZPackage>(EditResultRpc(file), (rpc, package) => OnClientReceiveEditResult(file, package));
+            }
+        }
+
+        // GUID-prefixed: every connection has one table of RPC name hashes, shared with vanilla and every
+        // other mod, and a second Register under the same hash silently replaces the first. RpcName is
+        // already unique within this mod.
+        private static string EditRequestRpc(YamlConfigFile file) =>
+            StarLevelSystem.PluginGUID + "." + file.RpcName + ".Edit";
+        private static string EditResultRpc(YamlConfigFile file) =>
+            StarLevelSystem.PluginGUID + "." + file.RpcName + ".EditResult";
 
         // Send an edited copy of a file to the server for validation. Client side; the server decides.
         internal static bool RequestEdit(YamlConfigFile file, string yaml, out string refusal) {
             refusal = "";
-            if (file == null || file.EditRpc == null) {
+            if (file == null || editableFiles.Contains(file) == false || connectionPatchApplied == false) {
                 refusal = "this config cannot be edited remotely.";
                 return false;
             }
@@ -112,66 +172,78 @@ namespace StarLevelSystem.common {
                 refusal = "only server admins can change this.";
                 return false;
             }
+            ZRpc server = ZNet.instance.GetServerRPC();
+            if (server == null) {
+                refusal = "not connected to a server as a client.";
+                return false;
+            }
 
             ZPackage package = new ZPackage();
             package.Write(EditProtocolVersion);
             package.Write(yaml);
-            file.EditRpc.SendPackage(ZRoutedRpc.instance.GetServerPeerID(), package);
+            if (package.Size() > MaxEditRequestBytes) {
+                refusal = $"{file.FileName} is too large to send as an edit; change it on the server instead.";
+                return false;
+            }
+            server.Invoke(EditRequestRpc(file), package);
             return true;
         }
 
-        private static IEnumerator OnServerReceiveEdit(YamlConfigFile file, long sender, ZPackage package) {
-            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { yield break; }
+        // Server handler. The admin check reads the socket the request arrived on, which the client cannot
+        // choose, the same check vanilla's RPC_RemoteCommand makes.
+        private static void OnServerReceiveEdit(YamlConfigFile file, ZRpc rpc, ZPackage package) {
+            ZNetPeer requester = ZNet.instance.GetPeer(rpc);
+            // Not ready means the handshake has not finished, so this is not yet a player in the world.
+            if (requester == null || requester.IsReady() == false) { return; }
 
             byte version = package.ReadByte();
             if (version != EditProtocolVersion) {
-                SendEditResult(sender, file, false, $"This server expects edit protocol v{EditProtocolVersion}, " +
+                SendEditResult(requester, file, false, $"This server expects edit protocol v{EditProtocolVersion}, " +
                     $"the sender used v{version}. Update so both sides match.");
-                yield break;
+                return;
             }
 
             string yaml = package.ReadString();
 
-            if (SenderIsAdmin(sender) == false) {
-                Logger.LogWarning($"Rejecting an edit of {file.FileName} from non-admin peer {sender}.");
+            string hostName = rpc.GetSocket().GetHostName();
+            if (ZNet.instance.IsAdmin(hostName) == false) {
+                Logger.LogWarning($"Rejecting an edit of {file.FileName} from non-admin {requester.m_playerName} ({hostName}).");
                 // Answer rather than going quiet, so the sender sees a refusal instead of nothing.
-                SendEditResult(sender, file, false, $"Only server admins can change {file.FileName}.");
-                yield break;
+                SendEditResult(requester, file, false, $"Only server admins can change {file.FileName}.");
+                return;
             }
 
             if (YamlConfigManager.ApplyEdited(file, yaml, out string message) == false) {
-                Logger.LogWarning($"Admin peer {sender} sent a {file.FileName} that was rejected: {message}");
-                SendEditResult(sender, file, false, message);
-                yield break;
+                Logger.LogWarning($"Admin {requester.m_playerName} ({hostName}) sent a {file.FileName} that was rejected: {message}");
+                SendEditResult(requester, file, false, message);
+                return;
             }
 
             // ApplyEdited already broadcast to every peer, the uploader included, so the admin's own copy
             // arrives back through the ordinary sync path and ends up byte-identical to the server's.
-            Logger.LogInfo($"{file.FileName} was replaced by admin peer {sender}.");
-            SendEditResult(sender, file, true, message);
-            yield return null;
+            Logger.LogInfo($"{file.FileName} was replaced by admin {requester.m_playerName} ({hostName}).");
+            SendEditResult(requester, file, true, message);
         }
 
-        private static IEnumerator OnClientReceiveEditResult(YamlConfigFile file, long sender, ZPackage package) {
+        // Client handler. Registered only on the connection to the server, so it can only come from there.
+        private static void OnClientReceiveEditResult(YamlConfigFile file, ZPackage package) {
             byte version = package.ReadByte();
             if (version != EditProtocolVersion) {
                 EditResult?.Invoke(file, false, "The server answered with an edit protocol this build does not understand.");
-                yield break;
+                return;
             }
 
             bool accepted = package.ReadBool();
             string message = package.ReadString();
             EditResult?.Invoke(file, accepted, message);
-            yield return null;
         }
 
-        private static void SendEditResult(long peer, YamlConfigFile file, bool accepted, string message) {
-            if (file.EditRpc == null) { return; }
+        private static void SendEditResult(ZNetPeer peer, YamlConfigFile file, bool accepted, string message) {
             ZPackage package = new ZPackage();
             package.Write(EditProtocolVersion);
             package.Write(accepted);
             package.Write(message ?? "");
-            file.EditRpc.SendPackage(peer, package);
+            peer.m_rpc.Invoke(EditResultRpc(file), package);
         }
 
         // Push a changed file out to the peers.
@@ -199,14 +271,20 @@ namespace StarLevelSystem.common {
         }
 
         // Config is server-authoritative by default: this rejects rather than admin-gating, because
-        // Jotunn's IsAdminOnly covers ConfigEntry values only. A CustomRPC has no such protection, so any
-        // peer can craft this package. A mod that genuinely wants an upload channel should write its own
-        // handler and gate it on SenderIsAdmin.
+        // Jotunn's IsAdminOnly covers ConfigEntry values only. A CustomRPC has no such protection, and its
+        // sender id cannot be trusted, so any peer can craft this package as anyone. A file that genuinely
+        // wants uploads sets AllowAdminEdit, which opens the per-connection channel above.
         private static IEnumerator OnServerReceive(YamlConfigFile file, long sender, ZPackage package) {
             Logger.LogDebug($"Peer {sender} sent {file.FileName}; this config is server-authoritative, ignoring.");
             yield break;
         }
 
+        // Takes whatever arrives, without comparing the sender to the server's uid. That check would only
+        // look like protection: the routed sender id is written by whoever sent the package and relayed
+        // untouched, so another client can name the server and still reach this. Server-only delivery would
+        // need this channel moved onto the peer connection like the edit channel. It stays a CustomRPC
+        // because that is what Jotunn's initial synchronization takes, and that is what delivers the
+        // server's copy as part of the join.
         private static IEnumerator OnClientReceive(YamlConfigFile file, long sender, ZPackage package) {
             string yaml = package.ReadString();
             file.LoadFrom(yaml, ConfigOrigin.ServerSync);
@@ -230,18 +308,6 @@ namespace StarLevelSystem.common {
                 package.Write("");
             }
             return package;
-        }
-
-        // True when the peer uid belongs to a connected admin. The integrated host never routes through an
-        // RPC, so it is not considered here.
-        //
-        // Intentionally duplicated from Common/Terminal/TerminalNetwork.cs rather than shared: these two
-        // folders have to stay independently droppable into another mod, which is the same reason each
-        // carries its own Harmony instance. Do not "fix" this by extracting it.
-        internal static bool SenderIsAdmin(long sender) {
-            ZNetPeer peer = ZNet.instance?.GetPeer(sender);
-            if (peer == null || peer.m_socket == null) { return false; }
-            return ZNet.instance.IsAdmin(peer.m_socket.GetHostName());
         }
     }
 }

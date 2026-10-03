@@ -268,7 +268,7 @@ StarLevelSystem.API.GetChunkResetInfo(position, false, chunk => { });
 | `terrainReverted` / `doorsSealed` | int | |
 | `zdoGrowth` | int | Net world-object change. A faithful restore is 0 |
 | `waitedSeconds` / `elapsedSeconds` | float | Time spent waiting in Safe mode, and in total |
-| `zones` | `List<Dictionary<string, object>>` | Per-chunk detail, only when `includeDetail: true` |
+| `zones` | `List<Dictionary<string, object>>` | Per-chunk detail, only when `includeDetail: true`. Left empty on a call from a client when the detail is too large to send back; the counters still arrive |
 
 Numeric values arrive as the type listed here whether the call was local or relayed.
 

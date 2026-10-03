@@ -98,6 +98,10 @@ namespace StarLevelSystem.common
             {
                 args.Output.Warning("DisableAllRaids is on, so no raids will start on their own; starting this one anyway.");
             }
+            if (RaidControl.IsBossNear(pos, out string nearBoss))
+            {
+                args.Output.Warning($"{nearBoss}, close enough that no raid would start here on its own; starting this one anyway.");
+            }
             WarnIfNobodyIsNearby(args, raid, pos);
 
             if (RaidControl.DispatchForcedRaid(raid, pos, skipCooldown: true) == false)

@@ -62,9 +62,6 @@ namespace StarLevelSystem.common {
 
         internal string Path { get; set; }
         internal CustomRPC Rpc { get; set; }
-        // Only created when AllowAdminEdit is set. Carries admin uploads up and the accept/refuse answer
-        // back down.
-        internal CustomRPC EditRpc { get; set; }
         internal bool LastLoadFailed { get; set; }
         internal string LastError { get; set; }
         internal DateTime LastLoadedUtc { get; set; }

@@ -409,8 +409,8 @@ namespace StarLevelSystem.common {
 # modifier you leave out stops rolling. An absent section keeps the defaults.
 # Valid modifier names are exactly the keys in the generated default sections
 # (Brutal, Fast, Big, Alert, Fire, Frost, Poison, Lightning, ElementalChaos,
-# StaminaDrain, EitrDrain, Resist*, SoulEater, LifeLink, Splitter, Lootbags,
-# FireNova, PoisonNova, Evolving, BossSummoner, ...). New modifiers can only be
+# Reflection, StaminaDrain, EitrDrain, Resist*, SoulEater, LifeLink, Splitter,
+# Lootbags, FireNova, PoisonNova, Evolving, BossSummoner, ...). New modifiers can only be
 # added through the mod API, not from yaml.
 #
 # Each entry:
@@ -429,10 +429,12 @@ namespace StarLevelSystem.common {
 # Power semantics: effective power = BasePower + PerlevelPower * level. For
 # damage affixes (Fire, Frost, ElementalChaos, ...) that is a fraction of the
 # hit added as that element; for resists it is the damage reduction; for
-# SoulEater/LifeLink/Splitter it drives their growth/split/link strength.
+# SoulEater/LifeLink/Splitter it drives their growth/split/link strength; for
+# Reflection it is the chance (0-1) that a projectile hitting it is reflected.
 # Some modifiers read extra keys from Config (e.g. the drain modifiers accept
-# BlockReduction / ParryReduction / DodgeReduction), and BossSummoner uses
-# BiomeObjects to pick its summons per biome:
+# BlockReduction / ParryReduction / DodgeReduction, and Reflection accepts
+# ReflectedDamage, the fraction of the damage a reflected shot keeps), and
+# BossSummoner uses BiomeObjects to pick its summons per biome:
 #
 #   BossModifiers:
 #     BossSummoner:
@@ -493,7 +495,7 @@ namespace StarLevelSystem.common {
 #     Duration: 120                  # seconds of active spawning
 #     RaidActiveTillDefeated: true   # after Duration, stays active until its creatures die (at most
 #                                    # RaidActiveTillDefeatedMaxSeconds from the main .cfg); false ends it at Duration
-#     RaidCoolDownMinutes: 120       # per-player cooldown for THIS raid
+#     RaidCoolDownMinutes: 240       # per-player cooldown for THIS raid
 #     EventRange: 96                 # radius of the event circle
 #     StartMessage: $SLS_my_raid_start   # localization tokens or plain text
 #     EndMessage: $SLS_my_raid_end

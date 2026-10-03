@@ -38,4 +38,4 @@ publish:
     file_category: main               # optional, default "main"
     update_mod_version: true          # optional, sets the mod version to this one
     archive_existing_version: true    # optional
-    display_name: "GradualTerrain"  # optional, defaults to the zip filename
+    display_name: "StarLevelSystems"  # optional, defaults to the zip filename

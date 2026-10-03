@@ -149,10 +149,6 @@ namespace StarLevelSystem.common {
         internal static CustomRPC RemoveNemesisBossPinRPC;
         internal static CustomRPC ReportNemesisBossDeathRPC;
         internal static CustomRPC ClientPlaceNemesisSpawnerRPC;
-        internal static CustomRPC ClientCommandRequestRPC;
-        internal static CustomRPC CommandOutputRPC;
-        internal static CustomRPC LocationApiRequestRPC;
-        internal static CustomRPC LocationApiResultRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
         internal static CustomRPC DestroyViaOwnerRPC;
@@ -279,6 +275,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> RaidForceDeleteStragglers;
         public static ConfigEntry<int> RaidActiveTillDefeatedMaxSeconds;
         public static ConfigEntry<float> RaidExclusionRange;
+        public static ConfigEntry<float> RaidBossExclusionRange;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
         public static ConfigEntry<bool> GrantWorldDefeatKeysOnJoin;
@@ -389,19 +386,9 @@ namespace StarLevelSystem.common {
             RemoveNemesisBossPinRPC = NetworkManager.Instance.AddRPC("SLS_RemoveNemesisBossPinRPC", OnServerReceiveConfigs, OnClientReceiveNemesisBossPinRemove);
             // Owner of a dying remote boss reports it to the server, which removes the registry entry + pin.
             ReportNemesisBossDeathRPC = NetworkManager.Instance.AddRPC("SLS_ReportNemesisBossDeathRPC", OnServerReceiveNemesisBossDeath, NOOPReceive);
-            // Admin client asks the server to run a server-authoritative SLS console command, and the
-            // server streams that command's output back to whoever asked. Both directions are needed
-            // because a dedicated server has no Terminal of its own: Console.Awake and
-            // Terminal.InitTerminal only ever run on a client, so these commands are otherwise
-            // untypeable anywhere. Vanilla's own relay (remoteCommand -> ZNet.RPC_RemoteCommand) ends in
-            // Console.instance.TryRunCommand and null-references headless, so it cannot be used here.
-            ClientCommandRequestRPC = NetworkManager.Instance.AddRPC("SLS_ClientCommandRequestRPC", OnServerReceiveCommandRequest, NOOPReceive);
-            CommandOutputRPC = NetworkManager.Instance.AddRPC("SLS_CommandOutputRPC", OnServerReceiveConfigs, OnClientReceiveCommandOutput);
-            // Client -> server: a Location Reset API call, and the typed answer back. Deliberately not
-            // carried on the command relay above: that speaks command names and lines of terminal text,
-            // which cannot express a result a mod's callback can read.
-            LocationApiRequestRPC = NetworkManager.Instance.AddRPC("SLS_LocationApiRequestRPC", modules.LocationReset.LocationResetNetwork.OnServerReceiveRequest, NOOPReceive);
-            LocationApiResultRPC = NetworkManager.Instance.AddRPC("SLS_LocationApiResultRPC", OnServerReceiveConfigs, modules.LocationReset.LocationResetNetwork.OnClientReceiveResult);
+            // The admin console-command relay and the Location Reset API are not registered here: both
+            // ride each peer's own connection rather than a CustomRPC, so the server can trust who sent
+            // them. See TerminalNetwork and LocationResetNetwork.
             // Server -> a chosen client: instantiate + own the dormant remote-boss placeholder. A dedicated
             // server can't own/drive it itself, so it delegates instantiation to the nearest ready peer.
             ClientPlaceNemesisSpawnerRPC = NetworkManager.Instance.AddRPC("SLS_ClientPlaceNemesisSpawnerRPC", OnServerReceiveConfigs, OnClientReceivePlaceNemesisSpawner);
@@ -597,6 +584,7 @@ namespace StarLevelSystem.common {
             RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
             RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
             RaidExclusionRange = BindServerConfig("Raids", "RaidExclusionRange", 500f, "No raid starts within this many meters of a raid that is already running or winding down, whoever it belongs to and however it was started: the first raid in an area is the only raid. Applies to force-started raids too. 0 disables the check.", false, 0f, 5000f);
+            RaidBossExclusionRange = BindServerConfig("Raids", "RaidBossExclusionRange", 100f, "No raid starts for a player within this many meters of a living boss, so a raid never lands on a boss fight. Counts vanilla and modded bosses and Nemesis minibosses. 100 is the distance the boss health bar shows from. Admin force-started raids (sls-raid-spawn, event) are not held to this. 0 disables the check.", false, 0f, 1000f);
             RaidActiveTillDefeatedMaxSeconds = BindServerConfig("Raids", "RaidActiveTillDefeatedMaxSeconds", 300, "Only for raids with RaidActiveTillDefeated set in RaidSettings.yaml. Once such a raid's Duration has elapsed it stays active until its remaining creatures are dead, for at most this many seconds; then it winds down regardless, so a straggler stuck somewhere cannot hold a raid open forever. 0 winds every raid down as soon as its Duration elapses.", true, 0, 3600);
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
             GrantWorldDefeatKeysOnJoin = BindServerConfig("Raids", "GrantWorldDefeatKeysOnJoin", true, "Each time a player joins the world or respawns, gives them the player key for every defeat this world has already recorded: the boss keys (defeated_eikthyr and so on) and creature ones such as KilledTroll. A kill only records that player key for whoever gets credit for it: in vanilla the one player whose game controlled the creature, and with a key share mod such as ValheimCommunityPatch the players online and nearby. Anyone offline, elsewhere, or new to the world never gets it, so raids using RequiredPlayerKeys stay closed to them. The key is saved on the character, just like a real kill, so it goes with that character to other worlds.");
@@ -817,53 +805,6 @@ namespace StarLevelSystem.common {
             string id = package.ReadString();
             global::StarLevelSystem.modules.NemesisSystem.NemesisMinimap.RemovePin(id);
             yield return null;
-        }
-
-        // Server handler: an admin client asked to run a server-authoritative SLS console command. These
-        // commands read or mutate world state only the server owns, and on a dedicated server there is
-        // no console to type them into, so the request is routed here. Gate on admin because any peer
-        // could craft this RPC; the client-side check is only there for a clearer message.
-        public static IEnumerator OnServerReceiveCommandRequest(long sender, ZPackage package) {
-            if (ZNet.instance == null || ZNet.instance.IsServer() == false) { yield break; }
-
-            string command = package.ReadString();
-            if (SenderIsAdmin(sender) == false) {
-                Logger.LogWarning($"Rejecting '{command}' from non-admin peer {sender}.");
-                // Answer rather than going quiet, so the sender sees a refusal instead of nothing.
-                TerminalOutput refusal = TerminalOutput.Remote(sender);
-                refusal.Error($"Only server admins can run {command}.", log: false);
-                refusal.Flush();
-                yield break;
-            }
-
-            int argCount = package.ReadInt();
-            string[] args = new string[argCount];
-            for (int i = 0; i < argCount; i++) { args[i] = package.ReadString(); }
-            bool hasCenter = package.ReadBool();
-            Vector3 center = package.ReadVector3();
-
-            TerminalManager.ExecuteFromNetwork(command, args, center, hasCenter, TerminalOutput.Remote(sender));
-            yield return null;
-        }
-
-        // Client handler: a batch of output lines from a command this client asked the server to run.
-        // Severity travels as a byte and the colour is applied here, so the server's log and chunk log
-        // never contain markup and each client honours its own EnableTerminalColors setting.
-        private static IEnumerator OnClientReceiveCommandOutput(long sender, ZPackage package) {
-            int count = package.ReadInt();
-            for (int i = 0; i < count; i++) {
-                OutputLevel level = (OutputLevel)package.ReadByte();
-                TerminalManager.PrintResponse(level, package.ReadString());
-            }
-            yield return null;
-        }
-
-        // True when the given peer uid belongs to a connected admin. Used to authorize client-issued
-        // server-side actions; the integrated host itself never routes through an RPC so is not considered here.
-        private static bool SenderIsAdmin(long sender) {
-            ZNetPeer peer = ZNet.instance?.GetPeer(sender);
-            if (peer == null || peer.m_socket == null) { return false; }
-            return ZNet.instance.IsAdmin(peer.m_socket.GetHostName());
         }
 
         // Server handler: the owner of a dying remote boss reported its pin id; drop it and broadcast removal.

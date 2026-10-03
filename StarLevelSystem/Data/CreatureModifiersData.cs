@@ -98,6 +98,7 @@ namespace StarLevelSystem.Data
             EitrDrain = 55,
             Brutal = 56,
             ElementalChaos = 57,
+            Reflection = 58,
         }
 
         public static Dictionary<string, CreatureModifierDefinition> ModifierDefinitions = new Dictionary<string, CreatureModifierDefinition>()
@@ -196,6 +197,13 @@ namespace StarLevelSystem.Data
                         VisualEffectStyle = VisualEffectStyle.objectCenter,
                         VisualEffect = "creatureLightning",
                         StarVisual = "eleChaos",
+                    }
+                },
+                { ModifierNames.Reflection.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$Reflection_prefix1",
+                        NameSuffix = "$Reflection_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
                     }
                 },
                 { ModifierNames.Splitter.ToString(), new CreatureModifierDefinition()
@@ -493,6 +501,20 @@ namespace StarLevelSystem.Data
                         PerlevelPower = 0.02f,
                         BasePower = 0.5f
                         },
+                    }
+                },
+                {ModifierNames.Reflection.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Chance (0-1) that a projectile hitting the creature is reflected.
+                        PerlevelPower = 0.02f,
+                        BasePower = 0.25f,
+                        // Fraction of the projectile's damage the reflected shot keeps.
+                        Config = new Dictionary<string, float>() {
+                            { "ReflectedDamage", 0.75f },
+                        },
+                        },
+                    UnallowedCreatures = NonCombatCreatures
                     }
                 },
             },

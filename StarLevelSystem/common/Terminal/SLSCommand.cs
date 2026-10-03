@@ -40,7 +40,8 @@ namespace StarLevelSystem.common
         // run it rather than running it locally. See TerminalManager.Execute.
         internal readonly bool ServerAuthoritative;
 
-        // Extra hint for sls-help. The real gate is SenderIsAdmin on the server side.
+        // Extra hint for sls-help. The real gate is the admin check in
+        // TerminalNetwork.OnServerReceiveCommandRequest on the server side.
         internal readonly bool RequiresAdmin;
 
         internal SLSCommand(

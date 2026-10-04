@@ -74,6 +74,8 @@ namespace StarLevelSystem.common
         public static readonly string SLS_INFERTILE = "SLS_Infertile";
         public static readonly string SLS_SOULEATER = "SLS_SoulEater";
         public static readonly string SLS_EVOLVE = "SLS_Evolve";
+        // How much of the Small modifier's full effect this creature rolled (0-1). See Modifiers/Small.cs.
+        public static readonly string SLS_SMALL = "SLS_Small";
         public static readonly string SLS_SIZE = "SLS_SIZE";
         public static readonly string SLS_NEMESIS_SCORE = "SLS_NEM_SCORE";
         public static readonly string SLS_NEMESIS_SCOREDATA = "SLS_NEM_SCOREDATA";

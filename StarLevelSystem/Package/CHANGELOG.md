@@ -1,13 +1,16 @@
 
-**1.20.1**
+**1.21.0**
  ---
  ```
 - Adds Reflection, a new major modifier that can send projectiles back the way they came, or off to the side on a glancing hit.
-- Servers with their own list of major modifiers need to add Reflection to it before it appears.
+- Adds Small, a new minor modifier that shrinks a creature and weakens its hits, and never shows up on a creature that is also Big.
+	- Servers with their own list of major or minor modifiers need to add Reflection or Small to it before they appear.
+- Summoned creatures are now held to half of their summoner's stars by default, and servers can change or remove that limit.
+- Bosses can now be allowed major and minor modifiers on top of their boss modifiers, and regular creatures can be allowed boss modifiers; both are off by default and set from the quick configure panel.
+- Fixes creatures that missed their major modifier roll also losing their chance at a minor one.
 - Players now wait much longer between raids.
 - Raids no longer start on a player who is near a boss.
-- Fixes a hole that let a modified client change server configs or run admin commands by pretending to be an admin who is online.
-- Fixes a hole that let a modified client get around the distance and cooldown limits on location resets by pretending to be another player who is online.
+- Fixed an exploit that let a modified client change server configs or run admin commands by pretending to be an admin who is online.
  ```
 
 **1.20.0**

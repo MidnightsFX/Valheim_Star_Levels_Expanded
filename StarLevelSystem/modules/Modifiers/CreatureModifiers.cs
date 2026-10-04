@@ -262,8 +262,12 @@ namespace StarLevelSystem.modules.Modifiers {
                     if (creature_settings != null && creature_settings.ChanceForMajorModifier > -1f) { chanceMajorMod = creature_settings.ChanceForMajorModifier; }
                     float chanceMinorMod = ValConfig.ChanceMinorModifier.Value;
                     if (creature_settings != null && creature_settings.ChanceForMinorModifier > -1f) { chanceMinorMod = creature_settings.ChanceForMinorModifier; }
+                    int bossMods = ValConfig.MaxBossModifiersPerCreature.Value;
+                    if (creature_settings != null && creature_settings.MaxBossModifiers > -1) { bossMods = creature_settings.MaxBossModifiers; }
+                    float chanceBossMod = ValConfig.ChanceOfBossModifierOnCreature.Value;
+                    if (creature_settings != null && creature_settings.ChanceForBossModifier > -1f) { chanceBossMod = creature_settings.ChanceForBossModifier; }
                     // Logger.LogDebug($"Setting up to {majorMods} major at chance {chanceMajorMod} and {minorMods} minor modifiers with chances {chanceMinorMod}");
-                    creatureModifiers = CreatureModifiers.SelectModifiers(character, creatureName, biome, level, maxMajorMods: majorMods, maxMinorMods: minorMods, chanceMajorMods: chanceMajorMod, chanceMinorMods: chanceMinorMod, notAllowedModifiers: notAllowedModifiers, requiredModifiers: requiredModifiers);
+                    creatureModifiers = CreatureModifiers.SelectModifiers(character, creatureName, biome, level, maxMajorMods: majorMods, maxMinorMods: minorMods, chanceMajorMods: chanceMajorMod, chanceMinorMods: chanceMinorMod, maxBossMods: bossMods, chanceBossMods: chanceBossMod, notAllowedModifiers: notAllowedModifiers, requiredModifiers: requiredModifiers);
                 }
             }
 
@@ -307,20 +311,20 @@ namespace StarLevelSystem.modules.Modifiers {
             }
 
             if (isBoss) {
-                List<string> bossMods = SelectCreatureModifiers(creatureName, biome, chanceBossMods, maxBossMods, level, 0, ModifierType.Boss, requiredBossMods, notAllowedModifiers);
+                List<string> bossMods = SelectCreatureModifiers(creatureName, biome, chanceBossMods, maxBossMods, level, 0, ModifierType.Boss, requiredBossMods, WithConflicts(notAllowedModifiers, requiredModifiers, selectedMods));
                 foreach (var mod in bossMods) {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Boss); }
                 }
 
                 // Share the star-level budget across categories; "None" does not use a slot.
                 int existingMods = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
-                List<string> majorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMajorModsonBoss, maxMajorModsonBoss, level, existingMods, ModifierType.Major, requiredMajorMods, notAllowedModifiers);
+                List<string> majorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMajorModsonBoss, maxMajorModsonBoss, level, existingMods, ModifierType.Major, requiredMajorMods, WithConflicts(notAllowedModifiers, requiredModifiers, selectedMods));
                 foreach (var mod in majorModsonBoss) {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Major); }
                 }
 
                 existingMods = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
-                List<string> minorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMinorModsonBoss, maxMinorModsonBoss, level, existingMods, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
+                List<string> minorModsonBoss = SelectCreatureModifiers(creatureName, biome, chanceMinorModsonBoss, maxMinorModsonBoss, level, existingMods, ModifierType.Minor, requiredMinorMods, WithConflicts(notAllowedModifiers, requiredModifiers, selectedMods));
                 foreach (var mod in minorModsonBoss) {
                     if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Minor); }
                 }
@@ -328,15 +332,25 @@ namespace StarLevelSystem.modules.Modifiers {
                 return selectedMods;
             }
 
-            // Major modifiers get first use of the shared star-level budget.
-            List<string> majorMods = SelectCreatureModifiers(creatureName, biome, chanceMajorMods, maxMajorMods, level, 0, ModifierType.Major, requiredMajorMods, notAllowedModifiers);
+            // Boss modifiers on a regular creature come first, as on a boss. Skipped with no allowance and nothing
+            // required, so the usual case keeps the same roll and modifier list as before.
+            if (maxBossMods > 0 || requiredBossMods.Count > 0) {
+                List<string> bossModsOnCreature = SelectCreatureModifiers(creatureName, biome, chanceBossMods, maxBossMods, level, 0, ModifierType.Boss, requiredBossMods, WithConflicts(notAllowedModifiers, requiredModifiers, selectedMods));
+                foreach (var mod in bossModsOnCreature) {
+                    if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Boss); }
+                }
+            }
+
+            // Major modifiers get the next use of the shared star-level budget; "None" does not use a slot.
+            int selectedBossCount = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
+            List<string> majorMods = SelectCreatureModifiers(creatureName, biome, chanceMajorMods, maxMajorMods, level, selectedBossCount, ModifierType.Major, requiredMajorMods, WithConflicts(notAllowedModifiers, requiredModifiers, selectedMods));
             foreach (var mod in majorMods) {
                 if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Major); }
             }
 
             // Count actual selected modifiers so "None" does not block a minor modifier.
             int selectedMajorCount = selectedMods.Keys.Count(mod => !string.IsNullOrEmpty(mod) && mod != NoMods);
-            List<string> minorMods = SelectCreatureModifiers(creatureName, biome, chanceMinorMods, maxMinorMods, level, selectedMajorCount, ModifierType.Minor, requiredMinorMods, notAllowedModifiers);
+            List<string> minorMods = SelectCreatureModifiers(creatureName, biome, chanceMinorMods, maxMinorMods, level, selectedMajorCount, ModifierType.Minor, requiredMinorMods, WithConflicts(notAllowedModifiers, requiredModifiers, selectedMods));
             foreach (var mod in minorMods) {
                 if (!selectedMods.ContainsKey(mod)) { selectedMods.Add(mod.ToString(), ModifierType.Minor); }
             }
@@ -380,17 +394,34 @@ namespace StarLevelSystem.modules.Modifiers {
                         string mod = RandomSelect.RandomSelectFromWeightedListWithExclusions(probabilities, avoidedModifiers);
                         selectedModifiers.Add(mod);
                         avoidedModifiers.Add(mod);
+                        AddConflicts(mod, avoidedModifiers);
                     }
                 } else {
                     string mod = RandomSelect.RandomSelectFromWeightedListWithExclusions(probabilities, avoidedModifiers);
                     selectedModifiers.Add(mod);
                     avoidedModifiers.Add(mod);
+                    AddConflicts(mod, avoidedModifiers);
                 }
                 mod_attempts++;
             }
             //Logger.LogDebug($"Selected {selectedModifiers.Count} modifiers {string.Join(",", selectedModifiers)} for creature {creature} of type {type} with chance {chance} limited by star level? {ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value} level:{level - 1}");
             if (selectedModifiers.Count == 0) { selectedModifiers.Add(NoMods); }
             return selectedModifiers;
+        }
+
+        // A pool's not-allowed list plus everything that conflicts with a modifier the creature is required to have
+        // or already rolled in an earlier pool, so a Small minor cannot land on a creature that rolled Big as a major.
+        private static List<string> WithConflicts(List<string> notAllowedModifiers, Dictionary<string, ModifierType> requiredModifiers, Dictionary<string, ModifierType> selectedMods) {
+            List<string> avoided = notAllowedModifiers != null ? new List<string>(notAllowedModifiers) : new List<string>();
+            foreach (string mod in requiredModifiers.Keys) { AddConflicts(mod, avoided); }
+            foreach (string mod in selectedMods.Keys) { AddConflicts(mod, avoided); }
+            return avoided;
+        }
+
+        private static void AddConflicts(string mod, List<string> avoided) {
+            if (mod != null && CreatureModifiersData.ConflictingModifiers.TryGetValue(mod, out List<string> conflicts)) {
+                avoided.AddRange(conflicts);
+            }
         }
 
         public static void RemoveCreatureModifier(Character character, string modifier) {
@@ -515,20 +546,20 @@ namespace StarLevelSystem.modules.Modifiers {
                 return false;
             }
 
+            // Same per-type limits SelectModifiersForCreature rolls against at spawn.
             CreatureSpecificSetting settings = cacheEntry.CreatureSettings;
+            bool bossLimits = character.IsBoss() && ValConfig.EnableBossModifiers.Value;
+            int maxBoss = bossLimits ? ValConfig.MaxBossModifiersPerBoss.Value : ValConfig.MaxBossModifiersPerCreature.Value;
+            if (settings != null && settings.MaxBossModifiers > -1) { maxBoss = settings.MaxBossModifiers; }
+            int maxMajor = bossLimits ? ValConfig.MaxMajorModifiersPerBoss.Value : ValConfig.MaxMajorModifiersPerCreature.Value;
+            if (settings != null && settings.MaxMajorModifiers > -1) { maxMajor = settings.MaxMajorModifiers; }
+            int maxMinor = bossLimits ? ValConfig.MaxMinorModifiersPerBoss.Value : ValConfig.MaxMinorModifiersPerCreature.Value;
+            if (settings != null && settings.MaxMinorModifiers > -1) { maxMinor = settings.MaxMinorModifiers; }
+
             List<ModifierType> candidateTypes = new List<ModifierType>();
-            if (character.IsBoss() && ValConfig.EnableBossModifiers.Value) {
-                int maxBoss = ValConfig.MaxBossModifiersPerBoss.Value;
-                if (settings != null && settings.MaxBossModifiers > -1) { maxBoss = settings.MaxBossModifiers; }
-                if (bossCount < maxBoss) { candidateTypes.Add(ModifierType.Boss); }
-            } else {
-                int maxMajor = ValConfig.MaxMajorModifiersPerCreature.Value;
-                if (settings != null && settings.MaxMajorModifiers > -1) { maxMajor = settings.MaxMajorModifiers; }
-                if (majorCount < maxMajor) { candidateTypes.Add(ModifierType.Major); }
-                int maxMinor = ValConfig.MaxMinorModifiersPerCreature.Value;
-                if (settings != null && settings.MaxMinorModifiers > -1) { maxMinor = settings.MaxMinorModifiers; }
-                if (minorCount < maxMinor) { candidateTypes.Add(ModifierType.Minor); }
-            }
+            if (bossCount < maxBoss) { candidateTypes.Add(ModifierType.Boss); }
+            if (majorCount < maxMajor) { candidateTypes.Add(ModifierType.Major); }
+            if (minorCount < maxMinor) { candidateTypes.Add(ModifierType.Minor); }
 
             // Drop types with nothing left to offer this creature, so an exhausted pool of one type does not
             // waste the roll while the other still has options.

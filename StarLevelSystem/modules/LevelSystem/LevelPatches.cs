@@ -198,6 +198,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                     if (childZDO.GetBool(SLS_INFERTILE, false)) { grownZDO.Set(SLS_INFERTILE, true); }
                     int evolveKills = childZDO.GetInt(SLS_EVOLVE, 0);
                     if (evolveKills > 0) { grownZDO.Set(SLS_EVOLVE, evolveKills); }
+                    float smallRoll = childZDO.GetFloat(SLS_SMALL, -1f);
+                    if (smallRoll >= 0f) { grownZDO.Set(SLS_SMALL, smallRoll); }
                 }
 
                 Logger.LogDebug($"Grown up {grownup.m_name} inheriting level {level} from child.");

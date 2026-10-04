@@ -408,10 +408,10 @@ namespace StarLevelSystem.common {
 # If you write a MajorModifiers section, list every major you want active - a
 # modifier you leave out stops rolling. An absent section keeps the defaults.
 # Valid modifier names are exactly the keys in the generated default sections
-# (Brutal, Fast, Big, Alert, Fire, Frost, Poison, Lightning, ElementalChaos,
+# (Brutal, Fast, Big, Small, Alert, Fire, Frost, Poison, Lightning, ElementalChaos,
 # Reflection, StaminaDrain, EitrDrain, Resist*, SoulEater, LifeLink, Splitter,
 # Lootbags, FireNova, PoisonNova, Evolving, BossSummoner, ...). New modifiers can only be
-# added through the mod API, not from yaml.
+# added through the mod API, not from yaml. Big and Small never roll on the same creature.
 #
 # Each entry:
 #
@@ -430,11 +430,16 @@ namespace StarLevelSystem.common {
 # damage affixes (Fire, Frost, ElementalChaos, ...) that is a fraction of the
 # hit added as that element; for resists it is the damage reduction; for
 # SoulEater/LifeLink/Splitter it drives their growth/split/link strength; for
-# Reflection it is the chance (0-1) that a projectile hitting it is reflected.
+# Reflection it is the chance (0-1) that a projectile hitting it is reflected;
+# for Small it is the most of its size a creature can lose.
 # Some modifiers read extra keys from Config (e.g. the drain modifiers accept
-# BlockReduction / ParryReduction / DodgeReduction, and Reflection accepts
-# ReflectedDamage, the fraction of the damage a reflected shot keeps), and
-# BossSummoner uses BiomeObjects to pick its summons per biome:
+# BlockReduction / ParryReduction / DodgeReduction, Reflection accepts
+# ReflectedDamage, the fraction of the damage a reflected shot keeps, and Small
+# accepts DamageReduction, the damage lost at the full shrink, and MinimumRoll,
+# the least share (0-1) of the full effect each Small creature rolls), and
+# BossSummoner uses BiomeObjects to pick its summons per biome and accepts
+# SummonStarLimit, the share (0-1) of the summoner's stars its summons may
+# have, rounded down (default 0.5, negative = no limit):
 #
 #   BossModifiers:
 #     BossSummoner:
@@ -445,6 +450,8 @@ namespace StarLevelSystem.common {
 #         BiomeObjects:
 #           Meadows: [ Greyling ]
 #           Plains: [ Goblin, GoblinShaman ]
+#         Config:
+#           SummonStarLimit: 0.5     # a 4 star summoner summons at most 2 stars
 #
 # --- ModifierGlobalSettings ---
 #   ModifierGlobalSettings:

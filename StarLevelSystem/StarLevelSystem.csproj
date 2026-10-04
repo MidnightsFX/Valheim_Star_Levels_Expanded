@@ -146,7 +146,80 @@
     <UNITY_FOLDER>$(SolutionDir)StarLevelUnity</UNITY_FOLDER>
   </PropertyGroup>
 
-  <Target Name="CopyToUnity">
+  <!-- Unity has to load every game assembly the prefabs' components live in, and everything
+       those reference, or it refuses assembly_valheim and each vanilla component on a prefab
+       becomes a missing script. Taken by pattern rather than by name so that a game update
+       adding one (Deep North brought in MagicaClothV2) is picked up without editing this.
+       Left out is whatever Unity or one of its packages already provides: the BCL, the engine
+       modules and the package runtimes. Newtonsoft.Json, and the Burst / Collections /
+       Mathematics that MagicaClothV2 needs, come from Packages/manifest.json instead, and a
+       second copy here would clash with them. -->
+  <Target Name="CollectUnityGameAssemblies">
+    <ItemGroup>
+      <UnityGameAssembly Condition="Exists('$(VALHEIM_MANAGED)')"
+                         Include="$(VALHEIM_MANAGED)/*.dll"
+                         Exclude="$(VALHEIM_MANAGED)/mscorlib.dll;
+                                  $(VALHEIM_MANAGED)/netstandard.dll;
+                                  $(VALHEIM_MANAGED)/System*.dll;
+                                  $(VALHEIM_MANAGED)/Mono.*.dll;
+                                  $(VALHEIM_MANAGED)/UnityEngine*.dll;
+                                  $(VALHEIM_MANAGED)/Unity.*.dll;
+                                  $(VALHEIM_MANAGED)/com.unity.*.dll;
+                                  $(VALHEIM_MANAGED)/Autodesk.*.dll;
+                                  $(VALHEIM_MANAGED)/SingularityGroup.*.dll;
+                                  $(VALHEIM_MANAGED)/Newtonsoft.Json.dll" />
+    </ItemGroup>
+  </Target>
+
+  <!-- A game assembly the Unity project has not seen yet gets its .meta written before the dll
+       lands, with Auto Reference off. Left on, every package compiles against the game's
+       global-namespace types, and assembly_utils' field-only DisplayNameAttribute then shadows
+       System.ComponentModel's in Timeline and the Input System - their compile fails and the
+       editor will not open. Nothing in the Unity project compiles against the game; the
+       prefabs only need the assemblies loaded. An existing .meta is never touched, so the
+       GUIDs the prefabs point at stay put. -->
+  <Target Name="WriteUnityGameAssemblyMetas" Condition="'@(UnityGameAssembly)' != ''" Outputs="%(UnityGameAssembly.Identity)">
+    <PropertyGroup>
+      <_UnityMetaFile>$(UNITY_FOLDER)/Assets/Assemblies/%(UnityGameAssembly.Filename)%(UnityGameAssembly.Extension).meta</_UnityMetaFile>
+      <_UnityMeta>fileFormatVersion: 2
+guid: $([System.Guid]::NewGuid().ToString('N'))
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 1
+  validateReferences: 1
+  platformData:
+  - first:
+      Any:
+    second:
+      enabled: 1
+      settings: {}
+  - first:
+      Editor: Editor
+    second:
+      enabled: 0
+      settings:
+        DefaultValueInitialized: true
+  - first:
+      Windows Store Apps: WindowsStoreApps
+    second:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+</_UnityMeta>
+    </PropertyGroup>
+    <WriteLinesToFile Condition="!Exists('$(_UnityMetaFile)')" File="$(_UnityMetaFile)" Lines="$(_UnityMeta)" Overwrite="true" />
+  </Target>
+
+  <Target Name="CopyToUnity" DependsOnTargets="CollectUnityGameAssemblies;WriteUnityGameAssemblyMetas">
     <Message Text="Copy assemblies to Unity" Importance="high" />
     <Copy SourceFiles="$(BEPINEX_PATH)/core/BepInEx.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(BEPINEX_PATH)/core/0Harmony.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
@@ -154,26 +227,23 @@
     <Copy SourceFiles="$(BEPINEX_PATH)/core/MonoMod.Utils.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(BEPINEX_PATH)/core/MonoMod.RuntimeDetour.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)Jotunn.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <!-- Both this plugin and Jotunn reference it, and the prefabs carry this plugin's components. -->
+    <Copy SourceFiles="$(TargetDir)YamlDotNet.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <!-- mdb generation doesn't work from portable pdbs, which are the only kind supported under Linux -->
+    <Copy Condition="Exists('$(TargetDir)$(TargetName).dll.mdb')" SourceFiles="$(TargetDir)$(TargetName).dll.mdb" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <Copy SourceFiles="@(UnityGameAssembly)" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" SkipUnchangedFiles="true" />
 
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/Splatform.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/Splatform.Steam.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_valheim.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_utils.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_postprocessing.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_sunshafts.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_guiutils.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/assembly_googleanalytics.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/PlayFab.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/PlayFabParty.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-
-
-
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/gui_framework.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/com.rlabrecque.steamworks.net.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
-    <Copy SourceFiles="$(VALHEIM_MANAGED)/SoftReferenceableAssets.dll" DestinationFolder="$(UNITY_FOLDER)/Assets/Assemblies" />
+    <!-- Bundles are built for the game's own Unity, and Valheim moves to a new Unity release
+         with most updates, so say so when the two drift apart. The game's version sits in
+         the header of globalgamemanagers. -->
+    <PropertyGroup>
+      <_ValheimUnityVersion Condition="Exists('$(VALHEIM_MANAGED)/../globalgamemanagers')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(VALHEIM_MANAGED)/../globalgamemanagers')), '\d+\.\d+\.\d+[abfp]\d+'))</_ValheimUnityVersion>
+      <_UnityProjectVersion Condition="Exists('$(UNITY_FOLDER)/ProjectSettings/ProjectVersion.txt')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(UNITY_FOLDER)/ProjectSettings/ProjectVersion.txt')), '(?&lt;=m_EditorVersion: )\S+'))</_UnityProjectVersion>
+    </PropertyGroup>
+    <Warning Condition="'$(_ValheimUnityVersion)' != '' And '$(_UnityProjectVersion)' != '' And '$(_ValheimUnityVersion)' != '$(_UnityProjectVersion)'"
+             Text="Valheim now runs on Unity $(_ValheimUnityVersion) but $(UNITY_FOLDER) is on $(_UnityProjectVersion). Open it once with Unity $(_ValheimUnityVersion) to upgrade it, and rebuild the asset bundles there." />
   </Target>
 
   <Target Name="JotunnPostBuildTask" AfterTargets="Build">

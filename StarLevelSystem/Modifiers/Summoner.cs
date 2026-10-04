@@ -1,5 +1,6 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.modules.CreatureSetup;
+using StarLevelSystem.modules.LevelSystem;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -9,6 +10,11 @@ namespace StarLevelSystem.Modifiers
 {
     internal class Summoner
     {
+        // Share (0-1) of the summoner's stars a summon may have, used when SummonStarLimit is left out of the
+        // CreatureModConfig.Config dict in Modifiers.yaml. Matches the built-in default there. A negative value
+        // in the yaml means summons roll their level with no limit.
+        private const float DefaultSummonStarLimit = 0.5f;
+
         public static void Setup(Character creature = null, CreatureModConfig config = null, CharacterCacheEntry ccache = null) {
             if (creature == null || config == null || ccache == null) { return; }
 
@@ -25,7 +31,12 @@ namespace StarLevelSystem.Modifiers
             // Always re-run rather than only on first attach: SetupSummoner is idempotent, and this is what
             // picks up a config reload that changed the cap, the interval or the summon pool.
             if (Logger.IsDebugEnabled) { Logger.LogDebug($"Setting up Summoner for {creature.name} with {summonPrefabs.Count} summonable prefabs"); }
-            summoner.SetupSummoner(creature, summonPrefabs, Mathf.RoundToInt(config.BasePower), config.PerlevelPower);
+            summoner.SetupSummoner(creature, summonPrefabs, Mathf.RoundToInt(config.BasePower), config.PerlevelPower, ReadConfig(config, "SummonStarLimit", DefaultSummonStarLimit));
+        }
+
+        private static float ReadConfig(CreatureModConfig cfg, string key, float fallback) {
+            if (cfg != null && cfg.Config != null && cfg.Config.TryGetValue(key, out float v)) { return v; }
+            return fallback;
         }
 
         // Wired as the BossSummoner TeardownEvent. Removing the modifier used to leave the component and its
@@ -90,9 +101,11 @@ namespace StarLevelSystem.Modifiers
 
             readonly List<GameObject> summonableCreatures = new List<GameObject>();
             ZNetView creature_znet = null;
+            Character summonerCharacter = null;
             int maxSummoned = 10;
             int summonBatchSize = 2;
             float timeBetweenSummons = 30f;
+            float summonStarLimit = -1f;
             bool started = false;
 
             public void OnDestroy() {
@@ -318,10 +331,10 @@ namespace StarLevelSystem.Modifiers
                 Character character = spawnedCreature.GetComponent<Character>();
                 if (character != null) {
                     // multiply: false - spawn multiplication applied to a summon would multiply the summons.
-                    // Barring BossSummoner mirrors Splitter's guard against recursive self-replication: boss
-                    // modifiers only roll on IsBoss() creatures, but a RequiredModifiers entry bypasses that.
+                    // Barring BossSummoner mirrors Splitter's guard against recursive self-replication: regular
+                    // creatures can roll boss modifiers (MaxBossModifiersPerCreature, RequiredModifiers).
                     List<string> notAllowed = new List<string>() { ModifierNames.BossSummoner.ToString() };
-                    CreatureSetupControl.CreatureSpawnerSetup(character, 0, multiply: false, notAllowedModifiers: notAllowed);
+                    CreatureSetupControl.CreatureSpawnerSetup(character, SummonLevelOverride(character), multiply: false, notAllowedModifiers: notAllowed);
                 }
 
                 // Tracked off the ZNetView rather than the Character: BiomeObjects takes any prefab name, and
@@ -336,10 +349,35 @@ namespace StarLevelSystem.Modifiers
                 return spawnedView.GetZDO().m_uid;
             }
 
-            public void SetupSummoner(Character character, List<string> summonPrefabs, int max_summoned = 10, float time_between_summons = 60f) {
+            /// <summary>
+            /// The level to hand a summon's setup, or 0 to let it roll as usual. With SummonStarLimit set, the summon
+            /// still rolls its level the normal way and is then held to that share of the summoner's stars, rounded
+            /// down: a 4 star summoner at 0.5 allows summons of up to 2 stars, and a 1 star summoner at 0.5 allows
+            /// none. The roll is made here and passed in as the level override because that is the only way the
+            /// setup pipeline takes a level from its caller. This peer just instantiated the summon, so it owns it
+            /// and is the one allowed to roll for it.
+            /// </summary>
+            private int SummonLevelOverride(Character summon) {
+                if (summonStarLimit < 0f || summonerCharacter == null) { return 0; }
+                if (summon.m_nview == null || summon.m_nview.GetZDO() == null) { return 0; }
+
+                // Levels are stars + 1. The epsilon stops a product like 0.7 * 10 from flooring to 6.
+                int summonerStars = Mathf.Max(0, summonerCharacter.GetLevel() - 1);
+                int maxLevel = Mathf.FloorToInt((summonerStars * summonStarLimit) + 0.0001f) + 1;
+                if (maxLevel <= 1) { return 1; }
+
+                LevelSelection.SelectCreatureBiomeSettings(summon.gameObject, out _, out CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
+                int rolled = LevelSelection.DetermineLevel(summon, summon.m_nview.GetZDO(), creatureSettings, biomeSettings, biome);
+                return Mathf.Clamp(rolled, 1, maxLevel);
+            }
+
+            public void SetupSummoner(Character character, List<string> summonPrefabs, int max_summoned = 10, float time_between_summons = 60f, float summon_star_limit = -1f) {
                 float previousInterval = timeBetweenSummons;
                 timeBetweenSummons = Mathf.Max(MinTimeBetweenSummons, time_between_summons);
                 maxSummoned = Mathf.Max(0, max_summoned);
+                // Re-read every setup pass like the cap and the interval, so a config reload changes the next wave.
+                summonStarLimit = summon_star_limit;
+                summonerCharacter = character;
                 creature_znet = character.m_nview;
                 if (creature_znet == null) {
                     creature_znet = this.gameObject.GetComponent<ZNetView>();

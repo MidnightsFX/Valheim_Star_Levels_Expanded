@@ -67,6 +67,13 @@ namespace StarLevelSystem.Data
             "Hen"
         };
 
+        // Modifiers that undo each other. A creature that rolls or is required to have one never rolls the others,
+        // in any pool (see CreatureModifiers.SelectModifiers). Adding one by hand or through the API is not checked.
+        public static readonly Dictionary<string, List<string>> ConflictingModifiers = new Dictionary<string, List<string>>() {
+            { nameof(ModifierNames.Big), new List<string>() { nameof(ModifierNames.Small) } },
+            { nameof(ModifierNames.Small), new List<string>() { nameof(ModifierNames.Big) } },
+        };
+
         public enum ModifierNames
         {
             None = 0,
@@ -99,6 +106,7 @@ namespace StarLevelSystem.Data
             Brutal = 56,
             ElementalChaos = 57,
             Reflection = 58,
+            Small = 59,
         }
 
         public static Dictionary<string, CreatureModifierDefinition> ModifierDefinitions = new Dictionary<string, CreatureModifierDefinition>()
@@ -325,6 +333,14 @@ namespace StarLevelSystem.Data
                         RunOnceEvent = Big.RunOnce
                     }
                 },
+                { ModifierNames.Small.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$small_prefix1",
+                        NameSuffix = "$small_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
+                        RunOnceEvent = Small.RunOnce
+                    }
+                },
                 { ModifierNames.Fast.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$fast_prefix1",
@@ -369,6 +385,11 @@ namespace StarLevelSystem.Data
                             { Heightmap.Biome.Mistlands, new List<string>() { "SeekerBrute", "Seeker" } },
                             { Heightmap.Biome.AshLands, new List<string>() { "Charred_Archer", "Charred_Melee" } }
                             },
+                        // Share (0-1) of the summoner's stars a summon may have, rounded down; 0.5 on a 4 star
+                        // summoner allows up to 2 star summons. Negative leaves summon levels unlimited.
+                        Config = new Dictionary<string, float>() {
+                            { "SummonStarLimit", 0.5f },
+                        },
                         },
                     }
                 },
@@ -590,6 +611,20 @@ namespace StarLevelSystem.Data
                     Config = new CreatureModConfig() {
                         PerlevelPower = 0.00f,
                         BasePower = 0.3f
+                        },
+                    }
+                },
+                {ModifierNames.Small.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Most of its size a creature can lose. Each Small creature rolls between MinimumRoll
+                        // and all of it, and loses that same share of DamageReduction from its damage.
+                        PerlevelPower = 0.00f,
+                        BasePower = 0.5f,
+                        Config = new Dictionary<string, float>() {
+                            { "DamageReduction", 0.25f },
+                            { "MinimumRoll", 0.3f },
+                        },
                         },
                     }
                 },

@@ -60,6 +60,7 @@ namespace StarLevelSystem.modules.UI {
             { "ResistSpirit", "Reduces damage taken from spirit." },
             { "Alert", "Increases the creature's hearing range." },
             { "Big", "Increases the creature's size." },
+            { "Small", "Shrinks the creature and weakens its attacks; the smaller it is, the weaker it hits." },
             { "Fast", "Increases the creature's movement speed." },
             { "StaminaDrain", "Its attacks drain your stamina. Dodging avoids it; blocking or parrying lessens it." },
             { "EitrDrain", "Its attacks drain your eitr. Dodging avoids it; blocking or parrying lessens it." },
@@ -898,14 +899,16 @@ namespace StarLevelSystem.modules.UI {
                 ConfigUI.AddHeaderRow(leftContent, leftContentW, "Creature modifiers"),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, Mathf.Max(6f, staged.maxMajor), staged.maxMajor, true, v => staged.maxMajor = (int)v), Tip(ValConfig.MaxMajorModifiersPerCreature)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, Mathf.Max(6f, staged.maxMinor), staged.maxMinor, true, v => staged.maxMinor = (int)v), Tip(ValConfig.MaxMinorModifiersPerCreature)),
+                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, Mathf.Max(6f, staged.maxBossOnCreature), staged.maxBossOnCreature, true, v => staged.maxBossOnCreature = (int)v), Tip(ValConfig.MaxBossModifiersPerCreature)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v), Tip(ValConfig.ChanceMajorModifier)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v), Tip(ValConfig.ChanceMinorModifier)),
+                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBossOnCreature, false, v => staged.chanceBossOnCreature = v), Tip(ValConfig.ChanceOfBossModifierOnCreature)),
                 WithTip(ConfigUI.AddToggleRow(leftContent, leftContentW, ToggleLabelWidth, "Limit modifier count to star level", staged.limitToStarLevel, v => staged.limitToStarLevel = v), Tip(ValConfig.LimitCreatureModifiersToCreatureStarLevel)),
                 ConfigUI.AddHeaderRow(leftContent, leftContentW, "Boss modifiers"),
                 WithTip(ConfigUI.AddToggleRow(leftContent, leftContentW, ToggleLabelWidth, "Bosses can have modifiers", staged.enableBossMods, v => staged.enableBossMods = v), Tip(ValConfig.EnableBossModifiers)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, Mathf.Max(6f, staged.maxBossMods), staged.maxBossMods, true, v => staged.maxBossMods = (int)v), Tip(ValConfig.MaxBossModifiersPerBoss)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v), Tip(ValConfig.ChanceOfBossModifier)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max Major modifiers", 0f, Mathf.Max(6f, staged.maxMajorOnBoss), staged.maxMajorOnBoss, true, v => staged.maxMajorOnBoss = (int)v), Tip(ValConfig.MaxMajorModifiersPerBoss)),
+                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, Mathf.Max(6f, staged.maxMajorOnBoss), staged.maxMajorOnBoss, true, v => staged.maxMajorOnBoss = (int)v), Tip(ValConfig.MaxMajorModifiersPerBoss)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajorOnBoss, false, v => staged.chanceMajorOnBoss = v), Tip(ValConfig.ChanceOfMajorModifierOnBoss)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, Mathf.Max(6f, staged.maxMinorOnBoss), staged.maxMinorOnBoss, true, v => staged.maxMinorOnBoss = (int)v), Tip(ValConfig.MaxMinorModifiersPerBoss)),
                 WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinorOnBoss, false, v => staged.chanceMinorOnBoss = v), Tip(ValConfig.ChanceOfMinorModifierOnBoss)),
@@ -944,6 +947,8 @@ namespace StarLevelSystem.modules.UI {
             staged.maxMinor = DefaultOf(ValConfig.MaxMinorModifiersPerCreature);
             staged.chanceMajor = DefaultOf(ValConfig.ChanceMajorModifier);
             staged.chanceMinor = DefaultOf(ValConfig.ChanceMinorModifier);
+            staged.maxBossOnCreature = DefaultOf(ValConfig.MaxBossModifiersPerCreature);
+            staged.chanceBossOnCreature = DefaultOf(ValConfig.ChanceOfBossModifierOnCreature);
             staged.limitToStarLevel = DefaultOf(ValConfig.LimitCreatureModifiersToCreatureStarLevel);
             staged.enableBossMods = DefaultOf(ValConfig.EnableBossModifiers);
             staged.chanceBoss = DefaultOf(ValConfig.ChanceOfBossModifier);

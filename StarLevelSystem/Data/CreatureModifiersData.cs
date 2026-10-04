@@ -212,6 +212,7 @@ namespace StarLevelSystem.Data
                         NamePrefix = "$Reflection_prefix1",
                         NameSuffix = "$Reflection_suffix1",
                         NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "reflecting",
                     }
                 },
                 { ModifierNames.Splitter.ToString(), new CreatureModifierDefinition()

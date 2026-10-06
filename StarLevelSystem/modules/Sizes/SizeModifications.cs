@@ -26,6 +26,7 @@ namespace StarLevelSystem.modules.Sizes {
         // passing through zero into negative (mirrored/inside-out) territory. The clamp also keeps the
         // result well clear of Vector3.zero, which SetSizeModification uses as its "not sized yet" sentinel
         // (Unity's Vector3 == is an epsilon compare, so near-zero would read back as unset).
+        // The top is capped at MaxScaleMultiplier, so high stars stacked with Big or a SoulEater's growth stop there.
         internal static float DetermineScaleMultiplier(CharacterCacheEntry characterCache, float bonus = 0f) {
             // Level - 1, matching health/damage/speed: a 0 star creature sits at exactly the base Size.
             int levels = Mathf.Max(0, characterCache.Level - 1);
@@ -33,7 +34,28 @@ namespace StarLevelSystem.modules.Sizes {
                 ? characterCache.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.SizePerLevel] * levels
                 : 0f;
             float scale = bonus + characterCache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] + perLevelSize;
-            return Mathf.Max(ValConfig.MinimumCreatureScale.Value, scale);
+            return Mathf.Clamp(scale, ValConfig.MinimumCreatureScale.Value, MaxScaleMultiplier(characterCache));
+        }
+
+        // The largest multiplier this creature may reach: its creature entry's MaxSizeScale when that is set, else the
+        // global MaximumCreatureScale. Never below MinimumCreatureScale, so a cap set under the floor pins the creature
+        // at the floor rather than inverting the clamp.
+        internal static float MaxScaleMultiplier(CharacterCacheEntry characterCache) {
+            float cap = ValConfig.MaximumCreatureScale.Value;
+            float creatureCap = characterCache?.CreatureSettings?.MaxSizeScale ?? -1f;
+            if (creatureCap > 0f) { cap = creatureCap; }
+            return Mathf.Max(ValConfig.MinimumCreatureScale.Value, cap);
+        }
+
+        // A stored SLS_SIZE held to the creature's current cap. A config reload only resizes creatures that are loaded,
+        // so without this one that streamed out while the cap was lowered would come back at its old size.
+        private static Vector3 CapStoredSize(GameObject obj, Vector3 size, CharacterCacheEntry characterCache) {
+            float reference = GetSizeReferenceForObject(obj.name).x;
+            if (reference <= 0f) { return size; }
+            float multiplier = size.x / reference;
+            float cap = MaxScaleMultiplier(characterCache);
+            if (multiplier <= cap || Mathf.Approximately(multiplier, cap)) { return size; }
+            return size * (cap / multiplier);
         }
 
         internal static void SetSizeModification(GameObject obj, ZNetView zview, CharacterCacheEntry characterCache, bool update = false, float bonus = 0f) {
@@ -41,6 +63,11 @@ namespace StarLevelSystem.modules.Sizes {
 
             // Size setting exists and we are not updating it
             if (update == false && ForceUpdateSize == false && size != Vector3.zero) {
+                Vector3 capped = CapStoredSize(obj, size, characterCache);
+                if (capped != size) {
+                    size = capped;
+                    if (zview.IsOwner()) { zview.m_zdo.Set(SLS_SIZE, size); }
+                }
                 // Physics.SyncTransforms is a GLOBAL engine sync; only pay for it (and the rider
                 // re-seat) when the scale is actually changing - this path runs on every setup pass.
                 if (obj.transform.localScale != size) {
@@ -157,7 +184,17 @@ namespace StarLevelSystem.modules.Sizes {
         // prefab assets - permanently corrupted the prefab scales that SizeEstimateCache is built from.
         internal static void StarLevelScaleChanged(object s, EventArgs e) {
             if (ValConfig.EnableCreatureScalingPerLevel.Value == false) { return; }
-            Logger.LogInfo($"Updating size scale: {ValConfig.PerLevelScaleBonus.Value} (minimum {ValConfig.MinimumCreatureScale.Value})");
+            ResizeLiveCreatures();
+        }
+
+        // The cap holds every creature's size, not just its per-star growth (Big alone can pass it), so it resizes
+        // even with per-level scaling off.
+        internal static void ScaleLimitChanged(object s, EventArgs e) {
+            ResizeLiveCreatures();
+        }
+
+        private static void ResizeLiveCreatures() {
+            Logger.LogInfo($"Updating size scale: {ValConfig.PerLevelScaleBonus.Value} (minimum {ValConfig.MinimumCreatureScale.Value}, maximum {ValConfig.MaximumCreatureScale.Value})");
             // Live instances only - a prefab asset has no valid ZNetView.
             List<Character> liveCharacters = Resources.FindObjectsOfTypeAll<Character>()
                 .Where(chara => chara != null && chara.m_nview != null && chara.m_nview.IsValid())

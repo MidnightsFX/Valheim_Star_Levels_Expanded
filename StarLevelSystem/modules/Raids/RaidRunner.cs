@@ -42,8 +42,9 @@ namespace StarLevelSystem.modules.Raids {
         private const string RPC_SpawnPointsFound = "SLS_RaidSpawnPointsFound";
         // How long a spawn-point search may run before the owner assumes it was lost and starts another. A search yields
         // 0.1s every 10 failed attempts and gives up after roughly 200 + 3 * EventRange of them, so even one that finds
-        // nothing ends in about 5s at the default 96m range. Starting a second search early costs only the work: the
-        // first result to arrive is kept (see StoreSpawnPoints).
+        // nothing ends in about 5s at the default 96m range. The growing search (RaidSpawnSearchGrowsPastBases) stops at
+        // the edge of reach instead, which it gets to in a similar time. Starting a second search early costs only the
+        // work: the first result to arrive is kept (see StoreSpawnPoints).
         private const double SpawnSearchTimeoutSeconds = 60d;
 
         // ZDO-backed values cached against the ZDO's DataRevision. Every BinaryFormatter-based
@@ -64,6 +65,8 @@ namespace StarLevelSystem.modules.Raids {
         private bool spawnPointsGeneratingCache;
         private double spawnPointsGeneratingStartCache;
         private List<SerializableVector3> spawnPointsCache;
+        // Derived rather than stored on the ZDO: every machine works it out from the same replicated spawn points.
+        private float areaRadiusCache;
         private List<RaidMonitor> activeSpawnsCache = new List<RaidMonitor>();
 
         private void RefreshZDataCache() {
@@ -91,6 +94,7 @@ namespace StarLevelSystem.modules.Raids {
             spawnPointsGeneratingCache = RaidSpawnPointsGenerating.Get();
             spawnPointsGeneratingStartCache = RaidSpawnPointsGeneratingStart.Get();
             spawnPointsCache = RaidSpawnPoints.Get();
+            areaRadiusCache = raidCache == null ? 0f : RaidControl.RaidAreaRadius(raidCache.EventRange, transform.position, spawnPointsCache);
             try {
                 activeSpawnsCache = ActiveRaidSpawns.Get();
             } catch (Exception e) {
@@ -104,6 +108,9 @@ namespace StarLevelSystem.modules.Raids {
         internal RaidDefinition CurrentRaid => raidCache;
         internal bool IsActive => raidStartedCache && raidCache != null && IsWindingDown() == false;
         internal double SecondsSinceStart => ZNet.instance == null ? 0d : ZNet.instance.GetTimeSeconds() - raidStartTimeCache;
+        // How far the raid's area reaches: its EventRange, or further when its spawns came from further out. See
+        // RaidControl.RaidAreaRadius.
+        internal float AreaRadius => areaRadiusCache;
         private List<RaidMonitor> RaidSpawners = new List<RaidMonitor>();
         // The environment name this runner last wrote into EnvMan.m_forceEnv, so teardown can release the
         // override without stomping one another system has taken over since. Null when we hold no override.
@@ -355,7 +362,7 @@ namespace StarLevelSystem.modules.Raids {
             RaitStartTime.Set(startTime);
             Endtime = startTime + raid.Duration;
             AddMapPins(this.transform.position, raid);
-            Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.StartMessage);
+            Player.MessageAllInRange(this.transform.position, AreaRadius * 1.5f, MessageHud.MessageType.Center, raid.StartMessage);
 
             // The raid is now committed. Flip the flag (gates the forced environment above), start our own music,
             // and tell the server to set the cooldown + broadcast music to nearby clients. Everything above this
@@ -372,7 +379,7 @@ namespace StarLevelSystem.modules.Raids {
             }
             ActiveRaidSpawns.Set(RaidSpawners);
 
-            foreach(Player player in SLSExtensions.GetPlayersInRange(this.transform.position, raid.EventRange * 1.5f)) {
+            foreach(Player player in SLSExtensions.GetPlayersInRange(this.transform.position, AreaRadius * 1.5f)) {
                 player.ShowTutorial("randomevent", false);
             }
         }
@@ -490,7 +497,7 @@ namespace StarLevelSystem.modules.Raids {
             RaidControl.UnregisterActiveRaid(this);
 
             RemoveExistingMapPins();
-            Player.MessageAllInRange(this.transform.position, raid.EventRange * 1.5f, MessageHud.MessageType.Center, raid.EndMessage);
+            Player.MessageAllInRange(this.transform.position, AreaRadius * 1.5f, MessageHud.MessageType.Center, raid.EndMessage);
             StopRaidMusic();
             ReleaseForcedEnvironment();
         }
@@ -653,7 +660,7 @@ namespace StarLevelSystem.modules.Raids {
         private void SendRaidCommitConfirmation(RaidDefinition raid, Vector3 pos) {
             if (ZNet.instance == null) { return; }
             if (ZNet.instance.IsServer()) {
-                RaidControl.FinalizeRaidCommit(SLSExtensions.GetLocalUserPlatformAndID(), raid.Name, pos);
+                RaidControl.FinalizeRaidCommit(SLSExtensions.GetLocalUserPlatformAndID(), raid.Name, pos, AreaRadius);
                 return;
             }
             ZNetPeer serverPeer = ZNet.instance.GetServerPeer();
@@ -666,6 +673,7 @@ namespace StarLevelSystem.modules.Raids {
             pkg.Write(pos.x);
             pkg.Write(pos.y);
             pkg.Write(pos.z);
+            pkg.Write(AreaRadius);
             ValConfig.RaidCommittedRPC.SendPackage(serverPeer.m_uid, pkg);
         }
 
@@ -691,7 +699,7 @@ namespace StarLevelSystem.modules.Raids {
 
             // Add the Area pin
             AreaPin = Minimap.instance.AddPin(pos, Minimap.PinType.EventArea, "", false, false, author: new PlatformUserID());
-            AreaPin.m_worldSize = raid.EventRange * 2f;
+            AreaPin.m_worldSize = Mathf.Max(raid.EventRange, AreaRadius) * 2f;
             //AreaPin.m_worldSize *= 0.9f;
 
             // Add the exclamation

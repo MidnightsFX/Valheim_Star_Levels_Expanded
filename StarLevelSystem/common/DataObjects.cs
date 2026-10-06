@@ -698,6 +698,10 @@ namespace StarLevelSystem.common
             [DefaultValue(-1)]
             public int CreatureMaxLevelOverride { get; set; } = -1;
 
+            [Description("Creature specific cap on its size multiplier, replacing MaximumCreatureScale for this creature. 2.0 = never more than twice its normal size. -1 uses MaximumCreatureScale.")]
+            [DefaultValue(-1f)]
+            public float MaxSizeScale { get; set; } = -1f;
+
             [Description("Creature specific limit to the number of major modifiers.")]
             [DefaultValue(-1)]
             public int MaxMajorModifiers { get; set; } = -1;

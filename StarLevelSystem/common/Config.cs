@@ -171,6 +171,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableScalingInDungeons;
         public static ConfigEntry<float> PerLevelScaleBonus;
         public static ConfigEntry<float> MinimumCreatureScale;
+        public static ConfigEntry<float> MaximumCreatureScale;
         public static ConfigEntry<float> PerLevelLootScale;
         public static ConfigEntry<float> PerLevelLootChanceScale;
         public static ConfigEntry<float> ChanceBaseChancePerLevel;
@@ -208,6 +209,15 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableRockLevels;
         public static ConfigEntry<bool> EnableRidableCreatureSizeFixes;
         public static ConfigEntry<bool> MultipliedNightSpawnsRemovedDuringDay;
+
+        // The night spawns each boss's defeat unlocks, one switch per boss. See modules/BossNightSpawns.
+        public static ConfigEntry<bool> EikthyrNightSpawns;
+        public static ConfigEntry<bool> ElderNightSpawns;
+        public static ConfigEntry<bool> BonemassNightSpawns;
+        public static ConfigEntry<bool> ModerNightSpawns;
+        public static ConfigEntry<bool> YagluthNightSpawns;
+        public static ConfigEntry<bool> QueenNightSpawns;
+        public static ConfigEntry<bool> FaderNightSpawns;
 
         public static ConfigEntry<float> PerLevelTreeLootScale;
         public static ConfigEntry<float> PerLevelBirdLootScale;
@@ -282,6 +292,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> RaidActiveTillDefeatedMaxSeconds;
         public static ConfigEntry<float> RaidExclusionRange;
         public static ConfigEntry<float> RaidBossExclusionRange;
+        public static ConfigEntry<bool> RaidSpawnSearchGrowsPastBases;
         public static ConfigEntry<bool> EnableDebugRaidDetails;
         public static ConfigEntry<bool> EnableCustomRaidsCompat;
         public static ConfigEntry<bool> GrantWorldDefeatKeysOnJoin;
@@ -507,6 +518,8 @@ namespace StarLevelSystem.common {
             PerLevelScaleBonus.SettingChanged += SizeModifications.StarLevelScaleChanged;
             MinimumCreatureScale = BindServerConfig("LevelSystem", "MinimumCreatureScale", 0.1f, "The smallest scale multiplier a creature can shrink to. Stops negative size-per-level values from producing zero-sized or inside-out creatures.", true, 0.01f, 1f);
             MinimumCreatureScale.SettingChanged += SizeModifications.StarLevelScaleChanged;
+            MaximumCreatureScale = BindServerConfig("LevelSystem", "MaximumCreatureScale", 5f, "The largest scale multiplier a creature can grow to, counting its base size, size per star and size modifiers like Big together. 5 = five times its normal size. A creature's MaxSizeScale in LevelSettings.yaml replaces this for that creature.", false, 1f, 100f);
+            MaximumCreatureScale.SettingChanged += SizeModifications.ScaleLimitChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             EnableColorization = BindServerConfig("LevelSystem", "EnableColorization", true, "Enables this mods colorization of creatures based on their star level.");
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x.", false, 0f, 5f);
@@ -591,9 +604,18 @@ namespace StarLevelSystem.common {
             RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
             RaidExclusionRange = BindServerConfig("Raids", "RaidExclusionRange", 500f, "No raid starts within this many meters of a raid that is already running or winding down, whoever it belongs to and however it was started: the first raid in an area is the only raid. Applies to force-started raids too. 0 disables the check.", false, 0f, 5000f);
             RaidBossExclusionRange = BindServerConfig("Raids", "RaidBossExclusionRange", 100f, "No raid starts for a player within this many meters of a living boss, so a raid never lands on a boss fight. Counts vanilla and modded bosses and Nemesis minibosses. 100 is the distance the boss health bar shows from. Admin force-started raids (sls-raid-spawn, event) are not held to this. 0 disables the check.", false, 0f, 1000f);
+            RaidSpawnSearchGrowsPastBases = BindServerConfig("Raids", "RaidSpawnSearchGrowsPastBases", false, "When a raid finds no room for its creatures outside the player's base within its EventRange, keep searching further out until it does, and grow the raid's map area to match. Meant for servers with very large bases, such as workbench areas enlarged by another mod. Raid creatures only move within roughly 64-128m of a player, so the search stops there; a base reaching past that has its raid come from the furthest ground still in reach, inside the base. When off, the search only widens a set distance past EventRange, and a raid that still has no room is skipped.");
             RaidActiveTillDefeatedMaxSeconds = BindServerConfig("Raids", "RaidActiveTillDefeatedMaxSeconds", 300, "Only for raids with RaidActiveTillDefeated set in RaidSettings.yaml. Once such a raid's Duration has elapsed it stays active until its remaining creatures are dead, for at most this many seconds; then it winds down regardless, so a straggler stuck somewhere cannot hold a raid open forever. 0 winds every raid down as soon as its Duration elapses.", true, 0, 3600);
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
             GrantWorldDefeatKeysOnJoin = BindServerConfig("Raids", "GrantWorldDefeatKeysOnJoin", true, "Each time a player joins the world or respawns, gives them the player key for every defeat this world has already recorded: the boss keys (defeated_eikthyr and so on) and creature ones such as KilledTroll. A kill only records that player key for whoever gets credit for it: in vanilla the one player whose game controlled the creature, and with a key share mod such as ValheimCommunityPatch the players online and nearby. Anyone offline, elsewhere, or new to the world never gets it, so raids using RequiredPlayerKeys stay closed to them. The key is saved on the character, just like a real kill, so it goes with that character to other worlds.");
+
+            EikthyrNightSpawns = BindServerConfig("NightSpawns", "EikthyrNightSpawns", true, BossNightSpawns.SettingDescription("defeated_eikthyr", "Eikthyr"));
+            ElderNightSpawns = BindServerConfig("NightSpawns", "ElderNightSpawns", true, BossNightSpawns.SettingDescription("defeated_gdking", "The Elder"));
+            BonemassNightSpawns = BindServerConfig("NightSpawns", "BonemassNightSpawns", true, BossNightSpawns.SettingDescription("defeated_bonemass", "Bonemass"));
+            ModerNightSpawns = BindServerConfig("NightSpawns", "ModerNightSpawns", true, BossNightSpawns.SettingDescription("defeated_dragon", "Moder"));
+            YagluthNightSpawns = BindServerConfig("NightSpawns", "YagluthNightSpawns", true, BossNightSpawns.SettingDescription("defeated_goblinking", "Yagluth"));
+            QueenNightSpawns = BindServerConfig("NightSpawns", "QueenNightSpawns", true, BossNightSpawns.SettingDescription("defeated_queen", "The Queen"));
+            FaderNightSpawns = BindServerConfig("NightSpawns", "FaderNightSpawns", true, BossNightSpawns.SettingDescription("defeated_fader", "Fader"));
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
             EnableNemesisRemoteSpawning = BindServerConfig("Nemesis", "EnableNemesisRemoteSpawning", false, "Enables ambient, server-driven remote spawning of Nemesis minibosses across the world (a second, finer gate lives in NemesisSettings.yaml under RemoteSpawning.Enabled).");
@@ -916,8 +938,9 @@ namespace StarLevelSystem.common {
         private static IEnumerator OnServerReceiveRaidCommitted(long sender, ZPackage package) {
             string raidName = package.ReadString();
             Vector3 pos = new Vector3(package.ReadSingle(), package.ReadSingle(), package.ReadSingle());
+            float areaRadius = package.ReadSingle();
             string playerPlatformID = SLSExtensions.GetPlatformUserID(sender).ToString();
-            RaidControl.FinalizeRaidCommit(playerPlatformID, raidName, pos);
+            RaidControl.FinalizeRaidCommit(playerPlatformID, raidName, pos, areaRadius);
             yield break;
         }
 

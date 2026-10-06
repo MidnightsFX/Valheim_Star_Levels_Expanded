@@ -30,6 +30,7 @@
   "sls_cfg_raids_intro": "StarLevelSystem replaces vanilla raids with its own. Open a raid's spawns to set how many of each creature arrive per wave, how many may be alive at once (0 stops that creature spawning), and the seconds between its waves. Spawn chances, levels and activation keys live in RaidSettings.yaml.",
   "sls_cfg_raids_show_spawns": "Spawns",
   "sls_cfg_raids_hide_spawns": "Hide",
+  "sls_cfg_night_spawns_intro": "Each boss you defeat lets new creatures roam the world at night. Untick a boss to stop the night spawns it unlocks; any already out still leave at dawn, and nothing else the boss unlocks changes.",
   "sls_cfg_distribution_caps_below_min": "Some biome caps are below Min stars; creatures in those biomes stay at their biome's cap.",
   "sls_cfg_distribution_conditional_note": "Conditional scaling is on: once a boss is defeated, its tier replaces these chances in the biomes it covers.",
   "sls_cfg_distribution_merge_note": "LevelSettings.yaml builds the default curve from several generators; saving a change here replaces them with the single curve shown.",

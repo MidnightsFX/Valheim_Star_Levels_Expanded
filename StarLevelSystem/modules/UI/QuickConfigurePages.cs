@@ -764,6 +764,9 @@ namespace StarLevelSystem.modules.UI {
                 ConfigUI.AddDividerRow(parent, LeftColWidth),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss HP / star", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyHealthMultiplier)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss dmg / star", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyDamageMultiplier)),
+                ConfigUI.AddDividerRow(parent, LeftColWidth),
+                // The slider stops at 20x; a larger cap set in the .cfg widens it rather than being clamped on save.
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max creature size", 1f, Mathf.Max(20f, staged.maxCreatureScale), staged.maxCreatureScale, false, v => staged.maxCreatureScale = v), Tip(ValConfig.MaximumCreatureScale)),
                 ConfigUI.AddSpacerRow(parent, LeftColWidth, 4f),
                 ConfigUI.AddHeaderRow(parent, LeftColWidth, "Multiplayer scaling"),
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain HP with more players", staged.mpHealth, v => { staged.mpHealth = v; UpdateExampleMath(); }), Tip(ValConfig.EnableMultiplayerEnemyHealthScaling)),
@@ -796,6 +799,7 @@ namespace StarLevelSystem.modules.UI {
             staged.creatureDmgPerLevel = DefaultOf(ValConfig.EnemyDamageLevelMultiplier);
             staged.bossHpPerLevel = DefaultOf(ValConfig.BossEnemyHealthMultiplier);
             staged.bossDmgPerLevel = DefaultOf(ValConfig.BossEnemyDamageMultiplier);
+            staged.maxCreatureScale = DefaultOf(ValConfig.MaximumCreatureScale);
             staged.mpHealth = DefaultOf(ValConfig.EnableMultiplayerEnemyHealthScaling);
             staged.mpHealthMod = DefaultOf(ValConfig.MultiplayerEnemyHealthModifier);
             staged.mpDamage = DefaultOf(ValConfig.EnableMultiplayerEnemyDamageScaling);

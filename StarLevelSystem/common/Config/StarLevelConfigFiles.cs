@@ -176,6 +176,7 @@ namespace StarLevelSystem.common {
 #         BaseHealth: 1.05
 #       CreaturePerLevelValueModifiers: # added per level above 1 (0.05 = +5%/level)
 #         SizePerLevel: 0.05
+#       MaxSizeScale: 3                 # never more than 3x its normal size (replaces MaximumCreatureScale)
 #       RequiredModifiers: { Fire: Major }
 #
 # --- Boss per-level health and damage ---

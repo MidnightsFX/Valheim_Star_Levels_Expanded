@@ -250,6 +250,7 @@ namespace StarLevelSystem.modules.UI {
             list.Add(new PageDef { Title = "Health & Damage", Build = BuildStatsPage, OnShow = UpdateExampleMath, Reset = ResetStatsPage, ClearRefs = ClearStatsReferences });
             list.Add(new PageDef { Title = "Modifiers", Build = BuildModifiersPage, Reset = ResetModifiersPage });
             list.Add(new PageDef { Title = "Raids", Build = BuildRaidsPage, Reset = ResetRaidsPage, ClearRefs = ClearRaidPageReferences });
+            list.Add(new PageDef { Title = "Night Spawns", Build = BuildNightSpawnsPage, Reset = ResetNightSpawnsPage });
             list.Add(new PageDef { Title = "Nemesis System", Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions, Reset = ResetNemesisPage, ClearRefs = ClearNemesisReferences });
             list.Add(new PageDef { Title = "Location Reset", Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews, Reset = ResetLocationResetPage, ClearRefs = ClearLocationResetReferences });
             return list;
@@ -581,6 +582,7 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.EnemyDamageLevelMultiplier.Value = staged.creatureDmgPerLevel;
                 ValConfig.BossEnemyHealthMultiplier.Value = staged.bossHpPerLevel;
                 ValConfig.BossEnemyDamageMultiplier.Value = staged.bossDmgPerLevel;
+                ValConfig.MaximumCreatureScale.Value = staged.maxCreatureScale;
                 ValConfig.MaxLevel.Value = staged.maxStars;
                 ValConfig.MaxBossLevel.Value = staged.maxBossLevel;
 
@@ -615,6 +617,9 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.ServerTimeBetweenRaidStartChecks.Value = staged.raidCheckMinutes;
                 ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
                 ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
+
+                // Night spawns - one ConfigEntry per boss.
+                SaveNightSpawns();
 
                 // Loot - the per-level scales are ConfigEntries; the distance rings are in the LootSettings YAML.
                 ValConfig.LootDropCalculationType.Value = staged.loot.style.ToString();
@@ -949,6 +954,7 @@ namespace StarLevelSystem.modules.UI {
             public bool enableConditional;
 
             public float creatureHpPerLevel, creatureDmgPerLevel, bossHpPerLevel, bossDmgPerLevel;
+            public float maxCreatureScale;
             public int maxBossLevel;
 
             public bool mpHealth, mpDamage;
@@ -1014,6 +1020,9 @@ namespace StarLevelSystem.modules.UI {
             public int raidDensity;
             public int raidDensityBase;
 
+            // Whether each boss's night spawns are allowed, keyed by its defeat key. See QuickConfigureNightSpawns.cs.
+            public Dictionary<string, bool> nightSpawnsOn;
+
             // Nemesis system. enableNemesis is a ConfigEntry; the rest live in the NemesisSettings YAML.
             public bool enableNemesis;
             public float nemCooldown, nemInfluence, nemMinSpawn;
@@ -1044,6 +1053,7 @@ namespace StarLevelSystem.modules.UI {
                     creatureDmgPerLevel = ValConfig.EnemyDamageLevelMultiplier.Value,
                     bossHpPerLevel = ValConfig.BossEnemyHealthMultiplier.Value,
                     bossDmgPerLevel = ValConfig.BossEnemyDamageMultiplier.Value,
+                    maxCreatureScale = ValConfig.MaximumCreatureScale.Value,
                     maxStars = ValConfig.MaxLevel.Value,
                     maxBossLevel = ValConfig.MaxBossLevel.Value,
 
@@ -1157,6 +1167,7 @@ namespace StarLevelSystem.modules.UI {
                 s.raidSpawns = SnapshotRaidSpawns(s.raidSource);
                 s.raidDensity = ClampRaidDensity(s.raidSource?.GlobalSettings?.RaidCreatureDensity ?? DefaultRaidDensity);
                 s.raidDensityBase = s.raidDensity;
+                s.nightSpawnsOn = SnapshotNightSpawns();
                 return s;
             }
 
@@ -1330,6 +1341,7 @@ namespace StarLevelSystem.modules.UI {
                     && enableConditional == o.enableConditional
                     && creatureHpPerLevel == o.creatureHpPerLevel && creatureDmgPerLevel == o.creatureDmgPerLevel
                     && bossHpPerLevel == o.bossHpPerLevel && bossDmgPerLevel == o.bossDmgPerLevel
+                    && maxCreatureScale == o.maxCreatureScale
                     && maxStars == o.maxStars && maxBossLevel == o.maxBossLevel
                     && mpHealth == o.mpHealth && mpDamage == o.mpDamage
                     && mpHealthMod == o.mpHealthMod && mpDamageMod == o.mpDamageMod && mpRequiredPlayers == o.mpRequiredPlayers
@@ -1359,6 +1371,7 @@ namespace StarLevelSystem.modules.UI {
                 }
                 if (raidDensity != o.raidDensity) { return false; }
                 if (SetsEqual(raidsOn, o.raidsOn) == false || RaidSpawnsMatch(raidSpawns, o.raidSpawns) == false) { return false; }
+                if (NightSpawnsMatch(nightSpawnsOn, o.nightSpawnsOn) == false) { return false; }
                 if (locationReset.Matches(o.locationReset) == false) { return false; }
                 if (loot.Matches(o.loot) == false) { return false; }
                 return NemesisMatches(o);

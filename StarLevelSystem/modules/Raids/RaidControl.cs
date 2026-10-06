@@ -58,7 +58,7 @@ namespace StarLevelSystem.modules.Raids
             foreach (RaidRunner runner in ActiveRaidRunners) {
                 if (runner == null || runner.IsActive == false) { continue; }
                 float distance = Utils.DistanceXZ(pos, runner.transform.position);
-                if (distance < runner.CurrentRaid.EventRange && distance < nearestDistance) {
+                if (distance < runner.AreaRadius && distance < nearestDistance) {
                     nearest = runner;
                     nearestDistance = distance;
                 }
@@ -781,7 +781,8 @@ namespace StarLevelSystem.modules.Raids
         // Server-side commit, invoked once the owning client confirms its raid started (directly on an integrated
         // host, or via RaidCommittedRPC from a networked client). Sets the full cooldown and broadcasts combat music
         // to nearby clients — both deferred from dispatch so an aborted raid produces no visible side effects.
-        internal static void FinalizeRaidCommit(string playerPlatformID, string raidName, Vector3 pos) {
+        // areaRadius is the raid's area as its spawns turned out (RaidAreaRadius), which the music reaches across.
+        internal static void FinalizeRaidCommit(string playerPlatformID, string raidName, Vector3 pos, float areaRadius) {
             // Usually already loaded by the raid check that dispatched this, but a raid can also reach
             // here from the vanilla SetRandomEvent passthrough, which never consults the registry.
             EnsureRegistryLoaded();
@@ -793,12 +794,13 @@ namespace StarLevelSystem.modules.Raids
                 Logger.LogWarning($"Raid commit received for unknown raid '{raidName}', ignoring.");
                 return;
             }
+            float musicRange = Mathf.Max(raidDef.EventRange, areaRadius) * 1.5f;
             // Checked before the registry lookup below, so a force-started raid for an otherwise untracked player
             // does not create an entry for them as a side effect. Music still plays -- that is a the-raid-is-here
             // effect, not cooldown bookkeeping -- but nothing is written, so there is nothing to flush.
             if (ConsumeForcedRaid(playerPlatformID, raidName)) {
                 Logger.LogRaid($"Raid '{raidName}' for {playerPlatformID} was force-started; leaving their raid cooldown untouched.");
-                ForceMusicForClientsInArea(raidDef.ForceMusic, pos, raidDef.EventRange * 1.5f);
+                ForceMusicForClientsInArea(raidDef.ForceMusic, pos, musicRange);
                 return;
             }
             if (ServerPlayerRaidData.TryGetValue(playerPlatformID, out PlayerRaidData playerData) == false) {
@@ -807,7 +809,7 @@ namespace StarLevelSystem.modules.Raids
             }
             Logger.LogRaid($"Finalizing raid commit '{raidName}' for {playerPlatformID} at {pos}");
             UpdatePlayerRaidHistory(playerData, raidDef, raidDef.Name);
-            ForceMusicForClientsInArea(raidDef.ForceMusic, pos, raidDef.EventRange * 1.5f);
+            ForceMusicForClientsInArea(raidDef.ForceMusic, pos, musicRange);
             FlushPlayerRaidData(force: true);
         }
 
@@ -1086,19 +1088,35 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // Raid spawns are scattered over a disc reaching this fraction of the event range, so a raid's creatures appear
+        // a little inside its map area. RaidAreaRadius keeps the same proportion when they come from further out.
+        internal const float SpawnDiscFraction = 0.8f;
+
         // Hands its result to onComplete rather than writing it anywhere itself: the search spans many frames, and by
         // the time it finishes the machine that started it may no longer own the runner (see RaidRunner.OnSpawnSearchComplete).
         public static IEnumerator DetermineRemoteSpawnLocations(Vector3 origin, int numTargets, Action<List<SerializableVector3>> onComplete, float maxDistance = 300f, Heightmap.Biome targetBiome = Heightmap.Biome.None) {
             List<SerializableVector3> spawn_locations = new List<SerializableVector3>();
-            //Logger.LogDebug($"Starting spawn destination in incrments of {range_increment} from x{origin.x} y{origin.y} z{origin.z}");
+            IEnumerator search = ValConfig.RaidSpawnSearchGrowsPastBases.Value
+                ? GrowingSpawnSearch(origin, numTargets, maxDistance * SpawnDiscFraction, targetBiome, spawn_locations)
+                : WideningSpawnSearch(origin, numTargets, maxDistance, targetBiome, spawn_locations);
+            while (search.MoveNext()) { yield return search.Current; }
+
+            if (spawn_locations.Count < numTargets) {
+                Logger.LogWarning($"Unable to find the requested number of spawn points. Found {spawn_locations.Count} spawn locations");
+            }
+            onComplete(spawn_locations);
+        }
+
+        // The search raids use by default: random points over the spawn disc, widened by 50m every 50 failures past the
+        // first 100 until it is four times its starting size, then no longer avoiding world-generated bases.
+        private static IEnumerator WideningSpawnSearch(Vector3 origin, int numTargets, float maxDistance, Heightmap.Biome targetBiome, List<SerializableVector3> spawn_locations) {
             int spawn_location_attempts = 0;
             float originalMaxDistance = maxDistance;
-            bool allowBaseSpawns = false;
-            Vector3 determinedSpawn = origin;
+            bool builtBasesOnly = false;
 
             while (spawn_locations.Count < numTargets) {
-                var offset = UnityEngine.Random.insideUnitCircle * (maxDistance * 0.8f);
-                determinedSpawn = origin + new Vector3(offset.x, 0, offset.y);
+                var offset = UnityEngine.Random.insideUnitCircle * (maxDistance * SpawnDiscFraction);
+                Vector3 determinedSpawn = origin + new Vector3(offset.x, 0, offset.y);
 
                 // Progressively widen the search the longer we fail, then relax the base restriction as a last
                 // resort, so cramped/coastal/heavily-built-up areas still yield points instead of aborting the raid.
@@ -1109,11 +1127,15 @@ namespace StarLevelSystem.modules.Raids
                     }
                     if (maxDistance < originalMaxDistance * 4) {
                         maxDistance += 50f;
-                    } else if (allowBaseSpawns == false) {
-                        // Base detection is imperfect (esp. Ashlands POIs that read as "player base"); allow base
-                        // spawns rather than aborting the raid for lack of room.
-                        Logger.LogRaid("Spawn search exhausted normal range; relaxing the player-base restriction as a last resort.");
-                        allowBaseSpawns = true;
+                    } else if (builtBasesOnly == false) {
+                        // Ashlands fortresses and other world-generated pieces carry PlayerBase areas too, and can
+                        // leave no room at all; stop avoiding those. Bases players built are still avoided: this
+                        // used to drop the base check entirely, so a base whose area covered everything this machine
+                        // has loaded -- a workbench enlarged by AzuWorkbenchTweaks, say -- had the raid spawn
+                        // inside it. Now that raid aborts instead, as a vanilla one would, unless
+                        // RaidSpawnSearchGrowsPastBases sends it further out.
+                        Logger.LogRaid("Spawn search exhausted normal range; only avoiding player-built bases as a last resort.");
+                        builtBasesOnly = true;
                     } else {
                         break; // Genuinely nowhere valid to spawn; the raid will abort harmlessly.
                     }
@@ -1122,72 +1144,206 @@ namespace StarLevelSystem.modules.Raids
                 // Sleep to avoid locking the thread
                 if (spawn_location_attempts > 1 && spawn_location_attempts % 10 == 0) { yield return new WaitForSeconds(0.1f); }
 
-                ZoneSystem.instance.GetGroundData(ref determinedSpawn, out var normal, out var foundBiome, out var biomeArea, out var hmap);
-
-                // Prevent spawns that are in the wrong biome if we are targeting a biome
-                if (targetBiome != Heightmap.Biome.None) {
-                    if (hmap == null || foundBiome != targetBiome) {
-                        spawn_location_attempts += 1;
-                        Logger.LogRaid($"Spawn location in the wrong biome, skipping. {foundBiome} | {determinedSpawn}");
-                        continue;
-                    }
-                }
-
-                // Prevent spawns that are inside of objects
-                float terrainHeight = determinedSpawn.y;
-                float solidHeight = 1000f; // This stars high in the sky for the raycast down, gets modified next
-                if (ZoneSystem.instance.FindFloor(new Vector3(determinedSpawn.x, determinedSpawn.y + 100f, determinedSpawn.z), out solidHeight)) {
-                    float terrainDiff = solidHeight - terrainHeight;
-
-                    // Prevent spawns in objects and too high off the ground
-                    if (terrainDiff > 1f) {
-                        Logger.LogRaid($"Spawn location blocked by an existing object skipping. {terrainDiff} | {determinedSpawn}");
-                        spawn_location_attempts += 1;
-                        continue;
-                    }
-
-                    if (terrainDiff > 0f) {
-                        determinedSpawn.y = solidHeight;
-                    }
-                } else {
+                SpawnBlock block = CheckSpawnPoint(ref determinedSpawn, targetBiome);
+                if (block == SpawnBlock.Ground || block == SpawnBlock.PlayerBase || (block == SpawnBlock.WorldBase && builtBasesOnly == false)) {
                     spawn_location_attempts += 1;
                     continue;
                 }
-
-                // Prevent spawns in a players base | This does not work in the ashlands as all of the existing fortresses, POIs etc are considered "player bases"
-                // However ignoring player bases entirely means that the spawn can happen directly inside a players base/walls
-                // foundBiome != Heightmap.Biome.AshLands &&
-                if (allowBaseSpawns == false && (bool)EffectArea.IsPointInsideArea(determinedSpawn, EffectArea.Type.PlayerBase)) {
-                    Logger.LogRaid($"Spawn location in a players base zone, skipping. | {determinedSpawn}");
-                    spawn_location_attempts += 1;
-                    continue;
-                }
-
-                // Prevent water spawns
-                if (determinedSpawn.y < 27) {
-                    Logger.LogRaid($"Spawn location below water level, skipping. | {determinedSpawn}");
-                    spawn_location_attempts += 1;
-                    continue;
-                }
-
-                // Prevent spawning in Lava unless a last resort
-                if (foundBiome == Heightmap.Biome.AshLands && hmap.GetVegetationMask(determinedSpawn) > 0.45f) {
-                    spawn_location_attempts += 1;
-                    Logger.LogRaid($"Spawn location is in lava, skipping. | {determinedSpawn}");
-                    continue;
-                }
-
-                determinedSpawn.y += 1f;
 
                 Logger.LogRaid($"Determined valid spawn target: {determinedSpawn}");
                 spawn_locations.Add(determinedSpawn);
             }
+        }
 
-            if (spawn_locations.Count < numTargets) {
-                Logger.LogWarning($"Unable to find the requested number of spawn points. Found {spawn_locations.Count} spawn locations");
+        // The growing search (RaidSpawnSearchGrowsPastBases) leaves the normal spawn disc after this many failures, the
+        // point where the widening search starts widening.
+        private const int GrowDiscFailures = 150;
+        // Bounds the disc pass where most of the disc is out of reach, since out-of-reach points are not failures.
+        private const int GrowDiscSamples = 600;
+        // A quarter zone per ring, with enough points tried in each that a ring with any room shows it.
+        private const float GrowRingStep = 16f;
+        private const int GrowRingSamples = 30;
+        // Rings stop at the edge of reach long before this; it only guards against a reach check that never ends.
+        private const float GrowMaxRadius = 1000f;
+
+        // Tries the normal spawn disc first, so a raid on an ordinary base looks as it would without the setting. Failing
+        // that, rings further and further out until one has room outside every base, so a base too big for the raid's
+        // EventRange is raided from just past its edge rather than not at all. Only ground in reach is tried (see
+        // InRaidReach), and that ends the growth well before a base enlarged by another mod may. When even the
+        // furthest ground in reach is claimed, the raid still comes, from the best of it: spots only world-generated
+        // pieces claim, else the spots furthest out, inside the player's base.
+        private static IEnumerator GrowingSpawnSearch(Vector3 origin, int numTargets, float discRadius, Heightmap.Biome targetBiome, List<SerializableVector3> spawn_locations) {
+            List<Vector3> worldBaseSpots = new List<Vector3>();
+            List<Vector3> playerBaseSpots = new List<Vector3>();
+            int checks = 0;
+
+            int failures = 0;
+            for (int sample = 0; sample < GrowDiscSamples && failures < GrowDiscFailures && spawn_locations.Count < numTargets; sample++) {
+                Vector2 offset = UnityEngine.Random.insideUnitCircle * discRadius;
+                Vector3 candidate = origin + new Vector3(offset.x, 0f, offset.y);
+                if (InRaidReach(candidate, origin) == false) { continue; }
+                // Sleep to avoid locking the thread
+                if (++checks % 10 == 0) { yield return new WaitForSeconds(0.1f); }
+                if (TakeSpawnPoint(candidate, targetBiome, spawn_locations, worldBaseSpots, playerBaseSpots) == false) { failures++; }
             }
-            onComplete(spawn_locations);
-            yield break;
+
+            // The first ring with any room is used, kept on until it gives enough points or its samples run out, so the
+            // spawns sit as close to the base's edge as the ground allows.
+            for (float inner = discRadius; spawn_locations.Count == 0 && inner < GrowMaxRadius; inner += GrowRingStep) {
+                int inReach = 0;
+                for (int sample = 0; sample < GrowRingSamples && spawn_locations.Count < numTargets; sample++) {
+                    Vector3 candidate = origin + RandomInRing(inner, inner + GrowRingStep);
+                    if (InRaidReach(candidate, origin) == false) { continue; }
+                    inReach++;
+                    if (++checks % 10 == 0) { yield return new WaitForSeconds(0.1f); }
+                    TakeSpawnPoint(candidate, targetBiome, spawn_locations, worldBaseSpots, playerBaseSpots);
+                }
+                if (spawn_locations.Count > 0) {
+                    Logger.LogRaid($"Spawn search grew to {inner + GrowRingStep:0}m to find room outside every base.");
+                } else if (inReach == 0) {
+                    Logger.LogRaid($"Spawn search reached the edge of where creatures move, {inner:0}m out, without finding room outside every base.");
+                    break;
+                }
+            }
+
+            if (spawn_locations.Count > 0) { yield break; }
+            if (worldBaseSpots.Count > 0) {
+                Logger.LogRaid("No room outside every base in reach; spawning where only world-generated pieces claim the ground.");
+                foreach (Vector3 spot in worldBaseSpots.Take(numTargets)) { spawn_locations.Add(spot); }
+            } else if (playerBaseSpots.Count > 0) {
+                Logger.LogRaid("The player's base covers all ground in reach; spawning at the furthest of it.");
+                foreach (Vector3 spot in playerBaseSpots.OrderByDescending(point => Utils.DistanceXZ(point, origin)).Take(numTargets)) { spawn_locations.Add(spot); }
+            }
+        }
+
+        // Judges one candidate for GrowingSpawnSearch. A good spot is taken; one that would do but for a base is set aside
+        // by which kind of base, in case nothing better turns up. Returns whether it was taken.
+        private static bool TakeSpawnPoint(Vector3 candidate, Heightmap.Biome targetBiome, List<SerializableVector3> spawn_locations, List<Vector3> worldBaseSpots, List<Vector3> playerBaseSpots) {
+            switch (CheckSpawnPoint(ref candidate, targetBiome)) {
+                case SpawnBlock.None:
+                    Logger.LogRaid($"Determined valid spawn target: {candidate}");
+                    spawn_locations.Add(candidate);
+                    return true;
+                case SpawnBlock.WorldBase:
+                    worldBaseSpots.Add(candidate);
+                    return false;
+                case SpawnBlock.PlayerBase:
+                    playerBaseSpots.Add(candidate);
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        // A random XZ offset spread evenly over the ring between inner and outer.
+        private static Vector3 RandomInRing(float inner, float outer) {
+            float radius = Mathf.Sqrt(UnityEngine.Random.Range(inner * inner, outer * outer));
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            return new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+        }
+
+        // Kept between a growing search's spawn points and the edge of reach, measured outward from the raid, so the
+        // player moving about their base does not leave a spawn point just past it.
+        private const float ReachMargin = 16f;
+
+        // Whether a creature spawned at point would move. Only the game of the player a creature is handed to runs it,
+        // and the server hands it only to a player whose active area holds it (ZNetScene.InActiveArea): the zones right
+        // around them, roughly 64-128m out, which the simulation distance setting does not widen. One spawned past that
+        // stands frozen where it is. Judged against this machine's player, who owns what the raid spawns.
+        private static bool InRaidReach(Vector3 point, Vector3 origin) {
+            if (ZNet.instance == null) { return false; }
+            Vector3 outward = point - origin;
+            outward.y = 0f;
+            if (outward.sqrMagnitude > 1f) { point += outward.normalized * ReachMargin; }
+            return ZNetScene.InActiveArea(point, ZNet.instance.GetReferencePosition());
+        }
+
+        // What, if anything, rules a point out as a raid spawn. Ground covers the spot itself: wrong biome, nothing to
+        // stand on, inside an object, under water or in lava. WorldBase is a spot only world-generated pieces claim
+        // (Ashlands fortresses carry PlayerBase areas); PlayerBase is one inside a base a player built.
+        private enum SpawnBlock { None, Ground, WorldBase, PlayerBase }
+
+        // Grounds point and judges it, lifting it 1m clear of the ground unless the spot itself is unusable. The base is
+        // asked last, so a spot reports a base only when it would otherwise do.
+        private static SpawnBlock CheckSpawnPoint(ref Vector3 point, Heightmap.Biome targetBiome) {
+            ZoneSystem.instance.GetGroundData(ref point, out var normal, out var foundBiome, out var biomeArea, out var hmap);
+
+            // Prevent spawns that are in the wrong biome if we are targeting a biome
+            if (targetBiome != Heightmap.Biome.None) {
+                if (hmap == null || foundBiome != targetBiome) {
+                    Logger.LogRaid($"Spawn location in the wrong biome, skipping. {foundBiome} | {point}");
+                    return SpawnBlock.Ground;
+                }
+            }
+
+            // Prevent spawns that are inside of objects
+            float terrainHeight = point.y;
+            if (ZoneSystem.instance.FindFloor(new Vector3(point.x, point.y + 100f, point.z), out float solidHeight) == false) {
+                return SpawnBlock.Ground;
+            }
+            float terrainDiff = solidHeight - terrainHeight;
+            // Prevent spawns in objects and too high off the ground
+            if (terrainDiff > 1f) {
+                Logger.LogRaid($"Spawn location blocked by an existing object skipping. {terrainDiff} | {point}");
+                return SpawnBlock.Ground;
+            }
+            if (terrainDiff > 0f) {
+                point.y = solidHeight;
+            }
+
+            // Prevent water spawns
+            if (point.y < 27) {
+                Logger.LogRaid($"Spawn location below water level, skipping. | {point}");
+                return SpawnBlock.Ground;
+            }
+
+            // Prevent spawning in Lava
+            if (foundBiome == Heightmap.Biome.AshLands && hmap.GetVegetationMask(point) > 0.45f) {
+                Logger.LogRaid($"Spawn location is in lava, skipping. | {point}");
+                return SpawnBlock.Ground;
+            }
+
+            SpawnBlock block = BaseAt(point);
+            if (block == SpawnBlock.PlayerBase) {
+                Logger.LogRaid($"Spawn location in a players base zone. | {point}");
+            } else if (block == SpawnBlock.WorldBase) {
+                Logger.LogRaid($"Spawn location in a world-generated base zone. | {point}");
+            }
+            point.y += 1f;
+            return block;
+        }
+
+        private static readonly Collider[] baseAreaHits = new Collider[128];
+        private static int baseAreaMask;
+
+        // Which kind of PlayerBase area point lies in, asked of the live colliders the way EffectArea.IsPointInsideArea
+        // does, so a mod that resizes them at runtime (AzuWorkbenchTweaks' Playerbase size) is honoured. Only areas
+        // loaded on this machine are seen. A piece nobody built -- world generation places some base pieces itself --
+        // is nobody's base, and a player's base wins where both reach.
+        private static SpawnBlock BaseAt(Vector3 point) {
+            if (baseAreaMask == 0) { baseAreaMask = LayerMask.GetMask("character_trigger"); }
+            int hits = Physics.OverlapSphereNonAlloc(point, 0f, baseAreaHits, baseAreaMask);
+            SpawnBlock block = SpawnBlock.None;
+            for (int i = 0; i < hits; i++) {
+                EffectArea area = baseAreaHits[i].GetComponent<EffectArea>();
+                if (area == null || (area.m_type & EffectArea.Type.PlayerBase) == EffectArea.Type.None) { continue; }
+                Piece piece = area.GetComponentInParent<Piece>();
+                if (piece != null && piece.IsPlacedByPlayer()) { return SpawnBlock.PlayerBase; }
+                block = SpawnBlock.WorldBase;
+            }
+            return block;
+        }
+
+        // How far a raid's event area reaches: its EventRange, or further when its creatures spawn further out, so its
+        // map area, messages, music and HUD banner cover where they come from. Keeps a normal raid's proportion, the
+        // furthest spawn sitting SpawnDiscFraction of the way out.
+        internal static float RaidAreaRadius(float eventRange, Vector3 center, List<SerializableVector3> spawnPoints) {
+            float radius = eventRange;
+            if (spawnPoints == null) { return radius; }
+            foreach (SerializableVector3 point in spawnPoints) {
+                radius = Mathf.Max(radius, Utils.DistanceXZ(point, center) / SpawnDiscFraction);
+            }
+            return radius;
         }
 
     }

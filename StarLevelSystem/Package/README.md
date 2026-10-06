@@ -48,7 +48,7 @@ Below are a few examples of what you might see, and what the mod can do.
 
 ## First-time setup
 The first time you reach the main menu, a short setup opens and walks through level scaling, the star range and its spawn chances,
-the distance rings, creature health and damage, modifiers, raids, the Nemesis system and Location Reset. You can save from any page, or click the X to skip it. Either way
+the distance rings, creature health and damage, modifiers, raids, boss night spawns, the Nemesis system and Location Reset. You can save from any page, or click the X to skip it. Either way
 it won't open again, in this or any other mod manager profile: whether you have seen it is kept once per user, in
 `ModQuickConfig/FirstRun.cfg` next to your Valheim saves (`%USERPROFILE%\AppData\LocalLow\IronGate\Valheim` on Windows). Set
 `FirstTimeSetup` to `ShowNextLaunch` in the BepInEx config to see it again, or to `Never` to keep it closed in that profile. The same
@@ -99,7 +99,10 @@ Note: `creaturePerLevelValueModifiers` do not apply to characters. But, `damageR
 Note on sizing: per-level size is applied as `Size + (SizePerLevel * stars)`, so a 0 star creature is
 exactly `Size`. `SizePerLevel` may be negative to make creatures shrink with each star. The final
 multiplier is floored at the `MinimumCreatureScale` config value (default `0.1`), so creatures can never
-reach zero size or turn inside-out no matter how negative the value is.
+reach zero size or turn inside-out no matter how negative the value is. It is also capped at the
+`MaximumCreatureScale` config value (default `5`, set from the quick configure panel's Health & Damage page),
+which holds base size, size per star and modifiers like Big together. A creature entry can set its own cap with
+`MaxSizeScale`, which replaces the global one for that creature.
 
 Biome specific configurations can be used to override the default `All` configuration, in this case max level for Ashlands is being set
 to 26 and the distance modifier is being reduced by 50%
@@ -287,7 +290,7 @@ ConditionalCreatureLevelupChance:
   defeated_bonemass:
     Meadows:
       LevelupGenerators:
-      - { MinLevel: 3, MaxLevel: 16, LevelUpChance: 0.25, LevelupCalculationStyle: Exponential }
+      - { MinLevel: 4, MaxLevel: 16, LevelUpChance: 0.25, LevelupCalculationStyle: Exponential }
 ```
 
 Add keys from modded bosses where they belong in your progression. An entry whose key is not in the list only applies while no
@@ -556,6 +559,12 @@ Raids never stack. Before a raid starts, the server checks for any raid still in
 
 Raids also leave boss fights alone. A player within `RaidBossExclusionRange` (main config, default 100m, the distance the boss health bar shows from) of a living boss is skipped, and considered again on the next raid check. Any creature the game treats as a boss counts, modded bosses and Nemesis minibosses included. `sls-raid-spawn` and the `event` command still start a raid there, with a warning from `sls-raid-spawn`.
 
+#### Where raid creatures come from
+
+A raid's creatures appear at random spots within 80% of its `EventRange`, never in water or lava, and never inside a player's base: the area around a workbench, fire, bed and the like that stops monsters spawning. Mods that enlarge that area, such as AzuWorkbenchTweaks, are respected. When a base leaves no room nearby the raid looks a little further out, and if it still finds none the raid is skipped.
+
+For servers with very large bases, turn on `RaidSpawnSearchGrowsPastBases` (main config, off by default). The search then keeps stepping outward until it finds room just past the base's edge. Creatures only move while they are within roughly 64-128m of a player, so the search stops there; a base that reaches further is raided from the furthest ground still in reach, inside the base. Either way, a raid's map area grows to cover wherever its creatures come from.
+
 Below is an example of many of the details that can be configured for a given raid
 ```
 - Name: foresttrolls              # Each raid has its own name, these should be unique or can be incorrectly selected
@@ -603,6 +612,19 @@ Below is an example of many of the details that can be configured for a given ra
   ForceMusic: Zblackforest                # Music that starts when the raid happens eg: ZCombatEventL1, ZCombatEventL2, ZCombatEventL3, ZCombatEventL4, Zboss_eikthyr, Zboss_gdking, Zboss_bonemass, Zboss_moder, Zboss_goblinking, Zboss_queen, Zboss_queen_ambience, Zboss_fader, 
                                           #   Zblackforest, Zmeadows, Zswamp, Zmountain, Zplains, Zplainstower, Zmistlands, Zashlands,
 ```
+
+### Boss night spawns
+Defeating a boss lets new creatures roam the world at night: Greydwarfs in the Meadows after Eikthyr, Greydwarf brutes,
+shamans and (in fog) Draugr after the Elder, Skeletons after Bonemass, Fulings after Yagluth, and Seekers, Seeker broods and
+Ticks after the Queen. Each boss has its own switch in the `NightSpawns` section of the main config (`EikthyrNightSpawns`,
+`ElderNightSpawns`, `BonemassNightSpawns`, `ModerNightSpawns`, `YagluthNightSpawns`, `QueenNightSpawns`, `FaderNightSpawns`),
+all on by default. Turning one off stops that boss's night spawns from then on; any already out still leave at dawn, and
+the boss's raids and other unlocks are untouched.
+
+A night spawn belongs to a boss when its spawn entry only spawns at night and requires that boss's defeat key, so a mod's
+night spawn gated the same way is covered too. Odin's night visit after the Elder is left alone. The Night Spawns page of
+the quick configure panel (Mod Config button) has a checkbox per boss and, in a loaded world, lists what each one brings.
+These are server settings: the server's values are synced to every client, which is where spawning happens.
 
 ### Modifiers
 Maybe you've tried out CLLC's modifiers, or Monster Modifiers? Both really add variety to the game that is much needed.

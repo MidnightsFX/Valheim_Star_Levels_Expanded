@@ -359,47 +359,66 @@ namespace StarLevelSystem.Data
             },
             EnableConditionalCreatureLevelupChance = false,
             ConditionalBossKeyOrder = new List<string>(VanillaBossKeyOrder),
+            // Each boss moves every biome already beaten up one step. A biome's first step starts at 1 star: one starting at
+            // level 1 has no floor and only swaps out the biome's curve, which the distance rings already carry past it in
+            // the outer biomes, so beating that biome's boss changed nothing there.
             ConditionalCreatureLevelupChance = new Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>>() {
                 { "defeated_fader", new Dictionary<Heightmap.Biome, ConditionalLevelupChance>() {
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 6, MaxLevel = 30, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 8, MaxLevel = 36, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 5, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 7, MaxLevel = 30, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Swamp, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 4, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 6, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Mountain, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 3, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Plains, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 2, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Mistlands, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                            }
+                        }
+                    },
+                    {
+                        Heightmap.Biome.AshLands, new ConditionalLevelupChance() {
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                            }
+                        }
+                    },
+                    // No vanilla boss belongs to the Deep North, so it steps up alongside the Ashlands, as it is ranked
+                    // everywhere else.
+                    {
+                        Heightmap.Biome.DeepNorth, new ConditionalLevelupChance() {
+                            LevelupGenerators = new List<LevelGenerator>() {
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }
@@ -408,42 +427,42 @@ namespace StarLevelSystem.Data
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 6, MaxLevel = 30, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 7, MaxLevel = 30, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 5, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 6, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Swamp, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 4, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Mountain, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 3, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Plains, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 2, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Mistlands, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }
@@ -452,35 +471,35 @@ namespace StarLevelSystem.Data
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 5, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 6, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 4, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Swamp, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 3, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Mountain, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 2, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Plains, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }
@@ -489,28 +508,28 @@ namespace StarLevelSystem.Data
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 4, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 5, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 3, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Swamp, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 2, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Mountain, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }
@@ -519,21 +538,21 @@ namespace StarLevelSystem.Data
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 3, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 4, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 2, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.Swamp, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }
@@ -542,14 +561,14 @@ namespace StarLevelSystem.Data
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 2, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     },
                     {
                         Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }
@@ -558,7 +577,7 @@ namespace StarLevelSystem.Data
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
-                                new LevelGenerator() { MinLevel = 1, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                                new LevelGenerator() { MinLevel = 2, MaxLevel = 8, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
                             }
                         }
                     }

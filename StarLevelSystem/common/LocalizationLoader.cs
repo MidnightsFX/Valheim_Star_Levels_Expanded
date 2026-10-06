@@ -77,19 +77,20 @@ namespace StarLevelSystem.common
             }
         }
 
+        // Checked key by key. Comparing the key counts first skipped every new key whenever the cached file also held as
+        // many keys the shipped file has since dropped, which left the new text showing as its raw $token.
         private static void UpdateLocalizationWithMissingKeys(Dictionary<string, string> internal_localization, Dictionary<string, string> cached_localization)
         {
-            if (internal_localization.Keys.Count != cached_localization.Keys.Count)
+            int added = 0;
+            foreach (KeyValuePair<string, string> entry in internal_localization)
             {
-                Logger.LogDebug("Cached localization was missing some entries. They will be added.");
-                foreach (KeyValuePair<string, string> entry in internal_localization)
+                if (!cached_localization.ContainsKey(entry.Key))
                 {
-                    if (!cached_localization.ContainsKey(entry.Key))
-                    {
-                        cached_localization.Add(entry.Key, entry.Value);
-                    }
+                    cached_localization.Add(entry.Key, entry.Value);
+                    added++;
                 }
             }
+            if (added > 0) { Logger.LogDebug($"Cached localization was missing {added} entries. They were added."); }
         }
 
         // This reads an embedded file resouce name, these are all resouces packed into the DLL

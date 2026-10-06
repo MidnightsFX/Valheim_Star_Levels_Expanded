@@ -33,31 +33,41 @@ namespace StarLevelSystem.modules.UI {
                 ConfigEntry<bool> setting = BossNightSpawns.ToggleFor(bossKey);
                 if (setting == null || staged.nightSpawnsOn.TryGetValue(bossKey, out bool on) == false) { continue; }
                 string key = bossKey;   // capture for the closure
-                rows.Add(WithTip(AddNightSpawnRow(parent, ColWidth, EntryH, BossKeyName(key), DescribeNightSpawns(key), on, v => staged.nightSpawnsOn[key] = v), Tip(setting)));
+                string description = DescribeNightSpawns(key, out bool hasSpawns);
+                rows.Add(WithTip(AddNightSpawnRow(parent, ColWidth, EntryH, BossKeyName(key), description, on, hasSpawns, v => staged.nightSpawnsOn[key] = v), Tip(setting)));
             }
             ConfigUI.LayoutColumn(rows, (PageW - ColWidth) * 0.5f, StartY + RowHeight + RowGap + 40f + 10f);
         }
 
-        // A boss's switch, with the creatures it lets out at night under its name.
-        private static GameObject AddNightSpawnRow(Transform parent, float width, float height, string label, string description, bool value, Action<bool> onChange) {
+        // A boss's switch, with the creatures it lets out at night under its name. A boss with none is greyed out and its
+        // switch locked: there is nothing for it to turn off, and its setting keeps whatever value it had.
+        private static GameObject AddNightSpawnRow(Transform parent, float width, float height, string label, string description, bool value, bool hasSpawns, Action<bool> onChange) {
             const float ToggleSize = 26f;
             const float TextX = ToggleSize + 10f;
             const float LabelH = 24f;
             GameObject row = ConfigUI.NewRow(parent, width, height);
             ConfigUI.AddToggle(row.transform, 0f, 1f, ToggleSize, value, onChange);
-            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX, LabelH, label, 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-            ConfigUI.AddText(row.transform, TextX, LabelH, width - TextX, height - LabelH, description, 13, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX, LabelH, label, 16, TextAnchor.MiddleLeft, hasSpawns ? GUIManager.Instance.ValheimOrange : InactiveColor);
+            ConfigUI.AddText(row.transform, TextX, LabelH, width - TextX, height - LabelH, description, 13, TextAnchor.UpperLeft, hasSpawns ? GUIManager.Instance.ValheimBeige : InactiveColor);
+            if (hasSpawns == false) {
+                // Locks the switch and fades it with the text. Raycasts still land, so the row keeps its tooltip.
+                CanvasGroup group = row.AddComponent<CanvasGroup>();
+                group.interactable = false;
+                group.alpha = 0.6f;
+            }
             return row;
         }
 
         // The creatures a boss's night spawns bring: from this world's spawn lists when one is loaded, and from vanilla's on
         // the main menu, where there are no lists to read. Creatures that share the same biomes are listed together.
-        private static string DescribeNightSpawns(string bossKey) {
+        private static string DescribeNightSpawns(string bossKey, out bool hasSpawns) {
             if (BossNightSpawns.TryGetLiveSpawns(bossKey, out List<SpawnSystem.SpawnData> spawns) == false) {
                 string vanilla = BossNightSpawns.VanillaSpawns.TryGetValue(bossKey, out string known) ? known : "";
-                return vanilla.Length > 0 ? $"In vanilla: {vanilla}." : "None known in vanilla; this also covers any a mod adds.";
+                hasSpawns = vanilla.Length > 0;
+                return hasSpawns ? $"In vanilla: {vanilla}." : "No night spawns in vanilla.";
             }
-            if (spawns.Count == 0) { return "None in this world's spawn lists."; }
+            hasSpawns = spawns.Count > 0;
+            if (hasSpawns == false) { return "No night spawns in this world."; }
 
             Dictionary<string, Heightmap.Biome> biomesByCreature = new Dictionary<string, Heightmap.Biome>();
             foreach (SpawnSystem.SpawnData spawn in spawns) {

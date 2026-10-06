@@ -100,8 +100,9 @@ Note on sizing: per-level size is applied as `Size + (SizePerLevel * stars)`, so
 exactly `Size`. `SizePerLevel` may be negative to make creatures shrink with each star. The final
 multiplier is floored at the `MinimumCreatureScale` config value (default `0.1`), so creatures can never
 reach zero size or turn inside-out no matter how negative the value is. It is also capped at the
-`MaximumCreatureScale` config value (default `5`, set from the quick configure panel's Health & Damage page),
-which holds base size, size per star and modifiers like Big together. A creature entry can set its own cap with
+`MaximumCreatureScale` config value (default `5`), which holds base size, size per star and modifiers like Big
+together. Both it and the global size per star (`PerLevelScaleBonus`) are at the bottom of the quick configure
+panel's Level Distribution page. A creature entry can set its own cap with
 `MaxSizeScale`, which replaces the global one for that creature.
 
 Biome specific configurations can be used to override the default `All` configuration, in this case max level for Ashlands is being set
@@ -623,7 +624,8 @@ the boss's raids and other unlocks are untouched.
 
 A night spawn belongs to a boss when its spawn entry only spawns at night and requires that boss's defeat key, so a mod's
 night spawn gated the same way is covered too. Odin's night visit after the Elder is left alone. The Night Spawns page of
-the quick configure panel (Mod Config button) has a checkbox per boss and, in a loaded world, lists what each one brings.
+the quick configure panel (Mod Config button) has a checkbox per boss and, in a loaded world, lists what each one brings;
+a boss with no night spawns is greyed out (on the main menu that is judged by vanilla's spawns).
 These are server settings: the server's values are synced to every client, which is where spawning happens.
 
 ### Modifiers

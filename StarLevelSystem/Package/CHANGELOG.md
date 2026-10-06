@@ -1,12 +1,12 @@
 
-**1.21.1**
+**1.22.0**
  ---
  ```
 - When creature levels follow boss progress, each boss now clearly raises levels in its own biome and every earlier one, and Fader adds a step of its own that also reaches the Ashlands and Deep North. (Delete or update your LevelSettings.yaml for the new defaults)
 - Servers can now turn off the night spawns each boss unlocks, one boss at a time, from the quick configure panel.
 - Raids no longer spawn inside a player's base when there is no room outside it, such as when another mod has enlarged the base area, and are skipped instead.
 - Servers with very large bases can now have raids look further out for room instead of being skipped, and a raid's map area now grows to cover wherever its creatures come from.
-- Creatures now stop growing at a size limit, which servers can change for every creature from the quick configure panel or for individual creatures.
+- Creatures now stop growing at a size limit, and servers can set that limit and how much creatures grow with each star from the quick configure panel, or give single creatures their own limit.
  ```
 
 **1.21.0**

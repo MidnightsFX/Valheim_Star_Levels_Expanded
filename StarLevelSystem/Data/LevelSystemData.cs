@@ -600,12 +600,19 @@ namespace StarLevelSystem.Data
             DistanceScaleSystem.DelayedMinimapSetup();
             CompositeLazyCache.FlushCache();
             ConditionalScaleSystem.ResetCache();
-            // Coroutine rather than a straight loop: this walks every Character in the scene and is
-            // budgeted per frame. Harmless at startup, where the scene is empty.
-            // Character.GetAllCharacters() is the live registry - Resources.FindObjectsOfTypeAll also
-            // walked every loaded asset (including prefabs) synchronously on each reload.
-            // Only one pass runs at a time: two overlapping passes share the ForceUpdateHealth/Size
-            // flags, and whichever finished first cleared them mid-run for the other.
+            RestartCreatureAttributeUpdate();
+        }
+
+        private static Coroutine runningAttributeUpdate;
+
+        // Re-runs creature setup over every loaded creature, replacing any pass already running.
+        // Coroutine rather than a straight loop: this walks every Character in the scene and is
+        // budgeted per frame. Harmless at startup, where the scene is empty.
+        // Character.GetAllCharacters() is the live registry - Resources.FindObjectsOfTypeAll also
+        // walked every loaded asset (including prefabs) synchronously on each reload.
+        // Only one pass runs at a time: two overlapping passes share the ForceUpdateHealth/Size
+        // flags, and whichever finished first cleared them mid-run for the other.
+        internal static void RestartCreatureAttributeUpdate() {
             var runner = TaskRunner.Run();
             if (runningAttributeUpdate != null) {
                 runner.StopCoroutine(runningAttributeUpdate);
@@ -613,8 +620,6 @@ namespace StarLevelSystem.Data
             }
             runningAttributeUpdate = runner.StartCoroutine(UpdateCreatureAttributes(new List<Character>(Character.GetAllCharacters())));
         }
-
-        private static Coroutine runningAttributeUpdate;
 
         // The level settings as the file wrote them, taken before ApplyLevelupGenerators expands generators into the
         // chance tables of the live copy. Editors save from this: saving the live copy wrote every expansion back over the

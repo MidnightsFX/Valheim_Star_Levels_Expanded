@@ -436,6 +436,20 @@ namespace StarLevelSystem.modules.UI {
             bossRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Boss night multiplier", 0f, 5f, staged.bossGenerator.NightMultiplier, false, v => staged.bossGenerator.NightMultiplier = v),
                 Tip("NightMultiplier", "Multiplies the boss chances at night only. 1 leaves them alone."))));
 
+            // Size, last in the column. Size per star does nothing while growth is off, so its row goes with the toggle.
+            GameObject sizePerStarRow = null;
+            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Creature size"));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelWidth + 120f, "Grow with each star", staged.scaleSizePerStar, on => {
+                staged.scaleSizePerStar = on;
+                sizePerStarRow.SetActive(on);
+            }), Tip(ValConfig.EnableCreatureScalingPerLevel)));
+            sizePerStarRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Size per star", -0.5f, 2f, staged.sizePerStar, false, v => staged.sizePerStar = v),
+                Tip(ValConfig.PerLevelScaleBonus)));
+            sizePerStarRow.SetActive(staged.scaleSizePerStar);
+            // The slider stops at 20x; a larger cap set in the .cfg widens it rather than being clamped on save.
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "Max creature size", 1f, Mathf.Max(20f, staged.maxCreatureScale), staged.maxCreatureScale, false, v => staged.maxCreatureScale = v),
+                Tip(ValConfig.MaximumCreatureScale)));
+
             RefreshTableRows(true);
             ShowStyleRows();
 
@@ -473,6 +487,9 @@ namespace StarLevelSystem.modules.UI {
 
         private static void ResetDistributionPage() {
             staged.ResetDistribution(ShippedDefaults(YamlConfigManager.LevelSettings));
+            staged.scaleSizePerStar = DefaultOf(ValConfig.EnableCreatureScalingPerLevel);
+            staged.sizePerStar = DefaultOf(ValConfig.PerLevelScaleBonus);
+            staged.maxCreatureScale = DefaultOf(ValConfig.MaximumCreatureScale);
         }
 
         // Min and Max both rewrite the generator's range, so whichever curve is picked always tapers across exactly the
@@ -764,9 +781,6 @@ namespace StarLevelSystem.modules.UI {
                 ConfigUI.AddDividerRow(parent, LeftColWidth),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss HP / star", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyHealthMultiplier)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss dmg / star", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyDamageMultiplier)),
-                ConfigUI.AddDividerRow(parent, LeftColWidth),
-                // The slider stops at 20x; a larger cap set in the .cfg widens it rather than being clamped on save.
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max creature size", 1f, Mathf.Max(20f, staged.maxCreatureScale), staged.maxCreatureScale, false, v => staged.maxCreatureScale = v), Tip(ValConfig.MaximumCreatureScale)),
                 ConfigUI.AddSpacerRow(parent, LeftColWidth, 4f),
                 ConfigUI.AddHeaderRow(parent, LeftColWidth, "Multiplayer scaling"),
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain HP with more players", staged.mpHealth, v => { staged.mpHealth = v; UpdateExampleMath(); }), Tip(ValConfig.EnableMultiplayerEnemyHealthScaling)),
@@ -799,8 +813,7 @@ namespace StarLevelSystem.modules.UI {
             staged.creatureDmgPerLevel = DefaultOf(ValConfig.EnemyDamageLevelMultiplier);
             staged.bossHpPerLevel = DefaultOf(ValConfig.BossEnemyHealthMultiplier);
             staged.bossDmgPerLevel = DefaultOf(ValConfig.BossEnemyDamageMultiplier);
-            staged.maxCreatureScale = DefaultOf(ValConfig.MaximumCreatureScale);
-            staged.mpHealth = DefaultOf(ValConfig.EnableMultiplayerEnemyHealthScaling);
+            staged.mpHealth =DefaultOf(ValConfig.EnableMultiplayerEnemyHealthScaling);
             staged.mpHealthMod = DefaultOf(ValConfig.MultiplayerEnemyHealthModifier);
             staged.mpDamage = DefaultOf(ValConfig.EnableMultiplayerEnemyDamageScaling);
             staged.mpDamageMod = DefaultOf(ValConfig.MultiplayerEnemyDamageModifier);

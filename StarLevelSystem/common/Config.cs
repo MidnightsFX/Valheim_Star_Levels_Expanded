@@ -501,6 +501,7 @@ namespace StarLevelSystem.common {
             OverLevelCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up over leveled creatures if you reduce the max level.");
             OverLevelTamesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverLevelTamesGetRerolledOnLoad", false, "Rerolls tamed creatures that have a level is above the maximum defined level. This includes biome specific level settings.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
+            EnableCreatureScalingPerLevel.SettingChanged += SizeModifications.SizeSettingChanged;
 
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
@@ -519,7 +520,7 @@ namespace StarLevelSystem.common {
             MinimumCreatureScale = BindServerConfig("LevelSystem", "MinimumCreatureScale", 0.1f, "The smallest scale multiplier a creature can shrink to. Stops negative size-per-level values from producing zero-sized or inside-out creatures.", true, 0.01f, 1f);
             MinimumCreatureScale.SettingChanged += SizeModifications.StarLevelScaleChanged;
             MaximumCreatureScale = BindServerConfig("LevelSystem", "MaximumCreatureScale", 5f, "The largest scale multiplier a creature can grow to, counting its base size, size per star and size modifiers like Big together. 5 = five times its normal size. A creature's MaxSizeScale in LevelSettings.yaml replaces this for that creature.", false, 1f, 100f);
-            MaximumCreatureScale.SettingChanged += SizeModifications.ScaleLimitChanged;
+            MaximumCreatureScale.SettingChanged += SizeModifications.SizeSettingChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             EnableColorization = BindServerConfig("LevelSystem", "EnableColorization", true, "Enables this mods colorization of creatures based on their star level.");
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x.", false, 0f, 5f);

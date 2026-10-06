@@ -582,6 +582,8 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.EnemyDamageLevelMultiplier.Value = staged.creatureDmgPerLevel;
                 ValConfig.BossEnemyHealthMultiplier.Value = staged.bossHpPerLevel;
                 ValConfig.BossEnemyDamageMultiplier.Value = staged.bossDmgPerLevel;
+                ValConfig.EnableCreatureScalingPerLevel.Value = staged.scaleSizePerStar;
+                ValConfig.PerLevelScaleBonus.Value = staged.sizePerStar;
                 ValConfig.MaximumCreatureScale.Value = staged.maxCreatureScale;
                 ValConfig.MaxLevel.Value = staged.maxStars;
                 ValConfig.MaxBossLevel.Value = staged.maxBossLevel;
@@ -954,8 +956,11 @@ namespace StarLevelSystem.modules.UI {
             public bool enableConditional;
 
             public float creatureHpPerLevel, creatureDmgPerLevel, bossHpPerLevel, bossDmgPerLevel;
-            public float maxCreatureScale;
             public int maxBossLevel;
+
+            // Creature size, at the bottom of the distribution page.
+            public bool scaleSizePerStar;
+            public float sizePerStar, maxCreatureScale;
 
             public bool mpHealth, mpDamage;
             public float mpHealthMod, mpDamageMod;
@@ -1053,6 +1058,8 @@ namespace StarLevelSystem.modules.UI {
                     creatureDmgPerLevel = ValConfig.EnemyDamageLevelMultiplier.Value,
                     bossHpPerLevel = ValConfig.BossEnemyHealthMultiplier.Value,
                     bossDmgPerLevel = ValConfig.BossEnemyDamageMultiplier.Value,
+                    scaleSizePerStar = ValConfig.EnableCreatureScalingPerLevel.Value,
+                    sizePerStar = ValConfig.PerLevelScaleBonus.Value,
                     maxCreatureScale = ValConfig.MaximumCreatureScale.Value,
                     maxStars = ValConfig.MaxLevel.Value,
                     maxBossLevel = ValConfig.MaxBossLevel.Value,
@@ -1341,7 +1348,7 @@ namespace StarLevelSystem.modules.UI {
                     && enableConditional == o.enableConditional
                     && creatureHpPerLevel == o.creatureHpPerLevel && creatureDmgPerLevel == o.creatureDmgPerLevel
                     && bossHpPerLevel == o.bossHpPerLevel && bossDmgPerLevel == o.bossDmgPerLevel
-                    && maxCreatureScale == o.maxCreatureScale
+                    && scaleSizePerStar == o.scaleSizePerStar && sizePerStar == o.sizePerStar && maxCreatureScale == o.maxCreatureScale
                     && maxStars == o.maxStars && maxBossLevel == o.maxBossLevel
                     && mpHealth == o.mpHealth && mpDamage == o.mpDamage
                     && mpHealthMod == o.mpHealthMod && mpDamageMod == o.mpDamageMod && mpRequiredPlayers == o.mpRequiredPlayers

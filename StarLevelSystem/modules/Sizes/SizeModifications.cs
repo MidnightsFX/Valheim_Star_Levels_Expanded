@@ -187,29 +187,17 @@ namespace StarLevelSystem.modules.Sizes {
             ResizeLiveCreatures();
         }
 
-        // The cap holds every creature's size, not just its per-star growth (Big alone can pass it), so it resizes
-        // even with per-level scaling off.
-        internal static void ScaleLimitChanged(object s, EventArgs e) {
+        // Resizes whether or not per-star growth is on: the cap holds every creature's size (Big alone can pass it), and
+        // turning growth off has to shrink grown creatures back.
+        internal static void SizeSettingChanged(object s, EventArgs e) {
             ResizeLiveCreatures();
         }
 
+        // Through LevelSystemData's single pass: one save can change several size settings and the level settings at
+        // once, and overlapping passes clear the shared ForceUpdateSize flag under each other.
         private static void ResizeLiveCreatures() {
             Logger.LogInfo($"Updating size scale: {ValConfig.PerLevelScaleBonus.Value} (minimum {ValConfig.MinimumCreatureScale.Value}, maximum {ValConfig.MaximumCreatureScale.Value})");
-            // Live instances only - a prefab asset has no valid ZNetView.
-            List<Character> liveCharacters = Resources.FindObjectsOfTypeAll<Character>()
-                .Where(chara => chara != null && chara.m_nview != null && chara.m_nview.IsValid())
-                .ToList();
-            ForceUpdateSize = true;
-            TaskRunner.Run().StartCoroutine(ResizeLoadedCreatures(liveCharacters));
-        }
-
-        private static IEnumerator ResizeLoadedCreatures(List<Character> characters) {
-            try {
-                yield return LevelSystemData.UpdateCreatureAttributes(characters);
-            }
-            finally {
-                ForceUpdateSize = false;
-            }
+            LevelSystemData.RestartCreatureAttributeUpdate();
         }
     }
 }

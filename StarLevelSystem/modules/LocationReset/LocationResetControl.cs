@@ -168,6 +168,11 @@ namespace StarLevelSystem.modules.LocationReset {
             sb.AppendLine($"Slow lane (loaded) : {LocationResetManager.SlowLaneZones}");
             sb.AppendLine($"Blocked by players : {LocationResetManager.PlayerBlockedZones}");
             sb.AppendLine($"Blocked by builds  : {LocationResetManager.ProtectionBlockedZones}");
+            // Locations are judged apart from their chunk, so a chunk held back above can still have
+            // its location reset -- and a dungeon whose surface is held still has its interior rebuilt.
+            sb.AppendLine($"Locations held     : {LocationResetManager.LocationsHeldByPlayers} by players, " +
+                $"{LocationResetManager.LocationsHeldByBuilds} by builds");
+            sb.AppendLine($"Interior-only      : {LocationResetManager.InteriorOnlyResets}");
             sb.AppendLine($"Short retries      : {LocationResetManager.RetriedZones} " +
                 $"({LocationResetManager.RetriesExhaustedZones} gave up after {LocationResetState.MaxTransientRetries})");
             sb.AppendLine($"Cumulative ZDO drift: {LocationResetManager.ZdoGrowthTotal} (expected 0)");
@@ -573,14 +578,30 @@ namespace StarLevelSystem.modules.LocationReset {
                         continue;
                     }
 
-                    // Same governing-entry rules as the background sweep: force bypasses timers, never
+                    // The same two gates as the background sweep: force bypasses timers, never
                     // protection, and an admin testing a group's ignores wants force to behave the way
                     // the sweep will. This holds in Safe mode too -- protection is not a timer.
+                    //
+                    // The chunk gate decides the in-place refresh and vegetation; the location is
+                    // judged on its own ground by LocationGate, which with force skips the surface
+                    // player rule (Safe has already waited the players out) but still never rebuilds a
+                    // dungeon around a player inside it.
                     ZoneProtectionScan.ProtectionResult protection =
                         ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
-                    if (protection.Blocked) {
+                    bool zoneOpen = protection.Blocked == false;
+                    if (zoneOpen == false) { report.ZoneHeldReason = ZoneProtectionScan.DescribeBlock(protection); }
+                    LocationGate.Verdict location = LocationGate.Evaluate(zone, cfg, true, 1f);
+
+                    if (zoneOpen == false && location.Scope == LocationGate.Scope.None) {
                         summary.ZonesBlocked++;
-                        report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
+                        report.SkipReason = report.ZoneHeldReason;
+                        report.ZoneHeldReason = null;
+                        if (location.Held) {
+                            report.GroupName = location.GroupName;
+                            report.LocationHeldReason = location.Reason;
+                            report.LocationHeldTransient = location.Transient;
+                            report.RecordLocation(location.Name, ZoneResetReport.LocationOutcome.Held);
+                        }
                         summary.Add(report);
                         Announce(output, report, source);
                         continue;
@@ -595,12 +616,19 @@ namespace StarLevelSystem.modules.LocationReset {
                     // somebody's feet, which the wait above has already settled; splitting this bool
                     // into "bypass timers" and "adopt a loaded zone" would touch seven call sites in
                     // the most delicate code here to express something the gate already handles.
-                    List<int> refreshedTimers = ResetTargets.RefreshZoneInPlace(zone, cfg, true, report);
+                    List<int> refreshedTimers = zoneOpen ? ResetTargets.RefreshZoneInPlace(zone, cfg, true, report) : null;
                     bool ok = false;
-                    yield return ResetTargets.RegenerateZone(zone, cfg, true, report, (r) => { ok = r; });
+                    ResetTargets.ZoneScope scope = new ResetTargets.ZoneScope() { Vegetation = zoneOpen, Location = location };
+                    yield return ResetTargets.RegenerateZone(zone, cfg, true, report, scope, (r) => { ok = r; });
                     if (ok) {
-                        LocationResetState.StampZone(zone);
-                        ZoneProtectionScan.RecordBaseline(zone);
+                        // Only a chunk whose vegetation was allowed to run is stamped and re-censused.
+                        // Re-recording a held chunk's census would write its losses in as the new
+                        // baseline, and stamping it would push its vegetation a cycle back for a reset
+                        // that only touched the location.
+                        if (zoneOpen) {
+                            LocationResetState.StampZone(zone);
+                            ZoneProtectionScan.RecordBaseline(zone);
+                        }
                         summary.ZonesReset++;
                     }
                     // Force reads no timers, but still restarts the ones it refreshed, as Tier 2 and a

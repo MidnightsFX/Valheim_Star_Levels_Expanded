@@ -23,6 +23,9 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     __instance.m_dontHideBossHud = true;
                 }
 
+                // A boss phase spawned by the previous phase's death takes that phase's level before anything rolls one.
+                BossPhases.TakeCarriedLevel(__instance);
+
                 CreatureSetupControl.CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value);
             }
         }

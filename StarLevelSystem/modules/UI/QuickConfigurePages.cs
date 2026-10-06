@@ -77,6 +77,7 @@ namespace StarLevelSystem.modules.UI {
             { "defeated_goblinking", "Yagluth" },
             { "defeated_queen", "The Queen" },
             { "defeated_fader", "Fader" },
+            { "defeated_frozenking_p3", "Kall Fimbulbringer" },
         };
 
         private static readonly Color HarderColor = new Color(0.97f, 0.47f, 0.42f);

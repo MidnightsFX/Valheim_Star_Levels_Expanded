@@ -93,10 +93,10 @@ namespace StarLevelSystem.modules.LocationReset {
             // "protected by Ward 'dverger_guardstone'" reads identically whether the ward is a player's
             // or world generation's, which is exactly how that bug survived.
             internal long BlockingCreator;
-            // Location occupying the blocked chunk, when the scan happened to pass its proxy. The
-            // protection scan runs before any location is resolved (ScanZone is called with a null
-            // entry), so without this a blocked chunk never records WHICH location is being starved --
-            // in one 28h log only 18 of 14,542 blocked zones could be tied to a location at all.
+            // Location occupying the blocked chunk. The chunk scan judges against the chunk's governing
+            // entries rather than one resolved location, so without this a blocked chunk never recorded
+            // WHICH location was being starved -- in one 28h log only 18 of 14,542 blocked zones could
+            // be tied to a location at all.
             internal string BlockingLocationName;
             // No Preserve set here. This scan decides whether the zone may be touched at all, judged
             // against the zone's governing entries (GoverningEntries) or Defaults when it has none.
@@ -324,10 +324,14 @@ namespace StarLevelSystem.modules.LocationReset {
             return entries;
         }
 
-        // Scan a zone and its 8 neighbours for player property. Neighbours are included because a
-        // location's exterior radius routinely crosses a zone boundary, and a base just over the line
-        // is still a base -- Upgrade World's single-sector scan is a documented source of stale
-        // objects and half-cleared locations.
+        // Scan a zone and its 8 neighbours for player property. Neighbours are included because
+        // vegetation and a chunk's content routinely sit near a zone boundary, and a base just over
+        // the line is still a base -- Upgrade World's single-sector scan is a documented source of
+        // stale objects and half-cleared locations.
+        //
+        // This decides the in-place refresh and vegetation tiers only. A location's own reset is
+        // judged by ScanFootprint instead, around the ground that reset actually touches, so a build
+        // elsewhere in the chunk no longer holds a crypt or camp back.
         //
         // entries are the zone's governing entries (see GoverningEntries); pass null or empty to judge
         // purely against Defaults, which is also what the entries themselves fall back to for any
@@ -504,6 +508,110 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (entry.ActionFor(category) == ProtectionAction.Block) { return true; }
             }
             return false;
+        }
+
+        // Scan the ground a location's surface reset would touch, plus LocationBuffer, for player
+        // property that holds it back. Judged by the location's own resolved entry alone: the chunk's
+        // other content -- ore, berries -- has its own gate in ScanZone and no say in this.
+        //
+        // The reach is measured, not assumed. baseRadius covers the location's declared radius and any
+        // terrain it resets, but the clear also takes every object stamped as this location's wherever
+        // it stands, and DungeonGenerator lays CampRadial walls at a radius of its own choosing -- so
+        // the furthest of those widens the disc too. A player build next to a perimeter wall is a build
+        // next to something this reset destroys and re-places.
+        //
+        // Surface only. A dungeon interior shares these sectors, 5000m up, and nothing inside it holds
+        // back the surface: the interior has its own rule (see LocationGate). XZ distances throughout,
+        // built explicitly, for the same reason.
+        //
+        // radius receives the disc that was actually judged, for the skip line.
+        internal static ProtectionResult ScanFootprint(Vector3 center, float baseRadius, LocationResetData.ResolvedResetEntry entry,
+                                                       long ownerKey, out float radius) {
+            ProtectionResult result = new ProtectionResult();
+            radius = baseRadius + LocationResetData.LocationBuffer;
+            if (ZDOMan.instance == null) { return result; }
+            BuildPrefabSets();
+
+            Vector2s home = ZoneSystem.GetZone(center);
+            Vector2 center2 = new Vector2(center.x, center.z);
+
+            // Pass 1: how far this location's own surface content reaches. The clear only ever sweeps
+            // the 3x3 block, so that is all that needs looking at.
+            float reach = baseRadius;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZoneObjects.FindObjects(new Vector2s(home.x + dx, home.y + dy), zdoBuffer);
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (LocationOwnership.IsOwnedBy(zdo, ownerKey) == false) { continue; }
+                        // Where it was placed, not where a creature has wandered to.
+                        Vector3 origin = ResetTargets.OriginOf(zdo);
+                        if (origin.y > SkyThreshold) { continue; }
+                        float d = Vector2.Distance(new Vector2(origin.x, origin.z), center2);
+                        if (d > reach) { reach = d; }
+                    }
+                }
+            }
+            radius = reach + LocationResetData.LocationBuffer;
+
+            // Pass 2: every sector the disc touches. A player base is found by its own reach, so a
+            // piece just outside the disc whose base area covers it still counts -- the same meaning
+            // PlayerBaseEffect has in the chunk scan, just measured against this disc.
+            Vector2s min = ZoneSystem.GetZone(new Vector3(center.x - radius, 0f, center.z - radius));
+            Vector2s max = ZoneSystem.GetZone(new Vector3(center.x + radius, 0f, center.z + radius));
+            for (int x = min.x; x <= max.x; x++) {
+                for (int y = min.y; y <= max.y; y++) {
+                    // No BlockingLocationName: the caller is judging one named location, and every
+                    // line this ends up in already says which.
+                    if (ScanFootprintSector(new Vector2s(x, y), center2, radius, entry, result)) { return result; }
+                }
+            }
+            zdoBuffer.Clear();
+            return result;
+        }
+
+        private static bool ScanFootprintSector(Vector2s sector, Vector2 center, float radius,
+                                                LocationResetData.ResolvedResetEntry entry, ProtectionResult result) {
+            zdoBuffer.Clear();
+            ZoneObjects.FindObjects(sector, zdoBuffer);
+
+            for (int i = 0; i < zdoBuffer.Count; i++) {
+                ZDO zdo = zdoBuffer[i];
+                if (zdo == null || zdo.IsValid() == false) { continue; }
+                Vector3 p = zdo.GetPosition();
+                if (p.y > SkyThreshold) { continue; }
+                float distance = Vector2.Distance(new Vector2(p.x, p.z), center);
+
+                if (distance <= radius && TryClassify(zdo, out ProtectionCategory category)) {
+                    // ProtectedPrefabs blocks unconditionally, as in ScanSector.
+                    bool blocks = LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)
+                        || EntryBlocks(entry, category, zdo.m_prefab);
+                    if (blocks) { return RecordBlock(result, category, zdo); }
+                }
+
+                if (PlayerBaseRadius.TryGetValue(zdo.m_prefab, out float baseReach)
+                        && distance <= baseReach + radius
+                        && zdo.GetLong(ZDOVars.s_creator, 0L) != 0L
+                        && EntryBlocks(entry, ProtectionCategory.PlayerBaseEffect, zdo.m_prefab)) {
+                    return RecordBlock(result, ProtectionCategory.PlayerBaseEffect, zdo);
+                }
+            }
+
+            zdoBuffer.Clear();
+            return false;
+        }
+
+        // ObjectBlocks for one entry, which is all a location's footprint is judged by. A null entry
+        // falls back to Defaults, as ObjectBlocks does for a chunk with nothing configured.
+        private static bool EntryBlocks(LocationResetData.ResolvedResetEntry entry, ProtectionCategory category, int prefabHash) {
+            if (entry == null) {
+                if (LocationResetData.DefaultIgnores(category, prefabHash)) { return false; }
+                return DefaultActionFor(category) == ProtectionAction.Block;
+            }
+            if (entry.Ignores(category, prefabHash)) { return false; }
+            return entry.ActionFor(category) == ProtectionAction.Block;
         }
 
         // "protected by PlayerBuiltPiece 'wood_floor' (built by 8FA31C02) at x=-742 z=2251, holding

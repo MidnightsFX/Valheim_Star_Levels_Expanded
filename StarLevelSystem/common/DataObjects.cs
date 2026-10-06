@@ -125,6 +125,9 @@ namespace StarLevelSystem.common
         // Rebuilt into a live index by SpawnerLinks.ReconnectRoutine at world load.
         public static readonly string SLS_SPAWNER = "SLS_SPAWNER";
         public static readonly string SLS_SPAWNER_POS = "SLS_SPAWNER_POS";
+        // The level a multi-phase boss started its fight at, kept on a phase that is pinned at level 1 so the phase
+        // after it can come back at the same level. See modules/BossPhases.cs.
+        public static readonly string SLS_PHASE_LEVEL = "SLS_PHASE_LVL";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -257,7 +260,18 @@ namespace StarLevelSystem.common
             Zlocation_haldor,
             Zlocation_dvergrtower,
             Zlocation_dvergrexc,
-            Zlocation_ashlands_ruins
+            Zlocation_ashlands_ruins,
+            Zboss_frozenking,
+            Zdeepnorth,
+            ZJotunInvasion
+        }
+
+        // Music members carry a leading 'Z' that vanilla track names do not have (combat, boss_eikthyr, ...).
+        // MusicMan.FindMusic matches the exact name's stable hash, so the 'Z' must come off before a value is handed
+        // to MusicMan or compared with its current track. The members keep their names because RaidSettings.yaml
+        // and the music RPC hold them by name.
+        public static string VanillaMusicName(Music music) {
+            return music.ToString().Substring(1);
         }
 
         public enum Environment {
@@ -1200,9 +1214,14 @@ namespace StarLevelSystem.common
             // a file whose entire header talks about turning it on. Absent means off here -- this one
             // has to fail closed. Read it through LocationResetData.ConfigEnabled.
             public bool? Enabled { get; set; } = false;
-            // Metres from a zone centre within which a player's presence defers the sweep.
+            // Metres from a zone centre within which a player's presence defers the in-place refresh
+            // and vegetation regrowth of that zone. Locations have their own rule, below.
             [DefaultValue(256f)]
             public float PlayerSafeRadius { get; set; } = 256f;
+            // Metres from a location within which a player on the surface holds back the reset of its
+            // surface. A player inside a dungeon holds back only that dungeon's interior.
+            [DefaultValue(120f)]
+            public float LocationPlayerRadius { get; set; } = 120f;
             // First time a zone is seen, record its census and stamp it rather than resetting it.
             // Prevents a world-wide reset the moment the mod is installed.
             [DefaultValue(true)]
@@ -1287,10 +1306,16 @@ namespace StarLevelSystem.common
             [DefaultValue(0f)]
             public float ExtraTerrainRadius { get; set; } = 0f;
             // How far from a chunk's centre a player build has to be before it stops protecting that
-            // chunk, in metres. The scan always reads the chunk and its 8 neighbours, so 96m is the
-            // most it can ever see and anything at or above that means "the whole 3x3 block blocks".
+            // chunk's in-place refresh and vegetation, in metres. The scan always reads the chunk and
+            // its 8 neighbours, so 96m is the most it can ever see and anything at or above that means
+            // "the whole 3x3 block blocks". Locations are judged by LocationBuffer instead.
             [DefaultValue(48f)]
             public float ProtectionRadius { get; set; } = 48f;
+            // Metres beyond everything a location reset touches -- its radius, its reset terrain and
+            // any of its own objects standing further out -- within which a blocking player object
+            // holds back the reset of that location's surface.
+            [DefaultValue(10f)]
+            public float LocationBuffer { get; set; } = 10f;
             public Dictionary<ProtectionCategory, ProtectionRule> Protection { get; set; } = DefaultProtection();
 
             public static Dictionary<ProtectionCategory, ProtectionRule> DefaultProtection() {
@@ -1426,7 +1451,7 @@ namespace StarLevelSystem.common
                 raid.m_endMessage = Localization.instance.Localize(EndMessage);
                 raid.m_forceEnvironment = ForceEnvironment.ToString();
                 raid.m_biome = Heightmap.FindBiome(position);
-                raid.m_forceMusic = ForceMusic.ToString();
+                raid.m_forceMusic = VanillaMusicName(ForceMusic);
                 raid.m_random = true;
                 raid.m_time = 0; // This is used to track event times
                 raid.m_pos = position;

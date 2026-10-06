@@ -30,6 +30,9 @@ namespace StarLevelSystem.Data
             "defeated_goblinking",
             "defeated_queen",
             "defeated_fader",
+            // The Deep North's final boss. Its first phase sets defeated_frozenking partway through the fight; this
+            // key is set when the last phase dies.
+            "defeated_frozenking_p3",
         };
 
         // Assigned in the static constructor, which runs after every field initializer. An initializer here ran before
@@ -363,6 +366,7 @@ namespace StarLevelSystem.Data
             // level 1 has no floor and only swaps out the biome's curve, which the distance rings already carry past it in
             // the outer biomes, so beating that biome's boss changed nothing there.
             ConditionalCreatureLevelupChance = new Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>>() {
+                { "defeated_frozenking_p3", DeepNorthBossTier() },
                 { "defeated_fader", new Dictionary<Heightmap.Biome, ConditionalLevelupChance>() {
                     {
                         Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
@@ -413,8 +417,8 @@ namespace StarLevelSystem.Data
                             }
                         }
                     },
-                    // No vanilla boss belongs to the Deep North, so it steps up alongside the Ashlands, as it is ranked
-                    // everywhere else.
+                    // The Deep North's own boss comes last, so until it falls the Deep North steps up alongside the
+                    // Ashlands, as it is ranked everywhere else.
                     {
                         Heightmap.Biome.DeepNorth, new ConditionalLevelupChance() {
                             LevelupGenerators = new List<LevelGenerator>() {
@@ -584,6 +588,90 @@ namespace StarLevelSystem.Data
                 }}
             }
         };
+
+        // The tier the Deep North's final boss unlocks: every biome one step past the Fader tier, the Deep North with the
+        // Ashlands. A method so the default file and AddDeepNorthBossKey each get their own copy.
+        private static Dictionary<Heightmap.Biome, ConditionalLevelupChance> DeepNorthBossTier() {
+            return new Dictionary<Heightmap.Biome, ConditionalLevelupChance>() {
+                {
+                    Heightmap.Biome.Meadows, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 9, MaxLevel = 42, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.BlackForest, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 8, MaxLevel = 36, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.Swamp, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 7, MaxLevel = 30, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.Mountain, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 6, MaxLevel = 24, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.Plains, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 5, MaxLevel = 20, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.Mistlands, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 4, MaxLevel = 16, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.AshLands, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                },
+                {
+                    Heightmap.Biome.DeepNorth, new ConditionalLevelupChance() {
+                        LevelupGenerators = new List<LevelGenerator>() {
+                            new LevelGenerator() { MinLevel = 3, MaxLevel = 12, LevelUpChance = 0.25f, LevelupCalculationStyle = DataObjects.LevelupCalculationStyle.Exponential }
+                        }
+                    }
+                }
+            };
+        }
+
+        // ConditionalBossKeyOrder as every LevelSettings.yaml written before the Deep North update holds it.
+        private static readonly List<string> PreDeepNorthBossKeyOrder = new List<string>() {
+            "defeated_eikthyr", "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader",
+        };
+
+        // One-shot in-place migration for LevelSettings.yaml. A file still holding the old vanilla boss order gains the
+        // Deep North's final boss key, and that boss's tier when it has none. Appending the key is also what stops this
+        // firing again, and a file whose order was changed by hand is left alone.
+        internal static bool AddDeepNorthBossKey(CreatureLevelSettings settings) {
+            List<string> order = settings?.ConditionalBossKeyOrder;
+            if (order == null || order.Count != PreDeepNorthBossKeyOrder.Count) { return false; }
+            for (int i = 0; i < order.Count; i++) {
+                if (string.Equals(order[i], PreDeepNorthBossKeyOrder[i], StringComparison.OrdinalIgnoreCase) == false) { return false; }
+            }
+            order.Add("defeated_frozenking_p3");
+            if (settings.ConditionalCreatureLevelupChance != null && settings.ConditionalCreatureLevelupChance.ContainsKey("defeated_frozenking_p3") == false) {
+                settings.ConditionalCreatureLevelupChance.Add("defeated_frozenking_p3", DeepNorthBossTier());
+            }
+            return true;
+        }
 
 
         // Everything that has to happen once new level settings exist, whatever produced them -- a hand

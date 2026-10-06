@@ -664,7 +664,12 @@ namespace StarLevelSystem
         /// Full reset state for the named location nearest `center`. Keys include: found, name,
         /// zoneX, zoneZ, positionX/Y/Z, distance, configured, enabled, hardBlocked, source,
         /// groupName, schedule, mode, resetTerrain, resetInterior, hasProxy, lastResetUnix,
-        /// secondsSinceReset, secondsUntilDue, dueNow, rateMultiplier, rateDescription.
+        /// secondsSinceReset, secondsUntilDue, dueNow, rateMultiplier, rateDescription,
+        /// locationScope, locationHeldReason.
+        ///
+        /// locationScope is what a reset would do if the location came due now: "full", "interior"
+        /// (a dungeon whose surface is held back, so only its interior is rebuilt), "held", or "none"
+        /// when it is not a reset target. locationHeldReason says what is holding it back.
         ///
         /// Always check "found" first.
         /// </summary>
@@ -679,7 +684,11 @@ namespace StarLevelSystem
         /// centerZ, biome, generated, loaded, tracked, lastExaminedUnix, secondsSinceExamined,
         /// deferredUntilUnix, retryAtUnix, retryCount, rateMultiplier, rateDescription,
         /// protectionBlocked, protectionReason, locationName, locationLastResetUnix,
-        /// locationSecondsUntilDue.
+        /// locationSecondsUntilDue, locationScope, locationHeldReason.
+        ///
+        /// protectionBlocked is the chunk's own protection, which holds back its ore, pickables and
+        /// vegetation. The chunk's location is judged on its own ground: see locationScope, as in
+        /// GetLocationResetInfo.
         ///
         /// Note that lastExaminedUnix is when the sweep last LOOKED at this chunk, which is not the
         /// same as anything in it having been reset - for that, read locationLastResetUnix or use
@@ -705,10 +714,12 @@ namespace StarLevelSystem
         /// touching anything, and gives up without resetting if they do not. safety 1 (Force) resets
         /// immediately, working on chunks that are loaded around a player - use this when you want a
         /// location restored before somebody walks back into it. Player-built structures block a
-        /// reset in BOTH modes and there is no way to override that.
+        /// reset in BOTH modes and there is no way to override that; for a location, only those
+        /// near the ground it resets count, and a dungeon held back that way still has its interior
+        /// rebuilt (counted in locationsInteriorOnly).
         ///
-        /// Be careful with Force on a dungeon somebody is inside: interiors are rebuilt from scratch
-        /// and a player standing in one will fall.
+        /// A dungeon is never rebuilt around a player inside it, in either mode, nor while one
+        /// holding a tombstone, item or player build is loaded by a nearby player.
         ///
         /// CALLING FROM A CLIENT. The server clamps the radius, refuses a position further away than
         /// its configured limit, and rate-limits how often any one client may ask. Read

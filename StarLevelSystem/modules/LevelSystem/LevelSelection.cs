@@ -31,6 +31,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         // replaces. A creature entry's CreatureMaxLevelOverride beats all of them.
         // asBoss measures a creature against the boss cap before it is one (a Nemesis promotion).
         public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, bool? asBoss = null) {
+            // A pinned boss phase stays at level 1 whatever the config says; see BossPhases.
+            if (BossPhases.IsPinned(character)) { return 1; }
             bool boss = asBoss ?? (character != null && character.IsBoss());
             int max_level = (boss ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value) + 1;
             if (boss == false) {
@@ -50,6 +52,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         // A spawn-managed creature's level belongs to the mod that spawned it (a bounty's level is part of the
         // bounty), so it is never rerolled or clamped - through this same shared gate, so both sites agree.
         public static bool OverLevelRerollEnabled(Character character) {
+            // Always corrected, so one saved with stars before it was pinned comes back at level 1.
+            if (BossPhases.IsPinned(character)) { return true; }
             if (CompositeLazyCache.IsSpawnManaged(character)) { return false; }
             if (character != null && character.m_nview != null && character.IsTamed()) {
                 return ValConfig.OverLevelTamesGetRerolledOnLoad.Value;
@@ -69,12 +73,17 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Logger.LogWarning($"Creature null or nview null, cannot set level.");
                 return 1;
             }
+            int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
+            // A pinned boss phase is always level 1, even with an override. Without one, a non-owner still waits for the
+            // owner's write, as it would for a roll.
+            if (BossPhases.IsPinned(character)) {
+                return allowRoll || clevel > 0 || leveloverride > 0 ? 1 : 0;
+            }
             if (leveloverride > 0) {
                 Logger.LogDebug($"Level override provided, setting level to {leveloverride}");
                 return leveloverride;
             }
 
-            int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             // Already includes the +1 star offset, so this is directly comparable to the stored ZDO level.
             int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings, biome);
             //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > max_level}");
@@ -113,13 +122,16 @@ namespace StarLevelSystem.modules.LevelSystem {
                     distance_level_modifier = creature_settings.DistanceScaleModifier;
                 }
 
-                // Apply Night level scalers
+                // Apply Night level scalers, only while it is night. The All biome's default 1.5 is merged into every
+                // biome, so without the check it raised level odds everywhere, all day.
                 float nightScaleBonus = 1f;
-                if (biome_settings != null && biome_settings.NightSettings != null && biome_settings.NightSettings.NightLevelUpChanceScaler != 1) {
-                    nightScaleBonus = biome_settings.NightSettings.NightLevelUpChanceScaler;
-                }
-                if (creature_settings != null && creature_settings.NightSettings != null && creature_settings.NightSettings.NightLevelUpChanceScaler != 1) {
-                    nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
+                if (EnvMan.IsNight()) {
+                    if (biome_settings != null && biome_settings.NightSettings != null && biome_settings.NightSettings.NightLevelUpChanceScaler != 1) {
+                        nightScaleBonus = biome_settings.NightSettings.NightLevelUpChanceScaler;
+                    }
+                    if (creature_settings != null && creature_settings.NightSettings != null && creature_settings.NightSettings.NightLevelUpChanceScaler != 1) {
+                        nightScaleBonus = creature_settings.NightSettings.NightLevelUpChanceScaler;
+                    }
                 }
                 // The NightMultiplier of the generators that built the chosen table, applied only while it is night.
                 nightScaleBonus *= LevelGeneratorResolver.NightFactor(generatorNightMultiplier);

@@ -128,7 +128,28 @@ namespace StarLevelSystem.modules.LocationReset {
             info["secondsUntilDue"] = configured == false || entry.Enabled == false || last <= 0
                 ? -1d
                 : (dueNow ? 0d : SecondsUntilDue(entry, last, now, rate));
+
+            bool resettable = configured && entry.Enabled && proxy != null
+                && LocationResetData.HardBlockedLocations.Contains(name) == false;
+            AddLocationGate(info, resettable ? zone : (Vector2s?)null, instance, proxy, entry);
             return info;
+        }
+
+        // What the location gate would decide if this location came due right now: "full", "interior"
+        // (a dungeon whose surface is held back), "held", or "none" when it is not a reset target at
+        // all. Asked whatever the timer says, because the question this answers is "why does this
+        // crypt never come back" once the timer has been ruled out. Same call the sweep makes.
+        private static void AddLocationGate(Dictionary<string, object> info, Vector2s? zone, ZoneSystem.LocationInstance instance,
+                                            ZDO proxy, LocationResetData.ResolvedResetEntry entry) {
+            if (zone.HasValue == false) {
+                info["locationScope"] = "none";
+                info["locationHeldReason"] = "";
+                return;
+            }
+            LocationGate.Verdict verdict = LocationGate.EvaluateFor(zone.Value, instance.m_location, proxy.GetPosition(),
+                entry, LocationResetConfigSnapshot.Capture(), false);
+            info["locationScope"] = LocationGate.Describe(verdict);
+            info["locationHeldReason"] = verdict.Reason ?? "";
         }
 
         // How many ZDOs across the location's 3x3 block carry its ownership stamp. The same footprint
@@ -202,6 +223,8 @@ namespace StarLevelSystem.modules.LocationReset {
             string locationName = "";
             long locationLast = NotFound;
             double locationDue = -1d;
+            info["locationScope"] = "none";
+            info["locationHeldReason"] = "";
             if (ZoneSystem.instance != null
                     && ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance)
                     && instance.m_location != null) {
@@ -217,6 +240,9 @@ namespace StarLevelSystem.modules.LocationReset {
                             if (entry.Enabled && locationLast > 0) {
                                 locationDue = entry.IsDue(locationLast, now, rate) ? 0d : SecondsUntilDue(entry, locationLast, now, rate);
                             }
+                            if (entry.Enabled && LocationResetData.HardBlockedLocations.Contains(entry.Name) == false) {
+                                AddLocationGate(info, zone, instance, proxy, entry);
+                            }
                         }
                     }
                 } catch (Exception) {
@@ -229,7 +255,9 @@ namespace StarLevelSystem.modules.LocationReset {
             info["locationSecondsUntilDue"] = locationDue;
 
             // Answers "is a player build holding this chunk back", which is the other half of the
-            // same question. Same call the sweep makes, so it cannot disagree with the sweep.
+            // same question. Same call the sweep makes, so it cannot disagree with the sweep. This is
+            // the chunk gate, which holds back the in-place refresh and vegetation only; whether the
+            // location itself is held is locationScope above.
             ZoneProtectionScan.ProtectionResult protection =
                 ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
             info["protectionBlocked"] = protection.Blocked;

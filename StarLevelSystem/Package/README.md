@@ -287,6 +287,7 @@ ConditionalBossKeyOrder:            # earliest to latest; leave out to use this 
 - defeated_goblinking
 - defeated_queen
 - defeated_fader
+- defeated_frozenking_p3
 ConditionalCreatureLevelupChance:
   defeated_bonemass:
     Meadows:
@@ -295,7 +296,8 @@ ConditionalCreatureLevelupChance:
 ```
 
 Add keys from modded bosses where they belong in your progression. An entry whose key is not in the list only applies while no
-listed boss has been defeated. The tier changes as soon as a boss key is set or removed, for creatures spawned after that.
+listed boss has been defeated. A file that still holds the vanilla list from before the Deep North update gets
+`defeated_frozenking_p3` (set when the Deep North's final boss dies) and its tier added on load; a list you changed is left alone. The tier changes as soon as a boss key is set or removed, for creatures spawned after that.
 
 The active tier replaces the biome's levelup chances and its level range: creatures there roll between the tier generators'
 `MinLevel` and `MaxLevel`, whatever `BiomeMinLevelOverride` / `BiomeMaxLevelOverride` say. An `All` entry inside a tier is the
@@ -526,7 +528,7 @@ may be alive at once (`MaxSpawned`, where 0 stops that creature spawning) and th
 
 Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
 
-`RaidSettings.yaml` carries a `RaidVersion` stamp, like `NemesisVersion`. Do not edit it: when the shipped raids change in a way every install should pick up, the version is bumped and a file at any other version (or with none, as every file from before 1.14.0) is reset to the new defaults on load. The previous file is saved next to it first as `RaidSettings.yaml.v<old version>.<date>.bak`, so raids of your own can be copied back in.
+`RaidSettings.yaml` carries a `RaidVersion` stamp, like `NemesisVersion`. Do not edit it: when the shipped raids change in a way every install should pick up, the version is bumped and a file at any other version (or with none, as every file from before 1.14.0) is reset to the new defaults on load. When the versions since a file's own only added raids, as version 3 added the Deep North's `army_elakingar` and `army_jotuns`, those raids are added instead, sized to the file's raid creature density, and everything else in it is kept. The previous file is saved next to it first as `RaidSettings.yaml.v<old version>.<date>.bak`, so raids of your own can be copied back in.
 
 #### Raid cooldowns and logging out
 
@@ -610,8 +612,8 @@ Below is an example of many of the details that can be configured for a given ra
       7: 1
   StartMessage: $event_foresttrolls_start # Start of the raid message
   EndMessage: $event_foresttrolls_end     # End of the raid message
-  ForceMusic: Zblackforest                # Music that starts when the raid happens eg: ZCombatEventL1, ZCombatEventL2, ZCombatEventL3, ZCombatEventL4, Zboss_eikthyr, Zboss_gdking, Zboss_bonemass, Zboss_moder, Zboss_goblinking, Zboss_queen, Zboss_queen_ambience, Zboss_fader, 
-                                          #   Zblackforest, Zmeadows, Zswamp, Zmountain, Zplains, Zplainstower, Zmistlands, Zashlands,
+  ForceMusic: Zblackforest                # Music that starts when the raid happens eg: ZCombatEventL1, ZCombatEventL2, ZCombatEventL3, ZCombatEventL4, Zboss_eikthyr, Zboss_gdking, Zboss_bonemass, Zboss_moder, Zboss_goblinking, Zboss_queen, Zboss_queen_ambience, Zboss_fader, Zboss_frozenking, ZJotunInvasion,
+                                          #   Zblackforest, Zmeadows, Zswamp, Zmountain, Zplains, Zplainstower, Zmistlands, Zashlands, Zdeepnorth
 ```
 
 ### Boss night spawns
@@ -627,6 +629,16 @@ night spawn gated the same way is covered too. Odin's night visit after the Elde
 the quick configure panel (Mod Config button) has a checkbox per boss and, in a loaded world, lists what each one brings;
 a boss with no night spawns is greyed out (on the main menu that is judged by vanilla's spawns).
 These are server settings: the server's values are synced to every client, which is where spawning happens.
+
+### The Deep North's final boss
+Kall Fimbulbringer is fought in three phases, each a separate creature. The second phase can only be hurt by the explosions
+of the seven boss spirits it calls up, one each as it dies, and those add up to exactly its health. So SLS leaves that part
+of the fight as vanilla made it:
+
+- The second phase (`FrozenKing_p2`) always stays at 0 stars, with no modifiers and its vanilla health, whatever the config says.
+- The spirits (`Aspect_*`) still roll stars and modifiers, but spawn rates and disabled spawns never clone or remove them,
+  they never roll Splitter, and one that kills a player is never turned into a Nemesis.
+- The last phase comes back with the stars the first phase had.
 
 ### Modifiers
 Maybe you've tried out CLLC's modifiers, or Monster Modifiers? Both really add variety to the game that is much needed.
@@ -706,23 +718,28 @@ safe and protection radii, chest refills, the sweep budget, biome rates, and eac
 timer and terrain reset. Group members, schedules, distance limits and protection rules stay in the file.
 
 How it works:
-- **Resets happen in the background, only in zones with no players nearby.** Nobody ever watches a
-  location pop out and back in, which is what causes the lag spikes and item duplication other
-  reset mods warn about. A chunk somebody happened to be standing in is re-tried a couple of times
-  a few minutes later rather than losing its whole cycle.
+- **Resets happen in the background, away from players.** Ore, pickables and vegetation wait until
+  nobody is within `PlayerSafeRadius` (256m) of their chunk; a location's surface waits until nobody
+  is within `LocationPlayerRadius` (120m) of it. A chunk somebody happened to be standing in is
+  re-tried a couple of times a few minutes later rather than losing its whole cycle.
 - **Locations are restored, not re-rolled.** The original position and rotation are kept, so
   buildings never rotate, shift or clip into the terrain after a reset.
 - **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
   replayed using the world's own generation seed. Replaying it re-places every node in the chunk, so
   the ones still standing are matched by position and discarded rather than stacked on top of the
   survivor — `sls-loc-audit` will tell you if any ever slip through.
-- **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels.
+- **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels. Only a player
+  inside a dungeon holds its interior back. If players have built around the entrance, the interior
+  is still rebuilt and the entrance is left exactly as it is; tombstones, dropped items and player
+  builds inside are kept where they lie.
 - **Terrain can be reset** around ore to undo mining craters. Locations also support
   `Mode: TerrainOnly`, which flattens the ground around one without touching the structure itself.
 - **Your stuff is safe.** Player-built structures, tombstones, wards, portals, beds, player-placed
-  chests, tamed creatures and any chunk inside a player's base all block a reset. Protection is
-  configurable per entry, so you can decide (for example) that a stray dropped item is preserved
-  rather than blocking the whole zone.
+  chests, tamed creatures and player bases all block a reset. For ore and vegetation that means
+  anything in or near their chunk; for a location, only what stands within `LocationBuffer` (10m)
+  of the ground it resets, so a build elsewhere in the same chunk no longer holds it back.
+  Protection is configurable per entry, so you can decide (for example) that a stray dropped item
+  is preserved rather than blocking the reset.
 - `StartTemple` can never be reset. Boss altars are covered by the `BossAltars` group, which ships
   enabled with terrain reset on to undo the crater players dig around a summoning circle — set
   `Enabled: false` on that group to leave them alone.
@@ -846,8 +863,9 @@ chunk matching no band is left at `1.0`, so a partial band list never disables t
 world. Distance is measured from the same point as the distance level-scaling rings; see
 `DistanceBonusIsFromStarterTemple`.
 
-**Ignoring trivial player clutter.** One abandoned campfire otherwise freezes a chunk forever: any
-player-built piece blocks a reset, and the protection scan covers a chunk *and its 8 neighbours*.
+**Ignoring trivial player clutter.** One abandoned campfire otherwise freezes a chunk's ore and
+vegetation forever: any player-built piece blocks them, and their protection scan covers a chunk
+*and its 8 neighbours*.
 Worse, a campfire sitting on an ore spawn stops that node coming back even when the chunk does
 reset, because vanilla will not place vegetation into a collider. Each protection category can list
 prefabs exempt from it:
@@ -865,9 +883,9 @@ Protection:
 > anything in `ProtectedPrefabs` wins over an ignore. Every deletion is recorded in the chunk log.
 
 **Player bases.** A chunk is also left alone while any part of it lies inside a player's base — the
-area around a workbench and similar pieces that stops monsters spawning in vanilla. This is the
-`PlayerBaseEffect` category, and it reaches exactly as far as that area does rather than
-`ProtectionRadius`. A prefab ignored under `PlayerBuiltPiece` does not count as a base either, so the
+area around a workbench and similar pieces that stops monsters spawning in vanilla — and so is a
+location's surface while that area reaches its ground. This is the `PlayerBaseEffect` category,
+and it reaches exactly as far as that area does rather than `ProtectionRadius`. A prefab ignored under `PlayerBuiltPiece` does not count as a base either, so the
 shipped `fire_pit` ignore covers both. A reset group can relax it like any other category:
 
 ```yaml
@@ -881,8 +899,8 @@ ResetGroups:
 **Resetting terrain around a location.** Players dig approach ramps and moats just *outside* a
 dungeon's footprint, where the normal terrain reset does not reach. `ExtraTerrainRadius` on a
 location entry adds metres beyond the location's own radius, clamped to `ProtectionRadius` minus
-32m — 16m at the default, 64m at most — which is as far as the protection scan actually checks for
-player property:
+32m — 16m at the default, 64m at most. The extra ground is checked for player property like the
+rest of the location, plus `LocationBuffer`:
 
 ```yaml
 Locations:
@@ -900,6 +918,7 @@ was not reset inside it, including the reason anything was skipped:
 Zone -12,34 @ x=-768 z=2176 (BlackForest) reset: refreshed pickables 14, minerock 3 | location 'Crypt2' rebuilt (cleared 214, spawned 218) | ZDO 402->405
 Zone -12,35 @ x=-768 z=2240 (Meadows) skipped: protected by PlayerBuiltPiece 'wood_floor' at x=-742 z=2251
 Zone -12,36 @ x=-768 z=2304 (Meadows) nothing reset: location 'FireHole' not due, 3 vegetation entries not due
+Zone -9,40 @ x=-576 z=2560 (BlackForest) reset: location 'Crypt3' interior rebuilt, surface left as it was (protected by Portal 'portal_wood' (built by 8FA31C02) at x=-561 z=2577, within 30m) (cleared 188, spawned 190, 12 surface copies dropped)
 ```
 
 Turn this off with `EnableLocationResetLog`. `EnableDebugLocationResetDetails` additionally copies

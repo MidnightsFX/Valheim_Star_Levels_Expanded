@@ -35,8 +35,11 @@ namespace StarLevelSystem.modules.Health {
             // unconditionally is also what keeps a zero HealthPerLevel meaning "no bonus per star" rather
             // than "no health" - the old shortcut branch multiplied base health by the per-level value and
             // handed a creature configured at 0 per star a max health of 0.
-            float basehp = chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
-            float perlvlhp = (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
+            // A pinned boss phase keeps exactly its vanilla health: the fight deals it a fixed amount of damage. It is
+            // also corrected from any other value, so one saved with stars before it was pinned comes back right.
+            bool pinned = BossPhases.IsPinned(chara);
+            float basehp = pinned ? chealth : chealth * cDetails.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseHealth];
+            float perlvlhp = pinned ? 0f : (chealth * cDetails.CreaturePerLevelValueModifiers[CreaturePerLevelAttribute.HealthPerLevel]) * (chara.GetLevel() - 1);
             float targetCreatureHealth = basehp + perlvlhp;
             //Logger.LogDebug($"Setting max HP to: {targetCreatureHealth} = {basehp} + {perlvlhp} | base: {chara.m_health} * difficulty = {chealth}");
 
@@ -44,7 +47,7 @@ namespace StarLevelSystem.modules.Health {
                 float vanillaMaxHealth = maxHealthBase * (float)chara.GetLevel();
 
                 // Set creature health only if it is the current vanilla health and not the default for SLS | or if the override is set
-                if (ForceUpdateHealth || ValConfig.OverrideCreatureModifiedHealth.Value || currentMaxHealth == maxHealthBase) {
+                if (ForceUpdateHealth || pinned || ValConfig.OverrideCreatureModifiedHealth.Value || currentMaxHealth == maxHealthBase) {
                     // Bool check, instead of computing the localization string every time.
                     if (ValConfig.EnableDebugMode.Value) {
                         Logger.LogDebug($"Creature {Localization.instance.Localize(cDetails.CreatureNameLocalizable)} HP does not match target: current:{currentMaxHealth} (base {maxHealthBase}) != {targetCreatureHealth} | vanilla {vanillaMaxHealth} | Set to {targetCreatureHealth}");

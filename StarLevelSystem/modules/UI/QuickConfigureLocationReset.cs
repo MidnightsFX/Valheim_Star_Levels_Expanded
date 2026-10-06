@@ -67,10 +67,12 @@ namespace StarLevelSystem.modules.UI {
 
             internal bool stampOnFirstSight;
             internal float playerSafeRadius;
+            internal float locationPlayerRadius;
             internal float defaultResetHours;
             internal bool defaultResetTerrain;
             internal float defaultExtraTerrainRadius;   // read-only here, for the descriptions
             internal float protectionRadius;
+            internal float locationBuffer;
             internal bool containerDefaultLoot;
             internal Dictionary<Heightmap.Biome, float> biomeRates;
             internal Dictionary<string, StagedResetGroup> groups;
@@ -86,10 +88,12 @@ namespace StarLevelSystem.modules.UI {
                     sweepBudgetMs = ValConfig.LocationResetSweepBudgetMs.Value,
                     stampOnFirstSight = cfg?.StampOnFirstSight ?? true,
                     playerSafeRadius = cfg?.PlayerSafeRadius ?? 256f,
+                    locationPlayerRadius = cfg?.LocationPlayerRadius ?? 120f,
                     defaultResetHours = defaults.ResetHours,
                     defaultResetTerrain = defaults.ResetTerrain,
                     defaultExtraTerrainRadius = defaults.ExtraTerrainRadius,
                     protectionRadius = defaults.ProtectionRadius,
+                    locationBuffer = defaults.LocationBuffer,
                     containerDefaultLoot = LocationResetData.InPlaceRefresh.ContainerDefaultLoot,
                     biomeRates = cfg?.BiomeRates != null ? new Dictionary<Heightmap.Biome, float>(cfg.BiomeRates) : new Dictionary<Heightmap.Biome, float>(),
                     groups = new Dictionary<string, StagedResetGroup>(),
@@ -119,10 +123,12 @@ namespace StarLevelSystem.modules.UI {
                 yamlEnabled = shipped.Enabled.GetValueOrDefault(false);
                 stampOnFirstSight = shipped.StampOnFirstSight;
                 playerSafeRadius = shipped.PlayerSafeRadius;
+                locationPlayerRadius = shipped.LocationPlayerRadius;
                 LocationResetDefaults defaults = shipped.Defaults ?? new LocationResetDefaults();
                 defaultResetHours = defaults.ResetHours;
                 defaultResetTerrain = defaults.ResetTerrain;
                 protectionRadius = defaults.ProtectionRadius;
+                locationBuffer = defaults.LocationBuffer;
                 containerDefaultLoot = (shipped.InPlaceRefresh ?? new LocationResetInPlace()).ContainerDefaultLoot;
                 biomeRates = shipped.BiomeRates != null ? new Dictionary<Heightmap.Biome, float>(shipped.BiomeRates) : new Dictionary<Heightmap.Biome, float>();
                 if (shipped.ResetGroups == null) { return; }
@@ -146,8 +152,10 @@ namespace StarLevelSystem.modules.UI {
             // Everything that lives in the YAML file.
             internal bool YamlMatches(StagedLocationReset o) {
                 if (yamlEnabled != o.yamlEnabled || stampOnFirstSight != o.stampOnFirstSight || playerSafeRadius != o.playerSafeRadius
+                    || locationPlayerRadius != o.locationPlayerRadius
                     || defaultResetHours != o.defaultResetHours || defaultResetTerrain != o.defaultResetTerrain
-                    || protectionRadius != o.protectionRadius || containerDefaultLoot != o.containerDefaultLoot) {
+                    || protectionRadius != o.protectionRadius || locationBuffer != o.locationBuffer
+                    || containerDefaultLoot != o.containerDefaultLoot) {
                     return false;
                 }
                 if (ResetRateBiomes.Any(b => RateFor(b) != o.RateFor(b))) { return false; }
@@ -175,7 +183,7 @@ namespace StarLevelSystem.modules.UI {
             float rightW = PageW - RightX;
             StagedLocationReset lr = staged.locationReset;
 
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, IntroH, "$sls_cfg_locreset_intro", 13, GUIManager.Instance.ValheimBeige);
+            GameObject intro = ConfigUI.AddTextRow(parent, PageW, IntroH, "$sls_cfg_locreset_about", 13, GUIManager.Instance.ValheimBeige);
             ConfigUI.PositionRow(intro, 0f, 0f);
             locationResetWarningText = ConfigUI.AddText(parent, 0f, IntroH, PageW, 20f, "", 13, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimOrange);
             float scrollY = IntroH + 24f;
@@ -200,14 +208,19 @@ namespace StarLevelSystem.modules.UI {
                 RefreshLocationResetViews();
             }), Tip("Defaults.ResetTerrain", "Restores the ground as well as the objects, which is what undoes mining craters and dug-out approaches.")));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Player safe radius (m)",
-                0f, Mathf.Max(1024f, lr.playerSafeRadius), lr.playerSafeRadius, true, v => lr.playerSafeRadius = v), Tip("PlayerSafeRadius", "A zone with a player within this distance is left alone and tried again later, so nothing is ever reset in front of someone.")));
+                0f, Mathf.Max(1024f, lr.playerSafeRadius), lr.playerSafeRadius, true, v => lr.playerSafeRadius = v), Tip("PlayerSafeRadius", "Ore, pickables and vegetation in a zone with a player within this distance are left alone and tried again later.")));
             // The protection scan reaches a chunk and its 8 neighbours, so LocationResetData clamps this to 32-96m.
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Protection radius (m)",
-                LocationResetData.MinProtectionRadius, LocationResetData.MaxProtectionRadius, lr.protectionRadius, true, v => lr.protectionRadius = v), Tip("Defaults.ProtectionRadius", "How far from a chunk's centre a player build blocks its reset. The scan covers the chunk and its neighbours, so this is limited to 32-96m.")));
+                LocationResetData.MinProtectionRadius, LocationResetData.MaxProtectionRadius, lr.protectionRadius, true, v => lr.protectionRadius = v), Tip("Defaults.ProtectionRadius", "How far from a chunk's centre a player build holds back its ore, pickables and vegetation. The scan covers the chunk and its neighbours, so this is limited to 32-96m.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Location player radius (m)",
+                0f, Mathf.Max(512f, lr.locationPlayerRadius), lr.locationPlayerRadius, true, v => lr.locationPlayerRadius = v), Tip("LocationPlayerRadius", "A location's surface is left alone while a player on the surface is within this distance of it. Only a player inside a dungeon holds back its interior.")));
+            // LocationResetData clamps this to 0-64m.
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Location buffer (m)",
+                0f, LocationResetData.MaxLocationBuffer, lr.locationBuffer, true, v => lr.locationBuffer = v), Tip("Defaults.LocationBuffer", "How far beyond the ground a location reset touches a player build still holds it back. A dungeon held back this way still has its interior rebuilt.")));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "Refill unowned chests", lr.containerDefaultLoot, on => lr.containerDefaultLoot = on), Tip("InPlaceRefresh.ContainerDefaultLoot", "Re-rolls the loot in chests nobody has built or placed. Off by default: it is the one refresh that grants new items.")));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Sweep budget (ms/frame)",
                 0f, 33f, lr.sweepBudgetMs, false, v => lr.sweepBudgetMs = v), Tip(ValConfig.LocationResetSweepBudgetMs)));
-            ScrollRow(left, lw, 84f, t => ConfigUI.AddTextRow(t, lw, 84f, "$sls_cfg_locreset_settings_help", 12, GUIManager.Instance.ValheimBeige));
+            ScrollRow(left, lw, 84f, t => ConfigUI.AddTextRow(t, lw, 84f, "$sls_cfg_locreset_settings_notes", 12, GUIManager.Instance.ValheimBeige));
 
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Biome rates"));
             ScrollRow(left, lw, 50f, t => ConfigUI.AddTextRow(t, lw, 50f, "$sls_cfg_locreset_biome_help", 12, GUIManager.Instance.ValheimBeige));
@@ -369,11 +382,13 @@ namespace StarLevelSystem.modules.UI {
             if (s.yamlEnabled != b.yamlEnabled) { copy.Enabled = s.yamlEnabled; }
             if (s.stampOnFirstSight != b.stampOnFirstSight) { copy.StampOnFirstSight = s.stampOnFirstSight; }
             if (s.playerSafeRadius != b.playerSafeRadius) { copy.PlayerSafeRadius = s.playerSafeRadius; }
+            if (s.locationPlayerRadius != b.locationPlayerRadius) { copy.LocationPlayerRadius = s.locationPlayerRadius; }
 
             if (copy.Defaults == null) { copy.Defaults = new LocationResetDefaults(); }
             if (s.defaultResetHours != b.defaultResetHours) { copy.Defaults.ResetHours = s.defaultResetHours; }
             if (s.defaultResetTerrain != b.defaultResetTerrain) { copy.Defaults.ResetTerrain = s.defaultResetTerrain; }
             if (s.protectionRadius != b.protectionRadius) { copy.Defaults.ProtectionRadius = s.protectionRadius; }
+            if (s.locationBuffer != b.locationBuffer) { copy.Defaults.LocationBuffer = s.locationBuffer; }
 
             if (s.containerDefaultLoot != b.containerDefaultLoot) {
                 if (copy.InPlaceRefresh == null) { copy.InPlaceRefresh = new LocationResetInPlace(); }

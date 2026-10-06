@@ -196,13 +196,18 @@ than queued.
 | `0` — Safe (default) | Waits for players to leave the affected chunks, then resets. Gives up after `safeWaitSeconds` (default 300) and touches nothing, reporting `outcome: "deferred"`. |
 | `1` — Force | Resets immediately, working on chunks already loaded around a player. |
 
-Player-built structures block a reset in **both** modes, and there is no way to override that.
+Player-built structures block a reset in **both** modes, and there is no way to override that. For
+ore and vegetation they block their whole chunk; for a location, only structures within
+`LocationBuffer` of the ground it resets count. A dungeon whose entrance is held back by one still has
+its interior rebuilt, and is reported in `locationsInteriorOnly`.
 
 Force is the mode to use when you want a location restored just before somebody walks back into it —
 Valheim keeps the chunks around every player loaded, so Safe would simply never fire there.
 
-> **Be careful with Force on a dungeon somebody is inside.** Interiors are rebuilt from scratch, and
-> they sit 5000m above the surface — a player standing in one when it is reset will fall.
+A dungeon is never rebuilt around a player inside it, in either mode: its interior is left alone and
+the zone's `zones` entry carries the reason in `locationHeldReason`. The same happens while a dungeon
+holding a tombstone, dropped item or player build is loaded by a nearby player, so nothing kept inside
+falls out while the rooms are rebuilt.
 
 ### Limits on requests from a client
 
@@ -241,6 +246,13 @@ StarLevelSystem.API.GetChunkResetInfo(position, false, chunk => { });
 
 `GetChunkResetInfo` reports on a map chunk: `tracked`, `lastExaminedUnix`, `deferredUntilUnix`,
 `protectionBlocked` / `protectionReason`, and the chunk's location and its timestamp.
+`protectionBlocked` is the chunk's own protection, which holds back its ore, pickables and vegetation;
+a location in the chunk is judged separately.
+
+Both also report `locationScope` and `locationHeldReason`: what a reset of the location would do if
+it came due right now. `locationScope` is `full`, `interior` (a dungeon whose surface is held back, so
+only its interior would be rebuilt), `held` (nothing would be touched), or `none` (not a reset target).
+`locationHeldReason` says what is holding it, and is empty when nothing is.
 
 > **`lastExaminedUnix` is when the sweep last *looked* at the chunk, not when anything in it was
 > reset.** Most chunks in a world carry a recent examination stamp and have never had a thing reset
@@ -259,9 +271,10 @@ StarLevelSystem.API.GetChunkResetInfo(position, false, chunk => { });
 | `refusalCode` | string | Empty unless `outcome` is `refused`; see the table below |
 | `reason` | string | Empty on success, otherwise why it stopped, in prose |
 | `target` | string | The location name, empty for a radius reset |
-| `zonesConsidered` / `zonesReset` / `zonesBlocked` | int | Chunks looked at, reset, and refused by the protection scan |
+| `zonesConsidered` / `zonesReset` / `zonesBlocked` | int | Chunks looked at, reset, and refused outright — protection held back both the chunk and its location |
 | `zonesUngenerated` / `zonesAdopted` | int | Never-generated chunks, and chunks worked on while loaded |
 | `locationsRebuilt` / `locationsTerrainOnly` / `locationsSkipped` | int | |
+| `locationsInteriorOnly` | int | Of `locationsRebuilt`, dungeons whose interior alone was rebuilt because their surface was held back |
 | `locationNames` | `List<string>` | What was actually rebuilt |
 | `objectsCleared` / `objectsSpawned` / `vegetationObjects` | int | |
 | `pickablesRefreshed` / `mineRocksRefreshed` / `containersRefreshed` | int | |

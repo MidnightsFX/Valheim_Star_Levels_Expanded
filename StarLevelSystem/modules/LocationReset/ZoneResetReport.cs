@@ -43,6 +43,13 @@ namespace StarLevelSystem.modules.LocationReset {
             // refused rather than fall back to destroying every tree in the radius. Transient by
             // definition -- the next pass after ZoneSystem.Start finds it ready.
             CatalogNotReady,
+            // A dungeon whose interior was rebuilt while its surface was left exactly as it was,
+            // because something around the entrance held the surface back. LocationHeldReason says what.
+            InteriorRebuilt,
+            // Due, but held back by a player or by blocking player property in or around it, so
+            // nothing was touched. LocationHeldReason says what, LocationHeldTransient whether it is
+            // worth a short retry.
+            Held,
         }
 
         internal Vector2s Zone;
@@ -122,6 +129,20 @@ namespace StarLevelSystem.modules.LocationReset {
         // Objects destroyed by the clear, or terrain modifications undone in TerrainOnly mode.
         internal int LocationCleared;
         internal int LocationSpawned;
+        // Why the location (or, for InteriorRebuilt, its surface) was held back, and whether that is a
+        // player who will move on -- the sweep retries those within minutes instead of a full cycle.
+        internal string LocationHeldReason;
+        internal bool LocationHeldTransient;
+        // Interior-only rebuilds: copies of the surface that the rebuild laid down and that were
+        // destroyed again straight away, because the surface they belong to was left standing.
+        internal int SurfaceDiscarded;
+        // Why the in-place refresh and vegetation tiers were held back in this chunk while its
+        // location was still worked on. Kept apart from SkipReason, which reads as "incomplete" next
+        // to work that did happen.
+        internal string ZoneHeldReason;
+        // When the chunk will be looked at again, for a chunk that was deferred rather than stamped:
+        // "retry 1/2 in 5 min". Appended to whichever line the record ends up as.
+        internal string Deferral;
         // Keyed entrances (Sunken Crypt gate, Queen's citadel door) forced back to state 0 after the
         // rebuild. A faithful clear+respawn leaves a fresh, already-sealed door, so anything above 0
         // means a stale one outlived the clear -- which is exactly what this counter is for.
@@ -164,6 +185,7 @@ namespace StarLevelSystem.modules.LocationReset {
                     || VegetationObjects > 0 || IgnoredPiecesCleared > 0 || TerrainModificationsUndone > 0
                     || DoorsSealed > 0
                     || LocationResult == LocationOutcome.Rebuilt
+                    || LocationResult == LocationOutcome.InteriorRebuilt
                     || LocationResult == LocationOutcome.TerrainOnly;
             }
         }
@@ -206,24 +228,29 @@ namespace StarLevelSystem.modules.LocationReset {
                     parts.Add($"interior {ZdoInteriorBefore}->{ZdoInteriorAfter}");
                 }
                 if (ZoneAdopted) { parts.Add("adopted while loaded"); }
+                if (string.IsNullOrEmpty(ZoneHeldReason) == false) { parts.Add($"refresh and vegetation held: {ZoneHeldReason}"); }
                 if (string.IsNullOrEmpty(SkipReason) == false) { parts.Add($"incomplete: {SkipReason}"); }
                 parts.RemoveAll(string.IsNullOrEmpty);
-                return $"{Where()} reset: {string.Join(" | ", parts)}";
+                return $"{Where()} reset: {string.Join(" | ", parts)}{DescribeDeferral()}";
             }
 
             if (string.IsNullOrEmpty(SkipReason) == false) {
-                return $"{Where()} skipped: {SkipReason}";
+                // A held location is worth naming even on a skip line: "this chunk is protected" and
+                // "this chunk is protected, and its crypt is waiting on a player inside" are different.
+                string held = LocationResult == LocationOutcome.Held ? $" | {DescribeLocation()}" : "";
+                return $"{Where()} skipped: {SkipReason}{held}{DescribeDeferral()}";
             }
 
             // Nothing came back. Say why, so an admin can tell "protected" from "not due yet" from
             // "nothing here is configured".
             string locationNote = DescribeLocation();
             if (string.IsNullOrEmpty(locationNote) == false) { parts.Add(locationNote); }
+            if (string.IsNullOrEmpty(ZoneHeldReason) == false) { parts.Add($"refresh and vegetation held: {ZoneHeldReason}"); }
             if (VegetationEntriesSkipped > 0) { parts.Add($"{VegetationEntriesSkipped} vegetation entries not due"); }
             int notDue = PickablesNotDue + MineRocksNotDue + ContainersNotDue;
             if (notDue > 0) { parts.Add($"{notDue} in-place targets not due"); }
             if (parts.Count == 0) { parts.Add("no configured targets in this chunk"); }
-            return $"{Where()} nothing reset: {string.Join(", ", parts)}";
+            return $"{Where()} nothing reset: {string.Join(", ", parts)}{DescribeDeferral()}";
         }
 
         private string DescribeLocation() {
@@ -232,18 +259,13 @@ namespace StarLevelSystem.modules.LocationReset {
             if (string.IsNullOrEmpty(GroupName) == false) { name = $"{name}' via group '{GroupName}"; }
             switch (LocationResult) {
                 case LocationOutcome.Rebuilt:
-                    string strays = SpawnersRemoved > 0 ? $", +{SpawnersRemoved} stray spawners" : "";
-                    string resealed = DoorsSealed > 0 ? $", resealed {DoorsSealed}" : "";
-                    // Split out rather than folded into the cleared count, because they answer the two
-                    // questions an admin actually has about this change: did it stop eating the
-                    // surroundings, and is it still collecting the location's own content.
-                    string owned = OwnedCleared > 0 ? $" of which {OwnedCleared} stamped" : "";
-                    string linked = LinkedCreaturesRemoved > 0 ? $", +{LinkedCreaturesRemoved} linked creatures" : "";
-                    string spared = VegetationPreserved > 0 ? $", preserved {VegetationPreserved} vegetation" : "";
-                    string foreign = ForeignOwnedSkipped > 0 ? $", skipped {ForeignOwnedSkipped} owned elsewhere" : "";
-                    string dupes = SparedDuplicatesRemoved > 0 ? $", {SparedDuplicatesRemoved} spared duplicates dropped" : "";
-                    return $"location '{name}' rebuilt (cleared {LocationCleared}{owned}{strays}{linked}{spared}{foreign}, " +
-                        $"spawned {LocationSpawned}{dupes}{resealed}{DescribeTerrain()})";
+                    return $"location '{name}' rebuilt ({DescribeRebuild()}{DescribeTerrain()})";
+                case LocationOutcome.InteriorRebuilt:
+                    string discarded = SurfaceDiscarded > 0 ? $", {SurfaceDiscarded} surface copies dropped" : "";
+                    return $"location '{name}' interior rebuilt, surface left as it was ({LocationHeldReason}) " +
+                        $"({DescribeRebuild()}{discarded})";
+                case LocationOutcome.Held:
+                    return $"location '{name}' held: {LocationHeldReason}";
                 case LocationOutcome.TerrainOnly:
                     return $"location '{name}' terrain-only ({LocationCleared} modifications undone{DescribeTerrain()})";
                 case LocationOutcome.NotDue:
@@ -269,6 +291,25 @@ namespace StarLevelSystem.modules.LocationReset {
                 default:
                     return "";
             }
+        }
+
+        // The clear and respawn counts both kinds of rebuild share.
+        private string DescribeRebuild() {
+            string strays = SpawnersRemoved > 0 ? $", +{SpawnersRemoved} stray spawners" : "";
+            string resealed = DoorsSealed > 0 ? $", resealed {DoorsSealed}" : "";
+            // Split out rather than folded into the cleared count, because they answer the two
+            // questions an admin actually has about this change: did it stop eating the
+            // surroundings, and is it still collecting the location's own content.
+            string owned = OwnedCleared > 0 ? $" of which {OwnedCleared} stamped" : "";
+            string linked = LinkedCreaturesRemoved > 0 ? $", +{LinkedCreaturesRemoved} linked creatures" : "";
+            string spared = VegetationPreserved > 0 ? $", preserved {VegetationPreserved} vegetation" : "";
+            string foreign = ForeignOwnedSkipped > 0 ? $", skipped {ForeignOwnedSkipped} owned elsewhere" : "";
+            string dupes = SparedDuplicatesRemoved > 0 ? $", {SparedDuplicatesRemoved} spared duplicates dropped" : "";
+            return $"cleared {LocationCleared}{owned}{strays}{linked}{spared}{foreign}, spawned {LocationSpawned}{dupes}{resealed}";
+        }
+
+        private string DescribeDeferral() {
+            return string.IsNullOrEmpty(Deferral) ? "" : $"; {Deferral}";
         }
 
         private string DescribeTerrain() {

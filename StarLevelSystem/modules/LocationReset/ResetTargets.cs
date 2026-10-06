@@ -245,12 +245,23 @@ namespace StarLevelSystem.modules.LocationReset {
         // Tiers 3 and 2 - regeneration (requires a loaded zone)
         // -----------------------------------------------------------------------------------
 
+        // What one regeneration pass is allowed to touch. The chunk gate (ZoneProtectionScan.ScanZone
+        // and the PlayerSafeRadius check) decides the vegetation tier; the location is decided by its
+        // own LocationGate verdict, taken before the zone was loaded and used here as a ceiling --
+        // the gate is asked again right before the clear, and may only narrow that answer.
+        internal sealed class ZoneScope {
+            internal bool Vegetation;
+            internal LocationGate.Verdict Location;
+        }
+
         // onComplete reports whether the regeneration finished cleanly. A failure must NOT be
         // stamped as done: the clear and the respawn are one operation, and abandoning it in the
         // middle would leave the location permanently empty.
         internal static IEnumerator RegenerateZone(Vector2s zone, LocationResetConfigSnapshot cfg,
-                                                   bool force, ZoneResetReport report, System.Action<bool> onComplete) {
+                                                   bool force, ZoneResetReport report, ZoneScope scope,
+                                                   System.Action<bool> onComplete) {
             if (ZoneSystem.instance == null || ZDOMan.instance == null) { onComplete?.Invoke(false); yield break; }
+            LocationGate.Scope locationCeiling = scope?.Location != null ? scope.Location.Scope : LocationGate.Scope.None;
 
             bool loaded = false;
             yield return ZoneLoader.Load(zone, cfg.MaxZoneLoadWaitSeconds, force, (ok) => { loaded = ok; });
@@ -270,7 +281,12 @@ namespace StarLevelSystem.modules.LocationReset {
             // A location configured with ExtraTerrainRadius can reach past its own chunk, and terrain
             // only resets where a heightmap is live, so those neighbours have to come up too. Loading
             // is hoisted here because the regeneration tiers below are synchronous and cannot yield.
-            List<Vector2s> extraZones = ExtraTerrainZones(zone, cfg);
+            //
+            // Only when the location may be reset in full: every narrower scope leaves the surface,
+            // and with it the terrain, alone. This list is then the ONLY source of neighbour zones
+            // for every terrain helper below, so none of them can reach a neighbour that never loaded
+            // -- on one of those CreateTerrainObjects would raise a terrain compiler with no heightmap.
+            List<Vector2s> extraZones = locationCeiling == LocationGate.Scope.Full ? ExtraTerrainZones(zone, cfg) : null;
             if (extraZones != null) {
                 for (int i = 0; i < extraZones.Count; i++) {
                     yield return ZoneLoader.Load(extraZones[i], cfg.MaxZoneLoadWaitSeconds, force, null);
@@ -286,8 +302,10 @@ namespace StarLevelSystem.modules.LocationReset {
             // async asset load that is typically incomplete the first time a given location type is
             // reset. A deferral means the terrain shaping misses SnapToGround.SnappAll entirely, which
             // is precisely the floating-contents bug. Waiting has to happen here; RegenerateLocation
-            // cannot yield.
-            yield return WaitForLocationPrefab(zone, cfg, cfg.MaxZoneLoadWaitSeconds);
+            // cannot yield. Skipped when the location will not be rebuilt on this pass at all.
+            if (locationCeiling != LocationGate.Scope.None) {
+                yield return WaitForLocationPrefab(zone, cfg, cfg.MaxZoneLoadWaitSeconds);
+            }
 
             // Sampled here rather than at the top of the method: poke-loading a neighbour that was
             // never generated GENERATES it, and with a 3x3 footprint all of that vegetation would land
@@ -302,12 +320,13 @@ namespace StarLevelSystem.modules.LocationReset {
             int zdosBefore = ZoneProtectionScan.BlockZdoCount(zone, out int interiorBefore, prefabsBefore, interiorPrefabsBefore);
 
             bool succeeded = true;
+            VegetationPlan plan = null;
             try {
                 // What this chunk owes the vegetation replay, settled before anything is touched.
                 // Selection reads the configuration and the state file only -- never the live world --
                 // so resolving it up here cannot change what it picks, and it is what gates the
-                // ignored-piece sweep below.
-                VegetationPlan plan = PlanVegetation(zone, cfg, force, report);
+                // ignored-piece sweep below. Nothing at all when the chunk gate held vegetation back.
+                if (scope != null && scope.Vegetation) { plan = PlanVegetation(zone, cfg, force, report); }
 
                 // BEFORE the rebuild, never after. This sweep exists to clear the chunk's ignored
                 // litter out of PlaceVegetation's way; running it after RegenerateLocation meant every
@@ -318,8 +337,10 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (plan != null) { report.IgnoredPiecesCleared += SweepIgnoredPieces(zone); }
 
                 // Vanilla's own ordering: locations first so vegetation sees the fresh clear areas.
-                RegenerateLocation(zone, cfg, force, report);
-                if (plan != null) { RegenerateVegetation(zone, cfg, plan, report); }
+                // Always called, even with no location work, so the chunk record says what the
+                // location's state is -- the gate inside decides whether anything is touched.
+                RegenerateLocation(zone, cfg, force, report, scope?.Location, extraZones);
+                if (plan != null) { RegenerateVegetation(zone, cfg, plan, report, extraZones); }
             } catch (System.Exception e) {
                 succeeded = false;
                 Logger.LogLocationResetError($"Reset of zone {zone.x},{zone.y} failed and will be retried: {e}");
@@ -387,6 +408,16 @@ namespace StarLevelSystem.modules.LocationReset {
                 // have kept the next pass correct.
                 Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y} gained {growth} ZDOs during a reset " +
                     $"(before {zdosBefore}, after {zdosAfter}). Reset kept; check sls-loc-audit if this persists.");
+            }
+
+            // An interior-only rebuild promises to leave the surface exactly as it was, so with no
+            // vegetation replay in the same pass the surface count must not move in EITHER direction.
+            // The growth warning above only looks one way; a loss here means the clear reached
+            // something on the surface, which is the one thing this mode exists not to do.
+            if (succeeded && report.LocationResult == ZoneResetReport.LocationOutcome.InteriorRebuilt
+                    && plan == null && report.ZoneAdopted == false && growth != 0) {
+                Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y}: the surface changed by {growth} ZDOs during an " +
+                    $"interior-only rebuild of '{report.LocationName}' (before {zdosBefore}, after {zdosAfter}). It should not change at all.");
             }
 
             // Reported last so this method owns every backoff decision; the caller only stamps the
@@ -465,7 +496,11 @@ namespace StarLevelSystem.modules.LocationReset {
         // Random.InitState(seed) before laying out rooms, so interiors come back deterministically
         // too. (Radial camps still vary slightly: their wall placement collision-tests against live
         // colliders, which differ between runs.)
-        private static void RegenerateLocation(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report) {
+        //
+        // ceiling is the pre-flight LocationGate verdict (null = nothing may be touched), and
+        // extraZones the neighbour chunks RegenerateZone actually loaded for terrain.
+        private static void RegenerateLocation(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report,
+                                               LocationGate.Verdict ceiling, List<Vector2s> extraZones) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
             // No record for the miss above: most chunks in the world hold no location at all, and
@@ -490,7 +525,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // An explicit request for this location by name overrides the configuration lookup. The
             // caller named it, so "no group covers it" is not an answer -- see TargetOverride.
             if (cfg.TargetPrefabHash == locationHash && cfg.TargetOverride != null) {
-                RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, cfg.TargetOverride);
+                RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, cfg.TargetOverride, ceiling, extraZones);
                 return;
             }
 
@@ -508,7 +543,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Disabled);
                 return;
             }
-            RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, entry);
+            RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, entry, ceiling, extraZones);
         }
 
         // The reset itself, once a governing entry has been settled on. Split out so an explicitly
@@ -519,7 +554,8 @@ namespace StarLevelSystem.modules.LocationReset {
         private static void RegenerateLocationWith(Vector2s zone, LocationResetConfigSnapshot cfg, bool force,
                                                    ZoneResetReport report, ZoneSystem.LocationInstance instance,
                                                    int locationHash,
-                                                   LocationResetData.ResolvedResetEntry entry) {
+                                                   LocationResetData.ResolvedResetEntry entry,
+                                                   LocationGate.Verdict ceiling, List<Vector2s> extraZones) {
             ZoneSystem zs = ZoneSystem.instance;
             report.GroupName = entry.GroupName;
 
@@ -563,11 +599,34 @@ namespace StarLevelSystem.modules.LocationReset {
             Quaternion rotation = proxy.GetRotation();
             float exteriorRadius = instance.m_location.m_exteriorRadius;
             float terrainRadius = TerrainRadiusFor(entry, exteriorRadius);
-            report.TerrainRadius = terrainRadius;
+
+            // The gate, asked again now that the zone is loaded and right before the synchronous
+            // part: loading and the prefab wait can take seconds, and a player can walk into the
+            // dungeon in that time. Capped by the pre-flight answer, which is what the zone was loaded
+            // for -- a Full reset needs neighbour chunks for its terrain that a narrower pre-flight
+            // never brought up.
+            LocationGate.Verdict verdict = LocationGate.EvaluateFor(zone, instance.m_location, position, entry, cfg, force);
+            LocationGate.Scope scope = verdict.Scope;
+            string heldReason = verdict.Reason;
+            bool heldTransient = verdict.Transient;
+            LocationGate.Scope cap = ceiling != null ? ceiling.Scope : LocationGate.Scope.None;
+            if (cap < scope) {
+                scope = cap;
+                heldReason = ceiling?.Reason ?? "held back when this pass began";
+                heldTransient = ceiling?.Transient ?? false;
+            }
+            if (scope == LocationGate.Scope.None) {
+                report.LocationHeldReason = heldReason ?? "held back for this pass";
+                report.LocationHeldTransient = heldTransient;
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Held);
+                return;
+            }
+            bool interiorOnly = scope == LocationGate.Scope.Interior;
+            if (interiorOnly == false) { report.TerrainRadius = terrainRadius; }
 
             // Boss altars and similar: undo the crater players dug, leave the location itself alone.
             if (entry.Mode == LocationResetMode.TerrainOnly) {
-                int undone = ResetTerrainLive(zone, cfg, position, terrainRadius);
+                int undone = ResetTerrainLive(zone, extraZones, position, terrainRadius);
                 TakeOwnership(proxy);
                 proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.TerrainOnly);
@@ -575,7 +634,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 return;
             }
 
-            bool hasInterior = HasSkyInterior(zone);
+            bool hasInterior = verdict.HasInterior;
 
             // A location whose interior we are told to leave alone cannot be rebuilt at all. Vanilla's
             // SpawnLocation always re-runs DungeonGenerator.Generate, so skipping only the clear would
@@ -585,12 +644,11 @@ namespace StarLevelSystem.modules.LocationReset {
             // Terrain is still honoured per config, unlike the TerrainOnly branch above which resets
             // it unconditionally: the admin asked to leave the dungeon alone, not to reshape ground.
             //
-            // Ownership stamps do NOT unlock a surface-only reset here, however precisely they could
-            // now separate the interior from the exterior. The blocker was never identifying the
-            // interior; it is that SpawnLocation re-runs DungeonGenerator.Generate unconditionally, so
-            // any rebuild produces a second one whatever the clear did or did not touch.
+            // A surface-only rebuild could now be done the way an interior-only one is -- rebuild the
+            // whole location and drop the fresh half that is not wanted -- but this flag has always
+            // meant "leave the location alone", and admins who set it expect exactly that.
             if (entry.ResetInterior == false && hasInterior) {
-                if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, cfg, position, terrainRadius); }
+                if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, extraZones, position, terrainRadius); }
                 TakeOwnership(proxy);
                 proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.InteriorPreserved);
@@ -601,12 +659,17 @@ namespace StarLevelSystem.modules.LocationReset {
             // A zone hosts at most one location and never moves, so its coordinates are this
             // location's identity -- the same key the spawn stamps onto everything it creates.
             long ownerKey = LocationOwnership.KeyFor(zone);
-            int cleared = ClearLocation(zone, position, rotation, exteriorRadius, instance.m_location, entry, ownerKey, report);
+            // Interior-only: the sky column is cleared and the surface is not touched at all -- no
+            // clear, no terrain reset -- so it is left exactly as it was.
+            int cleared = ClearLocation(zone, position, rotation, exteriorRadius, instance.m_location, entry, ownerKey, report,
+                                        clearSurface: interiorOnly == false, clearSky: entry.ResetInterior);
             // A negative count means the clear refused and destroyed nothing (see ClearLocation).
             // Abandon before the terrain reset and the respawn, and leave the proxy un-stamped so the
             // next pass retries -- clearing and rebuilding are one operation, never two.
             if (cleared < 0) { return; }
-            if (entry.ResetTerrain) { report.TerrainModificationsUndone += ResetTerrainLive(zone, cfg, position, terrainRadius); }
+            if (entry.ResetTerrain && interiorOnly == false) {
+                report.TerrainModificationsUndone += ResetTerrainLive(zone, extraZones, position, terrainRadius);
+            }
 
             int seed = WorldGenerator.instance.GetSeed() + (zone.x * 4271) + (zone.y * 9187);
 
@@ -636,7 +699,25 @@ namespace StarLevelSystem.modules.LocationReset {
                 instance.m_location.m_prefab.Release();
             }
 
+            // Interior-only: SpawnLocation has no way to build half a location, so it built all of it.
+            // Every fresh object on the surface -- the new LocationProxy among them -- is a second copy
+            // of a surface that was left standing, and goes straight back out. What remains in fresh
+            // is the interior alone, which is also all RejectSparedDuplicates should judge.
+            if (interiorOnly) { report.SurfaceDiscarded = DiscardSurfaceCopies(fresh); }
+
             report.SparedDuplicatesRemoved = RejectSparedDuplicates(zone, fresh, ownerKey);
+
+            if (interiorOnly) {
+                // The surface was left standing, so its proxy stays the location's identity and
+                // timestamp carrier. The copy SpawnLocation made went out with the rest above.
+                TakeOwnership(proxy);
+                proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+                report.DoorsSealed = SealKeyedDoors(zone, position, exteriorRadius, skyOnly: true);
+                report.LocationHeldReason = heldReason;
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.InteriorRebuilt);
+                report.LocationCleared = cleared;
+                return;
+            }
 
             // SpawnLocation always creates its own LocationProxy, and ClearLocation deliberately
             // preserves the existing one (IsStructural), so without this every reset would leave two
@@ -667,9 +748,30 @@ namespace StarLevelSystem.modules.LocationReset {
                 proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
             }
 
-            report.DoorsSealed = SealKeyedDoors(zone, position, exteriorRadius);
+            report.DoorsSealed = SealKeyedDoors(zone, position, exteriorRadius, skyOnly: false);
             report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Rebuilt);
             report.LocationCleared = cleared;
+        }
+
+        // Start the clock on a location the sweep has never stamped, from the fast lane. Stamping it is
+        // the whole of what the first pass does -- installing the mod must never reset every location
+        // at once -- and it used to cost a full zone load to get to the one ZDO write. Returns whether
+        // it stamped.
+        //
+        // The same refusals as RegenerateLocationWith's, so it never stamps a location that pass would
+        // pass over; that path keeps its own first-sight branch for anything that reaches it unstamped.
+        internal static bool StampFirstSightLocation(Vector2s zone, LocationResetConfigSnapshot cfg, ZoneResetReport report) {
+            if (GoverningLocation(zone, cfg, out ZoneSystem.LocationInstance instance,
+                                  out LocationResetData.ResolvedResetEntry entry) == false) { return false; }
+            if (LocationResetData.HardBlockedLocations.Contains(entry.Name)) { return false; }
+            ZDO proxy = FindLocationProxy(zone, instance.m_location.Hash);
+            if (proxy == null || proxy.GetLong(DataObjects.SLS_LOC_RESET, 0L) > 0L) { return false; }
+
+            TakeOwnership(proxy);
+            proxy.Set(DataObjects.SLS_LOC_RESET, LocationResetState.Now);
+            report.GroupName = entry.GroupName;
+            report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.FirstSightStamped);
+            return true;
         }
 
         // ZDOs that currently have a live GameObject. Used to bracket a Full-mode spawn so exactly the
@@ -770,10 +872,15 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (survivors.TryGetValue(copy.m_prefab, out List<ZDO> nodes) == false) { continue; }
 
                 Vector3 position = copy.GetPosition();
+                bool copyInSky = position.y > ZoneProtectionScan.SkyThreshold;
                 int best = -1;
                 float bestSqr = sqrEpsilon;
                 for (int n = 0; n < nodes.Count; n++) {
                     Vector3 other = nodes[n].GetPosition();
+                    // XZ alone cannot tell a dungeon room's object from a surface one 5000m below it.
+                    // Matching across the two would destroy a survivor on the side this rebuild never
+                    // touched -- the surface, on an interior-only rebuild.
+                    if ((other.y > ZoneProtectionScan.SkyThreshold) != copyInSky) { continue; }
                     float ox = other.x - position.x;
                     float oz = other.z - position.z;
                     float sqr = (ox * ox) + (oz * oz);
@@ -802,7 +909,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // override an explicitly named request supplies. Resolving it independently in each of them
         // is how a targeted reset ends up skipping the prefab wait it needed, or poke-loading
         // neighbours for a location it is about to pass over.
-        private static bool GoverningLocation(Vector2s zone, LocationResetConfigSnapshot cfg,
+        internal static bool GoverningLocation(Vector2s zone, LocationResetConfigSnapshot cfg,
                                               out ZoneSystem.LocationInstance instance,
                                               out LocationResetData.ResolvedResetEntry entry) {
             instance = default(ZoneSystem.LocationInstance);
@@ -847,8 +954,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // only sanctioned way to call TerrainResetter from the sweep. Synchronous by design: yielding
         // between create and destroy would let ZNetScene's 30Hz reaper tear the objects out from under
         // us mid-reset.
-        private static int ResetTerrainLive(Vector2s zone, LocationResetConfigSnapshot cfg, Vector3 position, float radius) {
-            List<Vector2s> zones = TerrainZonesFor(zone, cfg);
+        private static int ResetTerrainLive(Vector2s zone, List<Vector2s> extraZones, Vector3 position, float radius) {
+            List<Vector2s> zones = TerrainZonesFor(zone, extraZones);
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
 
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
@@ -859,11 +966,14 @@ namespace StarLevelSystem.modules.LocationReset {
             }
         }
 
-        // The chunk itself plus any neighbour an extra terrain radius reaches into.
-        private static List<Vector2s> TerrainZonesFor(Vector2s zone, LocationResetConfigSnapshot cfg) {
+        // The chunk itself plus the neighbours RegenerateZone loaded for an extra terrain radius.
+        // Taken from that list rather than recomputed from the config, because the config can name
+        // neighbours this pass never loaded -- RegenerateZone only brings them up for a full location
+        // reset -- and raising terrain objects on an unloaded chunk leaves a terrain compiler with no
+        // heightmap.
+        private static List<Vector2s> TerrainZonesFor(Vector2s zone, List<Vector2s> extraZones) {
             List<Vector2s> zones = new List<Vector2s>() { zone };
-            List<Vector2s> extra = ExtraTerrainZones(zone, cfg);
-            if (extra != null) { zones.AddRange(extra); }
+            if (extraZones != null) { zones.AddRange(extraZones); }
             return zones;
         }
 
@@ -874,7 +984,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // furthest extra reach it provably covered. Past it we would be flattening ground nobody
         // looked at. Both move together by construction -- see LocationResetData.MaxExtraTerrainRadius
         // -- so tightening ProtectionRadius to recover reset coverage cannot silently outrun it.
-        private static float TerrainRadiusFor(LocationResetData.ResolvedResetEntry entry, float exteriorRadius) {
+        internal static float TerrainRadiusFor(LocationResetData.ResolvedResetEntry entry, float exteriorRadius) {
             float baseRadius = entry.TerrainRadius > 0f ? entry.TerrainRadius : exteriorRadius;
             float extra = Mathf.Clamp(entry.ExtraTerrainRadius, 0f, LocationResetData.MaxExtraTerrainRadius);
             return baseRadius + extra;
@@ -942,10 +1052,14 @@ namespace StarLevelSystem.modules.LocationReset {
         // regenerates it via DungeonGenerator.Generate -- and vanilla's own DungeonGenerator.Clear
         // only destroys the generator's children, while the interior's contents are instantiated
         // unparented, so this clear is the ONLY thing that removes the previous interior.
+        //
+        // clearSurface and clearSky say which side of the sky threshold this clear may touch. An
+        // interior-only rebuild passes clearSurface false, and then nothing on the surface is
+        // destroyed by any route below -- see the final guard.
         private static int ClearLocation(Vector2s zone, Vector3 center, Quaternion rotation,
                                          float exteriorRadius, ZoneSystem.ZoneLocation location,
                                          LocationResetData.ResolvedResetEntry entry, long ownerKey,
-                                         ZoneResetReport report) {
+                                         ZoneResetReport report, bool clearSurface, bool clearSky) {
             // ShouldPreserve classifies against these, and it must not depend on the zone scan two
             // modules away having run first. Idempotent; early-outs on a bool once built.
             ZoneProtectionScan.BuildPrefabSets();
@@ -964,15 +1078,24 @@ namespace StarLevelSystem.modules.LocationReset {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     CollectClearable(new Vector2s(zone.x + dx, zone.y + dy), zone, center, exteriorRadius,
-                        entry.ResetInterior, entry, ownerKey, report, doomed);
+                        clearSurface, clearSky, entry, ownerKey, report, doomed);
                 }
             }
 
             // Before CollectSpawnedCreatures, so a spawner picked up here has its creature taken with
             // it by that pass rather than being orphaned.
-            report.SpawnersRemoved = CollectStraySpawners(center, rotation, location, doomed);
+            report.SpawnersRemoved = CollectStraySpawners(center, rotation, location, doomed, clearSurface, clearSky);
 
             CollectSpawnedCreatures(zone, doomed, report);
+
+            // The final guard for an interior-only clear. Every route above already respects the
+            // side, but the spawner links reach creatures anywhere in the world, and "nothing on the
+            // surface is touched" is the whole promise of this mode -- so it is enforced once more on
+            // the finished list rather than trusted to each route.
+            if (clearSurface == false) {
+                doomed.RemoveAll(z => OriginOf(z).y <= ZoneProtectionScan.SkyThreshold
+                                   && z.GetPosition().y <= ZoneProtectionScan.SkyThreshold);
+            }
 
             for (int i = 0; i < doomed.Count; i++) { DestroyZdo(doomed[i]); }
             return doomed.Count;
@@ -993,7 +1116,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // something this reset is not responsible for. The creator gate matches RefreshContainerLoot:
         // vanilla has no player-buildable keyed door, but a mod may, and a player's own lock is never
         // ours to change.
-        private static int SealKeyedDoors(Vector2s zone, Vector3 center, float exteriorRadius) {
+        //
+        // skyOnly for an interior-only rebuild: the Sunken Crypt gate stands on the surface, which that
+        // mode leaves exactly as it was, open gate included.
+        private static int SealKeyedDoors(Vector2s zone, Vector3 center, float exteriorRadius, bool skyOnly) {
             if (ZDOMan.instance == null || ZoneProtectionScan.KeyedDoorHashes.Count == 0) { return 0; }
 
             int resealed = 0;
@@ -1011,7 +1137,7 @@ namespace StarLevelSystem.modules.LocationReset {
                         Vector3 origin = OriginOf(zdo);
                         if (origin.y > ZoneProtectionScan.SkyThreshold) {
                             if (ZoneSystem.GetZone(origin) != zone) { continue; }
-                        } else if (Utils.DistanceXZ(origin, center) > exteriorRadius) {
+                        } else if (skyOnly || Utils.DistanceXZ(origin, center) > exteriorRadius) {
                             continue;
                         }
 
@@ -1039,7 +1165,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // the spawn rate, and a one-shot CreatureSpawner keeps its "already fired" state on its own
         // ZDO, so the replacement fires again while the original's creature is still standing.
         private static int CollectStraySpawners(Vector3 center, Quaternion rotation,
-                                                ZoneSystem.ZoneLocation location, List<ZDO> doomed) {
+                                                ZoneSystem.ZoneLocation location, List<ZDO> doomed,
+                                                bool clearSurface, bool clearSky) {
             List<SpawnerChild> children = SpawnerChildrenFor(location);
             if (children == null || children.Count == 0) { return 0; }
 
@@ -1048,6 +1175,9 @@ namespace StarLevelSystem.modules.LocationReset {
                 Vector3 expected = center + (rotation * children[i].LocalOffset);
                 ZDO hit = FindZdoAt(expected, children[i].PrefabHash);
                 if (hit == null || doomed.Contains(hit)) { continue; }
+                // FindZdoAt matches XZ only, so the side is checked on what it found.
+                bool inSky = hit.GetPosition().y > ZoneProtectionScan.SkyThreshold;
+                if (inSky ? clearSky == false : clearSurface == false) { continue; }
                 doomed.Add(hit);
                 found++;
             }
@@ -1169,7 +1299,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // have one, so troll caves and other hand-built interiors were never detected -- their sky
         // contents were skipped entirely while SpawnLocation kept laying down another copy, which is
         // how one troll cave ended up with 18 treasure chests and 9 one-shot Spawner_Troll.
-        private static bool HasSkyInterior(Vector2s zone) {
+        internal static bool HasSkyInterior(Vector2s zone) {
             if (ZDOMan.instance == null) { return false; }
 
             zdoBuffer.Clear();
@@ -1185,8 +1315,9 @@ namespace StarLevelSystem.modules.LocationReset {
             return false;
         }
 
+        // SurvivesInteriorClear restates this method's verdict for a sky object; keep the two in step.
         private static void CollectClearable(Vector2s sector, Vector2s locationZone, Vector3 center,
-                                             float exteriorRadius, bool clearInterior,
+                                             float exteriorRadius, bool clearSurface, bool clearSky,
                                              LocationResetData.ResolvedResetEntry entry, long ownerKey,
                                              ZoneResetReport report, List<ZDO> doomed) {
             zdoBuffer.Clear();
@@ -1206,7 +1337,12 @@ namespace StarLevelSystem.modules.LocationReset {
                     // sections at a radius it picks, not the one ZoneLocation declares, so those
                     // routinely sat outside m_exteriorRadius -- surviving every clear while the
                     // rebuild laid down another set beside them, every cycle.
-                    if (ShouldPreserve(zdo, entry)) { continue; }
+                    //
+                    // Still only on the side this clear may touch. Judged by where it was placed, so a
+                    // creature counts on the side its spawn point is on.
+                    bool ownedInSky = OriginOf(zdo).y > ZoneProtectionScan.SkyThreshold;
+                    if (ownedInSky ? clearSky == false : clearSurface == false) { continue; }
+                    if (ShouldPreserveOwned(zdo, entry)) { continue; }
                     doomed.Add(zdo);
                     report.OwnedCleared++;
                     continue;
@@ -1228,12 +1364,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 bool inSky = origin.y > ZoneProtectionScan.SkyThreshold;
 
                 if (inSky) {
-                    if (clearInterior == false) { continue; }
+                    if (clearSky == false) { continue; }
                     // The whole sky column of the location's OWN zone, which is the footprint vanilla
                     // confines an interior to. Scoped to that zone rather than the swept 3x3 on
                     // purpose: the neighbours' sky belongs to their own locations.
                     if (ZoneSystem.GetZone(origin) != locationZone) { continue; }
                 } else {
+                    if (clearSurface == false) { continue; }
                     if (Utils.DistanceXZ(origin, center) > exteriorRadius) { continue; }
 
                     // World generation really does plant trees inside a location's radius. Vanilla
@@ -1276,7 +1413,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Testing the live position instead is why creatures accumulated: a location's creatures are
         // direct children of its prefab, so every SpawnLocation lays down a fresh set, while the old
         // ones had already strayed past a 20m m_exteriorRadius and survived the clear.
-        private static Vector3 OriginOf(ZDO zdo) {
+        internal static Vector3 OriginOf(ZDO zdo) {
             return zdo.GetVec3(ZDOVars.s_spawnPoint, zdo.GetPosition());
         }
 
@@ -1363,10 +1500,10 @@ namespace StarLevelSystem.modules.LocationReset {
         // (Ward used to be creator-free here too, which is what let world-generated
         // dverger_guardstone block resets; it is gated on a creator now.)
         //
-        // Per-entry and per-group Protection overrides apply here AND at the zone gate: the zone scan
-        // judges against the zone's governing entries (ZoneProtectionScan.GoverningEntries), while
-        // this judges each object against the specific entry being cleared. The gate combines entries
-        // fail-closed, so the two can still disagree -- and the safe side wins there too.
+        // Per-entry and per-group Protection overrides apply here AND at the location's gate: the
+        // footprint scan (ZoneProtectionScan.ScanFootprint) decides whether the surface may be reset
+        // at all, while this judges each object the clear reaches. In the sky nothing blocks -- an
+        // interior is rebuilt around whatever is kept -- so there a Block simply means "keep".
         private static bool ShouldPreserve(ZDO zdo, LocationResetData.ResolvedResetEntry entry) {
             // Fails closed ahead of everything else, matching WarnOnProtectionConflicts' promise that
             // ProtectedPrefabs beats an ignore list.
@@ -1374,14 +1511,62 @@ namespace StarLevelSystem.modules.LocationReset {
             if (entry == null) { return false; }
             if (ZoneProtectionScan.TryClassify(zdo, out ProtectionCategory category) == false) { return false; }
 
+            // A grave holds a player's gear, and a reset never takes it, whatever Defaults says about
+            // the category. A dungeon is now rebuilt with graves still inside it, which is what made
+            // this worth stating outright rather than leaving to the category action.
+            if (category == ProtectionCategory.Tombstone) { return true; }
+
             // An ignore list means "treat this as ordinary content", so it beats the category action.
             if (entry.Ignores(category, zdo.m_prefab)) { return false; }
 
-            // Block and Preserve both mean "do not destroy this". A Block should have aborted the zone
-            // long before the clear, but the scan judged it against Defaults while this judges it
-            // against the entry's own rules, so the two can legitimately disagree -- and the safe side
-            // of that disagreement is keeping the object.
+            // Block and Preserve both mean "do not destroy this". On the surface a Block inside the
+            // footprint has already held the reset back; one the clear still meets is in the sky, or
+            // owned content the footprint scan never classifies -- and either way, keeping it is the
+            // safe side.
             return entry.ActionFor(category) != ProtectionAction.Ignore;
+        }
+
+        // ShouldPreserve for an object carrying this location's own stamp.
+        //
+        // An item is the one difference. A player's drop never carries the stamp: it reaches the
+        // server through ZDOMan's network receive path, which the stamping postfix deliberately does
+        // not patch. So a stamped item is one the location itself laid down, and preserving it as
+        // somebody's dropped loot only left it beside the copy the rebuild puts back -- one more every
+        // cycle.
+        private static bool ShouldPreserveOwned(ZDO zdo, LocationResetData.ResolvedResetEntry entry) {
+            if (LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)) { return true; }
+            if (ZoneProtectionScan.TryClassify(zdo, out ProtectionCategory category) && category == ProtectionCategory.DroppedItem) {
+                return false;
+            }
+            return ShouldPreserve(zdo, entry);
+        }
+
+        // Whether a sky object comes through an interior clear of this zone's location -- the same
+        // verdict CollectClearable reaches for it, restated for LocationGate, which needs to know
+        // whether the interior holds anything that will still be standing once its rooms are gone.
+        internal static bool SurvivesInteriorClear(ZDO zdo, LocationResetData.ResolvedResetEntry entry, long ownerKey) {
+            if (IsStructural(zdo) || IsPlayer(zdo) || IsTamed(zdo)) { return true; }
+            long owner = LocationOwnership.OwnerOf(zdo);
+            if (owner == ownerKey) { return ShouldPreserveOwned(zdo, entry); }
+            if (owner != LocationOwnership.NoOwner) { return true; }
+            return ShouldPreserve(zdo, entry);
+        }
+
+        // Every fresh object on the surface, destroyed again, for an interior-only rebuild: copies of
+        // a surface that was left standing. Removed from fresh too, so the duplicate pass after this
+        // judges the interior alone. Their GameObjects already went in DestroyNewInstances, so this
+        // takes DestroyZdo's ZDOMan path.
+        private static int DiscardSurfaceCopies(List<ZDO> fresh) {
+            int discarded = 0;
+            for (int i = fresh.Count - 1; i >= 0; i--) {
+                ZDO zdo = fresh[i];
+                if (zdo == null || zdo.IsValid() == false) { fresh.RemoveAt(i); continue; }
+                if (zdo.GetPosition().y > ZoneProtectionScan.SkyThreshold) { continue; }
+                DestroyZdo(zdo);
+                fresh.RemoveAt(i);
+                discarded++;
+            }
+            return discarded;
         }
 
         // Seizing ownership first is what makes the delete network-authoritative. Vanilla's
@@ -1442,7 +1627,8 @@ namespace StarLevelSystem.modules.LocationReset {
         // ZNetScene.CreateObjectsAll, around ZNet.GetReferencePosition() -- Vector3.zero on a
         // dedicated server. So a poke-loaded chunk has no vegetation colliders, IsBlocked is always
         // false, and m_blockCheck is a no-op no matter what it is set to.
-        private static void RegenerateVegetation(Vector2s zone, LocationResetConfigSnapshot cfg, VegetationPlan plan, ZoneResetReport report) {
+        private static void RegenerateVegetation(Vector2s zone, LocationResetConfigSnapshot cfg, VegetationPlan plan, ZoneResetReport report,
+                                                 List<Vector2s> extraZones) {
             ZoneSystem zs = ZoneSystem.instance;
             // Re-validated rather than trusted. The plan is resolved before the location rebuild runs,
             // and a chunk that lost its zone root in between would take PlaceVegetation down with it.
@@ -1492,7 +1678,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 report.VegetationEntriesReset += due.Count;
                 // Only the kept ghosts: a rejected duplicate sits on a node that never went away, so
                 // re-flattening the ground under it would undo terrain nobody touched.
-                ApplyVegetationTerrainReset(zone, cfg, dueHashes, kept, report);
+                ApplyVegetationTerrainReset(zone, extraZones, dueHashes, kept, report);
             }
 
             // Stamp only the time. The real per-prefab counts come from RecordBaseline once the reset
@@ -1704,7 +1890,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Mining leaves a crater. For entries configured with ResetTerrain, flatten it back around
         // each regenerated node.
-        private static void ApplyVegetationTerrainReset(Vector2s zone, LocationResetConfigSnapshot cfg, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
+        private static void ApplyVegetationTerrainReset(Vector2s zone, List<Vector2s> extraZones, List<int> dueHashes, List<GameObject> ghosts, ZoneResetReport report) {
             bool anyTerrain = false;
             for (int i = 0; i < dueHashes.Count; i++) {
                 if (LocationResetData.TryGetVegetationEntry(dueHashes[i], out LocationResetData.ResolvedResetEntry entry) && entry.ResetTerrain) {
@@ -1716,7 +1902,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // One create/destroy around the whole loop rather than per node: the terrain objects are
             // the same for every crater in this chunk, and the bracket has to stay yield-free anyway.
-            List<Vector2s> zones = TerrainZonesFor(zone, cfg);
+            List<Vector2s> zones = TerrainZonesFor(zone, extraZones);
             for (int i = 0; i < zones.Count; i++) { ZoneLoader.KeepAlive(zones[i]); }
             List<ZNetView> terrainObjects = ZoneLoader.CreateTerrainObjects(zones);
             try {

@@ -19,6 +19,11 @@ namespace StarLevelSystem.modules
             if (ValConfig.BossCreaturesNeverSpawnMultiply.Value && chara.IsBoss()) {
                 return false;
             }
+            // The final boss's aspects are not bosses, but a clone adds a death explosion to the fight and a deleted one
+            // never explodes at all (see BossPhases). Skipping here also keeps the Nemesis spawner out of the boss room.
+            if (BossPhases.IsAspect(chara)) {
+                return false;
+            }
             // Another mod spawned this creature deliberately and owns whether it exists (see SetCreatureSpawnManaged).
             if (CompositeLazyCache.IsSpawnManaged(chara)) {
                 return false;

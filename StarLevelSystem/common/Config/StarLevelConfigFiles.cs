@@ -39,6 +39,8 @@ namespace StarLevelSystem.common {
                 Header = LevelSettingsHeader,
                 Defaults = () => LevelSystemData.DefaultConfiguration,
                 Apply = LevelSystemData.ApplyLoaded,
+                // Adds the Deep North's final boss to a file that still holds the old vanilla boss order.
+                MigrateInPlace = LevelSystemData.AddDeepNorthBossKey,
                 AllowAdminEdit = true,
             });
 
@@ -281,6 +283,7 @@ namespace StarLevelSystem.common {
 #   - defeated_goblinking
 #   - defeated_queen
 #   - defeated_fader
+#   - defeated_frozenking_p3
 #
 # Add modded boss keys where they fall in your progression. An entry whose key
 # is not listed only applies while no listed key is defeated (a warning names
@@ -474,9 +477,10 @@ namespace StarLevelSystem.common {
 # on a client does nothing. Edits apply live.
 #
 # DO NOT edit RaidVersion: a version that does not match this build resets
-# the whole file to the defaults on load. The previous file is saved next to
-# this one as RaidSettings.yaml.v<old version>.<date>.bak first, so your own
-# raids can be copied back in.
+# the whole file to the defaults on load, unless the versions since only added
+# new raids; then those are added and everything else is kept. The previous
+# file is saved next to this one as RaidSettings.yaml.v<old version>.<date>.bak
+# first, so your own raids can be copied back in.
 #
 # --- GlobalSettings ---
 #   GlobalSettings:
@@ -641,9 +645,9 @@ namespace StarLevelSystem.common {
 # Star Level System Expanded - Location Reset Settings
 #
 # Resets overworld locations, dungeons, vegetation, ores and pickables so they can be
-# looted again. Sweeps run server-side, in the background, only in zones with no players
-# nearby. Timers are in real-world hours. NOTHING resets until both the EnableLocationReset
-# BepInEx setting and the Enabled flag below are turned on.
+# looted again. Sweeps run server-side, in the background, away from players (see 'What
+# holds a reset back' below). Timers are in real-world hours. NOTHING resets until both the
+# EnableLocationReset BepInEx setting and the Enabled flag below are turned on.
 #
 # --- Reset groups: start here ---
 # ResetGroups is where the work happens. A group both ENABLES a set of targets and gives them
@@ -731,11 +735,34 @@ namespace StarLevelSystem.common {
 # 'instantly'. Outer: 0 means the band has no outer limit. A chunk matching no band is
 # left at 1.0, so a partial band list never disables the rest of the world.
 #
+# --- What holds a reset back ---
+# Ore, pickables and vegetation are judged by their CHUNK: nobody within PlayerSafeRadius
+# (default 256m) of the chunk centre, and no blocking player object in the chunk or within
+# ProtectionRadius of it in a neighbour.
+#
+# Locations are judged by their own ground instead, so a build elsewhere in the same chunk no
+# longer holds one back:
+#   - the surface waits while a player on the surface is within LocationPlayerRadius (default
+#     120m) of the location, or while a blocking player object stands within
+#     Defaults.LocationBuffer (default 10m) of everything the reset touches - the location's
+#     radius, any terrain it resets, and any of its own objects standing further out;
+#   - a dungeon's interior waits only while a player is inside it. If it holds a tombstone,
+#     dropped item or player build, it also waits until no player is close enough to have it
+#     loaded, so nothing kept inside falls out while the rooms are rebuilt;
+#   - a dungeon whose surface is held back still has its INTERIOR rebuilt, and its surface is
+#     left exactly as it was. Tombstones, dropped items and player builds inside are kept.
+#
+#   PlayerSafeRadius: 256        # top level
+#   LocationPlayerRadius: 120    # top level
+#   Defaults:
+#     LocationBuffer: 10
+#
 # --- Protection: the three actions ---
 # Every Protection category takes one of three actions:
 #
-#   Block     the whole chunk is left alone while the object is there. The safest, and the
-#             default for everything except dropped items
+#   Block     the reset is held back while the object is there - the chunk's ore and
+#             vegetation, or a location's surface, depending on what it stands near. The
+#             safest, and the default for everything except dropped items
 #   Preserve  the object is kept, and the reset goes ahead around it
 #   Ignore    the object is ordinary resettable content and IS DELETED
 #
@@ -815,13 +842,14 @@ namespace StarLevelSystem.common {
 # over every ignore, at every level.
 #
 # --- ProtectionRadius ---
-# How far from a chunk's centre a player build still protects that chunk, in metres.
-# Default 48. The scan always reads a chunk and its 8 neighbours, so 96 means the whole 3x3
-# block protects, and is the most it can ever see; values are clamped to 32-96.
+# How far from a chunk's centre a player build still protects that chunk's ore, pickables
+# and vegetation, in metres. Default 48. The scan always reads a chunk and its 8 neighbours,
+# so 96 means the whole 3x3 block protects, and is the most it can ever see; values are
+# clamped to 32-96. Locations do not use it - see LocationBuffer above.
 #
-# Lower it if too little is resetting: at the full 96m one forgotten chest protects nine
-# chunks, which is the usual reason a server's crypts never come back. Raise it if players
-# report builds near a chunk edge being cleared.
+# Lower it if too little ore and vegetation is resetting: at the full 96m one forgotten
+# chest protects nine chunks. Raise it if players report builds near a chunk edge being
+# cleared.
 #
 #   Defaults:
 #     ProtectionRadius: 48
@@ -830,7 +858,8 @@ namespace StarLevelSystem.common {
 # A chunk is also blocked while any part of it lies inside a player's base: the PlayerBase
 # area vanilla puts around a workbench and similar pieces, the one that stops monsters
 # spawning. That area's own reach decides it, not ProtectionRadius, so a base in the next
-# chunk over holds this one only if it actually extends across the line. Only pieces a
+# chunk over holds this one only if it actually extends across the line. A location's
+# surface is held the same way when a base reaches its ground plus LocationBuffer. Only pieces a
 # player built count, and a prefab ignored under PlayerBuiltPiece projects no base either -
 # the shipped fire_pit ignore covers both. Groups and entries can override it like any
 # other category.
@@ -841,9 +870,8 @@ namespace StarLevelSystem.common {
 # --- ExtraTerrainRadius ---
 # Per location: metres of terrain reset BEYOND the location's own radius, for the ramps and
 # moats players dig around the outside. Clamped to ProtectionRadius minus 32m (so 16m at the
-# default), which is as far past a location's own footprint as the protection scan actually
-# checked for player property - resetting terrain further would flatten ground nobody looked
-# at. Raising ProtectionRadius raises this ceiling with it.
+# default); raising ProtectionRadius raises this ceiling with it. Whatever terrain a location
+# resets is part of the ground checked for player property, plus LocationBuffer.
 #
 # --- Advanced sections, omitted while unused ---
 # These four are left out of the generated file because their defaults are right for almost

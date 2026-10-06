@@ -232,6 +232,17 @@ namespace StarLevelSystem.modules.Modifiers {
         {
             Dictionary<string, ModifierType> creatureModifiers = new Dictionary<string, ModifierType>();
 
+            // A pinned boss phase gets nothing, required modifiers included (see BossPhases).
+            if (BossPhases.IsPinned(character)) {
+                creatureModifiers.Add(NoMods, ModifierType.Minor);
+                return creatureModifiers;
+            }
+            // A final boss aspect never splits: every copy would add a death explosion to the fight.
+            if (BossPhases.IsAspect(character)) {
+                notAllowedModifiers = notAllowedModifiers != null ? new List<string>(notAllowedModifiers) : new List<string>();
+                notAllowedModifiers.Add(CreatureModifiersData.ModifierNames.Splitter.ToString());
+            }
+
             if (!character.IsPlayer())
             {
                 if (character.IsBoss() && ValConfig.EnableBossModifiers.Value == true)

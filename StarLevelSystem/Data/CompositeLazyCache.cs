@@ -9,6 +9,7 @@ using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -197,8 +198,9 @@ namespace StarLevelSystem.Data
             if (characterEntry.Level == 0) { characterEntry.Level = 1; }
 
             // Destroy character if its selected for deletion. A creature another mod manages the spawn of is
-            // never removed by a disabled-spawn rule: that mod put it there on purpose (a bounty target).
-            if (characterEntry.ShouldDelete && chara.m_tamed == false && IsSpawnManaged(chara) == false) {
+            // never removed by a disabled-spawn rule: that mod put it there on purpose (a bounty target). Nor is a
+            // final boss aspect, whose death is what moves that fight on (see BossPhases).
+            if (characterEntry.ShouldDelete && chara.m_tamed == false && IsSpawnManaged(chara) == false && BossPhases.IsAspect(chara) == false) {
                 TaskRunner.Run().StartCoroutine(Spawnrate.DestroyCoroutine(chara.gameObject));
                 return;
             }
@@ -246,6 +248,13 @@ namespace StarLevelSystem.Data
             // Ensure force leveled characters and bosses get their level set even if they are not being directly setup
             if (chara.IsBoss() && ValConfig.ControlBossSpawns.Value) {
                 chara.m_nview.GetZDO().Set(ZDOVars.s_level, characterEntry.Level);
+            }
+
+            // A pinned boss phase carries no modifiers. One saved with some before it was pinned has them replaced
+            // here, ahead of setup applying them.
+            if (BossPhases.IsPinned(chara) && characterEntry.CreatureModifiers != null && characterEntry.CreatureModifiers.Keys.Any(mod => mod != CreatureModifiers.NoMods)) {
+                characterEntry.CreatureModifiers = new Dictionary<string, ModifierType>() { { CreatureModifiers.NoMods, ModifierType.Minor } };
+                SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
             }
 
             //Logger.LogDebug($"Checking stored mods {characterEntry.CreatureModifiers.Count}");

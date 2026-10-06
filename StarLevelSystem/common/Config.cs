@@ -952,7 +952,7 @@ namespace StarLevelSystem.common {
                 yield break;
             }
 
-            MusicMan.instance.TriggerMusic(music.ToString());
+            MusicMan.instance.TriggerMusic(VanillaMusicName(music));
 
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;

@@ -31,8 +31,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 Character killer = __instance.m_lastHit.GetAttacker();
                 if (killer == null) { return; }
 
-                // Can't make minibosses out of bosses
-                if (killer.IsBoss()) { return; }
+                // Can't make minibosses out of bosses, or out of the final boss's aspects: removing one that has not died
+                // stops that fight, and its death explosion would go off wherever the miniboss falls (see BossPhases).
+                if (killer.IsBoss() || BossPhases.IsAspect(killer)) { return; }
 
                 float roll = UnityEngine.Random.Range(0f, 1f);
                 Logger.LogNemesis($"Rolling for potential Nemesis boss creation {roll} <= {NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance}");

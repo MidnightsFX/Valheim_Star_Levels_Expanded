@@ -49,6 +49,12 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static long RetriedZones = 0;
         internal static long RetriesExhaustedZones = 0;
         internal static long FirstSightZones = 0;
+        // Location verdicts. A location held back by a player is retried shortly; one held back by a
+        // build waits for its next examination. An interior-only reset is a dungeon rebuilt inside
+        // while its surface was held back.
+        internal static long LocationsHeldByPlayers = 0;
+        internal static long LocationsHeldByBuilds = 0;
+        internal static long InteriorOnlyResets = 0;
         internal static long ZdoGrowthTotal = 0;
         internal static double SweepStartedAt = 0d;
         internal static string LastAction = "idle";
@@ -234,83 +240,159 @@ namespace StarLevelSystem.modules.LocationReset {
             // finally rather than an emit at each exit: every path through this method produces a
             // record, including the ones that decide to do nothing.
             try {
-                // Never reset a zone somebody is standing in or near. Also covers the case where the
-                // zone is already loaded because a player is there.
-                //
-                // This block is transient by nature -- somebody walking past a chunk should not cost
-                // it a whole cycle -- so it gets a couple of short retries before being written off.
-                bool playerNear = PlayersNearby(zone, cfg.PlayerSafeRadius);
-                if (playerNear || ZoneLoader.IsLive(zone)) {
+                // A chunk this process already has loaded -- a listen-server host standing nearby, or
+                // the area around a dedicated server's own origin -- is live in the scene, and the
+                // poke-load and release this sweep relies on would tear it out from under whoever has
+                // it. Nothing here can be worked on, so it waits like an occupied chunk always has.
+                if (ZoneLoader.IsLive(zone)) {
                     PlayerBlockedZones++;
-                    // Reported separately: "somebody is standing here" and "this chunk happens to be
-                    // loaded" have very different causes and used to share one message.
-                    string why = playerNear ? $"player within {cfg.PlayerSafeRadius:0}m" : "zone is already loaded";
-                    if (LocationResetState.TryScheduleRetry(zone, out int attempt, out float delay)) {
-                        RetriedZones++;
-                        report.SkipReason = $"{why}; retry {attempt}/{LocationResetState.MaxTransientRetries} in {delay / 60f:0.#} min";
-                    } else {
-                        RetriesExhaustedZones++;
-                        // Clears the retry state as well, so the next cycle starts with a full budget.
-                        LocationResetState.BackoffZone(zone, 300f);
-                        report.SkipReason = $"{why}; {LocationResetState.MaxTransientRetries} retries spent, deferred to the next cycle";
-                    }
+                    report.SkipReason = "zone is already loaded";
+                    Settle(zone, cfg, report, playerHold: true, zoneOpen: false, locationRan: false);
                     yield break;
                 }
 
-                // Zone-wide protection sweep. A blocked zone is stamped forward so it is not retried
-                // every cycle; a base built over a crypt simply keeps it. No short retry here on
-                // purpose: a structure is not going to move in fifteen minutes, and this scan is the
-                // expensive part of a tick.
+                // A location seen for the first time has its clock started here, with one ZDO write,
+                // rather than by loading the whole zone just to write it -- and whatever is holding
+                // the chunk back, so the clock starts the first time the sweep looks.
+                ResetTargets.StampFirstSightLocation(zone, cfg, report);
+
+                // Two gates, for two kinds of content.
                 //
-                // Judged against the zone's own governing entries rather than bare Defaults, so a
-                // reset group's Protection overrides -- "player builds do not block ore resets" --
-                // decide blocking for chunks holding that group's content.
-                ZoneProtectionScan.ProtectionResult protection =
-                    ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
-                if (protection.Blocked) {
-                    ProtectionBlockedZones++;
-                    LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
-                    report.SkipReason = ZoneProtectionScan.DescribeBlock(protection);
-                    yield break;
+                // The chunk gate is the one every tier used to share, and now decides only the
+                // in-place refresh and the vegetation replay: nobody within PlayerSafeRadius of the
+                // chunk, and no blocking player property in or near it.
+                string zoneHeld = null;
+                bool zoneHeldByPlayer = false;
+                if (PlayersNearby(zone, cfg.PlayerSafeRadius)) {
+                    zoneHeld = $"player within {cfg.PlayerSafeRadius:0}m";
+                    zoneHeldByPlayer = true;
+                    PlayerBlockedZones++;
+                } else {
+                    // Judged against the zone's own governing entries rather than bare Defaults, so a
+                    // reset group's Protection overrides -- "player builds do not block ore resets" --
+                    // decide blocking for chunks holding that group's content.
+                    ZoneProtectionScan.ProtectionResult protection =
+                        ZoneProtectionScan.ScanZone(zone, ZoneProtectionScan.GoverningEntries(zone), true);
+                    if (protection.Blocked) {
+                        zoneHeld = ZoneProtectionScan.DescribeBlock(protection);
+                        ProtectionBlockedZones++;
+                    }
+                }
+                bool zoneOpen = zoneHeld == null;
+                report.ZoneHeldReason = zoneHeld;
+
+                // The location gate judges the location on its own ground -- see LocationGate. A
+                // dungeon held back at the surface still gets its interior rebuilt.
+                LocationGate.Verdict location = LocationGate.Evaluate(zone, cfg, false, report.RateMultiplier);
+                bool playerHold = zoneHeldByPlayer;
+                if (location.Held) {
+                    if (location.Transient) { LocationsHeldByPlayers++; playerHold = true; } else { LocationsHeldByBuilds++; }
+                    // Recorded now, because the slow lane may not run. If it does, for vegetation, it
+                    // reaches the same verdict and records it again.
+                    report.GroupName = location.GroupName;
+                    report.LocationHeldReason = location.Reason;
+                    report.LocationHeldTransient = location.Transient;
+                    report.RecordLocation(location.Name, ZoneResetReport.LocationOutcome.Held);
                 }
 
                 // ---- Fast lane: pure ZDO refresh, no loading ----
-                FastLaneZones++;
-                refreshedTimers = ResetTargets.RefreshZoneInPlace(zone, cfg, false, report);
+                if (zoneOpen) {
+                    FastLaneZones++;
+                    refreshedTimers = ResetTargets.RefreshZoneInPlace(zone, cfg, false, report);
+                }
 
-                // ---- Slow lane: only if the census says something was destroyed here ----
-                bool needsSlow = allowSlow && NeedsRegeneration(zone, report.RateMultiplier);
+                // ---- Slow lane: only if something was destroyed here, or a location may be reset ----
+                bool vegetationDue = zoneOpen && NeedsVegetation(zone, report.RateMultiplier);
+                bool locationWork = location.Scope != LocationGate.Scope.None;
+                bool needsSlow = allowSlow && (vegetationDue || locationWork);
                 if (needsSlow == false) {
-                    LocationResetState.StampZone(zone);
                     onSlowUsed?.Invoke(false);
-                    report.Detail(allowSlow
-                        ? "no regeneration needed - nothing tracked is missing and no location is due"
-                        : "regeneration skipped - slow lane budget spent for this tick");
+                    report.Detail(allowSlow == false && (vegetationDue || locationWork)
+                        ? "regeneration skipped - slow lane budget spent for this tick"
+                        : "no regeneration needed - nothing tracked is missing and no location may be reset");
+                    Settle(zone, cfg, report, playerHold, zoneOpen, locationRan: false);
                     yield break;
                 }
 
                 SlowLaneZones++;
                 onSlowUsed?.Invoke(true);
                 bool succeeded = false;
-                yield return ResetTargets.RegenerateZone(zone, cfg, false, report, (ok) => { succeeded = ok; });
+                ResetTargets.ZoneScope scope = new ResetTargets.ZoneScope() { Vegetation = zoneOpen, Location = location };
+                yield return ResetTargets.RegenerateZone(zone, cfg, false, report, scope, (ok) => { succeeded = ok; });
 
                 if (succeeded == false) {
                     // RegenerateZone owns the deferral decision on every one of its failure paths --
-                    // a short retry for a load timeout, a backoff for anything else. Stamping here
+                    // a short retry for a load timeout, a backoff for anything else. Settling here
                     // would overwrite whichever it chose, so leave the zone alone.
                     report.SkipReason = report.SkipReason ?? "reset did not complete";
                     yield break;
                 }
 
-                LocationResetState.StampZone(zone);
-                // cfg.Now predates every stamp this pass wrote, which is how RecordBaseline tells a
-                // loss the pass skipped as not due from one it just regrew.
-                ZoneProtectionScan.RecordBaseline(zone, cfg.Now, report.RateMultiplier);
+                // The verdict taken right before the clear is the one that counts: a player who walked
+                // into the dungeon while the zone loaded turns this pass into a short retry.
+                if (report.LocationResult == ZoneResetReport.LocationOutcome.Held && report.LocationHeldTransient) { playerHold = true; }
+                if (report.LocationResult == ZoneResetReport.LocationOutcome.InteriorRebuilt) { InteriorOnlyResets++; }
+
+                // Only when the vegetation tier was allowed to run. A chunk held back re-recording its
+                // census would write a loss the pass was not allowed to restore in as the new
+                // baseline, and forget it for good -- LossStillOwed only protects losses whose timer
+                // was still running. cfg.Now predates every stamp this pass wrote, which is how
+                // RecordBaseline tells a loss the pass skipped as not due from one it just regrew.
+                if (zoneOpen) { ZoneProtectionScan.RecordBaseline(zone, cfg.Now, report.RateMultiplier); }
+                Settle(zone, cfg, report, playerHold, zoneOpen, LocationRan(report));
             } finally {
                 // After the slow lane, on every way out of it: a failed or skipped regeneration does
                 // not undo the in-place writes. Never earlier -- see StampRefreshedTimers.
                 ResetTargets.StampRefreshedTimers(zone, refreshedTimers);
                 EmitZoneReport(report);
+            }
+        }
+
+        // Whether the location tier did its work for this cycle, which is what decides whether a chunk
+        // whose vegetation was held back is stamped or backed off.
+        private static bool LocationRan(ZoneResetReport report) {
+            switch (report.LocationResult) {
+                case ZoneResetReport.LocationOutcome.Rebuilt:
+                case ZoneResetReport.LocationOutcome.InteriorRebuilt:
+                case ZoneResetReport.LocationOutcome.TerrainOnly:
+                case ZoneResetReport.LocationOutcome.InteriorPreserved:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        // How a worked chunk is left for next time. Every exit of ProcessZone that did not hand the
+        // decision to RegenerateZone comes through here, so a hold can never be lost by an early return.
+        //
+        //   a player held anything back  -> a short retry while the budget lasts, then a cycle. A
+        //                                   player passing through should not cost a whole cycle.
+        //   nothing ran, protection held -> backed off a full cycle. A structure does not move in
+        //                                   fifteen minutes, and the scan is the expensive part.
+        //   otherwise                    -> stamped as examined.
+        private static void Settle(Vector2s zone, LocationResetConfigSnapshot cfg, ZoneResetReport report,
+                                   bool playerHold, bool zoneOpen, bool locationRan) {
+            if (playerHold) {
+                if (LocationResetState.TryScheduleRetry(zone, out int attempt, out float delay)) {
+                    RetriedZones++;
+                    report.Deferral = $"retry {attempt}/{LocationResetState.MaxTransientRetries} in {delay / 60f:0.#} min";
+                } else {
+                    RetriesExhaustedZones++;
+                    // Clears the retry state as well, so the next cycle starts with a full budget.
+                    LocationResetState.BackoffZone(zone, 300f);
+                    report.Deferral = $"{LocationResetState.MaxTransientRetries} retries spent, deferred to the next cycle";
+                }
+            } else if (zoneOpen == false && locationRan == false) {
+                LocationResetState.BackoffZone(zone, ZoneRates.ScaleSeconds(cfg.MinIntervalSeconds, report.RateMultiplier));
+            } else {
+                LocationResetState.StampZone(zone);
+            }
+
+            // A chunk where nothing at all happened reads as a skip, exactly as it did when one gate
+            // held everything back; the chunk-gate reason is then the skip reason rather than a note.
+            if (report.DidAnything == false && string.IsNullOrEmpty(report.SkipReason) && string.IsNullOrEmpty(report.ZoneHeldReason) == false) {
+                report.SkipReason = report.ZoneHeldReason;
+                report.ZoneHeldReason = null;
             }
         }
 
@@ -323,11 +405,10 @@ namespace StarLevelSystem.modules.LocationReset {
             LastAction = report.ToSummaryLine();
         }
 
-        // Does this zone need the expensive poke-load path? Either a due location lives here, or a
-        // tracked prefab's live count has fallen below its recorded baseline. This is the gate that
-        // keeps the majority of a world out of the expensive path.
-        private bool NeedsRegeneration(Vector2s zone, float rate) {
-            if (NeedsLocationReset(zone, rate)) { return true; }
+        // Does this zone's vegetation need the expensive poke-load path? A tracked prefab's live count
+        // has fallen below its recorded baseline and its timer is due. This is the gate that keeps the
+        // majority of a world out of the expensive path. Locations are LocationGate's question.
+        private bool NeedsVegetation(Vector2s zone, float rate) {
             if (LocationResetData.VegetationByPrefabHash.Count == 0) { return false; }
             Dictionary<int, ushort> live = ZoneProtectionScan.CensusZone(zone);
 
@@ -343,27 +424,6 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (present < record.Baseline) { return true; }
             }
             return false;
-        }
-
-        // Locations have no census -- a looted crypt still contains all its objects, they are just
-        // empty. Their timer lives on the surviving LocationProxy ZDO instead, which is readable
-        // without loading the zone.
-        private bool NeedsLocationReset(Vector2s zone, float rate) {
-            if (LocationResetData.LocationsByHash.Count == 0) { return false; }
-            if (ZoneSystem.instance.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return false; }
-            if (instance.m_location == null) { return false; }
-            if (LocationResetData.TryGetLocationEntry(instance.m_location.Hash, out LocationResetData.ResolvedResetEntry entry) == false) { return false; }
-            entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
-            if (entry.Enabled == false) { return false; }
-
-            ZDO proxy = ResetTargets.FindLocationProxy(zone, instance.m_location.Hash);
-            if (proxy == null) { return false; }
-
-            long lastReset = proxy.GetLong(DataObjects.SLS_LOC_RESET, 0L);
-            // Never stamped: the first pass stamps it and the next one resets it, so a fresh install
-            // never wipes every location at once.
-            if (lastReset == 0) { return true; }
-            return entry.IsDue(lastReset, LocationResetState.Now, rate);
         }
 
         // internal rather than private: the Safe path of a manual reset polls on exactly this
@@ -414,6 +474,7 @@ namespace StarLevelSystem.modules.LocationReset {
         internal long Now;
         internal bool StampOnFirstSight;
         internal float PlayerSafeRadius;
+        internal float LocationPlayerRadius;
         internal float MaxZoneLoadWaitSeconds;
         internal long MinIntervalSeconds;
         internal long DefaultIntervalSeconds;
@@ -464,6 +525,7 @@ namespace StarLevelSystem.modules.LocationReset {
             snap.Now = LocationResetState.Now;
             snap.StampOnFirstSight = cfg.StampOnFirstSight;
             snap.PlayerSafeRadius = cfg.PlayerSafeRadius;
+            snap.LocationPlayerRadius = System.Math.Max(0f, cfg.LocationPlayerRadius);
             snap.MaxZoneLoadWaitSeconds = cfg.MaxZoneLoadWaitSeconds;
             snap.MinIntervalSeconds = (long)LocationResetData.MinEnabledIntervalSeconds;
             snap.DefaultIntervalSeconds = (long)(cfg.Defaults.ResetHours * 3600f);

@@ -1,5 +1,6 @@
 using StarLevelSystem.common;
 using StarLevelSystem.modules.Raids;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,9 +24,11 @@ namespace StarLevelSystem.Data
         public static readonly RaidConfiguration DefaultConfiguration = new RaidConfiguration()
         {
             // Bump whenever the shipped raids change in a way every install should pick up (1: the 1.14.0
-            // SpawnInterval retune, 2: the 1.19.2 MaxSpawned cut to 0.66x, rounded up). Any file at another
-            // version is backed up and replaced with these defaults.
-            RaidVersion = 2,
+            // SpawnInterval retune, 2: the 1.19.2 MaxSpawned cut to 0.66x, rounded up, 3: the Deep North raids and
+            // the blob and charred spawner raids' own message keys).
+            // A file at another version is backed up and replaced with these defaults, unless every version since
+            // its own only added raids (RaidsAddedInVersion): then it keeps everything and just gains those.
+            RaidVersion = 3,
             GlobalSettings = new GlobalRaidSettings()
             {
                 DisableAllRaids = false,
@@ -120,8 +123,9 @@ namespace StarLevelSystem.Data
                 { new RaidDefinition() {
                     Name = "blobs",
                     Duration = 90f,
-                    StartMessage = "$event_blobs_start",
-                    EndMessage = "$event_blobs_over",
+                    // Vanilla has no blob raid text (its own blob raid borrows the bonemass army's), so these are ours.
+                    StartMessage = "$SLS_event_blobs_start",
+                    EndMessage = "$SLS_event_blobs_end",
                     ForceEnvironment = DataObjects.Environment.SwampRain,
                     ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
@@ -340,8 +344,8 @@ namespace StarLevelSystem.Data
                 { new RaidDefinition() {
                     Name = "army_charred_spawners",
                     Duration = 90f,
-                    StartMessage = "event_charredspawnerarmy_start",
-                    EndMessage = "event_charrespawnerarmy_end",
+                    StartMessage = "$SLS_event_charredspawners_start",
+                    EndMessage = "$SLS_event_charredspawners_end",
                     ForceEnvironment = DataObjects.Environment.Ashlands_ashrain,
                     ForceMusic = Music.Zcombat,
                     Activation = new RaidActivation() {
@@ -352,6 +356,48 @@ namespace StarLevelSystem.Data
                     },
                     Spawns = new List<RaidSpawnEntry>() {
                         new RaidSpawnEntry() { PrefabName = "Spawner_CharredStone", MaxSpawned = 3, SpawnInterval = 5f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                // The Deep North's two vanilla raids, on vanilla's keys: each starts once its key creature has been killed
+                // and stops for good with the final boss.
+                { new RaidDefinition() {
+                    Name = "army_elakingar",
+                    Duration = 180f,
+                    StartMessage = "$event_elakingarmy_start",
+                    EndMessage = "$event_elakingarmy_end",
+                    ForceEnvironment = DataObjects.Environment.Twilight_SnowStorm,
+                    ForceMusic = Music.ZCombatEventL1,
+                    Activation = new RaidActivation() {
+                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.DeepNorth },
+                        NearBaseOnly = true,
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "elakingmole_defeated" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_frozenking_p3" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "Elaking",        MaxSpawned = 14, SpawnInterval = 5f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 3 },
+                        new RaidSpawnEntry() { PrefabName = "ElakingLantern", MaxSpawned = 4, SpawnInterval = 10f, SpawnChance = 60f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "ElakingMole",    MaxSpawned = 3, SpawnInterval = 20f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                    },
+                }},
+                { new RaidDefinition() {
+                    Name = "army_jotuns",
+                    Duration = 180f,
+                    StartMessage = "$event_jotunarmy_start",
+                    EndMessage = "$event_jotunarmy_end",
+                    ForceEnvironment = DataObjects.Environment.Twilight_Snow,
+                    ForceMusic = Music.ZCombatEventL1,
+                    Activation = new RaidActivation() {
+                        // Vanilla's biomes for this raid: everywhere but the Ashlands and the ocean.
+                        Biomes = new List<Heightmap.Biome>() { Heightmap.Biome.Meadows, Heightmap.Biome.BlackForest, Heightmap.Biome.Swamp, Heightmap.Biome.Mountain, Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.DeepNorth },
+                        NearBaseOnly = true,
+                        Chance = 50f,
+                        RequiredGlobalKeys = new List<string>() { "jotun_killed" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_frozenking_p3" },
+                    },
+                    Spawns = new List<RaidSpawnEntry>() {
+                        new RaidSpawnEntry() { PrefabName = "JotunWarrior", MaxSpawned = 4, SpawnInterval = 20f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer },
+                        new RaidSpawnEntry() { PrefabName = "Elaking",      MaxSpawned = 8, SpawnInterval = 8f, SpawnChance = 100f, LevelMin = 1, LevelMax = 30, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2 },
                     },
                 }},
                 { new RaidDefinition() {
@@ -487,15 +533,78 @@ namespace StarLevelSystem.Data
             if (config != null) { config.RaidVersion = version; }
         }
 
+        // The shipped raids each RaidVersion added and changed nothing else about. A file is only ever brought up through
+        // these, never reset, when every version after its own is listed here.
+        private static readonly Dictionary<int, string[]> RaidsAddedInVersion = new Dictionary<int, string[]>() {
+            { 3, new string[] { "army_elakingar", "army_jotuns" } },
+        };
+
+        // Shipped message keys a RaidVersion replaced. A file brought up through RaidsAddedInVersion has each swapped wherever
+        // it still holds the old key; a message an admin wrote themselves is left alone. 3: the charred spawner raid's keys
+        // had lost their $ and the blob raid's never existed in vanilla, so both raids showed a raw key.
+        private static readonly Dictionary<int, Dictionary<string, string>> MessagesReplacedInVersion = new Dictionary<int, Dictionary<string, string>>() {
+            { 3, new Dictionary<string, string>() {
+                { "event_charredspawnerarmy_start", "$SLS_event_charredspawners_start" },
+                { "event_charrespawnerarmy_end", "$SLS_event_charredspawners_end" },
+                { "$event_blobs_start", "$SLS_event_blobs_start" },
+                { "$event_blobs_over", "$SLS_event_blobs_end" },
+            } },
+        };
+
         // Any version other than the current one -- including none at all, which every file written before
-        // 1.14.0 has -- is replaced wholesale. The framework backs the previous file up next to it first, so
-        // an admin's own raids can be carried across by hand. Same shape as NemesisSystemData.MigrateToCurrent.
+        // 1.14.0 has -- is replaced wholesale, unless the versions since its own only added raids. The framework
+        // backs the previous file up next to it first, so an admin's own raids can be carried across by hand.
+        // Same shape as NemesisSystemData.MigrateToCurrent.
         internal static RaidConfiguration MigrateToCurrent(RaidConfiguration parsed) {
+            if (TryAddShippedRaids(parsed)) { return parsed; }
             Logger.LogInfo("Raid config version does not match this build, resetting it to the defaults.");
             // Fresh copy: returning the shared DefaultConfiguration would make it the live, runtime-mutated
             // settings object, and the migration path also writes the returned object over the user's file.
             return YamlFormat.Default.Deserializer.Deserialize<RaidConfiguration>(
                 YamlFormat.Default.Serializer.Serialize(DefaultConfiguration));
+        }
+
+        // Adds the shipped raids from every version after the file's own, at the density the file's counts sit at, and
+        // keeps everything else it holds. False when any of those versions changed more than its raid list.
+        private static bool TryAddShippedRaids(RaidConfiguration parsed) {
+            int current = DefaultConfiguration.RaidVersion;
+            if (parsed?.Raids == null || parsed.RaidVersion <= 0 || parsed.RaidVersion >= current) { return false; }
+            List<string> added = new List<string>();
+            for (int version = parsed.RaidVersion + 1; version <= current; version++) {
+                if (RaidsAddedInVersion.TryGetValue(version, out string[] names) == false) { return false; }
+                added.AddRange(names);
+            }
+
+            // A fresh copy, as in MigrateToCurrent: the shipped raids must not become the live, runtime-mutated objects.
+            RaidConfiguration shipped = YamlFormat.Default.Deserializer.Deserialize<RaidConfiguration>(
+                YamlFormat.Default.Serializer.Serialize(DefaultConfiguration));
+            int shippedDensity = shipped.GlobalSettings?.RaidCreatureDensity ?? QuickConfigureTool.DefaultRaidDensity;
+            int fileDensity = parsed.GlobalSettings?.RaidCreatureDensity ?? shippedDensity;
+            foreach (string name in added) {
+                if (parsed.Raids.Exists(r => r != null && r.Name == name)) { continue; }
+                RaidDefinition raid = shipped.Raids.Find(r => r != null && r.Name == name);
+                if (raid == null) { continue; }
+                QuickConfigureTool.ScaleRaidToDensity(raid, shippedDensity, fileDensity);
+                parsed.Raids.Add(raid);
+            }
+            int messages = ReplaceShippedMessages(parsed.Raids, parsed.RaidVersion, current);
+            string messageNote = messages > 0 ? $", updated {messages} raid messages" : "";
+            Logger.LogInfo($"Raid config is from an older version; added the new raids ({string.Join(", ", added.ToArray())}){messageNote} and kept everything else.");
+            return true;
+        }
+
+        // Swaps every message key the versions after `from` replaced, wherever a raid still holds the old one.
+        private static int ReplaceShippedMessages(List<RaidDefinition> raids, int from, int to) {
+            int replaced = 0;
+            for (int version = from + 1; version <= to; version++) {
+                if (MessagesReplacedInVersion.TryGetValue(version, out Dictionary<string, string> keys) == false) { continue; }
+                foreach (RaidDefinition raid in raids) {
+                    if (raid == null) { continue; }
+                    if (raid.StartMessage != null && keys.TryGetValue(raid.StartMessage, out string start)) { raid.StartMessage = start; replaced++; }
+                    if (raid.EndMessage != null && keys.TryGetValue(raid.EndMessage, out string end)) { raid.EndMessage = end; replaced++; }
+                }
+            }
+            return replaced;
         }
     }
 }

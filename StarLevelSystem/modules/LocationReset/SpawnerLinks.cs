@@ -217,8 +217,14 @@ namespace StarLevelSystem.modules.LocationReset {
             return ResetTargets.IsProtectedLiving(creature) == false;
         }
 
+        // XZ within the epsilon AND on the same side of the sky threshold. A dungeon's spawners sit
+        // directly above the surface they share a sector with, and XZ alone would let a spawner in the
+        // rooms claim a creature from a surface spawner standing 5000m below it -- which an
+        // interior-only rebuild must never reach.
         private static bool NearAny(List<Vector3> positions, Vector3 point, float sqrEpsilon) {
+            bool pointInSky = point.y > ZoneProtectionScan.SkyThreshold;
             for (int i = 0; i < positions.Count; i++) {
+                if ((positions[i].y > ZoneProtectionScan.SkyThreshold) != pointInSky) { continue; }
                 float dx = positions[i].x - point.x;
                 float dz = positions[i].z - point.z;
                 if ((dx * dx) + (dz * dz) <= sqrEpsilon) { return true; }

@@ -1065,6 +1065,7 @@ namespace StarLevelSystem.modules.Raids
             // if music is invalid return
             // if this is not a server, dedicated or integrated, return
 
+            // Sent as the Music member name; the client parses it back and converts it with VanillaMusicName.
             List<ZNetPeer> peersInArea = SLSExtensions.ServerGetPeersInArea(position, range);
             ZPackage package = new ZPackage();
             package.Write(music.ToString());

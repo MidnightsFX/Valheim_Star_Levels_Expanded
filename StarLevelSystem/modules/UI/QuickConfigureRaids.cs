@@ -51,6 +51,19 @@ namespace StarLevelSystem.modules.UI {
             return Mathf.Clamp(Mathf.RoundToInt(count * ratio), 1, max);
         }
 
+        // Moves one raid's counts from the density they were written at to another, the way the slider would. For a
+        // shipped raid that a schema update adds to a file whose density was moved off the shipped one.
+        internal static void ScaleRaidToDensity(RaidDefinition raid, int fromDensity, int toDensity) {
+            if (raid?.Spawns == null) { return; }
+            float ratio = RaidDensityScalar(toDensity) / RaidDensityScalar(fromDensity);
+            if (Mathf.Approximately(ratio, 1f)) { return; }
+            foreach (RaidSpawnEntry entry in raid.Spawns) {
+                if (entry == null) { continue; }
+                entry.SpawnGroupSize = ScaleSpawnCount(entry.SpawnGroupSize, ratio, MaxSpawnGroupSize);
+                entry.MaxSpawned = ScaleSpawnCount(entry.MaxSpawned, ratio, MaxSpawnAlive);
+            }
+        }
+
         // One creature line of one raid. Keyed by position in the raid list rather than by name, because nothing stops
         // two raids sharing a name, and PrefabName is kept so a file that changed underneath us is not written blind.
         private class StagedRaidSpawn {

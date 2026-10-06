@@ -369,7 +369,7 @@ namespace StarLevelSystem.modules.Raids {
             // point is side-effect-free, so a raid that aborted before here left no visible trace.
             RaidStarted.Set(true);
             RaidControl.RegisterActiveRaid(this);
-            if (MusicMan.instance != null) { MusicMan.instance.TriggerMusic(raid.ForceMusic.ToString()); }
+            if (MusicMan.instance != null) { MusicMan.instance.TriggerMusic(VanillaMusicName(raid.ForceMusic)); }
             SendRaidCommitConfirmation(raid, this.transform.position);
 
             // Start all of the spawners
@@ -431,7 +431,7 @@ namespace StarLevelSystem.modules.Raids {
         // of range must not lose boss, location or another event's music.
         private void StopRaidMusic() {
             if (MusicMan.instance == null || raidCache == null) { return; }
-            string raidMusic = raidCache.ForceMusic.ToString();
+            string raidMusic = VanillaMusicName(raidCache.ForceMusic);
             if (MusicMan.instance.m_triggerMusic == raidMusic) { MusicMan.instance.m_triggerMusic = null; }
             if (MusicMan.instance.GetCurrentMusic() == raidMusic) { MusicMan.instance.StopMusic(); }
         }

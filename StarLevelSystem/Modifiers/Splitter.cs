@@ -27,6 +27,8 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.IsPlayer() || __instance.m_nview == null || __instance.m_nview.IsOwner() == false) {
                     return;
                 }
+                // A final boss aspect never splits, even one that rolled Splitter before aspects were barred from it.
+                if (BossPhases.IsAspect(__instance)) { return; }
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                 if (mods != null && mods.ContainsKey(ModifierNames.Splitter.ToString())) {
                     

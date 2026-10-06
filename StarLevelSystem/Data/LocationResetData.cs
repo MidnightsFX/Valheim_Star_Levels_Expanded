@@ -77,13 +77,27 @@ namespace StarLevelSystem.Data {
             }
         }
 
-        // Ceiling on ExtraTerrainRadius, and not an arbitrary number: it is exactly how far past a
-        // location's own 32m footprint the protection scan reached. DERIVED from ProtectionRadius
-        // rather than fixed, because the two must move together -- resetting terrain further out than
-        // player property was checked for is flattening ground nobody looked at, which is the whole
-        // reason this ceiling exists.
+        // Ceiling on ExtraTerrainRadius. It was derived from how far past a location's own 32m
+        // footprint the chunk protection scan reached, back when that scan was what guarded location
+        // resets. The location footprint scan now covers whatever terrain radius is in effect, so
+        // this only bounds how far a reset reaches and how many neighbouring chunks it loads -- kept
+        // as it was so no existing configuration starts flattening further out than it did.
         internal static float MaxExtraTerrainRadius {
             get { return ProtectionRadius - MinProtectionRadius; }
+        }
+
+        // Upper bound on LocationBuffer. Past this the footprint scan stops meaning "around the
+        // location" and starts holding back locations for builds in the next chunk over, which is
+        // what the footprint scope exists to stop.
+        internal const float MaxLocationBuffer = 64f;
+
+        // Metres beyond everything a location reset touches that must be clear of blocking player
+        // property. See LocationResetDefaults.LocationBuffer.
+        internal static float LocationBuffer {
+            get {
+                float configured = SLE_LocationReset_Settings?.Defaults?.LocationBuffer ?? 10f;
+                return Math.Max(0f, Math.Min(MaxLocationBuffer, configured));
+            }
         }
 
         // Set when a conflicting reset mod is installed. Hard-gates the sweep independently of the
@@ -210,6 +224,7 @@ namespace StarLevelSystem.Data {
         public static readonly LocationResetConfiguration DefaultConfiguration = new LocationResetConfiguration() {
             Enabled = false,
             PlayerSafeRadius = 256f,
+            LocationPlayerRadius = 120f,
             StampOnFirstSight = true,
             MaxZoneLoadWaitSeconds = 10f,
             Defaults = new LocationResetDefaults(),
@@ -382,7 +397,7 @@ namespace StarLevelSystem.Data {
             foreach (ResolvedResetEntry entry in LocationsByHash.Values) {
                 if (entry.Enabled == false || entry.ExtraTerrainRadius <= ceiling) { continue; }
                 Logger.LogLocationResetWarning($"'{entry.Name}' sets ExtraTerrainRadius {entry.ExtraTerrainRadius:0}m, " +
-                    $"above the {ceiling:0}m the protection scan covers at ProtectionRadius {ProtectionRadius:0}m. " +
+                    $"above the {ceiling:0}m allowed at ProtectionRadius {ProtectionRadius:0}m. " +
                     $"It will be clamped to {ceiling:0}m. Raise ProtectionRadius to reset terrain further out.");
             }
         }

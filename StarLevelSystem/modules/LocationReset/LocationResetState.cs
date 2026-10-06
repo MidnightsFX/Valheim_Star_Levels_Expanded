@@ -150,6 +150,14 @@ namespace StarLevelSystem.modules.LocationReset {
             return true;
         }
 
+        // Whether TryScheduleRetry would still grant a retry. Read-only, for LocationGate: a dungeon
+        // whose surface is held only by a passer-by waits out these retries for the whole location
+        // before settling for an interior-only rebuild.
+        internal static bool RetriesRemaining(Vector2s zone) {
+            if (zones.TryGetValue(zone, out ZoneRecord record) == false) { return true; }
+            return record.RetryCount < MaxTransientRetries;
+        }
+
         // No separate ClearRetry: every path out of ProcessZone ends in StampZone (the zone is done)
         // or BackoffZone (deferred for a full cycle), and both clear the retry state themselves. A
         // third way to clear it would just be a way to forget to call it.

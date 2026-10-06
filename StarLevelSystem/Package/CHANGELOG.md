@@ -1,4 +1,18 @@
 
+**1.23.0**
+ ---
+ ```
+- Final boss fixes
+- Adds the Deep North's two raids, and existing raid settings keep their changes when the new raids are added.
+- When creature levels follow boss progress, defeating (final boss) now raises levels one more step everywhere.
+- Raid music now plays, and raids can use the Deep North's music.
+- The Ashlands monolith raid and the blob raid now show proper start and end messages instead of raw text keys.
+- Dungeons now reset even when players have built around the entrance or left tombstones and items inside.
+- Tombstones, dropped items and player builds inside a dungeon are kept where they lie when it resets.
+- Locations now only check the ground right around them for players and player builds, so a build elsewhere in the same area no longer stops them resetting.
+- Servers can set how close players and builds may be before a location waits, from the quick configure panel.
+ ```
+
 **1.22.0**
  ---
  ```

@@ -56,7 +56,9 @@ namespace StarLevelSystem.modules
                             position = DetermineOffsetPosition(position, 15f);
                         }
                         Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
-                        GameObject targetclone = PrefabManager.Instance.GetPrefab(ccEntry.RefCreatureName);
+                        GameObject targetclone = PrefabLookup.FindOrWarn(ccEntry.RefCreatureName, "multiplied spawns");
+                        // Every remaining extra spawn would miss the same way.
+                        if (targetclone == null) { break; }
                         GameObject spawnedCreature = GameObject.Instantiate(targetclone, position, rotation);
                         Character spawnedChara = spawnedCreature.GetComponent<Character>();
                         if (isTame && spawnedChara != null) {

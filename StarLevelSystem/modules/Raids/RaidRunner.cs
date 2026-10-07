@@ -267,11 +267,8 @@ namespace StarLevelSystem.modules.Raids {
                     // spawned one group).
                     if (connectedSpawns.Count < rmonitor.RaidSpawnDef.MaxSpawned) {
                         List<SerializableVector3> spawnPoints = spawnPointsCache;
-                        GameObject creaturePrefab = PrefabManager.Instance.GetPrefab(rmonitor.RaidSpawnDef.PrefabName);
-                        if (creaturePrefab == null) {
-                            Logger.LogWarning($"The creature defined for this wave is invalid and will be skipped. |{rmonitor.RaidSpawnDef.PrefabName}|");
-                            continue;
-                        }
+                        GameObject creaturePrefab = PrefabLookup.FindOrWarn(rmonitor.RaidSpawnDef.PrefabName, "a raid wave spawn");
+                        if (creaturePrefab == null) { continue; }
 
                         // Check spawn chance
                         float chance = UnityEngine.Random.Range(0, 100f);

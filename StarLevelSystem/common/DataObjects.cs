@@ -859,7 +859,8 @@ namespace StarLevelSystem.common
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
                     FixMocksIfAddedLate(prefab_obj);
-                    GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(VisualEffect);
+                    // Stored even when null: SetupCreatureVFX reads this by key and skips a null effect.
+                    GameObject mockFixedGO = PrefabLookup.FindOrWarn(VisualEffect, "a modifier visual effect");
                     CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockFixedGO);
                 }
                 if (SecondaryEffect != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(SecondaryEffect)) {
@@ -867,7 +868,7 @@ namespace StarLevelSystem.common
                     CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
                     PrefabManager.Instance.AddPrefab(prefab_obj);
                     FixMocksIfAddedLate(prefab_obj);
-                    GameObject mockFixedGO = PrefabManager.Instance.GetPrefab(SecondaryEffect);
+                    GameObject mockFixedGO = PrefabLookup.FindOrWarn(SecondaryEffect, "a modifier secondary effect");
                     CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockFixedGO);
                 }
             }
@@ -1894,7 +1895,8 @@ namespace StarLevelSystem.common
             public int MaxScaledAmount { get; set; } = 0;
 
             public void ResolveDropPrefab() {
-                DropGo = PrefabManager.Instance.GetPrefab(Drop.Prefab);
+                // Null leaves the drop unresolved; LootStyles skips it.
+                DropGo = PrefabLookup.FindOrWarn(Drop.Prefab, "a loot drop");
             }
         }
 
@@ -1919,7 +1921,8 @@ namespace StarLevelSystem.common
             {
                 return new CharacterDrop.Drop
                 {
-                    m_prefab = PrefabManager.Instance.GetPrefab(Prefab),
+                    // Null leaves the drop unresolved; LootStyles skips it.
+                    m_prefab = PrefabLookup.FindOrWarn(Prefab, "a loot drop"),
                     m_amountMin = Min,
                     m_amountMax = Max,
                     m_chance = Chance,

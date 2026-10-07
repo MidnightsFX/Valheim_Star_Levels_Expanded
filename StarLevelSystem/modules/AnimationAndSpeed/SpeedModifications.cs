@@ -20,11 +20,8 @@ namespace StarLevelSystem.modules.AnimationAndSpeed {
 
             string creaturename = cDetails.RefCreatureName;
             creaturename ??= Utils.GetPrefabName(creature.gameObject);
-            GameObject creatureRef = PrefabManager.Instance.GetPrefab(creaturename);
-            if (creatureRef == null) {
-                Logger.LogWarning($"Unable to find reference object for {creature.name}, not applying speed modifications");
-                return;
-            }
+            GameObject creatureRef = PrefabLookup.FindOrWarn(creaturename, "speed changes");
+            if (creatureRef == null) { return; }
 
             Character refChar = creatureRef.GetComponent<Character>();
 

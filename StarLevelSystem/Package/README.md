@@ -360,7 +360,7 @@ ChanceChanges:
         Faction: Boss                       # faction to assign to the creature
         RequiredModifiers:                  # modifiers the creature must have
           Fire: Major
-      - Prefab: Charred_Ranged
+      - Prefab: Charred_Archer
         SpawnGroupSize: 2
         Faction: Boss
         RequiredModifiers:

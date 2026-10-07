@@ -387,7 +387,7 @@ namespace StarLevelSystem.Modifiers
                 // would grow the pool by a full copy each time.
                 summonableCreatures.Clear();
                 foreach (var prefabname in summonPrefabs) {
-                    GameObject prefab = Jotunn.Managers.PrefabManager.Instance.GetPrefab(prefabname);
+                    GameObject prefab = PrefabLookup.FindOrWarn(prefabname, "a summonable creature");
                     if (prefab != null) {
                         summonableCreatures.Add(prefab);
                     }

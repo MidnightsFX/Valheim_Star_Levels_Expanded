@@ -203,7 +203,7 @@ namespace StarLevelSystem.modules.Raids
                 Logger.LogWarning($"Raid runner prefab '{RaidRunnerPrefabName}.prefab' was not found in the asset bundle; raids cannot start.");
                 return;
             }
-            if (PrefabManager.Instance.GetPrefab(RaidRunnerPrefabName) == null) {
+            if (PrefabLookup.Find(RaidRunnerPrefabName) == null) {
                 PrefabManager.Instance.AddPrefab(new CustomPrefab(RaidRunnerGO, false));
             }
         }

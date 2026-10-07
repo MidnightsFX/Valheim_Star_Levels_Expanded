@@ -44,7 +44,7 @@ namespace StarLevelSystem.Modifiers
                     Logger.LogDebug($"Splitter on {__instance.name} total split potential:{totalsplits} split creature level: {level}");
                     int splits = Mathf.Min(MaxSplits, Mathf.FloorToInt(totalsplits));
                     if (splits < 1) { return; }
-                    GameObject creatureToCreate = PrefabManager.Instance.GetPrefab(Utils.GetPrefabName(__instance.gameObject));
+                    GameObject creatureToCreate = PrefabLookup.FindOrWarn(Utils.GetPrefabName(__instance.gameObject), "splitting");
                     if (creatureToCreate == null) { return; }
                     // Spread the spawns across frames: each split is a full creature instantiate + setup,
                     // and doing them all synchronously inside the death prefix produced a frame hitch that

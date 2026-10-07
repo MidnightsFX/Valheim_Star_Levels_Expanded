@@ -164,7 +164,7 @@ namespace StarLevelSystem.Data
                         ScoreChange = -2000,
                         SpawnConfig = new List<NemesisSpawn>(){
                             new NemesisSpawn() { Prefab = "Charred_Melee", CreatureAI = AI.HuntPlayer, SpawnGroupSize = 1, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } },
-                            new NemesisSpawn() { Prefab = "Charred_Ranged", CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } }
+                            new NemesisSpawn() { Prefab = "Charred_Archer", CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2, RequiredModifiers = new Dictionary<string, ModifierType>() { { "Fire", ModifierType.Major } } }
                     }}},
                     { "SeekerAttack", new NemesisChanceEntry() {
                         Enabled = true,

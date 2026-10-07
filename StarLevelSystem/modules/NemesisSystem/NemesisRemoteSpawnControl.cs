@@ -50,10 +50,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
             if (!hasController) { bundlePrefab.AddComponent<NemesisRemoteSpawner>(); }
 
             // Register with ZNetScene so the persistent ZDO can be re-instantiated when a player loads the area.
-            if (PrefabManager.Instance.GetPrefab(SpawnerPrefabName) == null) {
+            if (PrefabLookup.Find(SpawnerPrefabName) == null) {
                 PrefabManager.Instance.AddPrefab(new CustomPrefab(bundlePrefab, false));
             }
-            SpawnerPrefab = PrefabManager.Instance.GetPrefab(SpawnerPrefabName);
+            SpawnerPrefab = PrefabLookup.Find(SpawnerPrefabName);
             Logger.LogInfo($"[NemesisRemote] LoadAssets: registered={(SpawnerPrefab != null)} name='{(SpawnerPrefab != null ? SpawnerPrefab.name : "null")}'");
         }
 
@@ -372,13 +372,14 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // creatureAIOverride replaces the spawn's own CreatureAI when given.
         internal static void SpawnNemesisSpawn(NemesisSpawn spawn, Vector3 basePoint, Quaternion rot, int levelBonus, List<ExtendedCharacterDrop> extraBiomeLoot, string pinId, AI? creatureAIOverride = null) {
             if (spawn == null || string.IsNullOrEmpty(spawn.Prefab)) { return; }
+            // Looked up once for the whole group: every member would miss the same way.
+            GameObject go = PrefabLookup.FindOrWarn(spawn.Prefab, "a Nemesis spawn");
+            if (go == null) { return; }
             var offset = UnityEngine.Random.insideUnitCircle * 0.8f;
             Vector3 determinedSpawn = basePoint + new Vector3(offset.x, 0, offset.y);
             int count = 0;
             while (count < spawn.SpawnGroupSize) {
                 count++;
-                GameObject go = PrefabManager.Instance.GetPrefab(spawn.Prefab);
-                if (go == null) { Logger.LogWarning($"[NemesisRemote] spawn prefab '{spawn.Prefab}' not found, skipping."); continue; }
                 GameObject cgo = GameObject.Instantiate(go, determinedSpawn, rot);
                 Character spawnChara = cgo.GetComponent<Character>();
                 if (spawnChara == null) { Logger.LogWarning($"[NemesisRemote] spawn '{spawn.Prefab}' has no Character component, skipping."); continue; }

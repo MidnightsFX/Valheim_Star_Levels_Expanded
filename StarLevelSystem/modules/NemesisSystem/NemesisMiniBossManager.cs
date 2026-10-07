@@ -63,7 +63,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 while (numMinions > 0) {
                     numMinions--;
                     NemesisMinion nm = biomeMinions[UnityEngine.Random.Range(0, biomeMinions.Count)];
-                    GameObject minionGo = PrefabManager.Instance.GetPrefab(nm.PrefabName);
+                    GameObject minionGo = PrefabLookup.FindOrWarn(nm.PrefabName, "a Nemesis minion");
                     if (minionGo == null) { continue; }
                     Character mchara = minionGo.GetComponent<Character>();
                     if (mchara != null) {
@@ -116,7 +116,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Weighted pick among the biome's boss archetypes, considering only those whose prefab is loaded.
         private static NemesisSpawn WeightedSelectCandidate(List<NemesisSpawn> candidates) {
             List<NemesisSpawn> valid = candidates
-                .Where(c => c != null && string.IsNullOrEmpty(c.Prefab) == false && PrefabManager.Instance.GetPrefab(c.Prefab) != null)
+                .Where(c => c != null && string.IsNullOrEmpty(c.Prefab) == false && PrefabLookup.FindOrWarn(c.Prefab, "a Nemesis boss candidate") != null)
                 .ToList();
             if (valid.Count == 0) { return null; }
 

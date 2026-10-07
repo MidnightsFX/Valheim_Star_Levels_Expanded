@@ -1,3 +1,8 @@
+**1.23.1**
+ ---
+ ```
+- Improve cache lookups for user defined prefabs, warn on missing or incorrect prefabs
+ ```
 
 **1.23.0**
  ---

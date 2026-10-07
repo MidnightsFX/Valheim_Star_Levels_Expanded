@@ -1,4 +1,4 @@
-using Jotunn.Managers;
+using StarLevelSystem.common;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -19,11 +19,13 @@ namespace StarLevelSystem.modules.AnimationAndSpeed {
             { "Ulv", "Walk" },
         };
 
-        // Hooked to OnVanillaPrefabsAvailable, which fires on every main menu load, so this must be idempotent: a
-        // prefab that already carries the fix has no humanoid clips left to replace and is left alone.
+        // Hooked to OnPrefabsRegistered, which fires on every world load, so this must be idempotent: a prefab that
+        // already carries the fix has no humanoid clips left to replace and is left alone. Not the main menu event:
+        // ZNetScene does not exist there, so creature prefabs cannot be looked up yet. It still runs before any
+        // instance exists, since ZNetScene.Awake comes before the world's objects are created.
         internal static void ApplyToPrefabs() {
             foreach (KeyValuePair<string, string> entry in StandInClips) {
-                GameObject prefab = PrefabManager.Instance.GetPrefab(entry.Key);
+                GameObject prefab = PrefabLookup.FindOrWarn(entry.Key, "its swim animation fix");
                 if (prefab == null) { continue; }
                 ReplaceHumanoidClips(prefab, entry.Value);
             }

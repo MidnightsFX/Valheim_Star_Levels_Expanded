@@ -93,7 +93,8 @@ namespace StarLevelSystem.modules.Loot {
                         // Logger.LogDebug($"Drop Prefab not yet cached, updating and caching.");
                         eod.ResolveDropPrefab();
                         if (eod.DropGo == null) {
-                            Logger.LogWarning($"Prefab {eod.Drop.Prefab} was not found, ensure it is spelled correctly and available in the game. This lootdrop will be skipped.");
+                            // PrefabLookup has already warned about the name, once per world.
+                            if (logloot) { sb.AppendLine($"Skipping {eod.Drop.Prefab}: prefab not found."); }
                             continue;
                         }
                     }
@@ -226,7 +227,8 @@ namespace StarLevelSystem.modules.Loot {
                 if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
                     loot.ToCharacterDrop();
                     if (loot.GameDrop == null || loot.GameDrop.m_prefab == null) {
-                        Logger.LogWarning($"Loot prefab '{loot.Drop?.Prefab}' for '{name}' was not found. Ensure it is spelled correctly and available in the game. This drop will be skipped.");
+                        // PrefabLookup has already warned about the name, once per world.
+                        if (ValConfig.EnableDebugLootDetails.Value) { sb.AppendLine($"Skipping {loot.Drop?.Prefab}: prefab not found."); }
                         continue;
                     }
                 }

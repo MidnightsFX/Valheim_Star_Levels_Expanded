@@ -106,9 +106,8 @@ namespace StarLevelSystem.modules.Sizes {
             } else {
                 // Unregistered or modded prefab names reach this; treat them as unit scale rather than NREing
                 // inside the setup pipeline (which would abort every remaining step for that creature).
-                GameObject prefab = PrefabManager.Instance.GetPrefab(objectName);
+                GameObject prefab = PrefabLookup.FindOrWarn(objectName, "its reference size (assuming a scale of 1)");
                 if (prefab == null) {
-                    Logger.LogWarning($"No prefab found for '{objectName}', assuming a reference scale of 1.");
                     objSize = Vector3.one;
                 } else {
                     objSize = prefab.transform.localScale;

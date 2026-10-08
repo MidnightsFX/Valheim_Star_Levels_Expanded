@@ -22,6 +22,15 @@ namespace StarLevelSystem.modules.CreatureSetup {
         // has just been handed stays unrolled, which is under the server's own 2 s ownership pass.
         private static readonly WaitForSeconds AwaitRollPoll = new WaitForSeconds(1f);
 
+        // How much setup work this machine does per frame, in Stopwatch ticks (2 ms). A zone loads its creatures a few
+        // frames apart and every one of them waits the same InitialDelayBeforeSetup, so their setups came due together:
+        // shortly after joining a world the profiler caught a 300 ms frame spent almost entirely on creature setup. A
+        // worker that finds this frame's budget spent tries again next frame. The first setup of a frame always runs, so
+        // a slow one still finishes, and a client's loading screen has no budget, as it hides any stutter.
+        private static readonly long FrameBudgetTicks = System.Diagnostics.Stopwatch.Frequency / 500;
+        private static long frameSpentTicks;
+        private static int budgetFrame = -1;
+
         // Adds a creature to the queue. Returns false when the request is a duplicate
         // (a setup coroutine is already running for this creature) or the character is invalid.
         internal static bool Enqueue(Character chara, int levelOverride, bool spawnMultiply, float delay, Dictionary<string, ModifierType> requiredModifiers, List<string> notAllowedModifiers) {
@@ -39,15 +48,24 @@ namespace StarLevelSystem.modules.CreatureSetup {
         }
 
 
+        // Whether this instance's setup has yet to finish. A worker left over from an earlier instance of the same
+        // creature does not count, as it ends without setting this one up.
+        internal static bool IsPending(Character chara) {
+            if (chara == null) { return false; }
+            ZDOID id = chara.GetZDOID();
+            return id != ZDOID.None && InProgress.TryGetValue(id, out Character running) && ReferenceEquals(running, chara);
+        }
+
         // Cleanup hook for destroyed creatures - drops all tracking.
         internal static void RemoveTracking(ZDOID id) {
             if (id == ZDOID.None) { return; }
             InProgress.Remove(id);
         }
 
-        // Per-creature setup worker. Waits for the requested delay, then waits for a valid ZNetView and for a
-        // rolled level/modifier set it may show (or its own ownership, to roll one), prepares the cache, and runs
-        // CharacterSetup. Only the setup itself is retried up to FallbackDelayBeforeCreatureSetup attempts.
+        // Per-creature setup worker. Waits for the requested delay, then waits for a valid ZNetView, for room in this
+        // frame's setup budget and for a rolled level/modifier set it may show (or its own ownership, to roll one),
+        // prepares the cache, and runs CharacterSetup. Only the setup itself is retried up to
+        // FallbackDelayBeforeCreatureSetup attempts.
         //
         // This never takes ownership of the creature. Owners come from the server alone: ZDOMan.ReleaseNearbyZDOS
         // hands every unowned persistent ZDO in a player's active area to that player every 2 s, in single player
@@ -80,6 +98,12 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     continue;
                 }
 
+                if (FrameBudgetSpent()) {
+                    yield return null;
+                    continue;
+                }
+                long passStart = System.Diagnostics.Stopwatch.GetTimestamp();
+
                 // Nothing to show until the owner has rolled, and only the owner may roll (strict ZDO-owner authority).
                 // Either nobody owns the creature yet or its owner's roll has not replicated, so wait, spending no
                 // attempts: the worker ends only with the instance. Re-checked every poll, so the pass after this
@@ -88,6 +112,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
                 // up from its ZDO at once.
                 bool isOwner = chara.m_nview.IsOwner();
                 if (isOwner == false && levelOverride <= 0 && AwaitsOwnerPass(chara, chara.m_nview.GetZDO())) {
+                    ChargeFrameBudget(passStart);
                     awaitedOwner = true;
                     yield return AwaitRollPoll;
                     continue;
@@ -124,10 +149,12 @@ namespace StarLevelSystem.modules.CreatureSetup {
                             if (success) { Logger.LogDebug($"{fallback.RefCreatureName} running delayed setup."); }
                         }
                     }
+                }
+                ChargeFrameBudget(passStart);
+
+                if (success == false) {
                     if (attempts >= maxAttempts) { break; }
-                    if (success == false) {
-                        yield return new WaitForSeconds(retryDelay);
-                    }
+                    yield return new WaitForSeconds(retryDelay);
                 }
             }
             } finally {
@@ -139,6 +166,25 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     InProgress.Remove(id);
                 }
             }
+        }
+
+        // Whether this frame's setup budget is used up. The first call of a frame starts a fresh budget.
+        private static bool FrameBudgetSpent() {
+            if (budgetFrame != Time.frameCount) {
+                budgetFrame = Time.frameCount;
+                frameSpentTicks = 0;
+                return false;
+            }
+            return frameSpentTicks >= FrameBudgetTicks && InLoadingScreen() == false;
+        }
+
+        private static void ChargeFrameBudget(long passStart) {
+            frameSpentTicks += System.Diagnostics.Stopwatch.GetTimestamp() - passStart;
+        }
+
+        // ZNetScene.InLoadingScreen is also true whenever there is no local player, which on a dedicated server is always.
+        private static bool InLoadingScreen() {
+            return ZNet.instance != null && ZNet.instance.IsDedicated() == false && ZNetScene.instance != null && ZNetScene.instance.InLoadingScreen();
         }
 
         // Whether the creature still needs its owner's pass before a non-owner may set it up: no finished roll yet, or

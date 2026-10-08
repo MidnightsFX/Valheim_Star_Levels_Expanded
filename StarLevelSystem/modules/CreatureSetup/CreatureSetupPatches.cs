@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using StarLevelSystem.common;
+using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,9 @@ namespace StarLevelSystem.modules.CreatureSetup {
 
                 // A boss phase spawned by the previous phase's death takes that phase's level before anything rolls one.
                 BossPhases.TakeCarriedLevel(__instance);
+
+                // A creature sized before comes back at that size now rather than when the delayed setup below runs.
+                SizeModifications.ApplyStoredSize(__instance, zdo);
 
                 CreatureSetupControl.CreatureSetup(__instance, delay: ValConfig.InitialDelayBeforeSetup.Value);
             }

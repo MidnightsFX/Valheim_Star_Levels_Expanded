@@ -383,6 +383,20 @@ namespace StarLevelSystem.modules.LevelSystem {
             chara.m_nview.GetZDO().Set(ZDOVars.s_level, fallbackLevel);
         }
 
+        // Each biome's settings merged over the 'All' biome's, built once per loaded settings object. Setting up one
+        // creature resolves its biome settings two or three times, and every merge built a fresh copy of the levelup
+        // table, three dictionaries and two lists. Shared like the unmerged settings this hands out when only one of
+        // the two exists, so callers must not write to the result, and none do.
+        private static readonly Dictionary<Heightmap.Biome, BiomeSpecificSetting> MergedBiomeSettings = new Dictionary<Heightmap.Biome, BiomeSpecificSetting>();
+        private static CreatureLevelSettings mergedBiomeSettingsSource;
+
+        // ApplyLevelupGenerators fills in the biome tables after the new settings object is assigned, so this runs
+        // once they are complete rather than relying on the object changing.
+        internal static void ClearMergedBiomeSettings() {
+            MergedBiomeSettings.Clear();
+            mergedBiomeSettingsSource = null;
+        }
+
         public static void SelectCreatureBiomeSettings(GameObject creature, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome creature_biome) {
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
@@ -392,25 +406,34 @@ namespace StarLevelSystem.modules.LevelSystem {
             biome_settings = null;
             creature_settings = null;
             // Guard clause for those that have empty or null configurations
-            if (LevelSystemData.SLE_Level_Settings == null) { return; }
+            CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
+            if (settings == null) { return; }
 
-            if (LevelSystemData.SLE_Level_Settings.BiomeConfiguration != null) {
-                bool biome_all_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
+            if (settings.BiomeConfiguration != null) {
+                bool biome_all_setting_check = settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out var allBiomeConfig);
                 if (biome_all_setting_check) {
                     biome_settings = allBiomeConfig;
                 }
                 //Logger.LogDebug($"Biome all config checked");
-                bool biome_setting_check = LevelSystemData.SLE_Level_Settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
+                bool biome_setting_check = settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
                 if (biome_setting_check && biome_all_setting_check) {
-                    biome_settings = SLSExtensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig);
+                    if (ReferenceEquals(mergedBiomeSettingsSource, settings) == false) {
+                        MergedBiomeSettings.Clear();
+                        mergedBiomeSettingsSource = settings;
+                    }
+                    if (MergedBiomeSettings.TryGetValue(biome, out BiomeSpecificSetting merged) == false) {
+                        merged = SLSExtensions.MergeBiomeConfigs(biomeConfig, allBiomeConfig);
+                        MergedBiomeSettings[biome] = merged;
+                    }
+                    biome_settings = merged;
                 } else if (biome_setting_check) {
                     biome_settings = biomeConfig;
                 }
                 //Logger.LogDebug($"Merged biome configs");
             }
 
-            if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration != null) {
-                if (LevelSystemData.SLE_Level_Settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
+            if (settings.CreatureConfiguration != null) {
+                if (settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
                 //Logger.LogDebug($"Set character specific configs");
             }
         }
@@ -429,7 +452,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // instance scaled every stack a second time - and, because DropData is a struct,
             // rebuilding it field by field dropped m_weight and m_dontScale, which collapsed
             // multi-item tables to whatever sat at index 0.
-            Physics.SyncTransforms();
+            TaskRunner.RequestPhysicsSync();
 
             yield break;
         }

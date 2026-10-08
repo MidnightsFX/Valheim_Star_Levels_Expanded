@@ -688,6 +688,7 @@ namespace StarLevelSystem.Data
             DistanceScaleSystem.DelayedMinimapSetup();
             CompositeLazyCache.FlushCache();
             ConditionalScaleSystem.ResetCache();
+            LevelSelection.ClearMergedBiomeSettings();
             RestartCreatureAttributeUpdate();
         }
 

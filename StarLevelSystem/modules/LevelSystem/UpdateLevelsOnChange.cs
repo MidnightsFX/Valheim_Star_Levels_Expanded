@@ -68,7 +68,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
                     yield return new WaitForEndOfFrame();
-                    Physics.SyncTransforms();
                 }
                 if (chara == null || chara.IsPlayer() || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
 
@@ -115,8 +114,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             foreach (GameObject tree in trees) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
+                    TaskRunner.RequestPhysicsSync();
                     yield return new WaitForEndOfFrame();
-                    Physics.SyncTransforms();
                 }
                 TreeBase treeBase = tree.GetComponent<TreeBase>();
                 if (treeBase == null || treeBase.m_nview == null || treeBase.m_nview.GetZDO() == null) { continue; }
@@ -150,6 +149,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     }
                 }
             }
+            TaskRunner.RequestPhysicsSync();
             yield break;
         }
 
@@ -160,8 +160,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             foreach (GameObject bird in birds) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
+                    TaskRunner.RequestPhysicsSync();
                     yield return new WaitForEndOfFrame();
-                    Physics.SyncTransforms();
                 }
                 RandomFlyingBird randomBird = bird.GetComponent<RandomFlyingBird>();
                 if (randomBird == null || randomBird.m_nview == null || randomBird.m_nview.GetZDO() == null) { continue; }
@@ -183,6 +183,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     randomBird.transform.localScale = BirdSizeReferences[birdName] * scale;
                 }
             }
+            TaskRunner.RequestPhysicsSync();
             yield break;
         }
 
@@ -192,8 +193,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             foreach (Fish fish in Resources.FindObjectsOfTypeAll<Fish>()) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
+                    TaskRunner.RequestPhysicsSync();
                     yield return new WaitForEndOfFrame();
-                    Physics.SyncTransforms();
                 }
                 if (fish == null || fish.m_nview == null || fish.m_nview.GetZDO() == null) { continue; }
                 ItemDrop id = fish.GetComponent<ItemDrop>();
@@ -202,6 +203,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 id.m_itemData.m_shared.m_scaleByQuality = scalePerLevel;
                 id.SetQuality(id.m_itemData.m_quality);
             }
+            TaskRunner.RequestPhysicsSync();
             yield break;
         }
     }

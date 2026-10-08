@@ -1,3 +1,17 @@
+**1.24.0**
+ ---
+ ```
+- Resized creatures now hold weapons that match their size again
+- Improves riding for larger creatures, and makes them easier to mount.
+- Per-star attack speed now counts stars the same way as the other per-star bonuses.
+- Improves performance of enemy health bars, creature resizing and damage handling.
+- Creature setup is faster and is spread out when many creatures load at once, such as right after joining a world, to avoid a stutter.
+- Admin command to apply stat changes to a specific creature (sls-creature-setstat)
+- A modifier given to a creature by command or by another mod now changes its size and resistances for every nearby player at once, not only after it reloads.
+- A creature that levels up by evolving now shows its new stars, speed and size to every nearby player at once.
+- Improves consistency of corpse coloring and sizes
+ ```
+
 **1.23.1**
  ---
  ```

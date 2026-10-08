@@ -180,13 +180,15 @@ namespace StarLevelSystem
         }
 
         /// <summary>
-        /// This allows setting modifiers to any of a creatures base attributes (this value is applied once, flat addition)
-        /// this does not apply immediately and must be applied with ApplyCreatureUpdates
+        /// This allows setting any of a creatures base attributes, in place of what its configuration gives it
+        /// this applies immediately
         /// </summary>
         /// <remarks>
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attribute">The enum value of which attribute to get: BaseHealth = 0, BaseDamage = 1, AttackSpeed = 2, Speed = 3, Size = 4</param>
@@ -215,6 +217,8 @@ namespace StarLevelSystem
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures attributes</param>
@@ -238,13 +242,15 @@ namespace StarLevelSystem
         }
 
         /// <summary>
-        /// This allows setting modifiers to any of a creatures per level attributes (this value is applied once for every level)
-        /// this does not apply immediately and must be applied with ApplyCreatureUpdates
+        /// This allows setting any of a creatures per level attributes (applied once for every level), in place of what its configuration gives it
+        /// this applies immediately
         /// </summary>
         /// <remarks>
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attribute">The enum value of which attribute to get: HealthPerLevel = 0, DamagePerLevel = 1, SpeedPerLevel = 2, AttackSpeedPerLevel = 3, SizePerLevel = 4</param>
@@ -273,6 +279,8 @@ namespace StarLevelSystem
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures attributes</param>
@@ -299,13 +307,14 @@ namespace StarLevelSystem
         /// <summary>
         /// This allows setting any of a creatures damage received modifiers
         /// 1.0 = 100% damage taken, 0.5 = 50% damage taken, 2.0 = 200% damage taken
-        /// this does not apply immediately and must be applied with ApplyCreatureUpdates
+        /// this applies immediately
         /// </summary>
         /// <remarks>
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
-        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="damageType">The enum value of which attribute to get: Blunt = 0, Slash = 1, Pierce = 2, Fire = 3, Frost = 4, Lightning = 5, Poison = 6, Spirit = 7, Chop = 8, Pickaxe = 9</param>
@@ -333,7 +342,8 @@ namespace StarLevelSystem
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
-        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of creatures damage recived modifiers</param>
@@ -356,14 +366,15 @@ namespace StarLevelSystem
         }
 
         /// <summary>
-        /// Allows setting flat damage bonus values for a creature (this value is applied once, flat addition)
-        /// this does not apply immediately and must be applied with ApplyCreatureUpdates
+        /// Allows setting flat damage bonus values for a creature (a flat addition to its damage)
+        /// this applies immediately
         /// </summary>
         /// <remarks>
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
-        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="damageType">The enum value of which attribute to get: Blunt = 0, Slash = 1, Pierce = 2, Fire = 3, Frost = 4, Lightning = 5, Poison = 6, Spirit = 7, Chop = 8, Pickaxe = 9</param>
@@ -390,7 +401,8 @@ namespace StarLevelSystem
         /// Persisted on the creature whichever peer calls it, so the value survives a reload, an ownership handoff and a
         /// Star Level System config reload, and every other peer sees it. A call from a peer that does not own the
         /// creature applies there at once and is forwarded to the owner, which saves it.
-        /// After a rebuild the persisted value is the base the creature's own modifiers (Resist*, Flame, ...) stack on.
+        /// The value is the creature's base: its modifiers (Big, Resist*, Flame, ...) add their share on top, now and after
+        /// every rebuild. The getters include that share, so a getter's value scaled and set back counts it twice.
         /// </remarks>
         /// <param name="creatureId">The creature's Character class</param>
         /// <param name="attributes">Dictionary<int, float> of all creatures flat damage bonuses</param>

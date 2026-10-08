@@ -1,6 +1,7 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.Sizes;
@@ -50,6 +51,21 @@ namespace StarLevelSystem.modules.Modifiers {
                 appliedMods += 1;
             }
             cacheEntry.RunOnceDone = true;
+        }
+
+        // Gives an entry GetAndSetLocalCache has just rebuilt from the ZDO what its modifiers add to it, which that build
+        // leaves out: Resist* lower damage taken, Fast raises speed, Big raises size and health, all only in RunOnce.
+        // Damage taken is read from the hitting peer's entry, so the hud's rebuild on noticing a new level or modifier
+        // list used to leave that player's hits ignoring the creature's resists until it reloaded.
+        // Left to the creature's setup while that is still to run: it adds them to whichever entry is cached by then.
+        // Run before the owner's roll exists, it would mark an entry with no modifiers yet as done, and setup would then
+        // skip every modifier's share (see CreatureStatOverrides.Apply).
+        internal static void SetupRebuiltEntry(Character character, CharacterCacheEntry cacheEntry) {
+            if (character == null || cacheEntry == null || cacheEntry.Level <= 0 || cacheEntry.RunOnceDone) { return; }
+            if (character.m_nview == null || CompositeLazyCache.HasRolledSetup(character.m_nview.GetZDO()) == false) { return; }
+            if (CreatureSetupQueue.IsPending(character)) { return; }
+            RunOnceModifierSetup(character, cacheEntry);
+            SetupModifiers(character, cacheEntry, cacheEntry.CreatureModifiers);
         }
 
         public static void SetupModifiers(Character character, CharacterCacheEntry cacheEntry, Dictionary<string, ModifierType> selectedMods) {
@@ -162,7 +178,12 @@ namespace StarLevelSystem.modules.Modifiers {
         internal static string BuildCreatureLocalizableName(Character chara, Dictionary<string, ModifierType> modifiers) {
             if (chara.m_nview.IsValid() == false) { return chara.m_name; }
 
-            modifiers ??= new Dictionary<string, ModifierType>();
+            // Most creatures carry no modifier, or only the "None" sentinel, which never adds to the name. This runs two
+            // or three times per creature setup, so they skip the lists below.
+            if (modifiers == null || modifiers.Count == 0 || (modifiers.Count == 1 && modifiers.ContainsKey(NoMods))) {
+                return CustomOrDefaultName(chara);
+            }
+
             List<string> prefix_names = new List<string>();
             List<string> suffix_names = new List<string>();
             int nameEntries = 0;
@@ -211,9 +232,7 @@ namespace StarLevelSystem.modules.Modifiers {
                 }
             }
 
-            string charName = chara.m_name;
-            string customName = chara.m_nview.GetZDO().GetString(SLS_NAME, "");
-            if (string.IsNullOrEmpty(customName) == false) { charName = customName; }
+            string charName = CustomOrDefaultName(chara);
 
             if (prefix_names.Count == 0 && suffix_names.Count == 0) {
                 return charName;
@@ -226,6 +245,11 @@ namespace StarLevelSystem.modules.Modifiers {
             // Logger.LogDebug($"Setting creature name for {chara.name} to {creatureName}");
             return creatureName;
 
+        }
+
+        private static string CustomOrDefaultName(Character chara) {
+            string customName = chara.m_nview.GetZDO().GetString(SLS_NAME, "");
+            return string.IsNullOrEmpty(customName) ? chara.m_name : customName;
         }
 
         public static Dictionary<string, ModifierType> SelectModifiersForCreature(Character character, string creatureName, CreatureSpecificSetting creature_settings, Heightmap.Biome biome, int level, Dictionary<string, ModifierType> requiredModifiers = null, List<string> notAllowedModifiers = null)
@@ -594,7 +618,12 @@ namespace StarLevelSystem.modules.Modifiers {
 
             Logger.LogDebug($"Evolve: {creatureName} reached level {newLevel} and gained {selectedType} modifier {newModifier}.");
             // applyChanges false: the evolve path re-applies speed/damage/size/health itself right after this.
-            return AddCreatureModifier(character, selectedType, newModifier, applyChanges: false);
+            if (AddCreatureModifier(character, selectedType, newModifier, applyChanges: false) == false) { return false; }
+            // Only this peer's entry has the new modifier's changes. Every other player's view of the creature, its size
+            // and the resists their own hits read, only follows once told, as for a modifier given by command. This peer
+            // handles it before the call returns, which replaces its cache entry.
+            ModifierPeerRefresh.Send(character, newModifier);
+            return true;
         }
 
     }

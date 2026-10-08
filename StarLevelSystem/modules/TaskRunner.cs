@@ -28,8 +28,23 @@ namespace StarLevelSystem.modules {
             Setup();
             return Instance;
         }
+
+        // Physics.SyncTransforms pushes every moved or rescaled transform in the scene to PhysX, so calling it once per
+        // resized object repeated the same global work many times a frame. Valheim leaves autoSyncTransforms off and
+        // physics syncs on its own before each simulation step; this only keeps physics queries current in the gap
+        // before that step, with at most one sync per frame from Orchestrator.LateUpdate.
+        internal static void RequestPhysicsSync() {
+            Orchestrator.PhysicsSyncRequested = true;
+        }
     }
 
     internal class Orchestrator : MonoBehaviour {
+        internal static bool PhysicsSyncRequested = false;
+
+        private void LateUpdate() {
+            if (PhysicsSyncRequested == false) { return; }
+            PhysicsSyncRequested = false;
+            Physics.SyncTransforms();
+        }
     }
 }

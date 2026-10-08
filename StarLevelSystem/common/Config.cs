@@ -532,7 +532,7 @@ namespace StarLevelSystem.common {
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
-            EnableRidableCreatureSizeFixes = BindServerConfig("LevelSystem", "EnableRidableCreatureSizeFixes", true, "Enables collider fixes for ridable creatures (lox and Askavin).");
+            EnableRidableCreatureSizeFixes = BindServerConfig("LevelSystem", "EnableRidableCreatureSizeFixes", true, "Keeps scaled rideable creatures usable: saddle reach that grows with the mount, dismounting onto the ground beside a big mount, steeper slopes for big mounts, more camera zoom while riding one, and collider fixes for tamed Lox and Asksvin.");
             MultipliedNightSpawnsRemovedDuringDay = BindServerConfig("LevelSystem", "MultipliedNightSpawnsRemovedDuringDay", true, "When true, night spawns will be flagged to despawn during the day, which will result in them running away and despawning. This can be disabled if desired.");
 
             EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");

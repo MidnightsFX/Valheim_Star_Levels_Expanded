@@ -132,7 +132,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     float scale = 1 + (ValConfig.BirdSizeScalePerLevel.Value * storedLevel);
                     //Logger.LogDebug($"Setting bird size {scale}.");
                     __instance.transform.localScale *= scale;
-                    Physics.SyncTransforms();
+                    TaskRunner.RequestPhysicsSync();
                     DropOnDestroyed dropondeath = __instance.gameObject.GetComponent<DropOnDestroyed>();
                     if (dropondeath != null && dropondeath.m_dropWhenDestroyed != null) {
                         List<DropTable.DropData> drops = new List<DropTable.DropData>();

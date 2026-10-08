@@ -68,13 +68,14 @@ namespace StarLevelSystem.modules.Sizes {
                     size = capped;
                     if (zview.IsOwner()) { zview.m_zdo.Set(SLS_SIZE, size); }
                 }
-                // Physics.SyncTransforms is a GLOBAL engine sync; only pay for it (and the rider
-                // re-seat) when the scale is actually changing - this path runs on every setup pass.
                 if (obj.transform.localScale != size) {
                     obj.transform.localScale = size;
-                    UpdateRidingCreaturesForSizeScaling(obj, characterCache);
-                    Physics.SyncTransforms();
+                    TaskRunner.RequestPhysicsSync();
                 }
+                // Outside the change check: ApplyStoredSize usually set this scale already in Character.Awake, and a
+                // tame's collider still needs fitting to it. The collider fixes and the saddle reach all set absolute values
+                // (the reach from the prefab's own), so a repeat is harmless.
+                UpdateRidingCreaturesForSizeScaling(obj);
                 return;
             }
 
@@ -89,13 +90,33 @@ namespace StarLevelSystem.modules.Sizes {
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
             if (obj.transform.localScale != creatureScale) {
                 obj.transform.localScale = creatureScale;
-                UpdateRidingCreaturesForSizeScaling(obj, characterCache);
+                UpdateRidingCreaturesForSizeScaling(obj);
                 //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
-                Physics.SyncTransforms();
+                TaskRunner.RequestPhysicsSync();
             }
             // Only the owner persists the size. A non-owner still applies it to its own instance above, but its write
             // would race the owner's (a SoulEater bonus, say) through vanilla's highest-revision-wins ZDO sync.
             if (zview.IsOwner()) { zview.m_zdo.Set(SLS_SIZE, creatureScale); }
+        }
+
+        // Puts a creature that was sized before straight back at that size from Character.Awake. The full setup runs
+        // InitialDelayBeforeSetup later, so without this every reloaded creature showed up at vanilla size and then
+        // popped. A read of the ZDO with no roll, so it is safe on any peer; the queued setup still runs the stored-size
+        // path in SetSizeModification afterwards, which applies the size cap and the tame collider fixes.
+        internal static void ApplyStoredSize(Character creature, ZDO zdo) {
+            if (zdo == null || creature.IsPlayer()) { return; }
+            Vector3 size = zdo.GetVec3(SLS_SIZE, Vector3.zero);
+            if (size == Vector3.zero || creature.transform.localScale == size) { return; }
+            creature.transform.localScale = size;
+            TaskRunner.RequestPhysicsSync();
+        }
+
+        // The factor SLS has scaled this creature by, read off its transform against the prefab's own scale.
+        // 1 for a creature SLS has not resized, or one whose prefab has no usable reference scale.
+        internal static float CurrentScaleMultiplier(GameObject obj) {
+            float reference = GetSizeReferenceForObject(obj.name).x;
+            if (reference <= 0f) { return 1f; }
+            return obj.transform.localScale.x / reference;
         }
 
         internal static Vector3 GetSizeReferenceForObject(string name) {
@@ -143,27 +164,29 @@ namespace StarLevelSystem.modules.Sizes {
 
         }
 
-        internal static void UpdateRidingCreaturesForSizeScaling(GameObject creature, CharacterCacheEntry cDetails) {
+        // Also run when a creature is tamed or saddled (MountScalingPatches): one sized while still wild would otherwise
+        // never get the tame collider fit until its size next changed.
+        internal static void UpdateRidingCreaturesForSizeScaling(GameObject creature) {
             if (ValConfig.EnableRidableCreatureSizeFixes.Value == false) { return; }
+            MountScaling.ApplySaddleScaling(creature);
             // Handle tame specific collider scaling
             Tameable tame = creature.GetComponent<Tameable>();
             if (tame != null && tame.IsTamed()) {
                 string name = Utils.GetPrefabName(creature.gameObject);
-                //Logger.LogDebug($"Checking Tame collider adjustment for {name} with for level {cDetails.Level}");
                 if (name == "Lox") {
-                    UpdateLoxCollider(creature.gameObject, cDetails);
+                    UpdateLoxCollider(creature.gameObject);
                 }
-                if (name == "Askvin") {
+                if (name == "Asksvin") {
                     UpdateAskavinCollider(creature.gameObject);
                 }
             }
         }
 
-        private static void UpdateLoxCollider(GameObject go, CharacterCacheEntry cDetails) {
+        private static void UpdateLoxCollider(GameObject go) {
             CapsuleCollider loxCC = go.GetComponent<CapsuleCollider>();
             if (loxCC == null) { return; }
-            // Uses the same clamped multiplier as the visual scale so a shrunk lox stays consistent.
-            float size_set = DetermineScaleMultiplier(cDetails);
+            // The multiplier actually on the transform, so the collider matches the visual scale (cap and bonuses included).
+            float size_set = CurrentScaleMultiplier(go);
             float levelChange = (size_set - 1) * 0.1555f;
             //float levelChange = cDetails.Level * 0.016f;  // 3.31 -lvl 20 (size 3), 3.15 -lvl 10 (size 2) or 0.016f per level at default sizing
             loxCC.height = Mathf.Max(0.1f, 3f + levelChange);

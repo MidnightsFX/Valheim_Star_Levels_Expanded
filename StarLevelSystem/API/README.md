@@ -27,15 +27,13 @@ StarLevelSystem.API.SetCreatureLevel(Character creature, int newLevel);
 
 To modify a creatures attributes:
 ```csharp
-int attribute = 0; // 0 = Health, 1 = Stamina, 2 = Mana, 3 = CarryWeight, 4 = Damage, 5 = Armor
-// Gets the current base health of the creature, this might already be modifier by other effects
-float basehealth = StarLevelSystem.API.GetCreatureBaseAttribute(Character creatureId, attribute);
-basehealth *= 1.5f; // Increase base health by 50%
-// Sets the new base health of the creature in the cache
-StarLevelSystem.API.SetCreatureBaseAttribute(Character creatureId, attribute, basehealth);
-// Applies the changes to the creature
-StarLevelSystem.API.ApplyCreatureUpdates(Character creatureId);
+int attribute = 0; // 0 = BaseHealth, 1 = BaseDamage, 2 = AttackSpeed, 3 = Speed, 4 = Size
+// Gives the creature a base health of 1.5x its vanilla health, in place of what its LevelSettings
+// entry gives it. Its modifiers (Big, ...) still add their share on top. Applies at once.
+StarLevelSystem.API.SetCreatureBaseAttribute(Character creatureId, attribute, 1.5f);
 ```
+See [Set values are the creature's base](#set-values-are-the-creatures-base) before reading a value,
+changing it and setting it back.
 
 To Add an existing creature modifier to a creature:
 ```csharp
@@ -64,9 +62,29 @@ there at once and is forwarded to the owner, which saves it a moment later. A cr
 is taken by the calling machine first. The same holds for `SetCreatureLevel`,
 `AddModifierToTargetCreature`, `ApplyCreatureUpdates` and `SetCreatureSpawnManaged`.
 
-Saved damage-received and flat damage-bonus values are the base the creature's own modifiers stack
-on after a rebuild: a Resist modifier still lowers a saved resistance, and Flame still adds to a
-saved fire bonus.
+Once the owner has saved a modifier from `AddModifierToTargetCreature`, every machine with the
+creature loaded, the owner included, rebuilds its stats, size and speed with the modifier, whatever
+`update` was. `update: false` only holds the change back on a calling machine that does not own the
+creature, until the owner's save reaches it.
+
+### Set values are the creature's base
+
+A value you set is the creature's own base for that stat, the value its `LevelSettings` entry would
+give it. Its modifiers add their share on top, the same way they do to a configured value: Big still
+adds to a set size and health, a Resist modifier still lowers a set resistance, and Flame still adds
+to a set fire bonus. The change applies at once (stats, size, speed and health), so the setters
+need no `ApplyCreatureUpdates` after them. A creature Star Level System has not set up yet, such as
+one you spawned this frame, gets the value when its setup runs.
+
+The getters (`GetCreatureBaseAttribute` and the rest) return what the creature has now, its
+modifiers' share included. So don't read a value, scale it and set it back: the share you read ends
+up in the base, and the modifiers add it again. A Big creature with a configured base health of 1.0
+that Big raises to 1.5 reads as 1.5; scaled by 1.5 and set back, it gets a base of 2.25 and Big's 0.5
+on top, 2.75. Set the base you want instead (1.5 here, which Big then raises to 2.0).
+
+Before 1.23.2 a setter wrote its value over the modified one, so the modifiers' share was missing
+until the creature's stats were next rebuilt (a reload, an ownership handoff, a config reload), and
+was added on top of the value from then on.
 
 ### Creatures your mod spawns
 

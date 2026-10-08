@@ -153,6 +153,9 @@ namespace StarLevelSystem.modules.UI {
                     extendedHUD.NextResolveAttempt = Time.time + NotReadyRetryInterval;
                     return;
                 }
+                // A fresh build, which is how the staleness check in UpdateHudForAllLevels gets here (it clears the entry
+                // first), has none of the modifiers' changes, and this peer's hits read the creature's resists from it.
+                CreatureModifiers.SetupRebuiltEntry(chara, cce);
             }
 
             Dictionary<string, ModifierType> mods = GetModifiersCached(extendedHUD, extendedHUD.HudLink.m_character);
@@ -530,6 +533,7 @@ namespace StarLevelSystem.modules.UI {
                     //Logger.LogDebug($"Creature cache is outdated for {zdoid}-{cce.RefCreatureName}-{cce.Level}");
                     CompositeLazyCache.ClearCachedCreature(extended_hud.HudLink.m_character);
                     cce = CompositeLazyCache.GetAndSetLocalCache(extended_hud.HudLink.m_character);
+                    CreatureModifiers.SetupRebuiltEntry(extended_hud.HudLink.m_character, cce);
                 }
             }
             // Always resolve a name here. Leaving CreatureNameLocalized null when the cache entry is not

@@ -128,6 +128,10 @@ namespace StarLevelSystem.common
         // The level a multi-phase boss started its fight at, kept on a phase that is pinned at level 1 so the phase
         // after it can come back at the same level. See modules/BossPhases.cs.
         public static readonly string SLS_PHASE_LEVEL = "SLS_PHASE_LVL";
+        // Set on a corpse SLS recoloured: 1, or 2 when the colour is emissive. The colour itself is stored in vanilla's
+        // s_hue/s_saturation/s_value on the same ZDO. Only the peer the creature died on recolours its corpse, so every
+        // other peer applies the colour from these when its copy loads. See SizePatches.ApplyStoredRagdollLook.
+        public static readonly string SLS_RAGDOLL_COLOR = "SLS_RDCOLOR";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,
@@ -1841,6 +1845,11 @@ namespace StarLevelSystem.common
             };
             public CreatureSpecificSetting CreatureSettings { get; set; } = null;
             public Dictionary<DamageType, float> CreatureDamageBonus { get; set; } = new Dictionary<DamageType, float>() { };
+
+            // Attack animation speed multiplier, built from AttackSpeed/AttackSpeedPerLevel by
+            // SpeedModifications.GetAttackSpeedMultiplier for the level it records. A level of -1 means rebuild it.
+            public float AttackSpeedMultiplier { get; set; } = 1f;
+            public int AttackSpeedMultiplierLevel { get; set; } = -1;
 
             public string GetDamageBonusDescription()
             {

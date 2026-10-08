@@ -1,6 +1,7 @@
 ﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.AnimationAndSpeed;
+using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
@@ -43,6 +44,10 @@ namespace StarLevelSystem.modules
         // config flush - applies it again. Only the owner writes the ZDO (CompositeLazyCache.PersistStatOverrides and
         // the other owner-gated writers), so each setter claims an unowned creature first and replays the call on the
         // owner when that is another peer. See APIOwnerRelay.
+        //
+        // The stat setters set the creature's base for a stat, the value its LevelSettings entry would give it, and its
+        // modifiers add their share on top, now and on every rebuild (CreatureStatOverrides.Apply). The getters return
+        // the value with that share included, so writing a getter's value back counts the share twice.
 
         // Marks a creature as spawned and owned by another mod. SLS keeps scaling it (stats, modifiers, colour),
         // but never deletes or multiplies it for spawn-rate or disabled-spawn rules and never rerolls or clamps its
@@ -74,13 +79,7 @@ namespace StarLevelSystem.modules
         public static bool UpdateCreatureBaseAttributes(Character chara, int attribute, float value) {
             if (chara == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (cdc == null) { return false; }
-            cdc.CreatureBaseValueModifiers[(CreatureBaseAttribute)attribute] = value;
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_BASE_STATS, new Dictionary<CreatureBaseAttribute, float>() { { (CreatureBaseAttribute)attribute, value } });
-            if ((CreatureBaseAttribute)attribute == CreatureBaseAttribute.Size) {
-                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cdc, true);
-            }
+            if (CreatureStatOverrides.Apply(chara, StatGroup.Base, StatValues(attribute, value)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.UpdateBaseAttribute, args => { args.Write(attribute); args.Write(value); });
             return true;
         }
@@ -97,21 +96,9 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllBaseAttributes(Character chara, Dictionary<int, float> attributes) {
-            if (chara == null) { return false; }
+            if (chara == null || attributes == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (scd == null) { return false; }
-            Dictionary<CreatureBaseAttribute, float> persisted = new Dictionary<CreatureBaseAttribute, float>();
-            foreach (var kvp in attributes) {
-                scd.CreatureBaseValueModifiers[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
-                persisted[(CreatureBaseAttribute)kvp.Key] = kvp.Value;
-            }
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_BASE_STATS, persisted);
-            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            SpeedModifications.ApplySpeedModifications(chara, scd);
-            DamageModifications.ApplyDamageModification(chara, scd);
-            SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
-            HealthModifications.ForceApplyHealthModifications(chara, scd);
+            if (CreatureStatOverrides.Apply(chara, StatGroup.Base, StatValues(attributes)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.SetAllBaseAttributes, args => APIOwnerRelay.WriteAttributes(args, attributes));
             return true;
         }
@@ -127,13 +114,7 @@ namespace StarLevelSystem.modules
         public static bool UpdateCreaturePerLevelAttributes(Character chara, int attribute, float value) {
             if (chara == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (cdc == null) { return false; }
-            cdc.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)attribute] = value;
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_PERLEVEL_STATS, new Dictionary<CreaturePerLevelAttribute, float>() { { (CreaturePerLevelAttribute)attribute, value } });
-            if ((CreaturePerLevelAttribute)attribute == CreaturePerLevelAttribute.SizePerLevel) {
-                SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, cdc, true);
-            }
+            if (CreatureStatOverrides.Apply(chara, StatGroup.PerLevel, StatValues(attribute, value)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.UpdatePerLevelAttribute, args => { args.Write(attribute); args.Write(value); });
             return true;
         }
@@ -151,22 +132,9 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllPerLevelAttributes(Character chara, Dictionary<int, float> attributes) {
-            if (chara == null) { return false; }
+            if (chara == null || attributes == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (scd == null) { return false; }
-            Dictionary<CreaturePerLevelAttribute, float> persisted = new Dictionary<CreaturePerLevelAttribute, float>();
-            foreach (var kvp in attributes)
-            {
-                scd.CreaturePerLevelValueModifiers[(CreaturePerLevelAttribute)kvp.Key] = kvp.Value;
-                persisted[(CreaturePerLevelAttribute)kvp.Key] = kvp.Value;
-            }
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_PERLEVEL_STATS, persisted);
-            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            SpeedModifications.ApplySpeedModifications(chara, scd);
-            DamageModifications.ApplyDamageModification(chara, scd);
-            SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
-            HealthModifications.ForceApplyHealthModifications(chara, scd);
+            if (CreatureStatOverrides.Apply(chara, StatGroup.PerLevel, StatValues(attributes)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.SetAllPerLevelAttributes, args => APIOwnerRelay.WriteAttributes(args, attributes));
             return true;
         }
@@ -182,10 +150,7 @@ namespace StarLevelSystem.modules
         public static bool UpdateCreatureDamageRecievedModifier(Character chara, int attribute, float value) {
             if (chara == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (cdc == null) { return false; }
-            cdc.DamageRecievedModifiers[(DamageType)attribute] = value;
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_DMGRECV_STATS, new Dictionary<DamageType, float>() { { (DamageType)attribute, value } });
+            if (CreatureStatOverrides.Apply(chara, StatGroup.DamageTaken, StatValues(attribute, value)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.UpdateDamageRecieved, args => { args.Write(attribute); args.Write(value); });
             return true;
         }
@@ -202,19 +167,9 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllDamageRecievedModifiers(Character chara, Dictionary<int, float> attributes) {
-            if (chara == null) { return false; }
+            if (chara == null || attributes == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (scd == null) { return false; }
-            Dictionary<DamageType, float> persisted = new Dictionary<DamageType, float>();
-            foreach (var kvp in attributes)
-            {
-                scd.DamageRecievedModifiers[(DamageType)kvp.Key] = kvp.Value;
-                persisted[(DamageType)kvp.Key] = kvp.Value;
-            }
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_DMGRECV_STATS, persisted);
-            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            DamageModifications.ApplyDamageModification(chara, scd);
+            if (CreatureStatOverrides.Apply(chara, StatGroup.DamageTaken, StatValues(attributes)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.SetAllDamageRecieved, args => APIOwnerRelay.WriteAttributes(args, attributes));
             return true;
         }
@@ -234,10 +189,7 @@ namespace StarLevelSystem.modules
         public static bool UpdateCreatureDamageBonus(Character chara, int attribute, float value) {
             if (chara == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (cdc == null) { return false; }
-            cdc.CreatureDamageBonus[(DamageType)attribute] = value;
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_DMGBONUS_STATS, new Dictionary<DamageType, float>() { { (DamageType)attribute, value } });
+            if (CreatureStatOverrides.Apply(chara, StatGroup.DamageBonus, StatValues(attribute, value)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.UpdateDamageBonus, args => { args.Write(attribute); args.Write(value); });
             return true;
         }
@@ -254,21 +206,21 @@ namespace StarLevelSystem.modules
         }
 
         public static bool SetAllDamageBonus(Character chara, Dictionary<int, float> attributes) {
-            if (chara == null) { return false; }
+            if (chara == null || attributes == null) { return false; }
             APIOwnerRelay.ClaimIfUnowned(chara);
-            CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara);
-            if (scd == null) { return false; }
-            Dictionary<DamageType, float> persisted = new Dictionary<DamageType, float>();
-            foreach (var kvp in attributes)
-            {
-                scd.CreatureDamageBonus[(DamageType)kvp.Key] = kvp.Value;
-                persisted[(DamageType)kvp.Key] = kvp.Value;
-            }
-            CompositeLazyCache.PersistStatOverrides(chara, SLS_DMGBONUS_STATS, persisted);
-            CompositeLazyCache.UpdateCharacterCacheEntry(chara, scd);
-            DamageModifications.ApplyDamageModification(chara, scd);
+            if (CreatureStatOverrides.Apply(chara, StatGroup.DamageBonus, StatValues(attributes)) == false) { return false; }
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.SetAllDamageBonus, args => APIOwnerRelay.WriteAttributes(args, attributes));
             return true;
+        }
+
+        private static Dictionary<int, float?> StatValues(int attribute, float value) {
+            return new Dictionary<int, float?>() { { attribute, value } };
+        }
+
+        private static Dictionary<int, float?> StatValues(Dictionary<int, float> attributes) {
+            Dictionary<int, float?> values = new Dictionary<int, float?>(attributes.Count);
+            foreach (KeyValuePair<int, float> attribute in attributes) { values[attribute.Key] = attribute.Value; }
+            return values;
         }
 
         // Applies all changes made to attributes to the creature
@@ -334,6 +286,9 @@ namespace StarLevelSystem.modules
             CharacterCacheEntry cdc = CompositeLazyCache.GetAndSetLocalCache(chara);
             if (cdc == null) { return false; }
             bool added = CreatureModifiers.AddCreatureModifier(chara, (ModifierType)modifierType, modifierName, update);
+            // Stored now, so every peer with the creature loaded rebuilds its view of it, whatever `update` says: nothing
+            // else would apply the modifier to their entry and size. See ModifierPeerRefresh.
+            if (added && CompositeLazyCache.IsZOwner(chara)) { ModifierPeerRefresh.Send(chara, modifierName); }
             // Replayed whatever this peer made of it: its copy of the modifier list can be behind the owner's.
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.AddModifier, args => { args.Write(modifierName); args.Write(modifierType); args.Write(update); });
             return added;

@@ -331,23 +331,47 @@ namespace StarLevelSystem.Data
             if (zdo == null) { return null; }
             string mods = zdo.GetString(SLS_MODSV2, null);
             // Priority storage of V2 Mod format
+            if (mods != null) { return ParseStoredModifiers(zdo, mods); }
+
+            CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
+            return StoredMods.Get();
+        }
+
+        // Whether the creature carries `modifier`, and at which tier, for checks that run on every hit. Unlike
+        // GetCreatureModifiers this allocates nothing for a creature with no stored modifiers, where that falls through
+        // to the pre-V2 property and builds it and an empty dictionary on every call. Only a creature still on the
+        // pre-V2 storage pays for the full read.
+        public static bool TryGetCreatureModifier(Character character, string modifier, out ModifierType type) {
+            type = default;
+            if (character == null || character.m_nview == null) { return false; }
+            ZDO zdo = character.m_nview.GetZDO();
+            if (zdo == null) { return false; }
+            Dictionary<string, ModifierType> parsed;
+            string mods = zdo.GetString(SLS_MODSV2, null);
             if (mods != null) {
-                ZDOID cid = zdo.m_uid;
-                if (ModifierParseCache.TryGetValue(cid, out KeyValuePair<string, Dictionary<string, ModifierType>> cached) && cached.Key == mods) {
-                    return cached.Value;
-                }
-                Dictionary<string, ModifierType> parsed;
+                parsed = ParseStoredModifiers(zdo, mods);
+            } else if (zdo.GetByteArray(SLS_MODIFIERS) != null) {
+                parsed = GetCreatureModifiers(character);
+            } else {
+                return false;
+            }
+            return parsed != null && parsed.TryGetValue(modifier, out type);
+        }
+
+        private static Dictionary<string, ModifierType> ParseStoredModifiers(ZDO zdo, string mods) {
+            ZDOID cid = zdo.m_uid;
+            if (ModifierParseCache.TryGetValue(cid, out KeyValuePair<string, Dictionary<string, ModifierType>> cached) && cached.Key == mods) {
+                return cached.Value;
+            }
+            if (StoredModifierFormat.TryParse(mods, out Dictionary<string, ModifierType> parsed) == false) {
                 try {
                     parsed = DataObjects.yamlDeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
                 }
                 catch { parsed = null; }
-                // A failed parse is cached too, so a malformed string doesn't re-parse on every hit.
-                ModifierParseCache[cid] = new KeyValuePair<string, Dictionary<string, ModifierType>>(mods, parsed);
-                return parsed;
             }
-
-            CreatureModifiersZNetProperty StoredMods = new CreatureModifiersZNetProperty(SLS_MODIFIERS, character.m_nview, null);
-            return StoredMods.Get();
+            // A failed parse is cached too, so a malformed string doesn't re-parse on every hit.
+            ModifierParseCache[cid] = new KeyValuePair<string, Dictionary<string, ModifierType>>(mods, parsed);
+            return parsed;
         }
 
         // Only the owner persists the list (strict ZDO-owner authority). A non-owner's call - an API call, which
@@ -355,7 +379,10 @@ namespace StarLevelSystem.Data
         public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
             if (IsZOwner(chara)) {
-                chara.m_nview.GetZDO().Set(SLS_MODSV2, DataObjects.yamlSerializerJsonCompat.Serialize(modifiers));
+                if (StoredModifierFormat.TrySerialize(modifiers, out string stored) == false) {
+                    stored = DataObjects.yamlSerializerJsonCompat.Serialize(modifiers);
+                }
+                chara.m_nview.GetZDO().Set(SLS_MODSV2, stored);
             }
             CharacterCacheEntry cce = GetCacheEntry(chara);
             if (cce != null) {
@@ -389,9 +416,21 @@ namespace StarLevelSystem.Data
             zdo.Set(key, DataObjects.yamlSerializerJsonCompat.Serialize(merged));
         }
 
+        // Drops one stat from what PersistStatOverrides stored under `key`, so the next cache build on any peer goes
+        // back to the configured value. Owner only, like the write.
+        public static void ClearStatOverride<TKey>(Character chara, string key, TKey stat)
+        {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null || IsZOwner(chara) == false) { return; }
+            ZDO zdo = chara.m_nview.GetZDO();
+            Dictionary<TKey, float> stored = ReadPersistedStats<TKey>(zdo, key, chara.name);
+            if (stored == null || stored.Remove(stat) == false) { return; }
+            // Empty reads back as nothing stored.
+            zdo.Set(key, stored.Count == 0 ? string.Empty : DataObjects.yamlSerializerJsonCompat.Serialize(stored));
+        }
+
         // A value this build cannot parse is skipped with a warning rather than failing the build, which would
         // leave the creature without a cache entry for the whole session.
-        private static Dictionary<TKey, float> ReadPersistedStats<TKey>(ZDO zdo, string key, string creatureName)
+        internal static Dictionary<TKey, float> ReadPersistedStats<TKey>(ZDO zdo, string key, string creatureName)
         {
             if (zdo == null) { return null; }
             string yaml = zdo.GetString(key, null);
@@ -491,6 +530,7 @@ namespace StarLevelSystem.Data
                 ModifierParseCache.Remove(id);
                 RemoveTreeCacheEntry(id);
                 UIHudControl.RemoveExtendedHudFromCache(id);
+                MountScaling.Forget(id);
             }
         }
     }

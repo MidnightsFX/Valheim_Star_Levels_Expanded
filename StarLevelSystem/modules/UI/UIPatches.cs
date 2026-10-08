@@ -98,10 +98,17 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
+        // EnemyHud.LateUpdate calls ShowHud every frame for every character in range, but vanilla only builds the hud
+        // on the first call. The work below only needs doing on that call: the UpdateHuds transpiler below removes
+        // vanilla's per-frame level_2/level_3 SetActive, so nothing turns those back on, and a reparented boss bar stays put.
         [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.ShowHud))]
         public static class DisableVanillaStarsByDefault {
-            public static void Postfix(EnemyHud __instance, Character c) {
-                if (__instance == null || c == null) { return; }
+            public static void Prefix(EnemyHud __instance, Character c, out bool __state) {
+                __state = __instance != null && c != null && __instance.m_huds.ContainsKey(c);
+            }
+
+            public static void Postfix(EnemyHud __instance, Character c, bool __state) {
+                if (__state || __instance == null || c == null) { return; }
                 // non-bosses and players
                 __instance.m_huds.TryGetValue(c, out var value);
                 if (!c.IsBoss()) {

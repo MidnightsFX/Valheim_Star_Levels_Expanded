@@ -18,11 +18,15 @@ namespace StarLevelSystem.Modifiers
             // creature in the world.
             static readonly Dictionary<ZDOID, float> NextAllowedRedirection = new Dictionary<ZDOID, float>();
 
+            // Enum.ToString allocates, and this prefix runs for every hit on every character.
+            static readonly string LifeLinkKey = ModifierNames.LifeLink.ToString();
+
             public static void Prefix(Character __instance, HitData hit) {
-                Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
-                if (mods != null && mods.ContainsKey(ModifierNames.LifeLink.ToString())) {
+                // Players never carry modifiers; skip the lookup for every hit they take.
+                if (__instance == null || __instance.IsPlayer()) { return; }
+                if (CompositeLazyCache.TryGetCreatureModifier(__instance, LifeLinkKey, out ModifierType lifeLinkType)) {
                     //Logger.LogDebug($"Lifelink triggered for {__instance.name}");
-                    CreatureModifierConfiguration cm = CreatureModifiersData.GetModifierDef(ModifierNames.LifeLink.ToString(), mods[ModifierNames.LifeLink.ToString()]);
+                    CreatureModifierConfiguration cm = CreatureModifiersData.GetModifierDef(LifeLinkKey, lifeLinkType);
                     // Fraction of the hit the linked target keeps; the linked neighbour absorbs the rest.
                     float kept_fraction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower * __instance.m_level));
                     kept_fraction = Mathf.Clamp(kept_fraction, 0.1f, 1f);

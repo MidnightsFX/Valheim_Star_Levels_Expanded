@@ -5,8 +5,10 @@ using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.Damage;
 using StarLevelSystem.modules.Health;
+using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -58,9 +60,17 @@ namespace StarLevelSystem.Modifiers {
             Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(chara);
             if (mods != null && mods.Keys.Contains(ModifierNames.Evolving.ToString())) {
                 CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Evolving.ToString(), mods[ModifierNames.Evolving.ToString()]);
+                int level = chara.m_level;
+                // Held at the max level wherever the over-level reroll would act on the next one: the cache rebuild below
+                // rolled a fresh random level into the entry (so size and colors followed it, not the evolved level), and
+                // the next load clamped the creature back to max anyway. The kill count holds too, so a raised max
+                // resumes from it. Same gate and bound DetermineLevel and StartZOwnerCreatureRoutines use.
+                if (LevelSelection.OverLevelRerollEnabled(chara)) {
+                    LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out CreatureSpecificSetting creatureSettings, out BiomeSpecificSetting biomeSettings, out Heightmap.Biome biome);
+                    if (level >= LevelSelection.GetMaxCreatureLevel(chara, creatureSettings, biomeSettings, biome)) { return; }
+                }
                 int kills = chara.m_nview.GetZDO().GetInt(SLS_EVOLVE, 0);
                 kills += 1;
-                int level = chara.m_level;
                 int levelup_req = Mathf.RoundToInt(cmcfg.BasePower + (cmcfg.PerlevelPower * level));
                 Logger.LogDebug($"Evolve check: {kills} >= {levelup_req}");
                 if (kills >= levelup_req) {
@@ -73,16 +83,28 @@ namespace StarLevelSystem.Modifiers {
                     chara.m_level = newLevel;
                     kills = 1;
                     CharacterCacheEntry scd = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
+                    // The rebuilt entry has none of the modifiers' changes yet, so the re-apply below dropped them:
+                    // a Big creature shrank and a Fast one slowed on every level-up. Set up again at the new level.
+                    CreatureModifiers.SetupRebuiltEntry(chara, scd);
                     // Evolution modifier roll. Runs after the cache rebuild (the new modifier is set up against
                     // the fresh entry) and before the stat re-apply below, which then picks up its changes.
+                    bool rolledModifier = false;
                     if (ValConfig.EvolvingCanRollNewModifiers.Value) {
-                        CreatureModifiers.TryRollEvolutionModifier(chara, scd, newLevel);
+                        rolledModifier = CreatureModifiers.TryRollEvolutionModifier(chara, scd, newLevel);
+                        // A rolled modifier's peer refresh has replaced the entry here; re-apply from that one.
+                        scd = CompositeLazyCache.GetCacheEntry(chara) ?? scd;
                     }
                     SpeedModifications.ApplySpeedModifications(chara, scd);
                     DamageModifications.ApplyDamageModification(chara, scd);
                     SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, scd, true);
                     HealthModifications.ForceApplyHealthModifications(chara, scd);
                     chara.Heal(chara.GetMaxHealth() * 5f);
+                    // Moves the hud to the new level from this entry. Left to notice the level itself, it would throw
+                    // the entry away and build another.
+                    UIHudControl.InvalidateCacheEntry(chara);
+                    // Every other peer still shows the old level: nothing there notices s_level change. A rolled
+                    // modifier's peer refresh already moves them to the new level.
+                    if (rolledModifier == false) { ModifierPeerRefresh.SendLevel(chara, newLevel); }
                     Logger.LogDebug($"Evolve: {chara} level: {level} -> {newLevel}");
                 }
                 chara.m_nview.GetZDO().Set(SLS_EVOLVE, kills);

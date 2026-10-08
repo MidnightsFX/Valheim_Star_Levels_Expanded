@@ -56,7 +56,7 @@ namespace StarLevelSystem.common {
                 first = false;
                 sb.Append('"').Append(modifier.Key).Append("\": \"").Append(typeName).Append('"');
             }
-            sb.Append('}').Append(Environment.NewLine);
+            sb.Append('}').Append(System.Environment.NewLine);
             stored = sb.ToString();
             return true;
         }

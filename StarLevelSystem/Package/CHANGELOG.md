@@ -1,3 +1,12 @@
+**1.25.0**
+ ---
+ ```
+- Creatures now follow the world's Combat modifier, so harder settings bring more starred and larger creatures, and death novas hit harder.
+- Creatures and objects with their own loot tables now follow the world's Resources modifier.
+- The level and loot setup pages show the world's modifiers and include them in their charts and estimates.
+- Improves performance of the map's distance rings and zone outlines
+ ```
+
 **1.24.0**
  ---
  ```

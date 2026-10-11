@@ -1,4 +1,3 @@
-using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -25,6 +24,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         // (TaskRunner is DontDestroyOnLoad, so they would otherwise survive across worlds).
         private static Coroutine flushCoroutine;
         private static Coroutine buildCoroutine;
+        // The zone overlay's line pixels; see MinimapLineArt for how redraws and reveals stay cheap.
+        private static readonly MinimapLineArt zoneArt = new MinimapLineArt(ZoneLayer);
 
         public static void Initialize() {
             if (!ValConfig.EnableZoneScalingBonus.Value) { return; }
@@ -175,14 +176,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
 
             // Clear the existing minimap overlay so stale boundaries don't linger during the rebuild.
-            if (ZoneScaleSystemData.overlayAvailable && !ZNet.instance.IsDedicated() && MinimapManager.Instance != null) {
-                var existing = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: ValConfig.ZoneOverlayAboveFog.Value);
-                if (existing != null) {
-                    int mapSize = existing.TextureSize * existing.TextureSize;
-                    existing.OverlayTex.SetPixels(new Color[mapSize]);
-                    existing.OverlayTex.Apply();
-                }
-            }
+            if (!ZNet.instance.IsDedicated()) { zoneArt.Clear(); }
 
             // Reset state and regenerate from the world.
             ZoneScaleSystemData.Zones = new List<ZoneData>();
@@ -205,6 +199,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             pendingDeaths.Clear();
             flushRunning = false;
             ZoneScaleSystemData.ResetState();
+            zoneArt.Reset();
         }
 
         private static IEnumerable<(int, int)> Neighbors(int x, int z) {
@@ -258,14 +253,26 @@ namespace StarLevelSystem.modules.LevelSystem {
             overlayRebuildCoroutine = runner.StartCoroutine(BuildZoneMapOverlay());
         }
 
+        // Called on new exploration while the outlines are drawn below fog (see
+        // MinimapOverlayFog.MaybeRefreshForExploration): writes the outline pixels the player has just
+        // uncovered, without a redraw. If the overlay has not been drawn in this world yet, start that
+        // draw instead.
+        internal static void RevealExploredZones() {
+            if (!ZoneScaleSystemData.overlayAvailable) {
+                DrawMinimapOverlay();
+                return;
+            }
+            zoneArt.Reveal();
+        }
+
         public static void UpdateZoneOverlayColorsOnChange(object s, EventArgs e) {
             Colorization.UpdateZoneOverlayColorSelection();
             if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
             DrawMinimapOverlay();
         }
 
-        // SettingChanged handler for ZoneOverlayAboveFog: redraw so the overlay's fog flag is
-        // re-synced (see BuildZoneMapOverlay) and recomposed above/below the fog as configured.
+        // SettingChanged handler for ZoneOverlayAboveFog: redraw so the outlines are re-masked
+        // above/below the fog as configured (see MinimapLineArt.Commit).
         public static void UpdateZoneOverlayFogOnChange(object s, EventArgs e) {
             if (ZNet.instance == null || ZNet.instance.IsDedicated()) { return; }
             DrawMinimapOverlay();
@@ -276,18 +283,11 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (!ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) { yield break; }
             if (Minimap.instance == null) { yield break; }
 
-            // The overlay is always created above-fog (ignoreFog: true) because Jotunn's own below-fog
-            // masking doesn't work here; ZoneOverlayAboveFog is honoured instead by masking the pixels
-            // we write (see the aboveFog check in DrawZoneEdge).
-            MinimapManager.MapOverlay zoneOverlay = MinimapManager.Instance.GetMapOverlay(ZoneLayer, ignoreFog: true);
-            if (zoneOverlay == null) { yield break; }
-            zoneOverlay.Enabled = true;
-            bool aboveFog = ValConfig.ZoneOverlayAboveFog.Value;
-            int texSize = zoneOverlay.TextureSize;
-            int mapSize = texSize * texSize;
-            // Build the whole frame into this local buffer; the live OverlayTex is left untouched
-            // until the single atomic SetPixels/Apply at the end, so the old overlay stays visible.
-            Color[] pixels = new Color[mapSize];
+            // Every outline pixel is staged regardless of fog; the Commit at the end swaps them into the
+            // overlay in one frame (the old outlines stay visible until then) and writes only those
+            // that may show -- ZoneOverlayAboveFog is honoured there, see MinimapLineArt and
+            // MinimapOverlayFog.
+            if (!zoneArt.BeginStage()) { yield break; }
 
             List<Color> colors = Colorization.zoneOverlayColors;
 
@@ -306,6 +306,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     zoneColor = colors[(zone.ZoneLevel - 1) % colors.Count];
                 }
                 zoneColor.a = ValConfig.ZoneOverlayColorTransparency.Value;
+                Color32 lineColor = zoneColor;
 
                 // Draw the 4 edges of the zone rectangle, inset slightly so neighbouring cells
                 // render as two parallel lines rather than one merged boundary. Fall back to the
@@ -313,20 +314,22 @@ namespace StarLevelSystem.modules.LevelSystem {
                 float ix0 = zone.MinX + outlineInset, ix1 = zone.MaxX - outlineInset;
                 float iz0 = zone.MinZ + outlineInset, iz1 = zone.MaxZ - outlineInset;
                 if (ix1 <= ix0 || iz1 <= iz0) { ix0 = zone.MinX; ix1 = zone.MaxX; iz0 = zone.MinZ; iz1 = zone.MaxZ; }
-                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix1, iz0, zoneColor, aboveFog); // bottom
-                yield return DrawZoneEdge(pixels, texSize, ix0, iz1, ix1, iz1, zoneColor, aboveFog); // top
-                yield return DrawZoneEdge(pixels, texSize, ix0, iz0, ix0, iz1, zoneColor, aboveFog); // left
-                yield return DrawZoneEdge(pixels, texSize, ix1, iz0, ix1, iz1, zoneColor, aboveFog); // right
+                yield return DrawZoneEdge(ix0, iz0, ix1, iz0, lineColor); // bottom
+                yield return DrawZoneEdge(ix0, iz1, ix1, iz1, lineColor); // top
+                yield return DrawZoneEdge(ix0, iz0, ix0, iz1, lineColor); // left
+                yield return DrawZoneEdge(ix1, iz0, ix1, iz1, lineColor); // right
             }
 
-            if (zoneOverlay == null) { yield break; }
-            zoneOverlay.OverlayTex.SetPixels(pixels);
-            zoneOverlay.OverlayTex.Apply();
+            // Commit also returns false if Jotunn destroyed the overlay texture on Minimap.OnDestroy
+            // while we were yielded. The fog setting is read here, at the moment the outlines are
+            // written, rather than at the start of the build.
+            if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
+            if (!zoneArt.Commit(ValConfig.ZoneOverlayAboveFog.Value)) { yield break; }
             ZoneScaleSystemData.overlayAvailable = true;
             Logger.LogDebug($"Zone map overlay drawn for {ZoneScaleSystemData.Zones.Count} zones.");
         }
 
-        private static IEnumerator DrawZoneEdge(Color[] pixels, int texSize, float x0, float z0, float x1, float z1, Color color, bool aboveFog) {
+        private static IEnumerator DrawZoneEdge(float x0, float z0, float x1, float z1, Color32 color) {
             float dx = x1 - x0;
             float dz = z1 - z0;
             float length = Mathf.Sqrt(dx * dx + dz * dz);
@@ -339,22 +342,10 @@ namespace StarLevelSystem.modules.LevelSystem {
                 float wx = x0 + dx * t;
                 float wz = z0 + dz * t;
                 Minimap.instance.WorldToPixel(new Vector3(wx, 0, wz), out int px, out int pz);
-                // Below fog: only draw the boundary over explored terrain (we self-mask because
-                // Jotunn's below-fog masking is broken in this build).
-                if (!aboveFog && !MinimapOverlayFog.IsPixelExplored(px, pz)) {
-                    ZoneScaleSystemData.overlayUpdates++;
-                    if (ZoneScaleSystemData.overlayUpdates % 3000 == 0) {
-                        yield return new WaitForEndOfFrame();
-                    }
-                    continue;
-                }
+                // Pixels off the map are dropped by Stage.
                 for (int oz = lo; oz <= hi; oz++) {
-                    int bz = pz + oz;
-                    if (bz < 0 || bz >= texSize) { continue; }
                     for (int ox = lo; ox <= hi; ox++) {
-                        int bx = px + ox;
-                        if (bx < 0 || bx >= texSize) { continue; }
-                        pixels[bz * texSize + bx] = color;
+                        zoneArt.Stage(px + ox, pz + oz, color);
                     }
                 }
                 ZoneScaleSystemData.overlayUpdates++;

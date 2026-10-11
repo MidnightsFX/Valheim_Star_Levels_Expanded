@@ -1,4 +1,3 @@
-using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -17,6 +16,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         // resume against a destroyed Minimap/overlay texture).
         private static Coroutine ringCheckCoroutine;
         private static Coroutine ringBuildCoroutine;
+        // The ring overlay's line pixels; see MinimapLineArt for how redraws and reveals stay cheap.
+        private static readonly MinimapLineArt ringArt = new MinimapLineArt("SLS-LevelBonus");
 
         public static void DelayedMinimapSetup() {
             // Don't try to draw while in the main menu, on a loading screen, or while leaving a world
@@ -35,6 +36,19 @@ namespace StarLevelSystem.modules.LevelSystem {
             buildingMapRings = false;
             ringAvailable = false;
             center = Vector3.zero;
+            ringArt.Reset();
+        }
+
+        // Called on new exploration while the rings are drawn below fog (see
+        // MinimapOverlayFog.MaybeRefreshForExploration): writes the ring pixels the player has just
+        // uncovered, without a redraw. If the rings have not been drawn in this world yet -- e.g. the
+        // first draw bailed because the distance settings were not ready -- start that draw instead.
+        internal static void RevealExploredRings() {
+            if (!ringAvailable) {
+                if (!buildingMapRings) { DelayedMinimapSetup(); }
+                return;
+            }
+            ringArt.Reveal();
         }
 
         private static IEnumerator CheckAndDrawMapRings() {
@@ -180,8 +194,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             DelayedMinimapSetup();
         }
 
-        // SettingChanged handler for MapRingsAboveFog: rebuild so the overlay's fog flag is re-synced
-        // (see BuildMapRingOverlay) and recomposed above/below the fog as configured.
+        // SettingChanged handler for MapRingsAboveFog: redraw so the rings are re-masked above/below
+        // the fog as configured (see MinimapLineArt.Commit).
         public static void UpdateMapRingFogSettingOnChange(object s, EventArgs e) {
             if (!ValConfig.EnableMapRingsForDistanceBonus.Value) { return; }
             DelayedMinimapSetup();
@@ -193,9 +207,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             } else if (ringAvailable && MinimapOverlayFog.CanDrawOverlays()) {
                 // Hide the existing overlay, but only touch the minimap manager when in a live world
                 // (not while in the main menu or loading).
-                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: true);
-                if (ringbonuses == null) { return; }
-                ringbonuses.Enabled = false;
+                ringArt.Hide();
             }
         }
 
@@ -217,20 +229,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                     Logger.LogDebug("Server is headless, skipping minimap generation");
                     yield break;
                 }
-                // The overlay is always created above-fog (ignoreFog: true) because Jotunn's own
-                // below-fog masking doesn't work here; MapRingsAboveFog is honoured instead by masking
-                // the pixels we write (see the aboveFog check in the draw loop below).
-                MinimapManager.MapOverlay ringbonuses = MinimapManager.Instance.GetMapOverlay("SLS-LevelBonus", ignoreFog: true);
-                if (ringbonuses == null) { yield break; }
-                ringbonuses.Enabled = true;
-                bool aboveFog = ValConfig.MapRingsAboveFog.Value;
-
-                // Create a Color array with space for every pixel of the map
-                int mapSize = ringbonuses.TextureSize * ringbonuses.TextureSize;
-                Color[] mainPixels = new Color[mapSize];
-
-                // Clear the existing map?
-                ringbonuses.OverlayTex.SetPixels(mainPixels);
                 // Determine size of the world
                 //float worlddiameter = WorldGenerator.worldSize * 2; // - to + range, we need the diameter
                 // float meters_per_pixel = (Minimap.instance.m_textureSize / 2) + ValConfig.PixelMapOffsetRatio.Value; // ValConfig.PixelMapOffsetRatio.Value; // worlddiameter / ringbonuses.TextureSize; // 9.765625
@@ -242,13 +240,18 @@ namespace StarLevelSystem.modules.LevelSystem {
                     yield break;
                 }
 
+                // Every ring pixel is staged regardless of fog; Commit below swaps them into the overlay
+                // in one frame (the old rings stay visible until then) and writes only those that may
+                // show -- MapRingsAboveFog is honoured there, see MinimapLineArt and MinimapOverlayFog.
+                if (!ringArt.BeginStage()) { yield break; }
+
                 int updates = 0;
                 int levelring_color_index = 0;
                 foreach (int ringDistance in LevelSystemData.SLE_Level_Settings.DistanceLevelBonus.Keys) {
                     if (levelring_color_index >= Colorization.mapRingColors.Count) {
                         levelring_color_index = 0;
                     }
-                    Color selectedColor = Colorization.mapRingColors[levelring_color_index];
+                    Color32 selectedColor = Colorization.mapRingColors[levelring_color_index];
                     levelring_color_index++;
 
                     int granularity = ringDistance * 10; // number of vertices per ring
@@ -276,27 +279,17 @@ namespace StarLevelSystem.modules.LevelSystem {
                         int y = Mathf.RoundToInt(world_y + Mathf.Sin(t) * map_radii);
                         //circle[i] = new Vector2(x, y);
 
-                        int index = (y * ringbonuses.TextureSize) + x;
-                        // Index must be less than pixels due to zero indexing and greater than zero
-                        if (index >= mainPixels.Length || index < 0) {
-                            continue;
-                        }
-                        // Below fog: only draw the ring over explored terrain (we self-mask because
-                        // Jotunn's below-fog masking is broken in this build).
-                        if (!aboveFog && !MinimapOverlayFog.IsPixelExplored(x, y)) {
-                            continue;
-                        }
-                        //Logger.LogDebug($"Drawing ring for distance {ringDistance} pixels idx:{index}[{mainPixels.Length}] x:{x} y:{y}");
-                        mainPixels[index] = selectedColor;
+                        // Pixels off the map are dropped by Stage.
+                        ringArt.Stage(x, y, selectedColor);
                     }
                 }
 
-                // OverlayTex is a UnityEngine.Object, so this also catches the case where Jotunn
-                // destroyed the overlay on Minimap.OnDestroy while we were yielded (MapOverlay itself
-                // is a plain managed object and can never become null here).
-                if (!MinimapOverlayFog.CanDrawOverlays() || ringbonuses.OverlayTex == null) { yield break; }
-                ringbonuses.OverlayTex.SetPixels(mainPixels);
-                ringbonuses.OverlayTex.Apply();
+                // Commit also returns false if Jotunn destroyed the overlay texture on
+                // Minimap.OnDestroy while we were yielded. The fog setting is read here rather than at
+                // the start, so a toggle that lands mid-build (and is dropped by the buildingMapRings
+                // guard) is still honoured.
+                if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
+                if (!ringArt.Commit(ValConfig.MapRingsAboveFog.Value)) { yield break; }
                 Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
                 ringAvailable = true;
             } finally {

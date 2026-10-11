@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using PlayFab.EconomyModels;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
@@ -69,12 +70,14 @@ namespace StarLevelSystem.modules.Sizes {
                     ZDO ragdollZdo = ragdoll.m_nview != null ? ragdoll.m_nview.GetZDO() : null;
                     Vector3 size = __instance.m_nview.m_zdo.GetVec3(SLS_SIZE, Vector3.zero);
                     if (size != Vector3.zero) {
-                        // SLS_SIZE stores the creature's final localScale, not a bare multiplier. Divide by the
+                        // SLS_SIZE stores the creature's sized scale, not a bare multiplier. Divide by the
                         // creature's own reference scale to recover the multiplier before applying it to the
                         // ragdoll's reference scale, otherwise any creature whose prefab is not unit-scaled
-                        // (lox, troll, ...) gets a ragdoll scaled by its own base size a second time.
+                        // (lox, troll, ...) gets a ragdoll scaled by its own base size a second time. The world's
+                        // Combat size factor is not in SLS_SIZE, so it goes on here as it went on the creature.
                         float creatureRef = GetSizeReferenceForObject(__instance.gameObject.name).x;
                         float multiplier = Mathf.Approximately(creatureRef, 0f) ? size.x : size.x / creatureRef;
+                        multiplier *= WorldRates.CreatureSizeFactor(__instance.transform.position);
                         ragdoll.transform.localScale = GetSizeReferenceForObject(ragdoll.gameObject.name) * multiplier;
                         ragdollZdo?.Set(SLS_SIZE, ragdoll.transform.localScale);
                     }

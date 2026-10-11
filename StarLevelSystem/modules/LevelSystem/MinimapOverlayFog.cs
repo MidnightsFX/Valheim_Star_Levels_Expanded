@@ -1,5 +1,6 @@
 using HarmonyLib;
 using StarLevelSystem.common;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -7,10 +8,10 @@ namespace StarLevelSystem.modules.LevelSystem {
     // Jotunn's built-in "below fog" overlay masking (MapOverlay.IgnoreFog=false) does not work in this
     // game/Jotunn build: even a freshly created below-fog overlay renders across the whole map. Only
     // IgnoreFog=true (draw everywhere) is reliable. So SLS always creates its overlays above-fog and
-    // masks the content itself -- in "below fog" mode the ring/zone builders only write pixels for
-    // explored map locations (see IsPixelExplored). Exploration reveals new terrain over time, so a
+    // masks the content itself -- in "below fog" mode only line pixels over explored map locations are
+    // written (see ExploredMask and MinimapLineArt). Exploration reveals new terrain over time, so a
     // Harmony hook on Minimap.Explore flags new exploration and MaybeRefreshForExploration throttle-
-    // redraws the below-fog overlays.
+    // reveals the below-fog overlays' hidden line pixels.
     internal static class MinimapOverlayFog {
         // Set true whenever the player uncovers a new fog pixel; consumed (throttled) to redraw the
         // self-masked below-fog overlays so newly explored areas gain their outlines.
@@ -64,23 +65,46 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         // Mirrors vanilla Minimap.IsExplored but takes overlay pixel coords directly (the ring/zone
-        // builders already work in this grid). SLS overlay drawing assumes the vanilla map texture and
+        // line art already works in this grid). SLS overlay drawing assumes the vanilla map texture and
         // Jotunn's overlay texture are the same size (m_textureSize == overlay.TextureSize == 2048), so
-        // a pixel index maps straight into the exploration arrays. Returns true when there is no live
-        // map yet so a premature draw doesn't hide everything.
-        internal static bool IsPixelExplored(int px, int py) {
-            Minimap mm = Minimap.instance;
-            if (mm == null || mm.m_explored == null) { return true; }
-            int size = mm.m_textureSize;
-            if (px < 0 || py < 0 || px >= size || py >= size) { return false; }
-            int idx = py * size + px;
-            return mm.m_explored[idx] || mm.m_exploredOthers[idx];
+        // a pixel index maps straight into the exploration arrays. Captured once per pass: testing tens
+        // of thousands of line pixels is then two BitArray reads each rather than a Minimap lookup
+        // each. IsExplored returns true when there is no live map yet so a premature draw doesn't hide
+        // everything.
+        internal readonly struct ExploredMask {
+            private readonly BitArray explored;
+            private readonly BitArray exploredOthers;
+            private readonly int size;
+
+            private ExploredMask(BitArray explored, BitArray exploredOthers, int size) {
+                this.explored = explored;
+                this.exploredOthers = exploredOthers;
+                this.size = size;
+            }
+
+            // False when there was no live map to read exploration from.
+            internal bool IsLive => explored != null;
+
+            internal static ExploredMask Capture() {
+                Minimap mm = Minimap.instance;
+                if (mm == null || mm.m_explored == null) { return default; }
+                return new ExploredMask(mm.m_explored, mm.m_exploredOthers, mm.m_textureSize);
+            }
+
+            internal bool IsExplored(int px, int py) {
+                if (explored == null) { return true; }
+                if (px < 0 || py < 0 || px >= size || py >= size) { return false; }
+                int idx = py * size + px;
+                return explored[idx] || exploredOthers[idx];
+            }
         }
 
         // Called from the Minimap.Update patch. When the player has uncovered new terrain and a
-        // below-fog overlay is active, throttle-redraw those overlays so the new area gains its
-        // outlines. Above-fog overlays already draw everywhere, so they never need this. Standing still
-        // uncovers nothing (ExplorationChanged stays false) and therefore costs nothing.
+        // below-fog overlay is active, throttle-reveal those overlays' line pixels over the new area.
+        // That only writes the newly uncovered line pixels (MinimapLineArt.Reveal) -- no redraw, and no
+        // texture upload unless a line was actually uncovered. Above-fog overlays already draw
+        // everywhere, so they never need this. Standing still uncovers nothing (ExplorationChanged
+        // stays false) and therefore costs nothing.
         internal static void MaybeRefreshForExploration() {
             if (!ExplorationChanged) { return; }
             if (Time.unscaledTime < nextFogRefresh) { return; }
@@ -92,8 +116,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (!ringsBelowFog && !zonesBelowFog) { return; }
 
             ExplorationChanged = false;
-            if (ringsBelowFog) { DistanceScaleSystem.DelayedMinimapSetup(); }
-            if (zonesBelowFog) { ZoneScaleSystem.DrawMinimapOverlay(); }
+            if (ringsBelowFog) { DistanceScaleSystem.RevealExploredRings(); }
+            if (zonesBelowFog) { ZoneScaleSystem.RevealExploredZones(); }
         }
 
         // Vanilla Minimap.Explore(int,int) returns true only when it reveals a previously-fogged pixel,

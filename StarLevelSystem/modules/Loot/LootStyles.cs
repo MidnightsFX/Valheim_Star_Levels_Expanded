@@ -150,6 +150,12 @@ namespace StarLevelSystem.modules.Loot {
                             break;
                     }
 
+                    // The world's Resources modifier, which vanilla applies to every table SLS does not replace. Before
+                    // the cap, as vanilla scales before its own, so the cap stays a hard limit.
+                    int beforeWorldRate = drop;
+                    drop = WorldRates.ScaleDropAmount(eod.DropGo, drop);
+                    if (logloot && drop != beforeWorldRate) { sb.AppendLine($"  world resource rate: {beforeWorldRate} * {WorldRates.ResourceRate} = {drop}."); }
+
                     // Enforce max drop cap
                     if (eod.MaxScaledAmount > 0 && drop > eod.MaxScaledAmount) {
                         if (logloot) { sb.AppendLine($"  capped {drop} -> {eod.MaxScaledAmount} (MaxScaledAmount)."); }
@@ -307,6 +313,12 @@ namespace StarLevelSystem.modules.Loot {
                     }
                     if (ValConfig.EnableDebugLootDetails.Value) {
                         sb.AppendLine($"Drop {loot.Drop.Prefab} Using {SelectedLootFactor} factor {scale_factor} base {drop_base_amount} = {drop}");
+                    }
+                    // The world's Resources modifier, as on the object tables: before the cap, so it stays a hard limit.
+                    int beforeWorldRate = drop;
+                    drop = WorldRates.ScaleDropAmount(loot.GameDrop.m_prefab, drop);
+                    if (ValConfig.EnableDebugLootDetails.Value && drop != beforeWorldRate) {
+                        sb.AppendLine($"Drop {loot.Drop.Prefab} world resource rate: {beforeWorldRate} * {WorldRates.ResourceRate} = {drop}");
                     }
                     // Enforce max drop cap
                     if (loot.MaxScaledAmount > 0 && drop > loot.MaxScaledAmount) {

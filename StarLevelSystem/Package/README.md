@@ -54,7 +54,8 @@ it won't open again, in this or any other mod manager profile: whether you have 
 `FirstTimeSetup` to `ShowNextLaunch` in the BepInEx config to see it again, or to `Never` to keep it closed in that profile. The same
 pages (without the welcome page) open from the Mod Config button on the main menu, or on the pause menu for hosts and admins.
 Each page has a Reset page button that puts just that page back to the mod's defaults; like any other edit, nothing is
-written until you Save.
+written until you Save. If a config file has a mistake that stops it loading, saving from the panel replaces it, but first
+keeps a copy next to it as `<file>.invalid.<date>.bak`, so you can see what was wrong and copy your settings back.
 
 Upgrading rather than installing fresh? The setup stays out of your way: a config file that already exists when this
 version first runs means the mod has been configured already, so it is marked done without being shown.
@@ -522,9 +523,16 @@ during an event.
 The number of players, frequency, and most all details of each raid is configurable through `RaidSettings.yaml`.
 
 The Raids page of the quick configure panel (Mod Config button) covers the common ones without editing YAML: the global
-raid settings, which raids are enabled, and per creature in a raid how many arrive each wave (`SpawnGroupSize`), how many
+raid settings (pausing every raid, multipliers on every raid's activation chance and cooldown, and the raid creature
+density), which raids are enabled, and per creature in a raid how many arrive each wave (`SpawnGroupSize`), how many
 may be alive at once (`MaxSpawned`, where 0 stops that creature spawning) and the seconds between its waves
 (`SpawnInterval`). Open a raid's **Spawns** button to see its creatures.
+
+New raid files ship with every raid's chance halved (`GlobalRaidChanceScalar: 0.5`), its cooldown doubled
+(`GlobalRaidIntervalScalar: 2`) and a lighter creature density (2); an existing `RaidSettings.yaml` keeps its own values.
+The world's vanilla **Raids** modifier applies on top, the way vanilla applies it to its own events: None starts no SLS
+raids, Less and Much less lengthen cooldowns and lower chances, More and Much more do the opposite. The Raids page shows
+the current world's setting.
 
 Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
 
@@ -928,6 +936,25 @@ are configured on the server itself.
 
 Not compatible with VentureValheim's LocationReset — SLS disables its own Location Reset
 automatically if that mod is present, since both would fight over the same objects.
+
+### World modifiers
+SLS follows the vanilla world modifiers a world was created with, or changed to later with `setworldmodifier` / `setkey`,
+on top of its own settings:
+
+- **Combat**: vanilla still applies enemy and player damage after SLS's damage scaling, and SLS's death novas follow the
+  enemy damage setting too. A harder setting's higher enemy level-up rate multiplies every SLS levelup chance (creatures,
+  bosses, raid spawns, fish and birds) the way night and zone bonuses do. Its larger enemies are sized on top of SLS's
+  own sizing, so `MaximumCreatureScale` caps SLS's sizing and the world's size goes on top; creatures in dungeons and
+  other interiors keep their size, as in vanilla.
+- **Resources**: drop tables SLS hands back to vanilla keep vanilla's resource scaling, and SLS's own tables in
+  `LootSettings.yaml` (`CharacterSpecificLoot`, `NonCharacterSpecificLoot`) follow it as well, after their per-level
+  scaling and before `MaxScaledAmount`. Drops marked `DontScale` or `DoesNotScale`, and the item types vanilla never
+  scales, keep their amounts.
+- **Raids**: see [Raids](#raids).
+
+With `EnableDebugOutputLevelRolls` on, each level roll logs the world's rate as `(WorldLevelUpRate)` next to the night and
+zone bonuses. The Level Distribution and Loot pages of the quick configure panel include the current world's modifiers in
+their charts and estimates, and say which ones are active.
 
 ### Localization
 Localization is available for everything in the mod. I accept community translations! If you would like to contribute localizations or improve them please reach out on discord.

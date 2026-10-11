@@ -56,6 +56,8 @@ namespace StarLevelSystem.modules.Raids {
             RaidControl.FlushPlayerRaidData();
 
             if (RaidsData.SLE_Raid_Settings.GlobalSettings.DisableAllRaids == true) { return; }
+            // The world's Raids modifier is None.
+            if (RaidControl.WorldRaidsOff) { return; }
 
 
             if (forceRaidStart || ZNet.instance.GetTimeSeconds() >= RaidControl.NextRaidCheckTime) {
@@ -194,8 +196,9 @@ namespace StarLevelSystem.modules.Raids {
 
 
                         float randv = UnityEngine.Random.Range(0f, 100f);
-                        Logger.LogRaid($"Raid {raid} checking activation chance: {randv} <= {raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar} | Forced? {forceRaidStart}");
-                        if (forceRaidStart || randv <= raid.Activation.Chance * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidChanceScalar) {
+                        float chance = raid.Activation.Chance * RaidControl.RaidChanceScalar();
+                        Logger.LogRaid($"Raid {raid} checking activation chance: {randv} <= {chance} | Forced? {forceRaidStart}");
+                        if (forceRaidStart || randv <= chance) {
                             Logger.LogRaid($"Activating Raid {raid.Name} for player {playerRaids.Key}");
                             // Send RPC to player to start their raid
                             Logger.LogRaid($"Determining raid init style: integrated? {isIntegratedServer} && {localPlayerPlatformAndID} == {playerRaids.Key}");

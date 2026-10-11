@@ -1,6 +1,7 @@
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.Raids;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -21,11 +22,18 @@ namespace StarLevelSystem.modules.UI {
 
         private const int MinRaidDensity = 1;
         private const int MaxRaidDensity = 6;
-        internal const int DefaultRaidDensity = 3;
+        // The density RaidsData's raids are written at, and what a file with no density stamp sits at. New files ship
+        // at the density RaidsData.DefaultConfiguration names instead.
+        internal const int StandardRaidDensity = 3;
 
-        // Density 1-6 to the share of each raid's configured creature counts that is actually used. 3 is the shipped
-        // numbers, which are already well above vanilla; 1 cuts them to roughly the size of a vanilla raid and 6
-        // triples them. Kept as a hand-written table rather than a curve so each step is a deliberate difficulty.
+        // Ends of the two global multipliers' sliders (the chance one starts at 0). A file value outside them widens the slider.
+        private const float MaxRaidChanceScalar = 2f;
+        private const float MinRaidIntervalScalar = 0.1f;
+        private const float MaxRaidIntervalScalar = 10f;
+
+        // Density 1-6 to the share of each raid's configured creature counts that is actually used. 3 is the numbers the
+        // raids are written with, which are already well above vanilla; 1 cuts them to roughly the size of a vanilla raid
+        // and 6 triples them. Kept as a hand-written table rather than a curve so each step is a deliberate difficulty.
         private static readonly float[] RaidDensityScale = { 0.4f, 0.65f, 1f, 1.6f, 2.2f, 3f };
         private static readonly string[] RaidDensityNames = { "Vanilla", "Light", "Standard", "Heavy", "Brutal", "Impossible" };
 
@@ -36,26 +44,32 @@ namespace StarLevelSystem.modules.UI {
         // What the staged counts are multiplied by relative to the numbers in the file. 1 while the slider has not been
         // moved off the density the file was written at.
         private static float RaidDensityRatio() {
-            return RaidDensityScalar(staged.raidDensity) / RaidDensityScalar(staged.raidDensityBase);
+            return RaidDensityRatio(staged.raidDensityBase, staged.raidDensity);
+        }
+
+        // What counts written at one density are multiplied by to sit at another.
+        private static float RaidDensityRatio(int fromDensity, int toDensity) {
+            return RaidDensityScalar(toDensity) / RaidDensityScalar(fromDensity);
         }
 
         // Never below 1: thinning a raid out must not silently switch a creature off. An entry already at 0 is off on
         // purpose (RaidRunner skips it entirely) and is left there.
         //
-        // The clamp is the one place this is lossy. An entry that lands on 1 by clamping is written to the file as 1,
-        // indistinguishable from an entry that was always 1, so raising the density in a LATER session scales that 1
-        // as if it had been the raid's intent. Only entries small enough to clamp drift, and only across a save; the
-        // alternative is scaling at spawn time, which is not what this setting does.
+        // Rounding and the clamp make this lossy across a save: a count written at a low density no longer says what it
+        // was scaled from (at Light a 1 may have been a 1 or a 2), so scaling it back up in a LATER session guesses.
+        // Spawns that still hold a shipped raid's numbers avoid that by scaling from RaidsData's standard counts
+        // instead; only counts an admin changed, and raids the mod does not ship, scale from the file and can drift.
+        // The alternative is scaling at spawn time, which is not what this setting does.
         private static int ScaleSpawnCount(int count, float ratio, int max) {
             if (count <= 0) { return count; }
             return Mathf.Clamp(Mathf.RoundToInt(count * ratio), 1, max);
         }
 
-        // Moves one raid's counts from the density they were written at to another, the way the slider would. For a
-        // shipped raid that a schema update adds to a file whose density was moved off the shipped one.
+        // Moves one raid's counts from the density they were written at to another, the way the slider would. For the
+        // shipped raids, from the standard density to the one new files ship at or a schema update adds them to.
         internal static void ScaleRaidToDensity(RaidDefinition raid, int fromDensity, int toDensity) {
             if (raid?.Spawns == null) { return; }
-            float ratio = RaidDensityScalar(toDensity) / RaidDensityScalar(fromDensity);
+            float ratio = RaidDensityRatio(fromDensity, toDensity);
             if (Mathf.Approximately(ratio, 1f)) { return; }
             foreach (RaidSpawnEntry entry in raid.Spawns) {
                 if (entry == null) { continue; }
@@ -71,10 +85,15 @@ namespace StarLevelSystem.modules.UI {
             internal int GroupSize;
             internal int MaxAlive;
             internal float Interval;
-            // The two counts as the file holds them, which is what the density slider always scales from. Keeping them
-            // means sliding away and back lands on the original numbers instead of compounding rounding each step.
+            // The two counts as the file holds them, which is what the density slider scales from. Keeping them means
+            // sliding away and back lands on the original numbers instead of compounding rounding each step.
             internal int FileGroupSize;
             internal int FileMaxAlive;
+            // Set while the file's counts are a shipped raid's, scaled to the file's density: the slider scales these
+            // standard-density counts instead, so a count rounded or clamped on the way down comes back exactly.
+            internal bool HasStandardCounts;
+            internal int StandardGroupSize;
+            internal int StandardMaxAlive;
 
             internal bool SameAs(StagedRaidSpawn other) {
                 return other != null && GroupSize == other.GroupSize && MaxAlive == other.MaxAlive && Interval == other.Interval;
@@ -83,16 +102,19 @@ namespace StarLevelSystem.modules.UI {
 
         private static string RaidSpawnKey(int raidIndex, int spawnIndex) => $"{raidIndex}:{spawnIndex}";
 
-        private static Dictionary<string, StagedRaidSpawn> SnapshotRaidSpawns(RaidConfiguration source) {
+        // fileDensity is the density the source's counts sit at.
+        private static Dictionary<string, StagedRaidSpawn> SnapshotRaidSpawns(RaidConfiguration source, int fileDensity) {
             Dictionary<string, StagedRaidSpawn> spawns = new Dictionary<string, StagedRaidSpawn>();
             if (source?.Raids == null) { return spawns; }
+            float fromStandard = RaidDensityRatio(StandardRaidDensity, fileDensity);
             for (int raidIndex = 0; raidIndex < source.Raids.Count; raidIndex++) {
+                string raidName = source.Raids[raidIndex]?.Name;
                 List<RaidSpawnEntry> entries = source.Raids[raidIndex]?.Spawns;
                 if (entries == null) { continue; }
                 for (int spawnIndex = 0; spawnIndex < entries.Count; spawnIndex++) {
                     RaidSpawnEntry entry = entries[spawnIndex];
                     if (entry == null) { continue; }
-                    spawns[RaidSpawnKey(raidIndex, spawnIndex)] = new StagedRaidSpawn {
+                    StagedRaidSpawn spawn = new StagedRaidSpawn {
                         PrefabName = entry.PrefabName,
                         GroupSize = entry.SpawnGroupSize,
                         MaxAlive = entry.MaxSpawned,
@@ -100,6 +122,16 @@ namespace StarLevelSystem.modules.UI {
                         FileGroupSize = entry.SpawnGroupSize,
                         FileMaxAlive = entry.MaxSpawned,
                     };
+                    // Only while both counts are exactly what the slider would have made of the shipped ones at this
+                    // density. Anything else was edited by hand and keeps scaling from the file.
+                    if (RaidsData.TryGetStandardCounts(raidName, spawnIndex, entry.PrefabName, out int standardGroup, out int standardMax)
+                        && ScaleSpawnCount(standardGroup, fromStandard, MaxSpawnGroupSize) == entry.SpawnGroupSize
+                        && ScaleSpawnCount(standardMax, fromStandard, MaxSpawnAlive) == entry.MaxSpawned) {
+                        spawn.HasStandardCounts = true;
+                        spawn.StandardGroupSize = standardGroup;
+                        spawn.StandardMaxAlive = standardMax;
+                    }
+                    spawns[RaidSpawnKey(raidIndex, spawnIndex)] = spawn;
                 }
             }
             return spawns;
@@ -111,6 +143,11 @@ namespace StarLevelSystem.modules.UI {
                 if (b.TryGetValue(spawn.Key, out StagedRaidSpawn other) == false || spawn.Value.SameAs(other) == false) { return false; }
             }
             return true;
+        }
+
+        // The GlobalSettings values the page edits, other than the density.
+        private static bool RaidGlobalsMatch(StagedConfig a, StagedConfig b) {
+            return a.disableAllRaids == b.disableAllRaids && a.raidChanceScalar == b.raidChanceScalar && a.raidIntervalScalar == b.raidIntervalScalar;
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -145,18 +182,26 @@ namespace StarLevelSystem.modules.UI {
             ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
             float colStartY = StartY + RowHeight + RowGap + 40f + 8f;
 
-            // Left column - global raid settings.
+            // Left column - global raid settings. The pause, the two multipliers and the density are RaidSettings.yaml's
+            // GlobalSettings; the rest are .cfg entries.
             List<GameObject> left = new List<GameObject> {
                 WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true), Tip("UseVanillaRaidConfiguration", "On, StarLevelSystem runs its own raids. Off, Valheim's own raid events are used instead and nothing on this page applies.")),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", Mathf.Min(0.1f, staged.raidEventRate), Mathf.Max(10f, staged.raidEventRate), staged.raidEventRate, false, v => staged.raidEventRate = v), Tip(ValConfig.RaidEventRate)),
+                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Pause all raids", staged.disableAllRaids, v => staged.disableAllRaids = v, true),
+                    Tip("DisableAllRaids", "On, no SLS raid starts on its own; with SLS raids enabled that means no raids at all. Every raid keeps its settings, and sls-raid-spawn still starts one for testing.")),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid chance multiplier", 0f, Mathf.Max(MaxRaidChanceScalar, staged.raidChanceScalar), staged.raidChanceScalar, false, v => staged.raidChanceScalar = v),
+                    Tip("GlobalRaidChanceScalar", "Multiplies every raid's activation chance each time it is rolled. 1 uses the chances in RaidSettings.yaml as written, 0.5 halves them and 0 means no raid ever starts on its own. " +
+                        "Several raids are rolled each check (Max attempts / player), so at high chances one of them almost always starts. The world's Raids modifier applies on top.")),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid cooldown multiplier", Mathf.Min(MinRaidIntervalScalar, staged.raidIntervalScalar), Mathf.Max(MaxRaidIntervalScalar, staged.raidIntervalScalar), staged.raidIntervalScalar, false, v => staged.raidIntervalScalar = v),
+                    Tip("GlobalRaidIntervalScalar", "Multiplies how long a player waits after a raid before the next can start (each raid's RaidCoolDownMinutes). Higher means raids come less often: 2 doubles every wait, 0.5 halves it. The world's Raids modifier applies on top.")),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v), Tip(ValConfig.ServerTimeBetweenRaidStartChecks)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v), Tip(ValConfig.MaxRaidAttemptsPerPlayer)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", Mathf.Min(1f, staged.maxActiveRaids), Mathf.Max(20f, staged.maxActiveRaids), staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v), Tip(ValConfig.MaxActiveRaids)),
                 WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid creature density", MinRaidDensity, MaxRaidDensity, staged.raidDensity, true, v => OnRaidDensityChanged((int)v)),
-                    Tip("RaidCreatureDensity", $"How crowded every raid is, {MinRaidDensity} to {MaxRaidDensity}. {DefaultRaidDensity} is the numbers RaidSettings.yaml holds now; " +
+                    Tip("RaidCreatureDensity", $"How crowded every raid is, {MinRaidDensity} to {MaxRaidDensity}. {StandardRaidDensity} is the numbers the raids were designed with; " +
                         $"{MinRaidDensity} thins every raid back to roughly vanilla sized and {MaxRaidDensity} is not meant to be survivable. " +
-                        "Moving it rewrites each creature's Each and Max alive on the right, never below 1, and always scales from the " +
-                        "numbers in the file - so sliding back where you started puts the raids back exactly.")),
+                        "Moving it rewrites each creature's Each and Max alive on the right, never below 1. Numbers still as shipped are scaled " +
+                        "from the ones the raids were designed with and numbers you changed from the file - so sliding back where you started " +
+                        "puts the raids back exactly.")),
             };
             ConfigUI.LayoutColumn(left, 0f, colStartY);
 
@@ -165,6 +210,11 @@ namespace StarLevelSystem.modules.UI {
             float noteY = colStartY + left.Count * (RowHeight + RowGap);
             raidDensityNote = ConfigUI.AddText(parent, 0f, noteY, LeftColWidth, RowHeight, "", 13, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
             RefreshRaidDensityNote();
+
+            // The world's own Raids modifier scales every raid on top of everything above, and is set when the world is
+            // made rather than here, so it is easy to forget it is there.
+            ConfigUI.AddText(parent, 0f, noteY + RowHeight, LeftColWidth, 2f * RowHeight, WorldRaidModifierNote(), 13, TextAnchor.UpperLeft,
+                RaidControl.WorldRaidsOff && ZoneSystem.instance != null ? GUIManager.Instance.ValheimOrange : GUIManager.Instance.ValheimBeige);
 
             // Right side - scrollable list of every configured raid, each with an enable/disable toggle and its spawns
             // behind a Spawns button. Disabled raids keep their config in RaidSettings.yaml and are marked Enabled = false.
@@ -284,12 +334,19 @@ namespace StarLevelSystem.modules.UI {
             staged.raidDensity = density;
 
             // Re-derived from the file's numbers rather than from what the boxes hold, so the slider never compounds
-            // its own rounding. Anything typed into Each or Max alive before the slider moved is re-derived with the
-            // rest -- the slider sets all of them, and the boxes are for fine tuning afterwards.
+            // its own rounding, and for a shipped raid's spawn from the numbers it was designed with. Anything typed into
+            // Each or Max alive before the slider moved is re-derived with the rest -- the slider sets all of them, and
+            // the boxes are for fine tuning afterwards.
             float ratio = RaidDensityRatio();
+            float fromStandard = RaidDensityRatio(StandardRaidDensity, density);
             foreach (StagedRaidSpawn spawn in staged.raidSpawns.Values) {
-                spawn.GroupSize = ScaleSpawnCount(spawn.FileGroupSize, ratio, MaxSpawnGroupSize);
-                spawn.MaxAlive = ScaleSpawnCount(spawn.FileMaxAlive, ratio, MaxSpawnAlive);
+                if (spawn.HasStandardCounts) {
+                    spawn.GroupSize = ScaleSpawnCount(spawn.StandardGroupSize, fromStandard, MaxSpawnGroupSize);
+                    spawn.MaxAlive = ScaleSpawnCount(spawn.StandardMaxAlive, fromStandard, MaxSpawnAlive);
+                } else {
+                    spawn.GroupSize = ScaleSpawnCount(spawn.FileGroupSize, ratio, MaxSpawnGroupSize);
+                    spawn.MaxAlive = ScaleSpawnCount(spawn.FileMaxAlive, ratio, MaxSpawnAlive);
+                }
             }
 
             foreach (RaidSpawnFields fields in raidSpawnFields) {
@@ -308,15 +365,19 @@ namespace StarLevelSystem.modules.UI {
         // counts follow the density back to the shipped one the way the slider would move them.
         private static void ResetRaidsPage() {
             staged.enableSlsRaids = !DefaultOf(ValConfig.UseVanillaRaidConfiguration);
-            staged.raidEventRate = DefaultOf(ValConfig.RaidEventRate);
             staged.raidCheckMinutes = DefaultOf(ValConfig.ServerTimeBetweenRaidStartChecks);
             staged.maxRaidAttempts = DefaultOf(ValConfig.MaxRaidAttemptsPerPlayer);
             staged.maxActiveRaids = DefaultOf(ValConfig.MaxActiveRaids);
 
             RaidConfiguration shipped = ShippedDefaults(YamlConfigManager.RaidSettings);
-            int density = ClampRaidDensity(shipped?.GlobalSettings?.RaidCreatureDensity ?? DefaultRaidDensity);
+            GlobalRaidSettings shippedGlobal = shipped?.GlobalSettings ?? RaidsData.DefaultConfiguration.GlobalSettings;
+            staged.disableAllRaids = shippedGlobal.DisableAllRaids;
+            staged.raidChanceScalar = shippedGlobal.GlobalRaidChanceScalar;
+            staged.raidIntervalScalar = shippedGlobal.GlobalRaidIntervalScalar;
+            int density = ClampRaidDensity(shippedGlobal.RaidCreatureDensity);
             // For the unmatched spawns: their file numbers sit at the old base density, and are carried to the new one.
-            float carry = RaidDensityScalar(density) / RaidDensityScalar(staged.raidDensityBase);
+            float carry = RaidDensityRatio(staged.raidDensityBase, density);
+            float fromStandard = RaidDensityRatio(StandardRaidDensity, density);
             List<RaidDefinition> raids = staged.raidSource?.Raids;
             if (raids != null) {
                 for (int raidIndex = 0; raidIndex < raids.Count; raidIndex++) {
@@ -334,6 +395,11 @@ namespace StarLevelSystem.modules.UI {
                             spawn.FileGroupSize = shippedSpawn.SpawnGroupSize;
                             spawn.FileMaxAlive = shippedSpawn.MaxSpawned;
                             spawn.Interval = shippedSpawn.SpawnInterval;
+                            spawn.HasStandardCounts = RaidsData.TryGetStandardCounts(raid.Name, spawnIndex, spawn.PrefabName, out spawn.StandardGroupSize, out spawn.StandardMaxAlive);
+                        } else if (spawn.HasStandardCounts) {
+                            // Only when the shipped file could not be read: the standard counts still say where it would be.
+                            spawn.FileGroupSize = ScaleSpawnCount(spawn.StandardGroupSize, fromStandard, MaxSpawnGroupSize);
+                            spawn.FileMaxAlive = ScaleSpawnCount(spawn.StandardMaxAlive, fromStandard, MaxSpawnAlive);
                         } else {
                             spawn.FileGroupSize = ScaleSpawnCount(spawn.FileGroupSize, carry, MaxSpawnGroupSize);
                             spawn.FileMaxAlive = ScaleSpawnCount(spawn.FileMaxAlive, carry, MaxSpawnAlive);
@@ -346,6 +412,33 @@ namespace StarLevelSystem.modules.UI {
             // Every count above now sits at the shipped density, so that is the base the slider scales from.
             staged.raidDensity = density;
             staged.raidDensityBase = density;
+        }
+
+        // Read on the client like every other global key, so a remote admin sees the server's value. Outside a world
+        // there is none to show, and the last world's rate is still in Game.m_eventRate.
+        private static string WorldRaidModifierNote() {
+            if (ZoneSystem.instance == null) {
+                return "In a world, its Raids world modifier also applies: None stops these raids, and Less or More lengthen or shorten cooldowns and lower or raise chances.";
+            }
+            float rate = RaidControl.WorldRaidRate;
+            if (RaidControl.WorldRaidsOff) {
+                return $"Raids world modifier: {ConfigUI.L("$menu_none")} - no raid starts on its own in this world, whatever is set here.";
+            }
+            if (Mathf.Approximately(rate, 1f)) {
+                return $"Raids world modifier: {ConfigUI.L("$menu_modifier_normal")} - raids run as set here.";
+            }
+            string cooldown = rate.ToString("0.##", CultureInfo.InvariantCulture);
+            string chance = (1f / rate).ToString("0.##", CultureInfo.InvariantCulture);
+            return $"Raids world modifier: {WorldRaidModifierName(rate)} - every cooldown x{cooldown} and chance x{chance} on top of the settings here.";
+        }
+
+        // Vanilla's names for the presets of its Raids modifier; anything else was set with setkey.
+        private static string WorldRaidModifierName(float rate) {
+            if (Mathf.Approximately(rate, 2f)) { return ConfigUI.L("$menu_muchless"); }
+            if (Mathf.Approximately(rate, 1.5f)) { return ConfigUI.L("$menu_less"); }
+            if (Mathf.Approximately(rate, 0.6f)) { return ConfigUI.L("$menu_more"); }
+            if (Mathf.Approximately(rate, 0.3f)) { return ConfigUI.L("$menu_muchmore"); }
+            return "custom";
         }
 
         private static void RefreshRaidDensityNote() {
@@ -361,19 +454,23 @@ namespace StarLevelSystem.modules.UI {
         //  Save
         // ------------------------------------------------------------------------------------------------
 
-        // Per-raid enable/disable, the three spawn numbers this page shows and the density they were scaled to; every
-        // other per-raid and per-spawn setting is preserved.
+        // The global switch and multipliers, per-raid enable/disable, the three spawn numbers this page shows and the
+        // density they were scaled to; every other per-raid and per-spawn setting is preserved.
         private static void SaveRaids(List<string> failures, List<string> warnings) {
             RaidConfiguration live = RaidsData.SLE_Raid_Settings;
             if (live?.Raids == null) { return; }
             if (staged.raidDensity == baseline.raidDensity
+                && RaidGlobalsMatch(staged, baseline)
                 && SetsEqual(staged.raidsOn, baseline.raidsOn)
                 && RaidSpawnsMatch(staged.raidSpawns, baseline.raidSpawns)) { return; }
 
             RaidConfiguration copy = CopyForEdit(YamlConfigManager.RaidSettings, live);
+            if (copy.GlobalSettings == null) { copy.GlobalSettings = new GlobalRaidSettings(); }
+            copy.GlobalSettings.DisableAllRaids = staged.disableAllRaids;
+            copy.GlobalSettings.GlobalRaidChanceScalar = staged.raidChanceScalar;
+            copy.GlobalSettings.GlobalRaidIntervalScalar = staged.raidIntervalScalar;
             // The counts written below are the ones this density produced, so the stamp has to go with them: the next
             // slider move reads it back as the density the file's numbers sit at.
-            if (copy.GlobalSettings == null) { copy.GlobalSettings = new GlobalRaidSettings(); }
             copy.GlobalSettings.RaidCreatureDensity = staged.raidDensity;
             for (int raidIndex = 0; raidIndex < copy.Raids.Count; raidIndex++) {
                 RaidDefinition raid = copy.Raids[raidIndex];

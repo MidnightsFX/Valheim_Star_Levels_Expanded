@@ -16,7 +16,38 @@ namespace StarLevelSystem.Data
         public static RaidConfiguration SLE_Raid_Settings;
 
         static RaidsData() {
+            // The spawn counts below are written at the standard density, so they stay the numbers to tune by hand, and
+            // are moved here to the density new files ship at, the way the quick configure slider would move them.
+            // StandardCounts keeps them as written first.
+            foreach (RaidDefinition raid in DefaultConfiguration.Raids) {
+                StandardCounts[raid.Name] = raid.Spawns.ConvertAll(entry => new SpawnCounts {
+                    PrefabName = entry.PrefabName, SpawnGroupSize = entry.SpawnGroupSize, MaxSpawned = entry.MaxSpawned });
+                QuickConfigureTool.ScaleRaidToDensity(raid, QuickConfigureTool.StandardRaidDensity, DefaultConfiguration.GlobalSettings.RaidCreatureDensity);
+            }
             SLE_Raid_Settings = DefaultConfiguration;
+        }
+
+        private struct SpawnCounts {
+            internal string PrefabName;
+            internal int SpawnGroupSize;
+            internal int MaxSpawned;
+        }
+
+        // Each shipped raid's spawn counts at the standard density, by raid name and in spawn order. Scaling down rounds
+        // and clamps, so a 1 in a file at a low density may have been a 1, 2 or 3 and cannot be scaled back up to it.
+        // Anything that moves a shipped raid's counts up goes back to these instead.
+        private static readonly Dictionary<string, List<SpawnCounts>> StandardCounts = new Dictionary<string, List<SpawnCounts>>();
+
+        // A shipped raid's counts for one spawn as written, at QuickConfigureTool.StandardRaidDensity. False when no
+        // shipped raid has that name or its spawn at that position is another creature.
+        internal static bool TryGetStandardCounts(string raidName, int spawnIndex, string prefabName, out int spawnGroupSize, out int maxSpawned) {
+            spawnGroupSize = 0;
+            maxSpawned = 0;
+            if (raidName == null || StandardCounts.TryGetValue(raidName, out List<SpawnCounts> spawns) == false) { return false; }
+            if (spawnIndex < 0 || spawnIndex >= spawns.Count || string.Equals(spawns[spawnIndex].PrefabName, prefabName, StringComparison.Ordinal) == false) { return false; }
+            spawnGroupSize = spawns[spawnIndex].SpawnGroupSize;
+            maxSpawned = spawns[spawnIndex].MaxSpawned;
+            return true;
         }
 
         internal static Dictionary<string, RaidDefinition> RaidsByName = new Dictionary<string, RaidDefinition>();
@@ -29,13 +60,16 @@ namespace StarLevelSystem.Data
             // A file at another version is backed up and replaced with these defaults, unless every version since
             // its own only added raids (RaidsAddedInVersion): then it keeps everything and just gains those.
             RaidVersion = 3,
+            // Only new files get these; see GlobalRaidSettings for why an existing file keeps its own.
             GlobalSettings = new GlobalRaidSettings()
             {
                 DisableAllRaids = false,
-                GlobalRaidIntervalScalar = 1f,
-                GlobalRaidChanceScalar = 1f,
-                // The counts every raid below is written with. Moving this on the Raids page rescales them.
-                RaidCreatureDensity = 3,
+                // Each raid's cooldown doubled, and its activation chance halved so a raid is a roll rather than a near
+                // certainty once a player has several to try.
+                GlobalRaidIntervalScalar = 2f,
+                GlobalRaidChanceScalar = 0.5f,
+                // Light. The counts below are written at standard and moved here by the static constructor.
+                RaidCreatureDensity = 2,
             },
             Raids = new List<RaidDefinition>()
             {
@@ -578,13 +612,21 @@ namespace StarLevelSystem.Data
             // A fresh copy, as in MigrateToCurrent: the shipped raids must not become the live, runtime-mutated objects.
             RaidConfiguration shipped = YamlFormat.Default.Deserializer.Deserialize<RaidConfiguration>(
                 YamlFormat.Default.Serializer.Serialize(DefaultConfiguration));
-            int shippedDensity = shipped.GlobalSettings?.RaidCreatureDensity ?? QuickConfigureTool.DefaultRaidDensity;
-            int fileDensity = parsed.GlobalSettings?.RaidCreatureDensity ?? shippedDensity;
+            // A file without the stamp sits at the class default, the standard density.
+            int fileDensity = parsed.GlobalSettings?.RaidCreatureDensity ?? QuickConfigureTool.StandardRaidDensity;
             foreach (string name in added) {
                 if (parsed.Raids.Exists(r => r != null && r.Name == name)) { continue; }
                 RaidDefinition raid = shipped.Raids.Find(r => r != null && r.Name == name);
                 if (raid == null) { continue; }
-                QuickConfigureTool.ScaleRaidToDensity(raid, shippedDensity, fileDensity);
+                // From the counts as written rather than the shipped copy's, which were rounded down to the shipped density.
+                for (int spawnIndex = 0; spawnIndex < raid.Spawns.Count; spawnIndex++) {
+                    RaidSpawnEntry entry = raid.Spawns[spawnIndex];
+                    if (entry != null && TryGetStandardCounts(name, spawnIndex, entry.PrefabName, out int spawnGroupSize, out int maxSpawned)) {
+                        entry.SpawnGroupSize = spawnGroupSize;
+                        entry.MaxSpawned = maxSpawned;
+                    }
+                }
+                QuickConfigureTool.ScaleRaidToDensity(raid, QuickConfigureTool.StandardRaidDensity, fileDensity);
                 parsed.Raids.Add(raid);
             }
             int messages = ReplaceShippedMessages(parsed.Raids, parsed.RaidVersion, current);

@@ -294,10 +294,12 @@ namespace StarLevelSystem.modules.LevelSystem {
             int selected_level = 0;
             // Build new levelup definitions with bonuses applied
             SortedDictionary<int, float> LevelUpWithBonus = ApplyLevelupBonus(creature_levelup_chance, levelup_bonus, distance_influence);
+            // The world's Combat modifier raises the odds of every level the way vanilla raises its spawners' chance.
+            float worldRate = WorldRates.LevelUpRate;
 
             int index = 0;
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {
-                float levelup_req = kvp.Value * nightBonus * zoneBonus;
+                float levelup_req = kvp.Value * nightBonus * zoneBonus * worldRate;
                 index++;
                 // Uncomment to debug level roll selection and values (warning verbose)
                 //if (ValConfig.EnableDebugOutputLevelRolls.Value) {
@@ -305,7 +307,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //    if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                 //    float baseval = 0;
                 //    if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
-                //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
+                //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus}(Night) * {zoneBonus}(Zone) * {worldRate}(WorldLevelUpRate) | {kvp.Key}");
                 //}
                 if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count) {
                     // Stopping at the cap is not enough: a table that starts above it (or skips past it) would hand
@@ -316,7 +318,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                         float baseval = 0;
                         if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) * {zoneBonus}(Zone) | max-level used: {maxLevel} Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) * {zoneBonus}(Zone) * {worldRate}(WorldLevelUpRate) | max-level used: {maxLevel} Selected Level: {selected_level}");
                     }
                     break;
                 }
@@ -327,11 +329,13 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         // The chance (0-1) of each level DetermineLevelRollResult picks from this table when no distance bonus applies.
         // Mirrors its walk: a level is picked by any roll at or above its threshold that no lower level already took, and
-        // the cap level (or the last level) takes every roll that is left. Keys are levels, so stars + 1.
+        // the cap level (or the last level) takes every roll that is left. Keys are levels, so stars + 1. Includes the
+        // world's level-up rate, as the roll does.
         public static SortedDictionary<int, float> ComputeLevelDistribution(SortedDictionary<int, float> table, int maxLevel, float nightBonus = 1f, float zoneBonus = 1f) {
             SortedDictionary<int, float> distribution = new SortedDictionary<int, float>();
             if (table == null || table.Count == 0) { return distribution; }
 
+            float worldRate = WorldRates.LevelUpRate;
             float unclaimed = 100f;   // rolls below every threshold walked so far
             int index = 0;
             foreach (KeyValuePair<int, float> kvp in table) {
@@ -341,7 +345,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     distribution[maxLevel > 0 ? Math.Min(kvp.Key, maxLevel) : kvp.Key] = unclaimed / 100f;
                     break;
                 }
-                float threshold = Mathf.Clamp(kvp.Value * nightBonus * zoneBonus, 0f, 100f);
+                float threshold = Mathf.Clamp(kvp.Value * nightBonus * zoneBonus * worldRate, 0f, 100f);
                 distribution[kvp.Key] = Mathf.Max(0f, unclaimed - threshold) / 100f;
                 unclaimed = Mathf.Min(unclaimed, threshold);
             }

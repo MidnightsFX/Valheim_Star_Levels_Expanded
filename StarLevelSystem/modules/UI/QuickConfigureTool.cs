@@ -90,11 +90,12 @@ namespace StarLevelSystem.modules.UI {
                 return;
             }
 
-            // Off-host, this tool can only half work: SaveStaged writes ~25 BepInEx ConfigEntry values,
-            // and Jotunn only pushes a remote admin's changed entries from SynchronizeChangedConfig, which
-            // is internal and fires when the ConfigurationManager window closes -- not from here. If that
-            // method cannot be reached, do not offer the button off-host at all. Better to be missing than
-            // to look like it worked.
+            // Off-host, this tool can only half work: SaveStaged writes ~55 BepInEx ConfigEntry values,
+            // and Jotunn only pushes changed entries from SynchronizeChangedConfig, which is internal and
+            // fires when the ConfigurationManager window closes or the .cfg is reloaded -- not from here. If
+            // that method cannot be reached, do not offer the button off-host at all. Better to be missing
+            // than to look like it worked. A host still gets there without it, late: the file watcher sees
+            // the .cfg change on its next poll and the reload makes Jotunn push.
             if (IsOwner() == false && CanPushRemoteConfig() == false) {
                 ConfigUILauncher.Unregister(LauncherEntry);
                 return;
@@ -122,11 +123,14 @@ namespace StarLevelSystem.modules.UI {
             return syncChangedConfig != null;
         }
 
-        // Reflection into a private Jotunn method, knowingly: it is the only way a remote admin's
-        // ConfigEntry edits reach the server without opening the ConfigurationManager window. Guarded, and
-        // the registration above declines to offer the button at all when it is missing.
-        private static void PushRemoteConfigChanges() {
-            if (IsOwner() || CanPushRemoteConfig() == false) { return; }
+        // Reflection into a private Jotunn method, knowingly: it is the only way ConfigEntry edits leave this
+        // machine without opening the ConfigurationManager window. A remote admin's go to the server, which
+        // forwards them; a host's go straight to every client. Jotunn does not watch SettingChanged, so
+        // without this a host's edits waited for the file watcher's next poll to reload the .cfg. Guarded,
+        // and the registration above declines to offer the button off-host when it is missing.
+        private static void PushConfigChanges() {
+            // The main menu has nobody to send to. In single player m_peers is empty and Jotunn sends nothing.
+            if (ZNet.instance == null || CanPushRemoteConfig() == false) { return; }
             try {
                 syncChangedConfig.Invoke(SynchronizationManager.Instance, null);
             } catch (Exception e) {
@@ -615,7 +619,6 @@ namespace StarLevelSystem.modules.UI {
 
                 // Raids - plain BepInEx ConfigEntries; "Enable SLS Raids" is the inverse of vanilla raids.
                 ValConfig.UseVanillaRaidConfiguration.Value = !staged.enableSlsRaids;
-                ValConfig.RaidEventRate.Value = staged.raidEventRate;
                 ValConfig.ServerTimeBetweenRaidStartChecks.Value = staged.raidCheckMinutes;
                 ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
                 ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
@@ -647,9 +650,9 @@ namespace StarLevelSystem.modules.UI {
                     ApplyYaml(doc.File, doc.Yaml, doc.Label, failures, warnings);
                 }
 
-                // A remote admin's ConfigEntry writes above are local-only until Jotunn is told to push
-                // them. On a host this is a no-op.
-                PushRemoteConfigChanges();
+                // The ConfigEntry writes above are local-only until Jotunn is told to push them, on a host
+                // as much as on a remote admin. After the YAML, so peers get both halves of the save together.
+                PushConfigChanges();
             } catch (Exception e) {
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
                 message = $"Saving failed: {e.Message}";
@@ -1011,8 +1014,11 @@ namespace StarLevelSystem.modules.UI {
 
             // Raids (BepInEx ConfigEntries). enableSlsRaids is the inverse of UseVanillaRaidConfiguration.
             public bool enableSlsRaids;
-            public float raidEventRate;
             public int raidCheckMinutes, maxRaidAttempts, maxActiveRaids;
+
+            // RaidSettings.yaml GlobalSettings: DisableAllRaids, GlobalRaidChanceScalar and GlobalRaidIntervalScalar.
+            public bool disableAllRaids;
+            public float raidChanceScalar, raidIntervalScalar;
 
             // Per-raid enable/disable: the raids the page lists (read-only here) and the names toggled on. raidSpawns
             // holds the per-creature numbers that page edits, keyed by position in the file.
@@ -1089,7 +1095,6 @@ namespace StarLevelSystem.modules.UI {
                     biomeCapAuto = ValConfig.AutoTuneBiomeStarCaps.Value,
 
                     enableSlsRaids = !ValConfig.UseVanillaRaidConfiguration.Value,
-                    raidEventRate = ValConfig.RaidEventRate.Value,
                     raidCheckMinutes = ValConfig.ServerTimeBetweenRaidStartChecks.Value,
                     maxRaidAttempts = ValConfig.MaxRaidAttemptsPerPlayer.Value,
                     maxActiveRaids = ValConfig.MaxActiveRaids.Value,
@@ -1171,9 +1176,15 @@ namespace StarLevelSystem.modules.UI {
                         if (raid.Enabled) { s.raidsOn.Add(raid.Name); }
                     }
                 }
-                s.raidSpawns = SnapshotRaidSpawns(s.raidSource);
-                s.raidDensity = ClampRaidDensity(s.raidSource?.GlobalSettings?.RaidCreatureDensity ?? DefaultRaidDensity);
+                // A file whose GlobalSettings section is missing reads as the class defaults, which is what a save would
+                // start from too.
+                GlobalRaidSettings raidGlobals = s.raidSource?.GlobalSettings ?? new GlobalRaidSettings();
+                s.disableAllRaids = raidGlobals.DisableAllRaids;
+                s.raidChanceScalar = raidGlobals.GlobalRaidChanceScalar;
+                s.raidIntervalScalar = raidGlobals.GlobalRaidIntervalScalar;
+                s.raidDensity = ClampRaidDensity(raidGlobals.RaidCreatureDensity);
                 s.raidDensityBase = s.raidDensity;
+                s.raidSpawns = SnapshotRaidSpawns(s.raidSource, s.raidDensityBase);
                 s.nightSpawnsOn = SnapshotNightSpawns();
                 return s;
             }
@@ -1359,7 +1370,7 @@ namespace StarLevelSystem.modules.UI {
                     && chanceMajorOnBoss == o.chanceMajorOnBoss && chanceMinorOnBoss == o.chanceMinorOnBoss
                     && limitToStarLevel == o.limitToStarLevel && enableBossMods == o.enableBossMods && minorFirst == o.minorFirst
                     && displayStyle == o.displayStyle && biomeCapAuto == o.biomeCapAuto
-                    && enableSlsRaids == o.enableSlsRaids && raidEventRate == o.raidEventRate
+                    && enableSlsRaids == o.enableSlsRaids
                     && raidCheckMinutes == o.raidCheckMinutes && maxRaidAttempts == o.maxRaidAttempts && maxActiveRaids == o.maxActiveRaids
                     && enableNemesis == o.enableNemesis;
                 if (scalars == false) { return false; }
@@ -1376,7 +1387,7 @@ namespace StarLevelSystem.modules.UI {
                 foreach (ModifierType type in modifierOn.Keys) {
                     if (o.modifierOn.TryGetValue(type, out HashSet<string> other) == false || SetsEqual(modifierOn[type], other) == false) { return false; }
                 }
-                if (raidDensity != o.raidDensity) { return false; }
+                if (raidDensity != o.raidDensity || RaidGlobalsMatch(this, o) == false) { return false; }
                 if (SetsEqual(raidsOn, o.raidsOn) == false || RaidSpawnsMatch(raidSpawns, o.raidSpawns) == false) { return false; }
                 if (NightSpawnsMatch(nightSpawnsOn, o.nightSpawnsOn) == false) { return false; }
                 if (locationReset.Matches(o.locationReset) == false) { return false; }

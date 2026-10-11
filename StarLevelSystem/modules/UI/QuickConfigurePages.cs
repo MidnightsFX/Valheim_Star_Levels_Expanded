@@ -598,8 +598,31 @@ namespace StarLevelSystem.modules.UI {
                 if ((live?.DefaultLevelupGenerators?.Count ?? 0) > 1 || (live?.DefaultLevelupGeneratorRefs?.Count ?? 0) > 0) {
                     notes.Add(ConfigUI.L("$sls_cfg_distribution_merge_note"));
                 }
+                string worldNote = WorldCombatModifierNote();
+                if (worldNote != null) { notes.Add(worldNote); }
                 distributionNotesText.text = string.Join("\n", notes.ToArray());
             }
+        }
+
+        // The world's Combat modifier raises star odds and creature size on top of everything on this page, and is set
+        // when the world is made rather than here. Read on the client like every global key, so a remote admin sees the
+        // server's value. Null when there is nothing to say.
+        private static string WorldCombatModifierNote() {
+            if (ZoneSystem.instance == null) {
+                return "In a world, its Combat world modifier can also change these star chances and creature sizes.";
+            }
+            float levelUp = WorldRates.LevelUpRate;
+            // Outdoors: creatures in dungeons and other interiors keep their size, as in vanilla.
+            float size = WorldRates.CreatureSizeFactor(Vector3.zero);
+            List<string> effects = new List<string>();
+            if (Mathf.Approximately(levelUp, 1f) == false) {
+                effects.Add($"star chances x{levelUp.ToString("0.##", CultureInfo.InvariantCulture)} (included in the charts)");
+            }
+            if (Mathf.Approximately(size, 1f) == false) {
+                effects.Add($"creature size x{size.ToString("0.##", CultureInfo.InvariantCulture)}");
+            }
+            if (effects.Count == 0) { return null; }
+            return $"Combat world modifier: {string.Join(" and ", effects.ToArray())} on top of the settings here.";
         }
 
         // Level keys (stars + 1) to star keys, folding everything at or below level 1 into 0 stars.

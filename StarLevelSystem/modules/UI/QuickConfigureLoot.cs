@@ -257,7 +257,7 @@ namespace StarLevelSystem.modules.UI {
             WithTip(lootTable.Root, Tip("Loot estimate",
                 "Every drop the sample creature has, at no stars and at Max stars from the Level Distribution page, near the world " +
                 "center; with distance loot on, a last column works the same kill inside the furthest ring. Amounts are the drop's own " +
-                "min-max carried through the multiplier - vanilla rolls that range with the top end exclusive, so the real maximum of a " +
+                "min-max carried through the multiplier and the world's Resources modifier - vanilla rolls that range with the top end exclusive, so the real maximum of a " +
                 "wide range is one step lower. A % under an amount is its chance to drop at all; the pseudo-random streak vanilla applies " +
                 "to drops under 30% is not modelled, so a rare drop lands a little more evenly than its number suggests."));
 
@@ -589,11 +589,25 @@ namespace StarLevelSystem.modules.UI {
             if (lootSample.Count > view.Drops.Count) {
                 notes.Add($"...and {lootSample.Count - view.Drops.Count} more drop(s) in its table.");
             }
+            string worldNote = WorldResourceModifierNote();
+            if (worldNote != null) { notes.Add(worldNote); }
             if (lootSampleIsLive == false) {
                 notes.Add($"{WarningColorTag}The {LootSampleCreature} prefab is only there once a world is loaded, so these are " +
                     $"stand-in drops. Reopen this page in game to see the {LootSampleCreature}'s own table.</color>");
             }
             view.Footer.text = string.Join("\n", notes.ToArray());
+        }
+
+        // The world's Resources modifier scales the amounts on top of everything on this page, and is set when the world
+        // is made rather than here. Read on the client like every global key, so a remote admin sees the server's value.
+        // Null when there is nothing to say.
+        private static string WorldResourceModifierNote() {
+            if (ZoneSystem.instance == null) {
+                return "In a world, its Resources world modifier also scales these amounts.";
+            }
+            float rate = WorldRates.ResourceRate;
+            if (Mathf.Approximately(rate, 1f)) { return null; }
+            return $"Resources world modifier: amounts x{rate.ToString("0.##", CultureInfo.InvariantCulture)}, included above. Items vanilla never scales keep theirs.";
         }
 
         // As many drop rows as fit the estimate table beside the settings column.
@@ -675,6 +689,12 @@ namespace StarLevelSystem.modules.UI {
 
             int low = Mathf.RoundToInt(Mathf.Min(baseMin * amountMin, LootStyles.MaxLootScaleResult));
             int high = Mathf.RoundToInt(Mathf.Min(baseMax * amountMax, LootStyles.MaxLootScaleResult));
+            // The world's Resources modifier, before the cap as on both drop paths. Vanilla scales a vanilla drop's rolled
+            // amount and SLS a custom drop's scaled one, which only differ here by rounding.
+            if (drop.WorldScaled) {
+                low = WorldRates.ScaleDropAmount(low);
+                high = WorldRates.ScaleDropAmount(high);
+            }
             if (drop.MaxScaledAmount > 0) {
                 low = Mathf.Min(low, drop.MaxScaledAmount);
                 high = Mathf.Min(high, drop.MaxScaledAmount);
@@ -734,6 +754,9 @@ namespace StarLevelSystem.modules.UI {
             internal bool UseChanceAsMultiplier;
             internal bool ScaleByMaxLevel;
             internal int MaxScaledAmount;
+            // Whether the world's Resources modifier reaches this drop: not when its table marks it as not scaling, nor
+            // for the item types vanilla never scales.
+            internal bool WorldScaled = true;
         }
 
         // Stands in for the sample creature when its prefab is not loaded - the panel also opens on the main menu,
@@ -784,6 +807,8 @@ namespace StarLevelSystem.modules.UI {
                 // m_dontScale only picks the roll vanilla uses for the base amount; m_levelMultiplier is the gate
                 // the level scaling itself sits behind.
                 ScalesWithLevel = drop.m_levelMultiplier,
+                // That roll is the one Game.ScaleDrops applies the world's resource rate in.
+                WorldScaled = drop.m_dontScale == false && WorldRates.ScalesWithResourceRate(drop.m_prefab),
             };
         }
 
@@ -801,6 +826,8 @@ namespace StarLevelSystem.modules.UI {
                 UseChanceAsMultiplier = drop.UseChanceAsMultiplier,
                 ScaleByMaxLevel = drop.ScalebyMaxLevel,
                 MaxScaledAmount = drop.MaxScaledAmount,
+                // LootStyles.ModifyCharacterDrops applies the rate only on the path that scales with level.
+                WorldScaled = drop.DoesNotScale == false && d.DontScale == false && WorldRates.ScalesWithResourceRate(drop.GameDrop?.m_prefab),
             };
         }
 

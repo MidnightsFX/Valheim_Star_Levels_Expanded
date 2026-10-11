@@ -486,18 +486,24 @@ namespace StarLevelSystem.common {
 #   GlobalSettings:
 #     DisableAllRaids: false
 #     PlayerBasedRaids: true         # raids target individual players
-#     GlobalRaidIntervalScalar: 1    # >1 = raids less often, <1 = more often
-#     GlobalRaidChanceScalar: 1      # scales every raid's activation chance
-#     RaidCreatureDensity: 3         # 1-6, how crowded the raids below already are
+#     GlobalRaidIntervalScalar: 2    # multiplies every raid's cooldown: >1 = raids less often
+#     GlobalRaidChanceScalar: 0.5    # multiplies every raid's activation chance
+#     RaidCreatureDensity: 2         # 1-6, how crowded the raids below already are
+#
+# The world's own Raids modifier applies on top of both scalars the way vanilla
+# applies it to its events: None starts no raids, Less (1.5x) and Much less (2x)
+# lengthen cooldowns and divide chances by the same amount, More and Much more
+# shorten and raise them.
 #
 # RaidCreatureDensity is a record, not a multiplier: nothing reads it while a
 # raid runs. The quick configure panel's ""Raid creature density"" slider
 # rewrites every SpawnGroupSize and MaxSpawned below when you move it (never
-# below 1) and stamps where it left them here, so the next move rescales from
-# the file as written instead of compounding. 3 is the shipped numbers, 1 is
-# roughly vanilla sized and 6 is not meant to be survivable. Edit the slider
-# rather than this number - changing it by hand only makes the next slider
-# move scale by the wrong amount.
+# below 1) and stamps where it left them here. The next move rescales counts
+# still as shipped from the raids' designed numbers, and counts you changed
+# from the file as written, so neither compounds. 3 is those designed numbers,
+# new files ship at 2, 1 is roughly vanilla sized and 6 is not meant to be
+# survivable. Edit the slider rather than this number - changing it by hand
+# only makes the next slider move scale by the wrong amount.
 #
 # --- Raids ---
 # Each raid: what unlocks it, how it announces itself, and what it spawns.

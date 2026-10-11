@@ -58,6 +58,9 @@ namespace StarLevelSystem.modules.Sizes {
             return size * (cap / multiplier);
         }
 
+        // SLS_SIZE holds the size SLS chose (reference scale x its multiplier) and never the world's Combat size factor,
+        // which is multiplied in wherever a size is put on a transform. The cap and every stored size stay in SLS's own
+        // terms that way, and a world whose modifier changes resizes its creatures on their next load.
         internal static void SetSizeModification(GameObject obj, ZNetView zview, CharacterCacheEntry characterCache, bool update = false, float bonus = 0f) {
             Vector3 size = zview.m_zdo.GetVec3(SLS_SIZE, Vector3.zero);
 
@@ -68,8 +71,9 @@ namespace StarLevelSystem.modules.Sizes {
                     size = capped;
                     if (zview.IsOwner()) { zview.m_zdo.Set(SLS_SIZE, size); }
                 }
-                if (obj.transform.localScale != size) {
-                    obj.transform.localScale = size;
+                Vector3 shown = size * WorldRates.CreatureSizeFactor(obj.transform.position);
+                if (obj.transform.localScale != shown) {
+                    obj.transform.localScale = shown;
                     TaskRunner.RequestPhysicsSync();
                 }
                 // Outside the change check: ApplyStoredSize usually set this scale already in Character.Awake, and a
@@ -88,8 +92,9 @@ namespace StarLevelSystem.modules.Sizes {
             // Set or update the size
             float scale = DetermineScaleMultiplier(characterCache, bonus);
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
-            if (obj.transform.localScale != creatureScale) {
-                obj.transform.localScale = creatureScale;
+            Vector3 shownScale = creatureScale * WorldRates.CreatureSizeFactor(obj.transform.position);
+            if (obj.transform.localScale != shownScale) {
+                obj.transform.localScale = shownScale;
                 UpdateRidingCreaturesForSizeScaling(obj);
                 //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
                 TaskRunner.RequestPhysicsSync();
@@ -106,13 +111,16 @@ namespace StarLevelSystem.modules.Sizes {
         internal static void ApplyStoredSize(Character creature, ZDO zdo) {
             if (zdo == null || creature.IsPlayer()) { return; }
             Vector3 size = zdo.GetVec3(SLS_SIZE, Vector3.zero);
-            if (size == Vector3.zero || creature.transform.localScale == size) { return; }
+            if (size == Vector3.zero) { return; }
+            size *= WorldRates.CreatureSizeFactor(creature.transform.position);
+            if (creature.transform.localScale == size) { return; }
             creature.transform.localScale = size;
             TaskRunner.RequestPhysicsSync();
         }
 
-        // The factor SLS has scaled this creature by, read off its transform against the prefab's own scale.
-        // 1 for a creature SLS has not resized, or one whose prefab has no usable reference scale.
+        // The factor this creature is scaled by, read off its transform against the prefab's own scale: SLS's sizing and
+        // the world's Combat size factor together, which is what the visual fixes that use it need to match.
+        // 1 for a creature nothing has resized, or one whose prefab has no usable reference scale.
         internal static float CurrentScaleMultiplier(GameObject obj) {
             float reference = GetSizeReferenceForObject(obj.name).x;
             if (reference <= 0f) { return 1f; }

@@ -118,6 +118,21 @@ namespace StarLevelSystem.common {
                 return false;
             }
 
+            // A file on disk that does not load is the admin's own text with a mistake in it, and this edit was built
+            // from the values in use instead, so writing it erases their work and the mistake they need to find. Keep a
+            // copy first. Before LoadFrom, which can rewrite the file itself when it migrates.
+            string unloadable = ReadUnloadableText(file);
+            string backupPath = null;
+            if (unloadable != null) {
+                backupPath = WriteBackup(file, unloadable, "invalid");
+                if (backupPath == null) {
+                    message = $"{file.FileName} could not be loaded and a copy of it could not be saved, so it was left as it is.";
+                    return false;
+                }
+                Logger.LogWarning($"{file.FileName} could not be loaded and is being replaced by an edit; " +
+                    $"the previous file was saved as {Path.GetFileName(backupPath)} next to it.");
+            }
+
             if (file.LoadFrom(yaml, ConfigOrigin.Api) == false) {
                 message = file.LastError ?? $"{file.FileName} could not be applied.";
                 return false;
@@ -137,6 +152,9 @@ namespace StarLevelSystem.common {
             // restart, which the editor has to hear about rather than a plain "saved".
             if (written == false) {
                 message = ($"{file.FileName} is applied but could not be written to disk, so it reverts on restart. " + message).Trim();
+            }
+            if (backupPath != null) {
+                message = ($"{file.FileName} could not be loaded, so it was kept as {Path.GetFileName(backupPath)} before being replaced. " + message).Trim();
             }
             return true;
         }
@@ -160,20 +178,46 @@ namespace StarLevelSystem.common {
 
         // Saves a file's previous content beside it before a schema migration rewrites it. previousYaml is
         // the text that was just loaded (header included), which is exactly what the admin had. Named with
-        // the version it was in and a timestamp so repeated migrations never overwrite an earlier backup,
-        // and with a .bak extension so nothing ever mistakes it for a live config. Returns the path written,
-        // or null when nothing was.
+        // the version it was in. Returns the path written, or null when nothing was.
         internal static string BackupBeforeRewrite(YamlConfigFile file, string previousYaml, int previousVersion) {
-            if (file == null || string.IsNullOrEmpty(file.Path) || string.IsNullOrEmpty(previousYaml)) { return null; }
-            string backupPath = $"{file.Path}.v{previousVersion}.{DateTime.Now:yyyyMMdd-HHmmss}.bak";
-            try {
-                Directory.CreateDirectory(Path.GetDirectoryName(file.Path));
-                File.WriteAllText(backupPath, previousYaml);
+            string backupPath = WriteBackup(file, previousYaml, $"v{previousVersion}");
+            if (backupPath != null) {
                 Logger.LogWarning($"{file.FileName} was schema version {previousVersion} and is being rewritten for this build; " +
                     $"the previous file was saved as {Path.GetFileName(backupPath)} next to it.");
+            }
+            return backupPath;
+        }
+
+        // Writes text beside a config file as <file>.<tag>.<timestamp>.bak: timestamped so a later backup never
+        // overwrites an earlier one, and a .bak extension so nothing ever mistakes it for a live config. Returns the
+        // path written, or null when nothing was.
+        private static string WriteBackup(YamlConfigFile file, string text, string tag) {
+            if (file == null || string.IsNullOrEmpty(file.Path) || string.IsNullOrEmpty(text)) { return null; }
+            string backupPath = $"{file.Path}.{tag}.{DateTime.Now:yyyyMMdd-HHmmss}.bak";
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(file.Path));
+                File.WriteAllText(backupPath, text);
                 return backupPath;
             } catch (Exception e) {
                 Logger.LogError($"Could not back up {file.FileName} before rewriting it: {e.Message}");
+                return null;
+            }
+        }
+
+        // The file's text on disk when it would not load -- a syntax or validation error, so the values in use are the
+        // last good ones or the defaults while the admin's broken edit sits there. Null when it is fine, empty, missing or
+        // unreadable. Reads the disk rather than trusting LastLoadFailed, which lags an edit the watcher has not reloaded.
+        private static string ReadUnloadableText(YamlConfigFile file) {
+            try {
+                if (File.Exists(file.Path) == false) { return null; }
+                string text = File.ReadAllText(file.Path);
+                // Exactly what last loaded cleanly: known good, and skipping the dry run keeps its load warnings from
+                // being logged a second time. Empty files are replaced without a backup on startup too.
+                if (text == file.LastAppliedText || HasNoUsableConfig(text)) { return null; }
+                ValidationReport report = file.DryRun(text, out string parseError);
+                return parseError != null || report.HasErrors ? text : null;
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not check whether {file.FileName} on disk loads before replacing it: {e.Message}");
                 return null;
             }
         }

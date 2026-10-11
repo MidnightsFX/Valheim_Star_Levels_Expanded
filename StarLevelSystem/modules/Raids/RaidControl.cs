@@ -693,10 +693,35 @@ namespace StarLevelSystem.modules.Raids
             }
         }
 
+        // The world's vanilla Raids modifier, the EventRate global key over 100: None 0, Much less 2, Less 1.5, Normal 1,
+        // More 0.6, Much more 0.3, or whatever setkey gave it. Vanilla stretches its event interval by it and divides its
+        // event chance by it; SLS raids follow it the same way, on top of their own GlobalSettings multipliers.
+        internal static float WorldRaidRate => Game.m_eventRate;
+
+        // A world whose Raids modifier is None starts no raid on its own, as vanilla does.
+        internal static bool WorldRaidsOff => WorldRaidRate <= 0f;
+
+        // What every raid's cooldown is multiplied by: GlobalRaidIntervalScalar and the world modifier.
+        internal static float RaidCooldownScalar() {
+            GlobalRaidSettings global = RaidsData.SLE_Raid_Settings?.GlobalSettings;
+            float scalar = global != null ? global.GlobalRaidIntervalScalar : 1f;
+            return WorldRaidsOff ? scalar : scalar * WorldRaidRate;
+        }
+
+        // What every raid's activation chance is multiplied by: GlobalRaidChanceScalar and the world modifier.
+        internal static float RaidChanceScalar() {
+            if (WorldRaidsOff) { return 0f; }
+            GlobalRaidSettings global = RaidsData.SLE_Raid_Settings?.GlobalSettings;
+            float scalar = global != null ? global.GlobalRaidChanceScalar : 1f;
+            return scalar / WorldRaidRate;
+        }
+
         private static double MaxConfiguredCooldownSeconds() {
             RaidConfiguration cfg = RaidsData.SLE_Raid_Settings;
             double scalar = cfg != null && cfg.GlobalSettings != null ? cfg.GlobalSettings.GlobalRaidIntervalScalar : 1d;
             if (scalar <= 0d) { scalar = 1d; }
+            // Under None nothing is being raided, so the saved cooldowns are left as the file's own scalar would set them.
+            if (WorldRaidsOff == false) { scalar *= WorldRaidRate; }
             double longest = 0d;
             if (cfg != null && cfg.Raids != null) {
                 foreach (RaidDefinition raid in cfg.Raids) {
@@ -739,7 +764,7 @@ namespace StarLevelSystem.modules.Raids
             // Set the current raid
             playerRaidData.ActiveRaid = raidDef;
             // Update cooldown
-            playerRaidData.NextRaidableTime = now + (raidDef.RaidCoolDownMinutes * 60 * RaidsData.SLE_Raid_Settings.GlobalSettings.GlobalRaidIntervalScalar);
+            playerRaidData.NextRaidableTime = now + (raidDef.RaidCoolDownMinutes * 60 * RaidCooldownScalar());
         }
 
         // Lightweight dispatch-time marker. Holds the player off re-dispatch for one check interval and records the

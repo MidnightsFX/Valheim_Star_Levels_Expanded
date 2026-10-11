@@ -992,6 +992,10 @@ namespace StarLevelSystem.common
             public List<RaidDefinition> Raids { get; set; } = new List<RaidDefinition>();
         }
 
+        // These initializers are what a file without the line means. OmitDefaults left every one of them out of the
+        // files already on servers, so they must stay the values those files were written at. What a new file ships
+        // with is set in RaidsData.DefaultConfiguration and differs on purpose: changing an initializer here would
+        // silently move every existing server, and for RaidCreatureDensity would mislabel the counts its file holds.
         public class GlobalRaidSettings {
             [DefaultValue(false)]
             public bool DisableAllRaids { get; set; } = false;
@@ -1002,10 +1006,11 @@ namespace StarLevelSystem.common
             [DefaultValue(1f)]
             public float GlobalRaidChanceScalar { get; set; } = 1f;
             // How crowded every raid in this file is, 1 (vanilla sized) to 6 (not meant to be survivable),
-            // 3 being the numbers the shipped raids were written with. This is a record of where the Spawns
+            // 3 being the numbers the shipped raids are written with (new files ship them at 2). This is a record of where the Spawns
             // entries below already sit, not a runtime multiplier: the quick configure panel rewrites each
             // entry's SpawnGroupSize and MaxSpawned when the density moves and stamps the new value here, so
-            // the next move scales from the file as written rather than compounding on the last one.
+            // the next move scales from the file as written (counts still as shipped, from the designed ones)
+            // rather than compounding on the last one.
             [DefaultValue(3)]
             public int RaidCreatureDensity { get; set; } = 3;
         }

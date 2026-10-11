@@ -38,8 +38,9 @@ namespace StarLevelSystem.Modifiers
                 if (go == null) { return; }
                 go.SetActive(false);
                 Aoe aoe = go.GetComponent<Aoe>();
-                // Configure damage
-                float dmgmod = cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * chara.m_level);
+                // Configure damage. The nova's Aoe has no owner, so its hits carry no attacker, and vanilla only applies
+                // the world's enemy damage rate to hits from a creature, so it is applied here.
+                float dmgmod = (cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * chara.m_level)) * Game.m_enemyDamageRate;
                 if (aoe) {
                     float characterdmg = SLSExtensions.EstimateCharacterDamage(chara, DamageEstimateType.Average);
                     if (characterdmg <= 0) {

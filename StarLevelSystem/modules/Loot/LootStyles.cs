@@ -58,12 +58,12 @@ namespace StarLevelSystem.modules.Loot {
 
         internal static List<LootEntry> ModifyPickableDropsOrDefault(Transform tform, string name, int level) {
             SelectObjectDistanceBonus(tform, out DistanceLootModifier distance_bonus);
-            List<LootEntry> drops = ModifyObjectDropsOrDefault(null, name, level, distance_bonus, DropType.Destructible, tform, honorOnePerPlayer: true);
+            List<LootEntry> drops = ModifyObjectDropsOrDefault(null, name, level, distance_bonus, DropType.Destructible, tform, honorOnePerPlayer: true, isPickable: true);
             return drops;
         }
 
 
-        internal static List<LootEntry> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree, Transform tform = null, bool honorOnePerPlayer = false) {
+        internal static List<LootEntry> ModifyObjectDropsOrDefault(DropTable defaultDrops, string lookupkey, int level, DistanceLootModifier distance_bonus, DropType type = DropType.Tree, Transform tform = null, bool honorOnePerPlayer = false, bool isPickable = false) {
             List<LootEntry> dropList = new List<LootEntry>();
             // Accumulate per-drop detail and emit one consolidated summary at the end (mirrors ModifyCharacterDrops).
             // Gate the string building on the flag directly so it costs nothing when loot debugging is disabled.
@@ -155,6 +155,14 @@ namespace StarLevelSystem.modules.Loot {
                     int beforeWorldRate = drop;
                     drop = WorldRates.ScaleDropAmount(eod.DropGo, drop);
                     if (logloot && drop != beforeWorldRate) { sb.AppendLine($"  world resource rate: {beforeWorldRate} * {WorldRates.ResourceRate} = {drop}."); }
+
+                    // Valheim Plus's pickable yield, which it adds to every pickable SLS does not replace. Taken here
+                    // with the world rate, so it skips the same non-scaling drops and stays under the cap.
+                    if (isPickable) {
+                        int beforeYield = drop;
+                        drop = Compatibility.ValheimPlus_PickableYield(eod.DropGo, drop);
+                        if (logloot && drop != beforeYield) { sb.AppendLine($"  Valheim Plus pickable yield: {beforeYield} -> {drop}."); }
+                    }
 
                     // Enforce max drop cap
                     if (eod.MaxScaledAmount > 0 && drop > eod.MaxScaledAmount) {

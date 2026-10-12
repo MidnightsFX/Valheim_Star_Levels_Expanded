@@ -346,55 +346,54 @@ namespace StarLevelSystem.modules.Loot {
 
         [HarmonyPatch(typeof(Pickable))]
         public static class PickableDropPatch {
+            //[HarmonyEmitIL(".dumps")]
+            //[HarmonyDebug]
             [HarmonyTranspiler]
-            [HarmonyPatch("RPC_Pick")]
-            [HarmonyEmitIL(".dumps")]
-            static public IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions) {
-                var codeMatcher = new CodeMatcher(instructions);
-                // Start of the vanilla main-item drop calculation: `this.m_dontScale ? ...`
-                codeMatcher.MatchStartForward(
-                    new CodeMatch(OpCodes.Ldarg_0),
-                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Pickable), nameof(Pickable.m_dontScale)))
-                ).ThrowIfNotMatch("Unable to patch Pickable drop: drop calculation start not found.");
-                int start = codeMatcher.Pos;
+            [HarmonyPatch(nameof(Pickable.RPC_Pick))]
+            static public IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator) {
+                var codeMatcher = new CodeMatcher(instructions, generator);
+                // Only adds a skip over the vanilla main-item drop; its amount and loop are left in place. Other mods
+                // hook that span - Valheim Plus scales pickable yields with a call right after the amount is stored -
+                // and this patch used to remove it whole and rebuild it in a delegate, which lost their changes
+                // whichever mod patched first. Valheim Plus also re-patches on joining a server, which re-runs this
+                // transpiler on top of its own, so the anchors below must hold with its call in the span.
 
                 // End of the section: the `if (!m_extraDrops.IsEmpty())` block begins right after the drop loop.
                 codeMatcher.MatchStartForward(
                     new CodeMatch(OpCodes.Ldarg_0),
                     new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Pickable), nameof(Pickable.m_extraDrops)))
-                ).ThrowIfNotMatch("Unable to patch Pickable drop: extra-drops section not found.");
-                int end = codeMatcher.Pos;
+                ).ThrowIfNotMatch("Unable to patch Pickable drop: extra-drops section not found.")
+                .CreateLabel(out Label extraDrops);
 
-                codeMatcher.Start().Advance(start)
-                    .RemoveInstructions(end - start)
-                    .InsertAndAdvance(
-                        new CodeInstruction(OpCodes.Ldarg_0), // The pickable
-                        new CodeInstruction(OpCodes.Ldarg_2), // bonus amount
-                        Transpilers.EmitDelegate(HandlePickableDrop)
-                    );
+                // Start of the vanilla main-item drop calculation: `this.m_dontScale ? ...`
+                codeMatcher.Start().MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Pickable), nameof(Pickable.m_dontScale)))
+                ).ThrowIfNotMatch("Unable to patch Pickable drop: drop calculation start not found.");
+
+                // Any jump into the calculation is moved onto the check, so nothing reaches the drop without it.
+                codeMatcher.InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldarg_0).MoveLabelsFrom(codeMatcher.Instruction), // The pickable
+                    Transpilers.EmitDelegate(DropConfiguredPickable),
+                    new CodeInstruction(OpCodes.Brtrue, extraDrops)
+                );
 
                 return codeMatcher.Instructions();
             }
 
-            internal static void HandlePickableDrop(Pickable instance, int bonus) {
+            // Drops a pickable that has an SLS loot table and returns true, so its vanilla drop is skipped. Returns false
+            // for every other pickable, which then drops exactly as vanilla (and any other mod patching it) decides.
+            internal static bool DropConfiguredPickable(Pickable instance) {
                 string name = Utils.GetPrefabName(instance.gameObject);
                 //Logger.LogDebug($"Checking for custom loot for {name} available: {string.Join(",", LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot.Keys)}");
-                if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot.ContainsKey(name) == true) {
-                    //Logger.LogDebug($"Custom Pickable loot set for {name}");
-                    Vector3 dropPos = instance.transform.position + Vector3.up * instance.m_spawnOffset;
-                    int level = LevelSelection.DetermineisticDetermineObjectLevel(instance.transform.position);
-                    List<LootEntry> drops = LootStyles.ModifyPickableDropsOrDefault(instance.transform, name, level);
-                    LootPerformanceChanges.DropItemsPreferAsync(dropPos, drops);
-                    return;
-                }
+                if (LootSystemData.SLS_Drop_Settings?.NonCharacterSpecificLoot?.ContainsKey(name) != true) { return false; }
 
-                // Vanilla behavior preserved for non-configured pickables.
-                int num = instance.m_dontScale ? instance.m_amount : Mathf.Max(instance.m_minAmountScaled, Game.instance.ScaleDrops(instance.m_itemPrefab, instance.m_amount));
-                num += bonus;
-                int num2 = 0;
-                for (int i = 0; i < num; i++) {
-                    instance.Drop(instance.m_itemPrefab, num2++, 1);
-                }
+                //Logger.LogDebug($"Custom Pickable loot set for {name}");
+                Vector3 dropPos = instance.transform.position + Vector3.up * instance.m_spawnOffset;
+                int level = LevelSelection.DetermineisticDetermineObjectLevel(instance.transform.position);
+                List<LootEntry> drops = LootStyles.ModifyPickableDropsOrDefault(instance.transform, name, level);
+                LootPerformanceChanges.DropItemsPreferAsync(dropPos, drops);
+                return true;
             }
         }
     }

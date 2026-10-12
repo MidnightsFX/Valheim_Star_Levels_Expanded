@@ -22,6 +22,7 @@ namespace StarLevelSystem.modules
         public static bool IsJewelcraftingEnabled = false;
         public static bool IsVentureLocationResetEnabled = false;
         public static bool IsUpgradeWorldEnabled = false;
+        public static bool IsValheimPlusEnabled = false;
 
         // Active only when CustomRaids is installed AND the compat toggle is enabled.
         public static bool CustomRaidsCompatActive => IsCustomRaidsEnabled && ValConfig.EnableCustomRaidsCompat.Value;
@@ -42,6 +43,21 @@ namespace StarLevelSystem.modules
         // drop pipeline, so DropThat's own transpiler never runs; we re-invoke this to preserve its modifiers.
         private static MethodInfo DropThatCharacterModifyDrop;
         private static MethodInfo JewelcraftingBossHudPostfix;
+
+        private const string ValheimPlusGUID = "org.bepinex.plugins.valheim_plus";
+        // ValheimPlus.GameClasses.PickableYieldState.CalculateYield(GameObject item, int originalAmount): V+'s [Pickable]
+        // yield for an item, looked up by its name. It hands the amount back unchanged while that section is off.
+        private static Func<GameObject, int, int> ValheimPlusPickableYield;
+        // ValheimPlus.Configurations.Configuration.Current.Game: the synced [Game] section, which holds V+'s per-player
+        // difficulty scales. V+ applies them by writing Game.m_damageScalePerPlayer / m_healthScalePerPlayer ahead of
+        // vanilla's difficulty formulas, which SLS's MultiplayerDamageMod replaces, so SLS reads them from here instead.
+        private static PropertyInfo ValheimPlusConfigCurrent;
+        private static PropertyInfo ValheimPlusGameSection;
+        private static PropertyInfo ValheimPlusGameEnabled;
+        private static PropertyInfo ValheimPlusDamageScale;
+        private static PropertyInfo ValheimPlusHealthScale;
+        private static bool ValheimPlusPickableYieldFailed;
+        private static bool ValheimPlusDifficultyFailed;
 
         internal static void CheckModCompat() {
             try {
@@ -106,6 +122,11 @@ namespace StarLevelSystem.modules
                         Logger.LogWarning("Jewelcrafting detected but DisplayMultipleBossHuds.Postfix could not be found; boss-HUD compatibility patch will be skipped.");
                     }
                 }
+                // Loaded ahead of SLS by the same soft BepInDependency as Drop That above.
+                if (plugins.TryGetValue(ValheimPlusGUID, out BepInEx.BaseUnityPlugin valheimPlus)) {
+                    IsValheimPlusEnabled = true;
+                    BindValheimPlus(valheimPlus.GetType().Assembly);
+                }
             } catch {
                 Logger.LogWarning("Unable to check mod compatibility. Ensure that Bepinex can load.");
             }
@@ -122,6 +143,68 @@ namespace StarLevelSystem.modules
                 DropThatCharacterModifyDrop.Invoke(null, new object[] { drop, drops, index });
             } catch (Exception e) {
                 Logger.LogWarning($"DropThat ModifyDrop failed: {e.Message}");
+            }
+        }
+
+        // Binds the two parts of Valheim Plus that SLS folds into its own results. Each is bound on its own, so a member V+
+        // renames only loses that one.
+        private static void BindValheimPlus(Assembly valheimPlus) {
+            MethodInfo yield = valheimPlus.GetType("ValheimPlus.GameClasses.PickableYieldState")?.GetMethod("CalculateYield",
+                BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(GameObject), typeof(int) }, null);
+            if (yield != null && yield.ReturnType == typeof(int)) {
+                ValheimPlusPickableYield = (Func<GameObject, int, int>)Delegate.CreateDelegate(typeof(Func<GameObject, int, int>), yield);
+                Logger.LogInfo("Valheim Plus detected; its [Pickable] yields apply to pickables with an SLS loot table.");
+            } else {
+                Logger.LogWarning("Valheim Plus detected but its pickable yield (PickableYieldState.CalculateYield) was not found; its [Pickable] yields will not apply to pickables with an SLS loot table.");
+            }
+
+            Type configuration = valheimPlus.GetType("ValheimPlus.Configurations.Configuration");
+            ValheimPlusGameSection = configuration?.GetProperty("Game", BindingFlags.Public | BindingFlags.Instance);
+            Type game = ValheimPlusGameSection?.PropertyType;
+            ValheimPlusGameEnabled = game?.GetProperty("IsEnabled", BindingFlags.Public | BindingFlags.Instance);
+            ValheimPlusDamageScale = game?.GetProperty("gameDifficultyDamageScale", BindingFlags.Public | BindingFlags.Instance);
+            ValheimPlusHealthScale = game?.GetProperty("gameDifficultyHealthScale", BindingFlags.Public | BindingFlags.Instance);
+            // Current is bound last: TryGetValheimPlusDifficulty treats it being set as everything else being bound.
+            if (ValheimPlusGameEnabled?.PropertyType == typeof(bool) && ValheimPlusDamageScale?.PropertyType == typeof(float) && ValheimPlusHealthScale?.PropertyType == typeof(float)) {
+                ValheimPlusConfigCurrent = configuration.GetProperty("Current", BindingFlags.Public | BindingFlags.Static);
+            }
+            if (ValheimPlusConfigCurrent == null) {
+                Logger.LogWarning("Valheim Plus detected but its [Game] difficulty settings were not found; they will not stack with SLS multiplayer scaling.");
+            } else {
+                Logger.LogInfo("Valheim Plus detected; its [Game] difficulty scales stack with SLS multiplayer scaling.");
+            }
+        }
+
+        // V+'s [Pickable] yield applied to an amount SLS rolled for a pickable it has a loot table for. The amount is
+        // returned as-is without V+, or once V+ has thrown (its yield table is only built when its RPC_Pick transpiler runs).
+        internal static int ValheimPlus_PickableYield(GameObject prefab, int amount) {
+            if (ValheimPlusPickableYield == null || ValheimPlusPickableYieldFailed || prefab == null || amount <= 0) { return amount; }
+            try {
+                return Mathf.Max(0, ValheimPlusPickableYield(prefab, amount));
+            } catch (Exception e) {
+                ValheimPlusPickableYieldFailed = true;
+                Logger.LogWarning($"Valheim Plus pickable yield failed and will not be applied to SLS pickable loot this session: {e.Message}");
+                return amount;
+            }
+        }
+
+        // V+'s [Game] per-player difficulty scales as fractions (its config is in percent), read live so they follow its
+        // server sync. False while V+ is missing or that section is off, which leaves SLS's multiplayer scaling on its own.
+        internal static bool TryGetValheimPlusDifficulty(out float damagePerPlayer, out float healthPerPlayer) {
+            damagePerPlayer = 0f;
+            healthPerPlayer = 0f;
+            if (ValheimPlusConfigCurrent == null || ValheimPlusDifficultyFailed) { return false; }
+            try {
+                object current = ValheimPlusConfigCurrent.GetValue(null);
+                object game = current != null ? ValheimPlusGameSection.GetValue(current) : null;
+                if (game == null || (bool)ValheimPlusGameEnabled.GetValue(game) == false) { return false; }
+                damagePerPlayer = (float)ValheimPlusDamageScale.GetValue(game) / 100f;
+                healthPerPlayer = (float)ValheimPlusHealthScale.GetValue(game) / 100f;
+                return true;
+            } catch (Exception e) {
+                ValheimPlusDifficultyFailed = true;
+                Logger.LogWarning($"Reading Valheim Plus difficulty settings failed; they will not stack with SLS multiplayer scaling this session: {e.Message}");
+                return false;
             }
         }
 

@@ -23,11 +23,12 @@ namespace StarLevelSystem
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
     [BepInIncompatibility("org.bepinex.plugins.creaturelevelcontrol")]
     [BepInDependency("asharppen.valheim.drop_that", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("org.bepinex.plugins.valheim_plus", BepInDependency.DependencyFlags.SoftDependency)]
     internal class StarLevelSystem : BaseUnityPlugin
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.25.0";
+        public const string PluginVersion = "1.25.1";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game

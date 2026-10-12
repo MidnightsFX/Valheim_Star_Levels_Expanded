@@ -1052,6 +1052,10 @@ Once you are ready to install mods, they must be unzipped first and go into the 
 - This mod is incompatible with Creature Level and Loot Control (they do the same things)
 - SLS Location Reset is automatically disabled if VentureValheim's LocationReset is installed, since both reset the same objects on their own timers. The rest of Star Level System works normally
 - Upgrade World can be used alongside SLS, but avoid running its `locations_reset` / `vegetation_reset` commands against zones SLS Location Reset manages
+- Valheim Plus works alongside SLS:
+  - Its `[Pickable]` yields apply to every pickable, including ones with an SLS loot table (on drops that scale with level, alongside the world's Resources modifier)
+  - Its `[Game]` difficulty scales (`gameDifficultyDamageScale`, `gameDifficultyHealthScale`) multiply onto SLS's multiplayer scaling, and apply on their own when SLS's is off. Turning on the `[Game]` section for any of its options also turns these on at their vanilla-like defaults (4% / 30% per player); set both to 0 to keep only SLS's scaling
+  - Its `[Gathering]` and `[LootDrop]` multipliers apply to everything without an SLS loot table; trees, rocks, objects and creatures with their own SLS loot table drop exactly what that table says
 
 Compatibility is being worked on for the following mods:
 - CarryMeMaster

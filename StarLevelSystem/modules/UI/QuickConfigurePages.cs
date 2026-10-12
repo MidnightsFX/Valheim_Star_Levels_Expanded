@@ -907,20 +907,27 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // Mirrors MultiplayerDamageMod: enemies take max(1 - players * healthMod, MinDamageTaken) damage and deal
-        // 1 + (1 + players) * damageMod, once enough players are nearby.
+        // 1 + (1 + players) * damageMod, once enough players are nearby. Valheim Plus's difficulty, when on, multiplies
+        // onto both from its live settings, as it is not part of what this page stages.
         private static string FormatMultiplayerExample() {
-            if (staged.mpHealth == false && staged.mpDamage == false) {
+            bool valheimPlus = Compatibility.TryGetValheimPlusDifficulty(out float valheimPlusDamagePerPlayer, out float valheimPlusHealthPerPlayer);
+            if (staged.mpHealth == false && staged.mpDamage == false && valheimPlus == false) {
                 return "Multiplayer scaling is off: groups face the same creatures as a solo player.";
             }
             int players = Mathf.Max(1, staged.mpRequiredPlayers);
             float taken = staged.mpHealth ? Mathf.Max(1f - players * staged.mpHealthMod, ValConfig.MultiplayerEnemyMinDamageTaken.Value) : 1f;
-            taken = Mathf.Max(taken, 0.01f);
             float dealt = staged.mpDamage ? 1f + (1f + players) * staged.mpDamageMod : 1f;
+            if (valheimPlus) {
+                taken *= MultiplayerHealthMod.ValheimPlusDamageTaken(players, valheimPlusHealthPerPlayer);
+                dealt *= MultiplayerDamageMod.ValheimPlusDamageDealt(players, valheimPlusDamagePerPlayer);
+            }
+            taken = Mathf.Max(taken, 0.01f);
             int stars = Mathf.Max(0, staged.maxStars);
             float trollHp = TrollHp * (1f + staged.creatureHpPerLevel * stars);
             float trollDmg = TrollDmg * (1f + staged.creatureDmgPerLevel * stars);
             return $"With {players} or more players nearby, creatures take {taken:0.00}x damage (about {1f / taken:0.0}x the health) and deal {dealt:0.00}x damage.\n" +
-                   $"A {Stars(stars)} Troll then takes about {trollHp / taken:0} damage to kill and hits for about {trollDmg * dealt:0}.";
+                   $"A {Stars(stars)} Troll then takes about {trollHp / taken:0} damage to kill and hits for about {trollDmg * dealt:0}." +
+                   (valheimPlus ? "\nIncludes Valheim Plus's difficulty scaling." : "");
         }
 
         // ------------------------------------------------------------------------------------------------

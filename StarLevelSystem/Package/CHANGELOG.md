@@ -1,4 +1,4 @@
-***1.25.1**
+**1.25.1**
  ---
  ```
 - Valheim Plus loot settings are now applied in addition to SLS loot settings

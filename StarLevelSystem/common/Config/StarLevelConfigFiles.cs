@@ -489,6 +489,8 @@ namespace StarLevelSystem.common {
 #     GlobalRaidIntervalScalar: 2    # multiplies every raid's cooldown: >1 = raids less often
 #     GlobalRaidChanceScalar: 0.5    # multiplies every raid's activation chance
 #     RaidCreatureDensity: 2         # 1-6, how crowded the raids below already are
+#     PauseBeforeCompleted: 30       # seconds a raid stays active after its Duration so its
+#                                    # creatures can be finished off; killing them all ends it early
 #
 # The world's own Raids modifier applies on top of both scalars the way vanilla
 # applies it to its events: None starts no raids, Less (1.5x) and Much less (2x)
@@ -511,8 +513,9 @@ namespace StarLevelSystem.common {
 #   Raids:
 #   - Name: my_swamp_raid            # unique; also used for cooldown tracking
 #     Duration: 120                  # seconds of active spawning
-#     RaidActiveTillDefeated: true   # after Duration, stays active until its creatures die (at most
-#                                    # RaidActiveTillDefeatedMaxSeconds from the main .cfg); false ends it at Duration
+#     RaidActiveTillDefeated: false  # true: after Duration, stays active until its creatures die (at most
+#                                    # RaidActiveTillDefeatedMaxSeconds from the main .cfg); false (default)
+#                                    # waits PauseBeforeCompleted from GlobalSettings instead
 #     RaidCoolDownMinutes: 240       # per-player cooldown for THIS raid
 #     EventRange: 96                 # radius of the event circle
 #     StartMessage: $SLS_my_raid_start   # localization tokens or plain text

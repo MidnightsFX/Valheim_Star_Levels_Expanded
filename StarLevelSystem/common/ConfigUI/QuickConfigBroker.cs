@@ -178,7 +178,7 @@ namespace StarLevelSystem.common {
             if (found != null) { return found.gameObject; }   // already ours, listener included
 
             GameObject go = GUIManager.Instance.CreateButton(
-                text: ConfigUI.L("Mod Config"), parent: parent,
+                text: ConfigUI.L("$modquickconfig_button", "Mod Config"), parent: parent,
                 anchorMin: new Vector2(1f, 0f), anchorMax: new Vector2(1f, 0f),
                 position: new Vector2(-20f, 20f), width: ButtonW, height: ButtonH);
             go.name = ButtonObjectName;
@@ -223,7 +223,8 @@ namespace StarLevelSystem.common {
 
             // 64 clears the title, 42 per entry, 16 of bottom padding.
             float height = Mathf.Clamp(80f + 42f * order.Count, 122f, 560f);
-            listPanel = ConfigUI.CreatePanel("Configure a mod", PanelW, height, out Transform body);
+            listPanel = ConfigUI.CreatePanel(ConfigUI.L("$modquickconfig_list_title", "Configure a mod"), PanelW, height,
+                out Transform body);
             ConfigUI.AddCloseX(body, PanelW, CloseList);
 
             float y = 64f;

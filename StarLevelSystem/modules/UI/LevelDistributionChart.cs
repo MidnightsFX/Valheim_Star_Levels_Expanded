@@ -102,7 +102,7 @@ namespace StarLevelSystem.modules.UI {
         // chances: star level -> chance (0-1), in ascending star order.
         internal void SetData(IList<KeyValuePair<int, float>> chances) {
             int n = chances?.Count ?? 0;
-            emptyText.text = n == 0 ? "No level data" : "";
+            emptyText.text = n == 0 ? ConfigUI.L("$sls_cfg_chart_no_data") : "";
 
             float peak = 0f;
             for (int i = 0; i < n; i++) { peak = Mathf.Max(peak, chances[i].Value); }

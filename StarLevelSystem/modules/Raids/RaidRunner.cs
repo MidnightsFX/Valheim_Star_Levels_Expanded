@@ -1,6 +1,7 @@
 ﻿using Jotunn.Managers;
 using Splatform;
 using StarLevelSystem.common;
+using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.LevelSystem;
 using System;
@@ -452,11 +453,13 @@ namespace StarLevelSystem.modules.Raids {
         // creatures kept hunting, its pins, music and forced weather stayed, and as a persistent ZDO it came back
         // after every restart, while each later raid at the same base stacked another set of pins on top.
         //
-        // RaidActiveTillDefeated now means what the config header says: after its Duration the raid stays active
-        // until its tracked creatures are dead, for at most RaidActiveTillDefeatedMaxSeconds.
+        // After its Duration the raid stays active until its tracked creatures are dead, for at most
+        // GlobalSettings.PauseBeforeCompleted -- or RaidActiveTillDefeatedMaxSeconds for a raid with
+        // RaidActiveTillDefeated set. Killing the last of them ends it straight away.
         private bool ShouldWindDown(RaidDefinition raid) {
-            if (raid.RaidActiveTillDefeated == false) { return true; }
-            double graceSeconds = ValConfig.RaidActiveTillDefeatedMaxSeconds.Value;
+            double graceSeconds = raid.RaidActiveTillDefeated
+                ? ValConfig.RaidActiveTillDefeatedMaxSeconds.Value
+                : RaidsData.SLE_Raid_Settings?.GlobalSettings?.PauseBeforeCompleted ?? new GlobalRaidSettings().PauseBeforeCompleted;
             if (graceSeconds <= 0d) { return true; }
             // Once a second: the alive check re-parses every tracked ZDOID from its string form.
             if (Time.time < nextDefeatCheck) { return false; }

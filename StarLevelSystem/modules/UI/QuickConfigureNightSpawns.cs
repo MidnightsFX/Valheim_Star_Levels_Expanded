@@ -23,7 +23,7 @@ namespace StarLevelSystem.modules.UI {
             const float EntryH = 56f;   // the name, and room for two lines of creatures under it
             const float StartY = 4f;
 
-            GameObject header = ConfigUI.AddHeaderRow(parent, PageW, "Night Spawns", TextAnchor.MiddleCenter);
+            GameObject header = ConfigUI.AddHeaderRow(parent, PageW, "$sls_cfg_page_night_spawns", TextAnchor.MiddleCenter);
             ConfigUI.PositionRow(header, 0f, StartY);
             GameObject intro = ConfigUI.AddTextRow(parent, PageW, 40f, "$sls_cfg_night_spawns_intro", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
             ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
@@ -64,10 +64,11 @@ namespace StarLevelSystem.modules.UI {
             if (BossNightSpawns.TryGetLiveSpawns(bossKey, out List<SpawnSystem.SpawnData> spawns) == false) {
                 string vanilla = BossNightSpawns.VanillaSpawns.TryGetValue(bossKey, out string known) ? known : "";
                 hasSpawns = vanilla.Length > 0;
-                return hasSpawns ? $"In vanilla: {vanilla}." : "No night spawns in vanilla.";
+                // VanillaSpawns is the English the .cfg description uses; the panel reads a token for each boss instead.
+                return hasSpawns ? L("$sls_cfg_night_in_vanilla", LocalizedOr("$sls_cfg_night_vanilla_" + bossKey, vanilla)) : ConfigUI.L("$sls_cfg_night_none_vanilla");
             }
             hasSpawns = spawns.Count > 0;
-            if (hasSpawns == false) { return "No night spawns in this world."; }
+            if (hasSpawns == false) { return ConfigUI.L("$sls_cfg_night_none_world"); }
 
             Dictionary<string, Heightmap.Biome> biomesByCreature = new Dictionary<string, Heightmap.Biome>();
             foreach (SpawnSystem.SpawnData spawn in spawns) {
@@ -76,7 +77,7 @@ namespace StarLevelSystem.modules.UI {
                 biomesByCreature[name] = biomes | spawn.m_biome;
             }
             IEnumerable<string> groups = biomesByCreature.GroupBy(kv => kv.Value, kv => kv.Key)
-                .Select(group => $"{JoinWithAnd(group.ToList())} in {JoinWithAnd(BiomeListOrder.Where(b => (group.Key & b) != 0).Select(BiomeName).ToList())}");
+                .Select(group => L("$sls_cfg_night_group", JoinWithAnd(group.ToList()), JoinWithAnd(BiomeListOrder.Where(b => (group.Key & b) != 0).Select(BiomeName).ToList())));
             return string.Join("; ", groups.ToArray()) + ".";
         }
 
@@ -90,9 +91,9 @@ namespace StarLevelSystem.modules.UI {
 
         // "A", "A and B", "A, B and C".
         private static string JoinWithAnd(List<string> parts) {
-            if (parts.Count == 0) { return "nowhere"; }
+            if (parts.Count == 0) { return ConfigUI.L("$sls_cfg_list_nowhere"); }
             if (parts.Count == 1) { return parts[0]; }
-            return string.Join(", ", parts.Take(parts.Count - 1).ToArray()) + " and " + parts[parts.Count - 1];
+            return L("$sls_cfg_list_and", string.Join(", ", parts.Take(parts.Count - 1).ToArray()), parts[parts.Count - 1]);
         }
 
         private static Dictionary<string, bool> SnapshotNightSpawns() {

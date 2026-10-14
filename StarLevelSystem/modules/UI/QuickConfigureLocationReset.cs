@@ -191,49 +191,49 @@ namespace StarLevelSystem.modules.UI {
 
             // Left - the switch, Defaults and throughput, then biome rates.
             ConfigUI.CreateScroll(parent, 0f, scrollY, LeftW, scrollH, out Transform left, out float lw);
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Location Reset"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "Enable Location Reset", lr.Enabled, on => {
+            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_page_location_reset"));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_enable", lr.Enabled, on => {
                 lr.masterSwitch = on;
                 lr.yamlEnabled = on;
                 RefreshLocationResetViews();
             }), Tip(ValConfig.EnableLocationReset)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "Start timers on first visit", lr.stampOnFirstSight, on => lr.stampOnFirstSight = on), Tip("StampOnFirstSight", "The first time the sweep sees a zone it records what is there and starts its timer, rather than resetting it immediately.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Default reset hours",
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_first_visit", lr.stampOnFirstSight, on => lr.stampOnFirstSight = on), Tip("StampOnFirstSight", "$sls_cfg_tip_locreset_first_visit")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_default_hours",
                 Mathf.Min(MinResetHours, lr.defaultResetHours), Mathf.Max(MaxResetHours, lr.defaultResetHours), lr.defaultResetHours, IsWhole(lr.defaultResetHours), v => {
                     lr.defaultResetHours = v;
                     RefreshLocationResetViews();
-                }), Tip("Defaults.ResetHours", "Real-world hours between resets for anything that does not set its own timer.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "Reset terrain by default", lr.defaultResetTerrain, on => {
+                }), Tip("Defaults.ResetHours", "$sls_cfg_tip_locreset_default_hours")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_default_terrain", lr.defaultResetTerrain, on => {
                 lr.defaultResetTerrain = on;
                 RefreshLocationResetViews();
-            }), Tip("Defaults.ResetTerrain", "Restores the ground as well as the objects, which is what undoes mining craters and dug-out approaches.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Player safe radius (m)",
-                0f, Mathf.Max(1024f, lr.playerSafeRadius), lr.playerSafeRadius, true, v => lr.playerSafeRadius = v), Tip("PlayerSafeRadius", "Ore, pickables and vegetation in a zone with a player within this distance are left alone and tried again later.")));
+            }), Tip("Defaults.ResetTerrain", "$sls_cfg_tip_locreset_default_terrain")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_safe_radius",
+                0f, Mathf.Max(1024f, lr.playerSafeRadius), lr.playerSafeRadius, true, v => lr.playerSafeRadius = v), Tip("PlayerSafeRadius", "$sls_cfg_tip_locreset_safe_radius")));
             // The protection scan reaches a chunk and its 8 neighbours, so LocationResetData clamps this to 32-96m.
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Protection radius (m)",
-                LocationResetData.MinProtectionRadius, LocationResetData.MaxProtectionRadius, lr.protectionRadius, true, v => lr.protectionRadius = v), Tip("Defaults.ProtectionRadius", "How far from a chunk's centre a player build holds back its ore, pickables and vegetation. The scan covers the chunk and its neighbours, so this is limited to 32-96m.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Location player radius (m)",
-                0f, Mathf.Max(512f, lr.locationPlayerRadius), lr.locationPlayerRadius, true, v => lr.locationPlayerRadius = v), Tip("LocationPlayerRadius", "A location's surface is left alone while a player on the surface is within this distance of it. Only a player inside a dungeon holds back its interior.")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_protection_radius",
+                LocationResetData.MinProtectionRadius, LocationResetData.MaxProtectionRadius, lr.protectionRadius, true, v => lr.protectionRadius = v), Tip("Defaults.ProtectionRadius", "$sls_cfg_tip_locreset_protection_radius")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_location_radius",
+                0f, Mathf.Max(512f, lr.locationPlayerRadius), lr.locationPlayerRadius, true, v => lr.locationPlayerRadius = v), Tip("LocationPlayerRadius", "$sls_cfg_tip_locreset_location_radius")));
             // LocationResetData clamps this to 0-64m.
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Location buffer (m)",
-                0f, LocationResetData.MaxLocationBuffer, lr.locationBuffer, true, v => lr.locationBuffer = v), Tip("Defaults.LocationBuffer", "How far beyond the ground a location reset touches a player build still holds it back. A dungeon held back this way still has its interior rebuilt.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "Refill unowned chests", lr.containerDefaultLoot, on => lr.containerDefaultLoot = on), Tip("InPlaceRefresh.ContainerDefaultLoot", "Re-rolls the loot in chests nobody has built or placed. Off by default: it is the one refresh that grants new items.")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Sweep budget (ms/frame)",
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_location_buffer",
+                0f, LocationResetData.MaxLocationBuffer, lr.locationBuffer, true, v => lr.locationBuffer = v), Tip("Defaults.LocationBuffer", "$sls_cfg_tip_locreset_location_buffer")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_refill_chests", lr.containerDefaultLoot, on => lr.containerDefaultLoot = on), Tip("InPlaceRefresh.ContainerDefaultLoot", "$sls_cfg_tip_locreset_refill_chests")));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_sweep_budget",
                 0f, 33f, lr.sweepBudgetMs, false, v => lr.sweepBudgetMs = v), Tip(ValConfig.LocationResetSweepBudgetMs)));
             ScrollRow(left, lw, 84f, t => ConfigUI.AddTextRow(t, lw, 84f, "$sls_cfg_locreset_settings_notes", 12, GUIManager.Instance.ValheimBeige));
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Biome rates"));
+            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_locreset_header_biome_rates"));
             ScrollRow(left, lw, 50f, t => ConfigUI.AddTextRow(t, lw, 50f, "$sls_cfg_locreset_biome_help", 12, GUIManager.Instance.ValheimBeige));
             foreach (Heightmap.Biome biome in ResetRateBiomes) {
                 Heightmap.Biome b = biome;   // capture per iteration
                 float rate = lr.RateFor(b);
                 ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, BiomeName(b),
-                    0f, Mathf.Max(5f, rate), rate, false, v => lr.biomeRates[b] = v), Tip("BiomeRates", "Multiplies every reset timer in this biome: 0.5 resets twice as fast, 2 half as fast, 0 never resets there.")));
+                    0f, Mathf.Max(5f, rate), rate, false, v => lr.biomeRates[b] = v), Tip("BiomeRates", "$sls_cfg_tip_locreset_biome_rate")));
             }
 
             // Right - every reset group in the file, in file order.
             ConfigUI.CreateScroll(parent, RightX, scrollY, rightW, scrollH, out Transform right, out float rw);
-            ScrollRow(right, rw, RowHeight, t => ConfigUI.AddHeaderRow(t, rw, "Reset groups"));
+            ScrollRow(right, rw, RowHeight, t => ConfigUI.AddHeaderRow(t, rw, "$sls_cfg_locreset_header_groups"));
             ScrollRow(right, rw, 50f, t => ConfigUI.AddTextRow(t, rw, 50f, "$sls_cfg_locreset_groups_help", 12, GUIManager.Instance.ValheimBeige));
             foreach (KeyValuePair<string, StagedResetGroup> group in lr.groups) {
                 AddResetGroupEntry(right, rw, group.Key, group.Value);
@@ -263,23 +263,25 @@ namespace StarLevelSystem.modules.UI {
             float rowW = width - TextX;
             if (string.IsNullOrWhiteSpace(group.Source.ResetSchedule)) {
                 float hours = lr.HoursFor(group);
-                GameObject hoursRow = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "Reset hours",
+                GameObject hoursRow = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "$sls_cfg_locreset_group_hours",
                     Mathf.Min(MinResetHours, hours), Mathf.Max(MaxResetHours, hours), hours, IsWhole(hours), v => {
                         group.ResetHours = group.Source.ResetHours.HasValue == false && v == lr.defaultResetHours ? (float?)null : v;
                         RefreshLocationResetViews();
-                    }), Tip("ResetHours", "Real-world hours between this group's resets. Left on the default until you move it."));
+                    }), Tip("ResetHours", "$sls_cfg_tip_locreset_group_hours"));
                 ConfigUI.PositionRow(hoursRow, TextX, ControlsTop);
                 view.HoursSlider = hoursRow.GetComponentInChildren<Slider>();
                 view.HoursField = hoursRow.GetComponentInChildren<InputField>();
             } else {
-                // A schedule wins over ResetHours at the same level, so an hours slider here would do nothing.
-                ConfigUI.AddText(entry.transform, TextX, ControlsTop, rowW, RowHeight, $"Timed by the schedule '{group.Source.ResetSchedule}' in the YAML file.", 13, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimBeige);
+                // A schedule wins over ResetHours at the same level, so an hours slider here would do nothing. Set on the
+                // text directly: the schedule is the admin's own text, and AddText would read a '$' in it as a token.
+                Text scheduled = ConfigUI.AddText(entry.transform, TextX, ControlsTop, rowW, RowHeight, "", 13, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimBeige);
+                scheduled.text = L("$sls_cfg_locreset_group_scheduled", group.Source.ResetSchedule);
             }
 
-            GameObject terrainRow = WithTip(ConfigUI.AddToggleRow(entry.transform, rowW, LabelW + 80f, "Reset terrain", lr.TerrainFor(group), on => {
+            GameObject terrainRow = WithTip(ConfigUI.AddToggleRow(entry.transform, rowW, LabelW + 80f, "$sls_cfg_locreset_group_terrain", lr.TerrainFor(group), on => {
                 group.ResetTerrain = group.Source.ResetTerrain.HasValue == false && on == lr.defaultResetTerrain ? (bool?)null : on;
                 RefreshLocationResetViews();
-            }), Tip("ResetTerrain", "Restores the ground around this group's targets as well as the objects themselves."));
+            }), Tip("ResetTerrain", "$sls_cfg_tip_locreset_group_terrain"));
             ConfigUI.PositionRow(terrainRow, TextX, ControlsTop + RowHeight);
             view.TerrainToggle = terrainRow.GetComponentInChildren<Toggle>();
 
@@ -302,7 +304,7 @@ namespace StarLevelSystem.modules.UI {
                     view.TerrainToggle.SetIsOnWithoutNotify(lr.defaultResetTerrain);
                 }
                 view.Description.text = DescribeResetGroup(group, lr);
-                view.Tag.text = group.Enabled ? "On" : "Off";
+                view.Tag.text = ConfigUI.L(group.Enabled ? "$sls_cfg_tag_on" : "$sls_cfg_tag_off");
                 view.Tag.color = group.Enabled ? EasierColor : InactiveColor;
             }
 
@@ -330,38 +332,39 @@ namespace StarLevelSystem.modules.UI {
             LocationResetGroup source = group.Source;
             string members = DescribeResetMembers(source.Members);
 
-            string timing = string.IsNullOrWhiteSpace(source.ResetSchedule)
-                ? $"every {lr.HoursFor(group):0.##}h{(group.ResetHours.HasValue ? "" : " (default)")}"
-                : $"on the schedule '{source.ResetSchedule}'";
+            // When it resets, then whether the ground goes too and how far out it reaches, as one comma-separated clause.
+            List<string> parts = new List<string>();
+            string hours = lr.HoursFor(group).ToString("0.##");
+            parts.Add(string.IsNullOrWhiteSpace(source.ResetSchedule)
+                ? L(group.ResetHours.HasValue ? "$sls_cfg_locreset_every_hours" : "$sls_cfg_locreset_every_hours_default", hours)
+                : L("$sls_cfg_locreset_on_schedule", source.ResetSchedule));
 
-            string terrain = "";
             if (lr.TerrainFor(group)) {
                 float extra = source.ExtraTerrainRadius ?? lr.defaultExtraTerrainRadius;
-                terrain = extra > 0f ? $", terrain too (+{extra:0}m)" : ", terrain too";
+                parts.Add(extra > 0f ? L("$sls_cfg_locreset_terrain_extra", extra.ToString("0")) : ConfigUI.L("$sls_cfg_locreset_terrain"));
             }
 
             float min = Mathf.Max(0f, source.MinDistance ?? 0f);
             float max = Mathf.Max(0f, source.MaxDistance ?? 0f);
-            string scope = "";
-            if (min > 0f && max > 0f) { scope = $", only {min:0}-{max:0}m from spawn"; }
-            else if (max > 0f) { scope = $", only within {max:0}m of spawn"; }
-            else if (min > 0f) { scope = $", only beyond {min:0}m from spawn"; }
+            if (min > 0f && max > 0f) { parts.Add(L("$sls_cfg_locreset_scope_between", min.ToString("0"), max.ToString("0"))); }
+            else if (max > 0f) { parts.Add(L("$sls_cfg_locreset_scope_within", max.ToString("0"))); }
+            else if (min > 0f) { parts.Add(L("$sls_cfg_locreset_scope_beyond", min.ToString("0"))); }
 
-            return $"{members}. Resets {timing}{terrain}{scope}.";
+            return L("$sls_cfg_locreset_group_summary", members, string.Join(", ", parts.ToArray()));
         }
 
         // Member names are left as written: they are the prefab names an admin types into the file.
         private static string DescribeResetMembers(List<string> members) {
             List<string> names = members?.Where(m => string.IsNullOrWhiteSpace(m) == false).Select(m => m.Trim()).ToList() ?? new List<string>();
-            if (names.Count == 0) { return "No members"; }
+            if (names.Count == 0) { return ConfigUI.L("$sls_cfg_locreset_no_members"); }
             List<string> shown = names.Take(4).Select(DescribeResetMember).ToList();
             string list = string.Join(", ", shown.ToArray());
-            return names.Count > shown.Count ? $"{list} and {names.Count - shown.Count} more" : list;
+            return names.Count > shown.Count ? L("$sls_cfg_locreset_members_more", list, names.Count - shown.Count) : list;
         }
 
         private static string DescribeResetMember(string member) {
-            if (string.Equals(member, "$Pickable", StringComparison.OrdinalIgnoreCase)) { return "every pickable"; }
-            if (string.Equals(member, "$Mineable", StringComparison.OrdinalIgnoreCase)) { return "every mineable rock"; }
+            if (string.Equals(member, "$Pickable", StringComparison.OrdinalIgnoreCase)) { return ConfigUI.L("$sls_cfg_locreset_every_pickable"); }
+            if (string.Equals(member, "$Mineable", StringComparison.OrdinalIgnoreCase)) { return ConfigUI.L("$sls_cfg_locreset_every_mineable"); }
             return member;
         }
 
@@ -416,7 +419,7 @@ namespace StarLevelSystem.modules.UI {
                 }
             }
 
-            SaveYaml(file, copy, "Location reset settings", failures, warnings);
+            SaveYaml(file, copy, "$sls_cfg_label_location_reset_settings", failures, warnings);
         }
     }
 }

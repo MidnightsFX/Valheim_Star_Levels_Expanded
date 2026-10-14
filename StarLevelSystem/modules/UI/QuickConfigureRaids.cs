@@ -30,12 +30,17 @@ namespace StarLevelSystem.modules.UI {
         private const float MaxRaidChanceScalar = 2f;
         private const float MinRaidIntervalScalar = 0.1f;
         private const float MaxRaidIntervalScalar = 10f;
+        // Top of the end-of-raid pause slider, in seconds. A file value above it widens the slider.
+        private const int MaxRaidPauseBeforeCompleted = 300;
 
         // Density 1-6 to the share of each raid's configured creature counts that is actually used. 3 is the numbers the
         // raids are written with, which are already well above vanilla; 1 cuts them to roughly the size of a vanilla raid
         // and 6 triples them. Kept as a hand-written table rather than a curve so each step is a deliberate difficulty.
         private static readonly float[] RaidDensityScale = { 0.4f, 0.65f, 1f, 1.6f, 2.2f, 3f };
-        private static readonly string[] RaidDensityNames = { "Vanilla", "Light", "Standard", "Heavy", "Brutal", "Impossible" };
+        private static readonly string[] RaidDensityNames = {
+            "$sls_cfg_raids_density_vanilla", "$sls_cfg_raids_density_light", "$sls_cfg_raids_density_standard",
+            "$sls_cfg_raids_density_heavy", "$sls_cfg_raids_density_brutal", "$sls_cfg_raids_density_impossible",
+        };
 
         internal static int ClampRaidDensity(int density) => Mathf.Clamp(density, MinRaidDensity, MaxRaidDensity);
 
@@ -147,7 +152,8 @@ namespace StarLevelSystem.modules.UI {
 
         // The GlobalSettings values the page edits, other than the density.
         private static bool RaidGlobalsMatch(StagedConfig a, StagedConfig b) {
-            return a.disableAllRaids == b.disableAllRaids && a.raidChanceScalar == b.raidChanceScalar && a.raidIntervalScalar == b.raidIntervalScalar;
+            return a.disableAllRaids == b.disableAllRaids && a.raidChanceScalar == b.raidChanceScalar && a.raidIntervalScalar == b.raidIntervalScalar
+                && a.raidPauseBeforeCompleted == b.raidPauseBeforeCompleted;
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -176,32 +182,29 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             // Full-width header + intro across the top.
-            GameObject header = ConfigUI.AddHeaderRow(parent, PageW, "Raids", TextAnchor.MiddleCenter);
+            GameObject header = ConfigUI.AddHeaderRow(parent, PageW, "$sls_cfg_page_raids", TextAnchor.MiddleCenter);
             ConfigUI.PositionRow(header, 0f, StartY);
             GameObject intro = ConfigUI.AddTextRow(parent, PageW, 40f, "$sls_cfg_raids_intro", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
             ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
             float colStartY = StartY + RowHeight + RowGap + 40f + 8f;
 
-            // Left column - global raid settings. The pause, the two multipliers and the density are RaidSettings.yaml's
-            // GlobalSettings; the rest are .cfg entries.
+            // Left column - global raid settings. The pause, the two multipliers, the end-of-raid pause and the density
+            // are RaidSettings.yaml's GlobalSettings; the rest are .cfg entries.
             List<GameObject> left = new List<GameObject> {
-                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true), Tip("UseVanillaRaidConfiguration", "On, StarLevelSystem runs its own raids. Off, Valheim's own raid events are used instead and nothing on this page applies.")),
-                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Pause all raids", staged.disableAllRaids, v => staged.disableAllRaids = v, true),
-                    Tip("DisableAllRaids", "On, no SLS raid starts on its own; with SLS raids enabled that means no raids at all. Every raid keeps its settings, and sls-raid-spawn still starts one for testing.")),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid chance multiplier", 0f, Mathf.Max(MaxRaidChanceScalar, staged.raidChanceScalar), staged.raidChanceScalar, false, v => staged.raidChanceScalar = v),
-                    Tip("GlobalRaidChanceScalar", "Multiplies every raid's activation chance each time it is rolled. 1 uses the chances in RaidSettings.yaml as written, 0.5 halves them and 0 means no raid ever starts on its own. " +
-                        "Several raids are rolled each check (Max attempts / player), so at high chances one of them almost always starts. The world's Raids modifier applies on top.")),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid cooldown multiplier", Mathf.Min(MinRaidIntervalScalar, staged.raidIntervalScalar), Mathf.Max(MaxRaidIntervalScalar, staged.raidIntervalScalar), staged.raidIntervalScalar, false, v => staged.raidIntervalScalar = v),
-                    Tip("GlobalRaidIntervalScalar", "Multiplies how long a player waits after a raid before the next can start (each raid's RaidCoolDownMinutes). Higher means raids come less often: 2 doubles every wait, 0.5 halves it. The world's Raids modifier applies on top.")),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v), Tip(ValConfig.ServerTimeBetweenRaidStartChecks)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v), Tip(ValConfig.MaxRaidAttemptsPerPlayer)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", Mathf.Min(1f, staged.maxActiveRaids), Mathf.Max(20f, staged.maxActiveRaids), staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v), Tip(ValConfig.MaxActiveRaids)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid creature density", MinRaidDensity, MaxRaidDensity, staged.raidDensity, true, v => OnRaidDensityChanged((int)v)),
-                    Tip("RaidCreatureDensity", $"How crowded every raid is, {MinRaidDensity} to {MaxRaidDensity}. {StandardRaidDensity} is the numbers the raids were designed with; " +
-                        $"{MinRaidDensity} thins every raid back to roughly vanilla sized and {MaxRaidDensity} is not meant to be survivable. " +
-                        "Moving it rewrites each creature's Each and Max alive on the right, never below 1. Numbers still as shipped are scaled " +
-                        "from the ones the raids were designed with and numbers you changed from the file - so sliding back where you started " +
-                        "puts the raids back exactly.")),
+                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "$sls_cfg_raids_enable", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true), Tip("UseVanillaRaidConfiguration", "$sls_cfg_tip_raids_enable")),
+                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "$sls_cfg_raids_pause", staged.disableAllRaids, v => staged.disableAllRaids = v, true),
+                    Tip("DisableAllRaids", "$sls_cfg_tip_raids_pause")),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_chance_multiplier", 0f, Mathf.Max(MaxRaidChanceScalar, staged.raidChanceScalar), staged.raidChanceScalar, false, v => staged.raidChanceScalar = v),
+                    Tip("GlobalRaidChanceScalar", "$sls_cfg_tip_raids_chance_multiplier")),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_cooldown_multiplier", Mathf.Min(MinRaidIntervalScalar, staged.raidIntervalScalar), Mathf.Max(MaxRaidIntervalScalar, staged.raidIntervalScalar), staged.raidIntervalScalar, false, v => staged.raidIntervalScalar = v),
+                    Tip("GlobalRaidIntervalScalar", "$sls_cfg_tip_raids_cooldown_multiplier")),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_check_minutes", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v), Tip(ValConfig.ServerTimeBetweenRaidStartChecks)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_max_attempts", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v), Tip(ValConfig.MaxRaidAttemptsPerPlayer)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_max_active", Mathf.Min(1f, staged.maxActiveRaids), Mathf.Max(20f, staged.maxActiveRaids), staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v), Tip(ValConfig.MaxActiveRaids)),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_pause_before_completed", 0f, Mathf.Max(MaxRaidPauseBeforeCompleted, staged.raidPauseBeforeCompleted), Mathf.Max(0, staged.raidPauseBeforeCompleted), true, v => staged.raidPauseBeforeCompleted = (int)v),
+                    Tip("PauseBeforeCompleted", "$sls_cfg_tip_raids_pause_before_completed")),
+                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raids_density", MinRaidDensity, MaxRaidDensity, staged.raidDensity, true, v => OnRaidDensityChanged((int)v)),
+                    Tip("RaidCreatureDensity", L("$sls_cfg_tip_raids_density", MinRaidDensity, MaxRaidDensity, StandardRaidDensity))),
             };
             ConfigUI.LayoutColumn(left, 0f, colStartY);
 
@@ -221,7 +224,7 @@ namespace StarLevelSystem.modules.UI {
             const float ScrollX = 446f;
             const float ScrollW = 402f;
             float scrollH = PageH - colStartY - RowHeight - 8f;
-            ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "Raids and their spawns", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "$sls_cfg_raids_list_header", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
             ConfigUI.CreateScroll(parent, ScrollX, colStartY + RowHeight, ScrollW, scrollH, out Transform content, out float contentW);
             List<RaidDefinition> raids = staged.raidSource?.Raids;
             if (content == null || raids == null) { return; }
@@ -240,8 +243,7 @@ namespace StarLevelSystem.modules.UI {
             string raidName = raid.Name;   // capture for the closures
 
             GameObject header = ConfigUI.NewLayoutRow(content, width, 44f);
-            WithTip(header, Tip(raidName, $"Runs for {raid.Duration:0}s, then waits {raid.RaidCoolDownMinutes:0} minutes before it can be picked again. " +
-                "A disabled raid keeps all of its settings in RaidSettings.yaml."));
+            WithTip(header, Tip(raidName, L("$sls_cfg_tip_raid_entry", raid.Duration.ToString("0"), raid.RaidCoolDownMinutes.ToString("0"))));
             ConfigUI.AddToggle(header.transform, 2f, 3f, 22f, staged.raidsOn.Contains(raidName), on => {
                 if (on) { staged.raidsOn.Add(raidName); }
                 else { staged.raidsOn.Remove(raidName); }
@@ -249,7 +251,7 @@ namespace StarLevelSystem.modules.UI {
             float textW = width - TextX - ButtonW - 8f;
             ConfigUI.AddText(header.transform, TextX, 0f, textW, 20f, PrettifyRaidName(raidName), 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
             int types = raid.Spawns != null ? raid.Spawns.Select(sp => sp.PrefabName).Distinct().Count() : 0;
-            string sub = $"{types} creature type{(types == 1 ? "" : "s")}  ·  {raid.Duration:0}s";
+            string sub = $"{(types == 1 ? ConfigUI.L("$sls_cfg_raids_creature_types_one") : L("$sls_cfg_raids_creature_types", types))}  ·  {raid.Duration:0}s";
             ConfigUI.AddText(header.transform, TextX, 20f, textW, 24f, sub, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
 
             // The spawn rows are separate children of the scroll content, so hiding them collapses the space they took:
@@ -286,10 +288,10 @@ namespace StarLevelSystem.modules.UI {
         private static GameObject AddRaidSpawnHeaderRow(Transform content, float width) {
             GameObject row = ConfigUI.NewLayoutRow(content, width, 20f);
             Color color = GUIManager.Instance.ValheimYellow;
-            ConfigUI.AddText(row.transform, SpawnNameX, 0f, SpawnNameW, 20f, "Creature", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, SpawnGroupX, 0f, SpawnFieldW, 20f, "Each", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, SpawnMaxX, 0f, SpawnFieldW + 6f, 20f, "Max alive", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, SpawnIntervalX, 0f, SpawnFieldW + 20f, 20f, "Every (s)", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, SpawnNameX, 0f, SpawnNameW, 20f, "$sls_cfg_raids_col_creature", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, SpawnGroupX, 0f, SpawnFieldW, 20f, "$sls_cfg_raids_col_each", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, SpawnMaxX, 0f, SpawnFieldW + 6f, 20f, "$sls_cfg_raids_col_max_alive", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, SpawnIntervalX, 0f, SpawnFieldW + 20f, 20f, "$sls_cfg_raids_col_every", 11, TextAnchor.MiddleLeft, color);
             return row;
         }
 
@@ -302,19 +304,19 @@ namespace StarLevelSystem.modules.UI {
                 if (int.TryParse(text, out int value)) { spawn.GroupSize = Mathf.Clamp(value, 1, MaxSpawnGroupSize); }
                 group.SetTextWithoutNotify(spawn.GroupSize.ToString());
             }, InputField.ContentType.IntegerNumber);
-            WithTip(group.gameObject, Tip("SpawnGroupSize", "How many of this creature arrive each time the raid spawns it."));
+            WithTip(group.gameObject, Tip("SpawnGroupSize", "$sls_cfg_tip_raids_spawn_each"));
             max = ConfigUI.AddTextField(row.transform, SpawnMaxX, 0f, SpawnFieldW, spawn.MaxAlive.ToString(), text => {
                 if (int.TryParse(text, out int value)) { spawn.MaxAlive = Mathf.Clamp(value, 0, MaxSpawnAlive); }
                 max.SetTextWithoutNotify(spawn.MaxAlive.ToString());
             }, InputField.ContentType.IntegerNumber);
-            WithTip(max.gameObject, Tip("MaxSpawned", "How many of this creature may be alive at once from this raid. 0 stops it spawning at all."));
+            WithTip(max.gameObject, Tip("MaxSpawned", "$sls_cfg_tip_raids_spawn_max_alive"));
             interval = ConfigUI.AddTextField(row.transform, SpawnIntervalX, 0f, SpawnFieldW + 10f, FormatInterval(spawn.Interval), text => {
                 if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float value)) {
                     spawn.Interval = Mathf.Clamp(value, MinSpawnInterval, MaxSpawnInterval);
                 }
                 interval.SetTextWithoutNotify(FormatInterval(spawn.Interval));
             }, InputField.ContentType.DecimalNumber);
-            WithTip(interval.gameObject, Tip("SpawnInterval", "Seconds between this creature's waves. The raid keeps spawning it until it hits Max alive."));
+            WithTip(interval.gameObject, Tip("SpawnInterval", "$sls_cfg_tip_raids_spawn_every"));
             raidSpawnFields.Add(new RaidSpawnFields { Spawn = spawn, Group = group, Max = max });
             return row;
         }
@@ -374,6 +376,7 @@ namespace StarLevelSystem.modules.UI {
             staged.disableAllRaids = shippedGlobal.DisableAllRaids;
             staged.raidChanceScalar = shippedGlobal.GlobalRaidChanceScalar;
             staged.raidIntervalScalar = shippedGlobal.GlobalRaidIntervalScalar;
+            staged.raidPauseBeforeCompleted = shippedGlobal.PauseBeforeCompleted;
             int density = ClampRaidDensity(shippedGlobal.RaidCreatureDensity);
             // For the unmatched spawns: their file numbers sit at the old base density, and are carried to the new one.
             float carry = RaidDensityRatio(staged.raidDensityBase, density);
@@ -418,18 +421,18 @@ namespace StarLevelSystem.modules.UI {
         // there is none to show, and the last world's rate is still in Game.m_eventRate.
         private static string WorldRaidModifierNote() {
             if (ZoneSystem.instance == null) {
-                return "In a world, its Raids world modifier also applies: None stops these raids, and Less or More lengthen or shorten cooldowns and lower or raise chances.";
+                return ConfigUI.L("$sls_cfg_raids_world_note_menu");
             }
             float rate = RaidControl.WorldRaidRate;
             if (RaidControl.WorldRaidsOff) {
-                return $"Raids world modifier: {ConfigUI.L("$menu_none")} - no raid starts on its own in this world, whatever is set here.";
+                return L("$sls_cfg_raids_world_note_off", ConfigUI.L("$menu_none"));
             }
             if (Mathf.Approximately(rate, 1f)) {
-                return $"Raids world modifier: {ConfigUI.L("$menu_modifier_normal")} - raids run as set here.";
+                return L("$sls_cfg_raids_world_note_normal", ConfigUI.L("$menu_modifier_normal"));
             }
             string cooldown = rate.ToString("0.##", CultureInfo.InvariantCulture);
             string chance = (1f / rate).ToString("0.##", CultureInfo.InvariantCulture);
-            return $"Raids world modifier: {WorldRaidModifierName(rate)} - every cooldown x{cooldown} and chance x{chance} on top of the settings here.";
+            return L("$sls_cfg_raids_world_note", WorldRaidModifierName(rate), cooldown, chance);
         }
 
         // Vanilla's names for the presets of its Raids modifier; anything else was set with setkey.
@@ -438,16 +441,16 @@ namespace StarLevelSystem.modules.UI {
             if (Mathf.Approximately(rate, 1.5f)) { return ConfigUI.L("$menu_less"); }
             if (Mathf.Approximately(rate, 0.6f)) { return ConfigUI.L("$menu_more"); }
             if (Mathf.Approximately(rate, 0.3f)) { return ConfigUI.L("$menu_muchmore"); }
-            return "custom";
+            return ConfigUI.L("$sls_cfg_raids_world_custom");
         }
 
         private static void RefreshRaidDensityNote() {
             if (raidDensityNote == null || staged == null) { return; }
             float ratio = RaidDensityRatio();
-            string name = RaidDensityNames[ClampRaidDensity(staged.raidDensity) - 1];
+            string name = ConfigUI.L(RaidDensityNames[ClampRaidDensity(staged.raidDensity) - 1]);
             raidDensityNote.text = Mathf.Approximately(ratio, 1f)
-                ? $"{name} - raids spawn the creature counts in RaidSettings.yaml."
-                : $"{name} - every raid's creature counts x{ratio.ToString("0.##", CultureInfo.InvariantCulture)}, at least 1 each.";
+                ? L("$sls_cfg_raids_density_note_file", name)
+                : L("$sls_cfg_raids_density_note_scaled", name, ratio.ToString("0.##", CultureInfo.InvariantCulture));
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -469,6 +472,7 @@ namespace StarLevelSystem.modules.UI {
             copy.GlobalSettings.DisableAllRaids = staged.disableAllRaids;
             copy.GlobalSettings.GlobalRaidChanceScalar = staged.raidChanceScalar;
             copy.GlobalSettings.GlobalRaidIntervalScalar = staged.raidIntervalScalar;
+            copy.GlobalSettings.PauseBeforeCompleted = staged.raidPauseBeforeCompleted;
             // The counts written below are the ones this density produced, so the stamp has to go with them: the next
             // slider move reads it back as the density the file's numbers sit at.
             copy.GlobalSettings.RaidCreatureDensity = staged.raidDensity;
@@ -492,7 +496,7 @@ namespace StarLevelSystem.modules.UI {
                     entry.SpawnInterval = spawn.Interval;
                 }
             }
-            SaveYaml(YamlConfigManager.RaidSettings, copy, "Raid settings", failures, warnings);
+            SaveYaml(YamlConfigManager.RaidSettings, copy, "$sls_cfg_label_raid_settings", failures, warnings);
         }
     }
 }

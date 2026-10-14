@@ -1013,6 +1013,11 @@ namespace StarLevelSystem.common
             // rather than compounding on the last one.
             [DefaultValue(3)]
             public int RaidCreatureDensity { get; set; } = 3;
+            // Seconds a raid stays active once its Duration has elapsed, so players can finish off what it spawned;
+            // killing the last of them ends it at once. Raids with RaidActiveTillDefeated use
+            // RaidActiveTillDefeatedMaxSeconds instead. 0 ends a raid as soon as its Duration elapses.
+            [DefaultValue(30)]
+            public int PauseBeforeCompleted { get; set; } = 30;
         }
 
         public class NetworkRaidRequest {
@@ -1407,8 +1412,11 @@ namespace StarLevelSystem.common
             public bool Enabled { get; set; } = true;
             [DefaultValue(60f)]
             public float Duration { get; set; } = 60f;
-            [DefaultValue(true)]
-            public bool RaidActiveTillDefeated { get; set; } = true;
+            // Off unless a raid sets it: after its Duration a raid waits GlobalSettings.PauseBeforeCompleted for its
+            // creatures to die. On, it waits for them for up to RaidActiveTillDefeatedMaxSeconds from the main .cfg.
+            // Files written while this defaulted to true omit it, so those raids now read false too.
+            [DefaultValue(false)]
+            public bool RaidActiveTillDefeated { get; set; } = false;
             [DefaultValue(12)]
             public int SpawnPoints { get; set; } = 12;
             // Written files omit this while it sits at the default, so raising the default reaches existing

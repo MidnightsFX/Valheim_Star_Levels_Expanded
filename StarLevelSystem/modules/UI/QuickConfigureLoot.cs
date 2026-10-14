@@ -201,46 +201,44 @@ namespace StarLevelSystem.modules.UI {
             // Left - everything that scales loot with a level, then the distance rings that add to it.
             ConfigUI.CreateScroll(parent, 0f, colY, LeftW, colH, out Transform left, out float lw);
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Creature loot"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelW, 150f, "Loot scaling style", LootStyleOptions, (int)lt.style, i => {
+            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_loot_header_creature"));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelW, 150f, "$sls_cfg_loot_style", LootStyleOptions, (int)lt.style, i => {
                 lt.style = (LootFactorType)i;
                 RefreshLootEstimates();
             }), Tip(ValConfig.LootDropCalculationType)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Loot per star", 0f, MaxPerLevelLootScale, lt.perLevelScale, false, v => {
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_per_star", 0f, MaxPerLevelLootScale, lt.perLevelScale, false, v => {
                 lt.perLevelScale = v;
                 RefreshLootEstimates();
             }), Tip(ValConfig.PerLevelLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Drop chance per level", 0f, 1f, lt.perLevelChanceScale, false, v => {
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_chance_per_level", 0f, 1f, lt.perLevelChanceScale, false, v => {
                 lt.perLevelChanceScale = v;
                 RefreshLootEstimates();
             }), Tip(ValConfig.PerLevelLootChanceScale)));
-            lootChanceRampRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Base drop chance", 0f, 1f, lt.chanceBase, false, v => {
+            lootChanceRampRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_base_chance", 0f, 1f, lt.chanceBase, false, v => {
                 lt.chanceBase = v;
                 RefreshLootEstimates();
             }), Tip(ValConfig.ChanceBaseChancePerLevel))));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "Scale loot that never scales", lt.scaleAllLoot, v => {
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "$sls_cfg_loot_scale_all", lt.scaleAllLoot, v => {
                 lt.scaleAllLoot = v;
                 RefreshLootEstimates();
             }), Tip(ValConfig.ScaleAllLootByLevel)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "More eggs, not better eggs", lt.eggStacks, v => lt.eggStacks = v), Tip(ValConfig.LootEggsDropIncreaseStacks)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "$sls_cfg_loot_egg_stacks", lt.eggStacks, v => lt.eggStacks = v), Tip(ValConfig.LootEggsDropIncreaseStacks)));
             lootStyleNote = ScrollRow(left, lw, 60f, t => ConfigUI.AddTextRow(t, lw, 60f, "", 12, GUIManager.Instance.ValheimBeige)).GetComponentInChildren<Text>();
 
             // World objects carry their own per-level scale and their own shape: each is `1 + scale * level` applied to
             // the object's vanilla drop table, not the creature multiplier above.
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Trees, rocks and the rest"));
+            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_loot_header_objects"));
             ScrollRow(left, lw, 34f, t => ConfigUI.AddTextRow(t, lw, 34f, "$sls_cfg_loot_objects_help", 12, GUIManager.Instance.ValheimBeige));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Tree wood per level", 0f, Mathf.Max(MaxObjectLootScale, lt.treeScale), lt.treeScale, false, v => lt.treeScale = v), Tip(ValConfig.PerLevelTreeLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Rock ore per level", 0f, Mathf.Max(MaxObjectLootScale, lt.rockScale), lt.rockScale, false, v => lt.rockScale = v), Tip(ValConfig.PerLevelMineRockLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Destructible loot per level", 0f, Mathf.Max(MaxObjectLootScale, lt.destructibleScale), lt.destructibleScale, false, v => lt.destructibleScale = v), Tip(ValConfig.PerLevelDestructibleLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "Bird loot per level", 0f, Mathf.Max(MaxObjectLootScale, lt.birdScale), lt.birdScale, false, v => lt.birdScale = v), Tip(ValConfig.PerLevelBirdLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_tree", 0f, Mathf.Max(MaxObjectLootScale, lt.treeScale), lt.treeScale, false, v => lt.treeScale = v), Tip(ValConfig.PerLevelTreeLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_rock", 0f, Mathf.Max(MaxObjectLootScale, lt.rockScale), lt.rockScale, false, v => lt.rockScale = v), Tip(ValConfig.PerLevelMineRockLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_destructible", 0f, Mathf.Max(MaxObjectLootScale, lt.destructibleScale), lt.destructibleScale, false, v => lt.destructibleScale = v), Tip(ValConfig.PerLevelDestructibleLootScale)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_bird", 0f, Mathf.Max(MaxObjectLootScale, lt.birdScale), lt.birdScale, false, v => lt.birdScale = v), Tip(ValConfig.PerLevelBirdLootScale)));
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "Distance bonus"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "Loot rises with distance", lt.distanceBonus, v => {
+            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_loot_header_distance"));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "$sls_cfg_loot_distance_toggle", lt.distanceBonus, v => {
                 lt.distanceBonus = v;
                 RefreshLootEstimates();
-            }), YamlTip(typeof(LootSettings), nameof(LootSettings.EnableDistanceLootModifier),
-                "Adds a bonus to loot scaling the further a kill is from the world center. These rings are LootSettings.yaml's own - they are " +
-                "not the distance rings the level system uses, and they are not drawn on the map.")));
+            }), YamlTip(typeof(LootSettings), nameof(LootSettings.EnableDistanceLootModifier), "$sls_cfg_tip_loot_distance")));
             lootRingRows.Add(ScrollRow(left, lw, 46f, t => ConfigUI.AddTextRow(t, lw, 46f, "$sls_cfg_loot_rings_help", 12, GUIManager.Instance.ValheimBeige)));
             // Last in the column, so it can be rebuilt in place. See lootRingSection.
             lootRingContent = left;
@@ -248,18 +246,13 @@ namespace StarLevelSystem.modules.UI {
             BuildLootRingSection();
 
             // Right - the estimate.
-            GameObject header = ConfigUI.AddHeaderRow(parent, rightW, "Loot estimate");
+            GameObject header = ConfigUI.AddHeaderRow(parent, rightW, "$sls_cfg_loot_header_estimate");
             ConfigUI.PositionRow(header, RightX, colY);
             float estimateY = colY + RowHeight + RowGap;
             lootWarningText = ConfigUI.AddText(parent, RightX, estimateY, rightW, 40f, "", 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimOrange);
             estimateY += 44f;
             lootTable = BuildLootTable(parent, RightX, estimateY, rightW, PageH - estimateY);
-            WithTip(lootTable.Root, Tip("Loot estimate",
-                "Every drop the sample creature has, at no stars and at Max stars from the Level Distribution page, near the world " +
-                "center; with distance loot on, a last column works the same kill inside the furthest ring. Amounts are the drop's own " +
-                "min-max carried through the multiplier and the world's Resources modifier - vanilla rolls that range with the top end exclusive, so the real maximum of a " +
-                "wide range is one step lower. A % under an amount is its chance to drop at all; the pseudo-random streak vanilla applies " +
-                "to drops under 30% is not modelled, so a rare drop lands a little more evenly than its number suggests."));
+            WithTip(lootTable.Root, Tip("$sls_cfg_loot_header_estimate", "$sls_cfg_tip_loot_estimate"));
 
             RefreshLootEstimates();
         }
@@ -290,18 +283,17 @@ namespace StarLevelSystem.modules.UI {
                 lootRingSection.Add(AddLootRingHeaderRow(content, w));
                 foreach (StagedLootRing ring in rings) { lootRingSection.Add(AddLootRingRow(content, w, ring)); }
             }
-            lootRingSection.Add(AddRingButtonRow(content, w, AddLootRing, Tip("Add ring",
-                "Adds a ring past the furthest one, as far beyond it as the last two are apart, with the same bonuses. Type over its distance to move it.")));
+            lootRingSection.Add(AddRingButtonRow(content, w, AddLootRing, Tip("$sls_cfg_button_add_ring", "$sls_cfg_tip_add_loot_ring")));
             lootRingRows.AddRange(lootRingSection);
         }
 
         private static GameObject AddLootRingHeaderRow(Transform content, float width) {
             GameObject row = ConfigUI.NewLayoutRow(content, width, 22f);
             Color color = GUIManager.Instance.ValheimYellow;
-            ConfigUI.AddText(row.transform, RingDistanceX, 0f, RingDistanceW, 22f, "Within (m)", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, RingMinX, 0f, RingFieldW, 22f, "Min", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, RingMaxX, 0f, RingFieldW, 22f, "Max", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, RingChanceX, 0f, RingFieldW + 10f, 22f, "Chance", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, RingDistanceX, 0f, RingDistanceW, 22f, "$sls_cfg_loot_col_within", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, RingMinX, 0f, RingFieldW, 22f, "$sls_cfg_loot_col_min", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, RingMaxX, 0f, RingFieldW, 22f, "$sls_cfg_loot_col_max", 11, TextAnchor.MiddleLeft, color);
+            ConfigUI.AddText(row.transform, RingChanceX, 0f, RingFieldW + 10f, 22f, "$sls_cfg_loot_col_chance", 11, TextAnchor.MiddleLeft, color);
             return row;
         }
 
@@ -310,19 +302,14 @@ namespace StarLevelSystem.modules.UI {
             InputField distance = null;
             distance = ConfigUI.AddTextField(row.transform, RingDistanceX, 0f, RingDistanceW, ring.Distance.ToString(CultureInfo.InvariantCulture),
                 text => CommitLootRingDistance(ring, distance, text), InputField.ContentType.IntegerNumber);
-            WithTip(distance.gameObject, Tip("Distance",
-                $"Metres from the world center this ring reaches out to. A kill is matched to the first ring that reaches it, so each ring covers " +
-                $"from the one before it out to here. {MinRingDistance}-{MaxRingDistance}m, and no two rings at the same distance."));
+            WithTip(distance.gameObject, Tip("$sls_cfg_tip_distance_title", L("$sls_cfg_tip_loot_ring_distance", MinRingDistance, MaxRingDistance)));
 
             AddLootRingField(row.transform, RingMinX, ring.MinBonus, v => ring.MinBonus = v,
-                YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MinAmountScaleFactorBonus),
-                    "Added to the loot scale at the low end of the roll for a kill inside this ring."));
+                YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MinAmountScaleFactorBonus), "$sls_cfg_tip_loot_ring_min"));
             AddLootRingField(row.transform, RingMaxX, ring.MaxBonus, v => ring.MaxBonus = v,
-                YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MaxAmountScaleFactorBonus),
-                    "Added to the loot scale at the high end of the roll. Set it above Min for a wider spread out here."));
+                YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MaxAmountScaleFactorBonus), "$sls_cfg_tip_loot_ring_max"));
             AddLootRingField(row.transform, RingChanceX, ring.ChanceBonus, v => ring.ChanceBonus = v,
-                YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.ChanceScaleFactorBonus),
-                    "Added to the per-level drop chance ramp in this ring, so uncertain drops land more often out here."));
+                YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.ChanceScaleFactorBonus), "$sls_cfg_tip_loot_ring_chance"));
             AddRingRemoveButton(row.transform, width, () => {
                 staged.loot.rings.Remove(ring);
                 BuildLootRingSection();
@@ -333,7 +320,7 @@ namespace StarLevelSystem.modules.UI {
 
         private static void CommitLootRingDistance(StagedLootRing ring, InputField field, string text) {
             if (staged?.loot == null) { return; }
-            int distance = ReadRingDistance(text, ring.Distance, staged.loot.rings.Where(r => r != ring).Select(r => r.Distance), "loot ring");
+            int distance = ReadRingDistance(text, ring.Distance, staged.loot.rings.Where(r => r != ring).Select(r => r.Distance), "$sls_cfg_loot_ring_distance_taken");
             field.SetTextWithoutNotify(distance.ToString(CultureInfo.InvariantCulture));
             if (distance == ring.Distance) { return; }
             ring.Distance = distance;
@@ -346,7 +333,7 @@ namespace StarLevelSystem.modules.UI {
             if (staged?.loot == null) { return; }
             List<StagedLootRing> rings = staged.loot.rings;
             if (NextRingDistance(rings.Select(r => r.Distance).ToList(), DefaultLootRingStep, out int distance) == false) {
-                SetStatus($"There is no room for another loot ring past {rings[rings.Count - 1].Distance} m.", false);
+                SetStatus(L("$sls_cfg_loot_ring_no_room", rings[rings.Count - 1].Distance), false);
                 return;
             }
             StagedLootRing last = rings.Count > 0 ? rings[rings.Count - 1] : null;
@@ -407,42 +394,36 @@ namespace StarLevelSystem.modules.UI {
             string scale = FormatLootBonus(lt.perLevelScale);
             switch (lt.style) {
                 case LootFactorType.Exponential:
-                    return $"Exponential: a creature's drops are multiplied by (1 + {scale}) once per star, so late stars are " +
-                        "worth far more than early ones. Drop chances follow the same multiplier.";
+                    return L("$sls_cfg_loot_style_exponential", scale);
                 case LootFactorType.ChancePerLevel:
-                    return $"ChancePerLevel: amounts are multiplied by level x {scale}, and an uncertain drop's chance by " +
-                        $"{FormatLootBonus(lt.chanceBase)} + {FormatLootBonus(lt.perLevelChanceScale)} per level - so low stars " +
-                        "can drop less often than vanilla, and high stars almost always.";
+                    return L("$sls_cfg_loot_style_chance_per_level", scale, FormatLootBonus(lt.chanceBase), FormatLootBonus(lt.perLevelChanceScale));
                 default:
-                    return $"PerLevel: a creature's drops are multiplied by level x {scale}, and an uncertain drop's chance by " +
-                        "the same amount. Drop chance per level only reaches creatures with a table in LootSettings.yaml.";
+                    return L("$sls_cfg_loot_style_per_level", scale);
             }
         }
 
         // One line above the estimate for the thing most worth knowing about these numbers right now, if anything.
         private static string LootWarning(StagedLoot lt) {
             if (lt.perLevelScale <= 0f) {
-                return "Loot per star is 0, so every creature drops its base amount at any star level.";
+                return ConfigUI.L("$sls_cfg_loot_warn_zero");
             }
             // Exponential growth reaches this within a dozen stars at the default scale, and everything past it is cut,
             // which is worth saying out loud before the estimate is read as the intended reward.
             LootScale top = LootScaleAt(lt, Mathf.Max(0, staged.maxStars) + 1, lt.OutermostRing);
             if (top.AmountMax >= LootStyles.MaxLootScaleResult) {
-                return $"At {Stars(Mathf.Max(0, staged.maxStars))} this style reaches the " +
-                    $"{LootStyles.MaxLootScaleResult.ToString("#,0", CultureInfo.InvariantCulture)}x ceiling loot scaling is clamped to, " +
-                    "so the top of the range is cut rather than earned.";
+                return L("$sls_cfg_loot_warn_ceiling", Stars(Mathf.Max(0, staged.maxStars)),
+                    LootStyles.MaxLootScaleResult.ToString("#,0", CultureInfo.InvariantCulture));
             }
             if (lt.style == LootFactorType.ChancePerLevel) {
                 float atFirst = LootScaleAt(lt, 1, lt.InnermostRing).ChanceMin;
                 if (atFirst < 1f) {
-                    return $"At 0 stars this style multiplies an uncertain drop's chance by {atFirst:0.##}, so those drops are " +
-                        "rarer than vanilla until a creature has a few stars.";
+                    return L("$sls_cfg_loot_warn_low_chance", atFirst.ToString("0.##"));
                 }
             }
             if (lt.style != LootFactorType.ChancePerLevel && lt.perLevelScale < 1f) {
                 // The chance branch shares the amount multiplier here, and DetermineLootScale floors it at 1, so a
                 // scale under 1 leaves the low levels on their vanilla chances rather than lowering them.
-                return "Below 1, loot per star cannot lower a drop's chance: the multiplier never falls under 1x.";
+                return ConfigUI.L("$sls_cfg_loot_warn_below_one");
             }
             return "";
         }
@@ -488,11 +469,11 @@ namespace StarLevelSystem.modules.UI {
             view.Header = AddLootTableRow(t, rowY, LootTableHeaderH, 13, GUIManager.Instance.ValheimYellow);
             rowY += LootTableHeaderH;
 
-            string[] multiplierLabels = { "Amount multiplier", "Chance multiplier" };
+            string[] multiplierLabels = { "$sls_cfg_loot_row_amount", "$sls_cfg_loot_row_chance" };
             for (int i = 0; i < multiplierLabels.Length; i++) {
                 if (i % 2 == 1) { AddLootTableShade(t, rowY, w, LootTableMultiplierRowH, LootTableStripeShade); }
                 Text[] row = AddLootTableRow(t, rowY, LootTableMultiplierRowH, 12, beige);
-                row[0].text = multiplierLabels[i];
+                row[0].text = ConfigUI.L(multiplierLabels[i]);
                 view.Rows.Add(row);
                 rowY += LootTableMultiplierRowH;
             }
@@ -569,10 +550,10 @@ namespace StarLevelSystem.modules.UI {
             bool farColumn = far != null && far != near;
             LayoutLootTableColumns(view, farColumn ? 3 : 2);
 
-            view.Header[0].text = lootSampleIsLive ? $"{LootSampleCreature} drops" : "Stand-in drops";
-            view.Header[1].text = "No stars";
+            view.Header[0].text = lootSampleIsLive ? L("$sls_cfg_loot_col_drops", TrollName()) : ConfigUI.L("$sls_cfg_loot_col_stand_in");
+            view.Header[1].text = ConfigUI.L("$sls_cfg_loot_col_no_stars");
             view.Header[2].text = Stars(maxStars);
-            view.Header[3].text = farColumn ? $"{Stars(maxStars)}\n<size=11>{far.Distance}m ring</size>" : "";
+            view.Header[3].text = farColumn ? $"{Stars(maxStars)}\n<size=11>{L("$sls_cfg_loot_col_ring", far.Distance)}</size>" : "";
 
             int[] levels = { 1, topLevel, topLevel };
             StagedLootRing[] rings = { near, near, far };
@@ -587,13 +568,12 @@ namespace StarLevelSystem.modules.UI {
 
             List<string> notes = new List<string>();
             if (lootSample.Count > view.Drops.Count) {
-                notes.Add($"...and {lootSample.Count - view.Drops.Count} more drop(s) in its table.");
+                notes.Add(L("$sls_cfg_loot_more_drops", lootSample.Count - view.Drops.Count));
             }
             string worldNote = WorldResourceModifierNote();
             if (worldNote != null) { notes.Add(worldNote); }
             if (lootSampleIsLive == false) {
-                notes.Add($"{WarningColorTag}The {LootSampleCreature} prefab is only there once a world is loaded, so these are " +
-                    $"stand-in drops. Reopen this page in game to see the {LootSampleCreature}'s own table.</color>");
+                notes.Add($"{WarningColorTag}{L("$sls_cfg_loot_stand_in_note", TrollName())}</color>");
             }
             view.Footer.text = string.Join("\n", notes.ToArray());
         }
@@ -603,11 +583,11 @@ namespace StarLevelSystem.modules.UI {
         // Null when there is nothing to say.
         private static string WorldResourceModifierNote() {
             if (ZoneSystem.instance == null) {
-                return "In a world, its Resources world modifier also scales these amounts.";
+                return ConfigUI.L("$sls_cfg_loot_world_note_menu");
             }
             float rate = WorldRates.ResourceRate;
             if (Mathf.Approximately(rate, 1f)) { return null; }
-            return $"Resources world modifier: amounts x{rate.ToString("0.##", CultureInfo.InvariantCulture)}, included above. Items vanilla never scales keep theirs.";
+            return L("$sls_cfg_loot_world_note", rate.ToString("0.##", CultureInfo.InvariantCulture));
         }
 
         // As many drop rows as fit the estimate table beside the settings column.
@@ -703,7 +683,7 @@ namespace StarLevelSystem.modules.UI {
             string amount = low == high ? low.ToString() : $"{low}-{high}";
             chance = Mathf.Clamp01(chance);
             if (chance >= 0.999f) { return amount; }
-            if (chance <= 0f) { return "never"; }
+            if (chance <= 0f) { return ConfigUI.L("$sls_cfg_loot_never"); }
             return $"{amount}\n<size=11>{chance * 100f:0.#}%</size>";
         }
 
@@ -764,8 +744,8 @@ namespace StarLevelSystem.modules.UI {
         // enough to show what the multipliers do to each kind of drop.
         private static List<LootSampleDrop> LootSampleStandIn() {
             return new List<LootSampleDrop>() {
-                new LootSampleDrop { Name = "A 3-5 stack, always dropped", Min = 3, Max = 5 },
-                new LootSampleDrop { Name = "A trophy, 1 at 25%", Chance = 0.25f },
+                new LootSampleDrop { Name = ConfigUI.L("$sls_cfg_loot_stand_in_stack"), Min = 3, Max = 5 },
+                new LootSampleDrop { Name = ConfigUI.L("$sls_cfg_loot_stand_in_trophy"), Chance = 0.25f },
             };
         }
 
@@ -869,7 +849,7 @@ namespace StarLevelSystem.modules.UI {
                     };
                 }
             }
-            SaveYaml(YamlConfigManager.LootSettingsFile, copy, "Loot settings", failures, warnings);
+            SaveYaml(YamlConfigManager.LootSettingsFile, copy, "$sls_cfg_label_loot_settings", failures, warnings);
         }
     }
 }

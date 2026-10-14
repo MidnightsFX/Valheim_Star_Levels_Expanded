@@ -17,6 +17,8 @@ namespace StarLevelSystem.modules.UI {
     //
     // The text comes from what already documents each setting: a BepInEx entry's ConfigDescription (the same line an
     // admin reads in the .cfg) or a [Description] on a YAML data class, so the panel and the files cannot drift apart.
+    // Another language reads a translation of that text where its language file has one (see Translated); the heading
+    // stays the setting's own name, since that is the word an admin types into the file.
     internal static class QuickConfigTooltip {
         private const float MaxWidth = 360f;
         private const float Padding = 10f;
@@ -53,18 +55,33 @@ namespace StarLevelSystem.modules.UI {
         // A BepInEx setting: its key, and the description written for the config file.
         internal static string Of(ConfigEntryBase entry) {
             if (entry == null) { return ""; }
-            return Compose(entry.Definition?.Key, entry.Description?.Description);
+            string key = entry.Definition?.Key;
+            return Compose(key, Translated("$sls_cfg_desc_" + key, entry.Description?.Description));
         }
 
         // A YAML member, described by its [Description] attribute where the data class carries one. The fallback covers
-        // the many members that are documented by a comment in the class or by the file header instead.
+        // the many members that are documented by a comment in the class or by the file header instead; it is written
+        // for the panel, so it is a token.
         internal static string OfYaml(Type type, string member, string fallback = null) {
             string described = DescriptionOf(type, member);
-            return Compose(member, string.IsNullOrEmpty(described) ? fallback : described);
+            if (string.IsNullOrEmpty(described)) { return Compose(member, ConfigUI.L(fallback)); }
+            return Compose(member, Translated($"$sls_cfg_desc_{type.Name}_{member}", described));
         }
 
+        // Text written for the panel: either part may be a token.
         internal static string Text(string key, string description) {
-            return Compose(key, description);
+            return Compose(ConfigUI.L(key), ConfigUI.L(description));
+        }
+
+        // A setting's description as written, or the language file's translation of it. English always reads the
+        // description itself: English.json carries a copy of each one only for translators, and the cached copy of that
+        // file wins over the shipped one, so reading it here would keep showing a description long after it was reworded.
+        private static string Translated(string token, string written) {
+            if (string.IsNullOrEmpty(written) || Localization.instance == null) { return written; }
+            if (Localization.instance.GetSelectedLanguage() == "English") { return written; }
+            string translated = Localization.instance.Localize(token);
+            // Valheim answers with "[token]" for a token it has no translation for.
+            return string.IsNullOrEmpty(translated) || translated.StartsWith("[") ? written : translated;
         }
 
         private static readonly Dictionary<string, string> yamlDescriptions = new Dictionary<string, string>();

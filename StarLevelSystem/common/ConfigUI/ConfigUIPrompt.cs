@@ -56,8 +56,8 @@ namespace StarLevelSystem.common {
                 InputField.ContentType.Standard, null, 64);
 
             y += 46f;
-            ConfigUI.AddButton(panel.transform, 20f, y, 190f, "Cancel", Close, 34f);
-            ConfigUI.AddButton(panel.transform, PanelW - 210f, y, 190f, "OK", () => {
+            ConfigUI.AddButton(panel.transform, 20f, y, 190f, ConfigUI.L("$menu_cancel", "Cancel"), Close, 34f);
+            ConfigUI.AddButton(panel.transform, PanelW - 210f, y, 190f, ConfigUI.L("$menu_ok", "OK"), () => {
                 string value = field.text;
                 Close();
                 onAccept?.Invoke(value);

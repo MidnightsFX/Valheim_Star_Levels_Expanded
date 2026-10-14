@@ -523,8 +523,8 @@ during an event.
 The number of players, frequency, and most all details of each raid is configurable through `RaidSettings.yaml`.
 
 The Raids page of the quick configure panel (Mod Config button) covers the common ones without editing YAML: the global
-raid settings (pausing every raid, multipliers on every raid's activation chance and cooldown, and the raid creature
-density), which raids are enabled, and per creature in a raid how many arrive each wave (`SpawnGroupSize`), how many
+raid settings (pausing every raid, multipliers on every raid's activation chance and cooldown, how long a raid waits
+for its creatures to be finished off, and the raid creature density), which raids are enabled, and per creature in a raid how many arrive each wave (`SpawnGroupSize`), how many
 may be alive at once (`MaxSpawned`, where 0 stops that creature spawning) and the seconds between its waves
 (`SpawnInterval`). Open a raid's **Spawns** button to see its creatures.
 
@@ -557,10 +557,10 @@ A kill that sets a key (every boss, plus creatures such as the Troll's `KilledTr
 
 #### How a raid ends
 
-A raid spawns creatures for its `Duration`. What happens next depends on `RaidActiveTillDefeated`:
+A raid spawns creatures for its `Duration`. It then stays active, with its creatures still hunting and its map pin, music and weather in place, so players can finish off what it spawned. Killing every creature it spawned ends it straight away. How long it waits otherwise depends on `RaidActiveTillDefeated`:
 
-- `true` (default) - the raid stays active, with its creatures still hunting and its map pin, music and weather in place, until every creature it spawned is dead. `RaidActiveTillDefeatedMaxSeconds` in the main config (default 300) caps that wait, so a straggler stuck somewhere cannot hold a raid open forever.
-- `false` - the raid ends as soon as its `Duration` elapses.
+- `false` (default) - at most `PauseBeforeCompleted` seconds, set in `RaidSettings.yaml`'s `GlobalSettings` or on the quick configure panel's Raids page (default 30). 0 ends the raid as soon as its `Duration` elapses.
+- `true` - until every creature it spawned is dead, for at most `RaidActiveTillDefeatedMaxSeconds` in the main config (default 300), so a straggler stuck somewhere cannot hold a raid open forever.
 
 Either way the raid then winds down for `RaidWindDownSeconds`: the end message shows, the pin, music and weather go, and the creatures wander off and despawn. Anything still around at the end of the window is deleted when `RaidForceDeleteStragglers` is on.
 

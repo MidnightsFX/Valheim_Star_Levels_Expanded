@@ -173,6 +173,18 @@ namespace StarLevelSystem.common {
             return Localization.instance != null ? Localization.instance.Localize(text) : text;
         }
 
+        // The kit's own words: a $token, and the English to show when nothing defines it. Vanilla tokens
+        // where Valheim has one, so those come translated for free; otherwise a shared $modquickconfig_*
+        // token that every mod carrying this folder ships in its English file. The launcher belongs to
+        // whichever copy loaded first, so its words must resolve whatever mod that is -- including one
+        // with no localization at all, which would otherwise show "[modquickconfig_button]".
+        internal static string L(string token, string english) {
+            string text = L(token);
+            // Valheim answers an unknown token with "[token]"; before Localization exists it is the token itself.
+            if (text.Length == 0 || text == token || text == "[" + token.TrimStart('$') + "]") { return english; }
+            return text;
+        }
+
         internal static Text AddText(Transform parent, float x, float y, float w, float h, string text,
             int fontSize, TextAnchor anchor, Color? color = null) {
             GameObject go = GUIManager.Instance.CreateText(
@@ -533,7 +545,7 @@ namespace StarLevelSystem.common {
             GameObject header = NewLayoutRow(content, width, SubRowHeight);
             AddText(header.transform, 0f, 0f, width - 90f, SubRowHeight, label, 14, TextAnchor.MiddleLeft,
                 GUIManager.Instance.ValheimOrange);
-            AddButton(header.transform, width - 84f, 0f, 80f, "Add", () => {
+            AddButton(header.transform, width - 84f, 0f, 80f, L("$piece_smelter_add", "Add"), () => {
                 items.Add("");
                 onChanged?.Invoke();
             }, 24f);

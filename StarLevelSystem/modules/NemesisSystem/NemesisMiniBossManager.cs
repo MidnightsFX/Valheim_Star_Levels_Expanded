@@ -11,7 +11,8 @@ using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.NemesisSystem {
     internal static class NemesisMiniBossManager {
-        internal static int NumNemesisNames = 9;
+        // How many SLS_Miniboss_NameN tokens the language files define; a name past this is never picked.
+        internal static int NumNemesisNames = 60;
         internal static int NumNemesisPrefixes = 6;
         internal static int NumNemesisPostfixes = 4;
 

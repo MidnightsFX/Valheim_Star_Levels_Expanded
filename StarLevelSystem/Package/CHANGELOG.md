@@ -1,3 +1,12 @@
+**1.26.0**
+ ---
+ ```
+- Adds many more nemesis names
+- Adds a small delay after a raid has stopped spawning enemies before it ends
+- Raids no longer wait until all enemies are killed by default (can still be enabled with RaidActiveTillDefeated)
+- Localization updates for the quick configuration system
+ ```
+
 **1.25.1**
  ---
  ```

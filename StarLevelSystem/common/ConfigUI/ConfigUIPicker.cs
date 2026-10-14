@@ -66,8 +66,8 @@ namespace StarLevelSystem.common {
                 GUIManager.Instance.ValheimYellow);
 
             InputField filter = ConfigUI.AddTextField(panel.transform, 16f, 52f, PanelW - 100f, "", null,
-                InputField.ContentType.Standard, "Filter...");
-            ConfigUI.AddButton(panel.transform, PanelW - 76f, 52f, 60f, "Close", Close, 28f);
+                InputField.ContentType.Standard, ConfigUI.L("$menu_filter", "Filter") + "...");
+            ConfigUI.AddButton(panel.transform, PanelW - 76f, 52f, 60f, ConfigUI.L("$menu_close", "Close"), Close, 28f);
 
             ConfigUI.CreateScroll(panel.transform, 16f, 92f, PanelW - 32f, PanelH - 116f,
                 out Transform content, out float contentW);
@@ -94,12 +94,13 @@ namespace StarLevelSystem.common {
 
                 if (shown == 0) {
                     GameObject row = ConfigUI.NewLayoutRow(content, contentW, RowH);
-                    ConfigUI.AddText(row.transform, 4f, 0f, contentW, RowH, "No matches", 14,
-                        TextAnchor.MiddleLeft);
+                    ConfigUI.AddText(row.transform, 4f, 0f, contentW, RowH,
+                        ConfigUI.L("$modquickconfig_no_matches", "No matches"), 14, TextAnchor.MiddleLeft);
                 } else if (shown >= MaxRows) {
                     GameObject row = ConfigUI.NewLayoutRow(content, contentW, RowH);
+                    string more = ConfigUI.L("$modquickconfig_more_matches", "... $1 more, type to narrow");
                     ConfigUI.AddText(row.transform, 4f, 0f, contentW, RowH,
-                        $"... {all.Count - shown} more, type to narrow", 13, TextAnchor.MiddleLeft);
+                        more.Replace("$1", (all.Count - shown).ToString()), 13, TextAnchor.MiddleLeft);
                 }
             };
 

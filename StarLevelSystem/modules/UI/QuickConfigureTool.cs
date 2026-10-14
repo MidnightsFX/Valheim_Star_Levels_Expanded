@@ -214,7 +214,7 @@ namespace StarLevelSystem.modules.UI {
                 anchor: TextAnchor.MiddleCenter,
                 color: GUIManager.Instance.ValheimYellow);
             WithTip(ConfigUI.AddCloseX(panel.transform, PanelW, RequestClose),
-                Tip("Close", "Closes the panel. If anything has not been saved yet you are asked about it first."));
+                Tip("$sls_cfg_tip_close_title", "$sls_cfg_tip_close"));
 
             pages = BuildPageList(tutorialMode);
             pageRoots = new GameObject[pages.Count];
@@ -226,37 +226,38 @@ namespace StarLevelSystem.modules.UI {
             statusText = ConfigUI.AddText(panel.transform, Margin, PanelH - 80f, PageW, 22f, "", 13, TextAnchor.MiddleCenter);
 
             float navY = PanelH - 56f;
-            backBtn = WithTip(ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1)),
-                Tip("Back", "The previous page. Moving between pages keeps your edits; only Save writes them."));
+            backBtn = WithTip(ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "$sls_cfg_button_back", () => ShowPage(currentPage - 1)),
+                Tip("$sls_cfg_tip_back_title", "$sls_cfg_tip_back"));
             // Between Back and Save rather than beside Next, so it is never where the eye expects to move on.
             resetBtn = WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f - ResetButtonW - 16f, navY, ResetButtonW, "$sls_cfg_button_reset_page", ShowResetConfirm),
-                Tip("Reset page", "Puts every setting on this page back to the mod's default. The other pages keep their edits, and nothing is written until you Save."));
+                Tip("$sls_cfg_button_reset_page", "$sls_cfg_tip_reset_page"));
             WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f, navY, NavButtonW, "$sls_cfg_button_save", OnSaveClicked),
-                Tip("Save", "Writes every page's changes: the BepInEx settings and the YAML files behind them. The panel stays open."));
-            nextBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "Next >", () => ShowPage(currentPage + 1)),
-                Tip("Next", "The next page. Moving between pages keeps your edits; only Save writes them."));
+                Tip("$sls_cfg_button_save", "$sls_cfg_tip_save"));
+            nextBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "$sls_cfg_button_next", () => ShowPage(currentPage + 1)),
+                Tip("$sls_cfg_tip_next_title", "$sls_cfg_tip_next"));
             nextCaption = nextBtn.GetComponentInChildren<Text>();
             finishBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "$sls_cfg_button_finish", OnFinishClicked),
-                Tip("Save & Finish", "Saves everything and closes the panel."));
+                Tip("$sls_cfg_button_finish", "$sls_cfg_tip_finish"));
         }
 
+        // Titles are localized once, here, because they are read by the title bar and by status messages alike.
         private static List<PageDef> BuildPageList(bool tutorial) {
             List<PageDef> list = new List<PageDef>();
             if (tutorial) {
-                list.Add(new PageDef { Title = "Welcome", Build = BuildWelcomePage });
+                list.Add(new PageDef { Title = L("$sls_cfg_page_welcome"), Build = BuildWelcomePage });
             }
-            list.Add(new PageDef { Title = "Level Progression", Build = BuildScalingPage, Reset = ResetScalingPage });
-            list.Add(new PageDef { Title = "Level Distribution", Build = BuildDistributionPage, OnShow = RefreshDistribution, Reset = ResetDistributionPage, ClearRefs = ClearDistributionReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_level_progression"), Build = BuildScalingPage, Reset = ResetScalingPage });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_level_distribution"), Build = BuildDistributionPage, OnShow = RefreshDistribution, Reset = ResetDistributionPage, ClearRefs = ClearDistributionReferences });
             // After the distribution: the preview adds each ring to the curve set there, so it re-reads it on show.
-            list.Add(new PageDef { Title = "Distance Rings", Build = BuildDistanceRingsPage, OnShow = RefreshDistanceRings, Reset = ResetDistanceRingsPage, ClearRefs = ClearDistanceRingReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_distance_rings"), Build = BuildDistanceRingsPage, OnShow = RefreshDistanceRings, Reset = ResetDistanceRingsPage, ClearRefs = ClearDistanceRingReferences });
             // After the level pages: the estimate is worked at the Max stars they set, so it re-reads it on show.
-            list.Add(new PageDef { Title = "Loot", Build = BuildLootPage, OnShow = RefreshLootEstimates, Reset = ResetLootPage, ClearRefs = ClearLootPageReferences });
-            list.Add(new PageDef { Title = "Health & Damage", Build = BuildStatsPage, OnShow = UpdateExampleMath, Reset = ResetStatsPage, ClearRefs = ClearStatsReferences });
-            list.Add(new PageDef { Title = "Modifiers", Build = BuildModifiersPage, Reset = ResetModifiersPage });
-            list.Add(new PageDef { Title = "Raids", Build = BuildRaidsPage, Reset = ResetRaidsPage, ClearRefs = ClearRaidPageReferences });
-            list.Add(new PageDef { Title = "Night Spawns", Build = BuildNightSpawnsPage, Reset = ResetNightSpawnsPage });
-            list.Add(new PageDef { Title = "Nemesis System", Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions, Reset = ResetNemesisPage, ClearRefs = ClearNemesisReferences });
-            list.Add(new PageDef { Title = "Location Reset", Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews, Reset = ResetLocationResetPage, ClearRefs = ClearLocationResetReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_loot"), Build = BuildLootPage, OnShow = RefreshLootEstimates, Reset = ResetLootPage, ClearRefs = ClearLootPageReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_health_damage"), Build = BuildStatsPage, OnShow = UpdateExampleMath, Reset = ResetStatsPage, ClearRefs = ClearStatsReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_modifiers"), Build = BuildModifiersPage, Reset = ResetModifiersPage });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_raids"), Build = BuildRaidsPage, Reset = ResetRaidsPage, ClearRefs = ClearRaidPageReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_night_spawns"), Build = BuildNightSpawnsPage, Reset = ResetNightSpawnsPage });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_nemesis"), Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions, Reset = ResetNemesisPage, ClearRefs = ClearNemesisReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_location_reset"), Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews, Reset = ResetLocationResetPage, ClearRefs = ClearLocationResetReferences });
             return list;
         }
 
@@ -295,10 +296,10 @@ namespace StarLevelSystem.modules.UI {
                 RebuildPage(page);
             } catch (Exception e) {
                 Logger.LogWarning($"QuickConfigureTool could not reset the {pages[page].Title} page: {e}");
-                SetStatus($"Could not reset {pages[page].Title}: {e.Message}", false);
+                SetStatus(L("$sls_cfg_status_reset_failed", pages[page].Title, e.Message), false);
                 return;
             }
-            SetStatus($"{pages[page].Title} is back to its defaults. Save to keep it.", true);
+            SetStatus(L("$sls_cfg_status_reset_done", pages[page].Title), true);
         }
 
         // --- defaults, for Reset page ---
@@ -325,14 +326,14 @@ namespace StarLevelSystem.modules.UI {
             for (int i = 0; i < pageRoots.Length; i++) {
                 pageRoots[i].SetActive(i == currentPage);
             }
-            titleText.text = $"StarLevelSystem - {pages[currentPage].Title}  (Page {currentPage + 1} of {pageRoots.Length})";
+            titleText.text = L("$sls_cfg_panel_title", pages[currentPage].Title, currentPage + 1, pageRoots.Length);
 
             backBtn.SetActive(currentPage > 0);
             resetBtn.SetActive(pages[currentPage].Reset != null);
             bool last = currentPage == pageRoots.Length - 1;
             nextBtn.SetActive(!last);
             finishBtn.SetActive(last);
-            nextCaption.text = ConfigUI.L(tutorialMode && currentPage == 0 ? "$sls_cfg_button_get_started" : "Next >");
+            nextCaption.text = ConfigUI.L(tutorialMode && currentPage == 0 ? "$sls_cfg_button_get_started" : "$sls_cfg_button_next");
             SetStatus("", true);
             pages[currentPage].OnShow?.Invoke();
         }
@@ -493,6 +494,20 @@ namespace StarLevelSystem.modules.UI {
         private static string Tip(string key, string description) => QuickConfigTooltip.Text(key, description);
 
         private static string YamlTip(Type type, string member, string fallback = null) => QuickConfigTooltip.OfYaml(type, member, fallback);
+
+        // A token with its $1, $2... filled in, the way vanilla fills its own messages. The words are inserted after the
+        // token is translated, so they are never read as tokens themselves.
+        private static string L(string token, params object[] words) {
+            if (string.IsNullOrEmpty(token)) { return ""; }
+            if (Localization.instance == null) { return token; }
+            return Localization.instance.Localize(token, words.Select(w => Convert.ToString(w)).ToArray());
+        }
+
+        // A vanilla token's translation, or the fallback when the language files have none: Valheim answers "[token]".
+        private static string LocalizedOr(string token, string fallback) {
+            string localized = ConfigUI.L(token);
+            return string.IsNullOrEmpty(localized) || localized.StartsWith("[") ? fallback : localized;
+        }
 
         private static void StretchToParent(GameObject go) {
             RectTransform rt = (RectTransform)go.transform;
@@ -655,7 +670,7 @@ namespace StarLevelSystem.modules.UI {
                 PushConfigChanges();
             } catch (Exception e) {
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
-                message = $"Saving failed: {e.Message}";
+                message = L("$sls_cfg_status_save_failed", e.Message);
                 return false;
             } finally {
                 pendingYaml = null;
@@ -676,42 +691,45 @@ namespace StarLevelSystem.modules.UI {
         // Every YAML write goes through ApplyEdited: validate, apply, write with the documented header intact, broadcast.
         // It refuses and reports rather than half-writing. Off-host only the server may take that path, so a remote
         // admin's copy is sent to it instead; the verdict comes back later through OnRemoteEditResult.
+        // label is a token naming what the document holds; the log names the file instead, in English.
         private static void ApplyYaml(YamlConfigFile file, string yaml, string label, List<string> failures, List<string> warnings) {
             if (IsOwner() == false) {
                 if (ConfigNetwork.RequestEdit(file, yaml, out string refusal)) {
-                    warnings.Add($"{label} sent to the server.");
+                    warnings.Add(L("$sls_cfg_status_sent_to_server", L(label)));
                     return;
                 }
-                Logger.LogWarning($"{label} were not saved: {refusal}");
-                failures.Add($"{label} were not saved: {refusal}");
+                Logger.LogWarning($"{file.FileName} was not saved: {refusal}");
+                failures.Add(L("$sls_cfg_status_not_saved", L(label), refusal));
                 return;
             }
             if (YamlConfigManager.ApplyEdited(file, yaml, out string result)) {
                 if (string.IsNullOrEmpty(result) == false) { warnings.Add(result); }
                 return;
             }
-            Logger.LogWarning($"{label} were not saved: {result}");
-            failures.Add($"{label} were not saved: {result}");
+            Logger.LogWarning($"{file.FileName} was not saved: {result}");
+            failures.Add(L("$sls_cfg_status_not_saved", L(label), result));
         }
 
         // The server's answer to a YAML edit sent from here. The server broadcasts an accepted file before it answers,
         // so by now the live settings hold it and a fresh baseline stops it counting as unsaved.
         private static void OnRemoteEditResult(YamlConfigFile file, bool accepted, string message) {
-            string name = file?.FileName ?? "Settings";
+            string name = file?.FileName ?? L("$sls_cfg_label_settings");
             if (accepted) {
                 Logger.LogInfo($"The server accepted {name}. {message}");
                 if (panel != null && staged != null) {
                     baseline = StagedConfig.Snapshot();
                     // The message carries the server's warnings, including a failed disk write.
-                    SetStatus(string.IsNullOrEmpty(message) ? $"{name} saved on the server." : $"{name} saved on the server. {message}", string.IsNullOrEmpty(message));
+                    string saved = L("$sls_cfg_status_saved_on_server", name);
+                    SetStatus(string.IsNullOrEmpty(message) ? saved : saved + " " + message, string.IsNullOrEmpty(message));
                 }
                 return;
             }
             Logger.LogWarning($"The server refused {name}: {message}");
+            string refused = L("$sls_cfg_status_server_refused", name, message);
             if (panel != null) {
-                SetStatus($"The server refused {name}: {message}", false);
+                SetStatus(refused, false);
             } else if (MessageHud.instance != null) {
-                MessageHud.instance.ShowMessage(MessageHud.MessageType.TopLeft, $"The server refused {name}: {message}");
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.TopLeft, refused);
             }
         }
 
@@ -740,11 +758,11 @@ namespace StarLevelSystem.modules.UI {
             string yaml = YamlConfigManager.SerializeForEdit(file, value);
             ValidationReport report = file.DryRun(yaml, out string parseError);
             if (parseError != null) {
-                failures.Add($"{label} were not saved: {file.FileName} was rejected because {parseError}.");
+                failures.Add(L("$sls_cfg_status_not_saved", L(label), L("$sls_cfg_status_parse_error", file.FileName, parseError)));
                 return;
             }
             if (report.HasErrors) {
-                failures.Add($"{label} were not saved: {string.Join(" ", report.Errors.ToArray())}");
+                failures.Add(L("$sls_cfg_status_not_saved", L(label), string.Join(" ", report.Errors.ToArray())));
                 return;
             }
             pendingYaml.Add(new PendingYaml { File = file, Yaml = yaml, Label = label });
@@ -809,7 +827,7 @@ namespace StarLevelSystem.modules.UI {
                     }
                 }
             }
-            SaveYaml(YamlConfigManager.LevelSettings, settings, "Level settings", failures, warnings);
+            SaveYaml(YamlConfigManager.LevelSettings, settings, "$sls_cfg_label_level_settings", failures, warnings);
         }
 
         // Modifier enable/disable is only written when a toggle actually changed, so touching the sliders alone never
@@ -827,7 +845,7 @@ namespace StarLevelSystem.modules.UI {
             ApplyEnabledFlags(copy.BossModifiers, staged.modifierOn[ModifierType.Boss]);
             ApplyEnabledFlags(copy.MajorModifiers, staged.modifierOn[ModifierType.Major]);
             ApplyEnabledFlags(copy.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
-            SaveYaml(YamlConfigManager.ModifierSettings, copy, "Modifier settings", failures, warnings);
+            SaveYaml(YamlConfigManager.ModifierSettings, copy, "$sls_cfg_label_modifier_settings", failures, warnings);
         }
 
         // Writes the staged on/off state back onto each modifier's Enabled flag.
@@ -864,7 +882,7 @@ namespace StarLevelSystem.modules.UI {
                     op.Value.LevelBonus = action.LevelBonus;
                 }
             }
-            SaveYaml(YamlConfigManager.NemesisSettings, copy, "Nemesis settings", failures, warnings);
+            SaveYaml(YamlConfigManager.NemesisSettings, copy, "$sls_cfg_label_nemesis_settings", failures, warnings);
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -1016,9 +1034,11 @@ namespace StarLevelSystem.modules.UI {
             public bool enableSlsRaids;
             public int raidCheckMinutes, maxRaidAttempts, maxActiveRaids;
 
-            // RaidSettings.yaml GlobalSettings: DisableAllRaids, GlobalRaidChanceScalar and GlobalRaidIntervalScalar.
+            // RaidSettings.yaml GlobalSettings: DisableAllRaids, GlobalRaidChanceScalar, GlobalRaidIntervalScalar and
+            // PauseBeforeCompleted.
             public bool disableAllRaids;
             public float raidChanceScalar, raidIntervalScalar;
+            public int raidPauseBeforeCompleted;
 
             // Per-raid enable/disable: the raids the page lists (read-only here) and the names toggled on. raidSpawns
             // holds the per-creature numbers that page edits, keyed by position in the file.
@@ -1182,6 +1202,7 @@ namespace StarLevelSystem.modules.UI {
                 s.disableAllRaids = raidGlobals.DisableAllRaids;
                 s.raidChanceScalar = raidGlobals.GlobalRaidChanceScalar;
                 s.raidIntervalScalar = raidGlobals.GlobalRaidIntervalScalar;
+                s.raidPauseBeforeCompleted = raidGlobals.PauseBeforeCompleted;
                 s.raidDensity = ClampRaidDensity(raidGlobals.RaidCreatureDensity);
                 s.raidDensityBase = s.raidDensity;
                 s.raidSpawns = SnapshotRaidSpawns(s.raidSource, s.raidDensityBase);

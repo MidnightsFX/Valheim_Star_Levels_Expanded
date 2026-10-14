@@ -257,8 +257,36 @@ no way out but a relog.
 `$tokens` for anything your mod owns. Enum *member names* are deliberately left raw — they are the tokens
 an admin types into a YAML file, and showing a translated form would teach them the wrong word.
 
-The kit's own strings ("Close", "Add", "Filter…") are plain English literals, not tokens, so the folder
-renders correctly when dropped into a mod that has no localization set up at all.
+The kit's own words go through `ConfigUI.L(token, english)`: the token's translation when anything
+defines it, the English beside it when nothing does (Valheim would otherwise show `[token]`). So the folder
+still reads correctly in a mod with no localization set up at all. Where Valheim has a word of its own the
+kit uses it, and gets every language the game ships:
+
+| Token | English |
+| --- | --- |
+| `$menu_close` | Close |
+| `$menu_cancel` | Cancel |
+| `$menu_ok` | OK |
+| `$menu_filter` | Filter |
+| `$piece_smelter_add` | Add |
+
+Never put these in a mod's own localization file: Jotunn loads every mod's English over the game's
+words, and would replace the translation with English for every player.
+
+The rest are **shared tokens**. Ship them in your English file, so your translators can carry them into
+your other languages:
+
+```json
+"modquickconfig_button": "Mod Config",
+"modquickconfig_list_title": "Configure a mod",
+"modquickconfig_no_matches": "No matches",
+"modquickconfig_more_matches": "... $1 more, type to narrow",
+```
+
+**Their names are frozen, like the launcher contract.** The button and the mod list are drawn by
+whichever copy owns the broker, and that copy's tokens are resolved from whatever mods are loaded — so
+every copy must use the same names and the same `$1`. Additive only: a new word gets a new token, never a
+renamed one. Two mods defining the same token is fine; Jotunn keeps the last, and they agree.
 
 ## Dropping this into another mod
 
@@ -269,7 +297,8 @@ Copy `Common/Config/UI/`, then:
    it is a per-machine UI preference).
 3. Replace `Examples/ExampleConfigPanel.cs` with your own panel and registration.
 4. Call your `Init()` from `Awake`.
-5. Only if the mod has a first-run popup: add a `ConfigEntry<FirstRunMode> FirstRunPopup` (Client config,
+5. Add the shared `modquickconfig_*` tokens from [Localization](#localization) to your English file.
+6. Only if the mod has a first-run popup: add a `ConfigEntry<FirstRunMode> FirstRunPopup` (Client config,
    default `Auto`, not `IsAdminOnly`), pick a record key, and queue the popup as
    `Examples/ExampleWelcomePopup.cs` does. Any other popup that opens by itself on the main menu goes
    through `ConfigUIStartupPopups.Enqueue`.

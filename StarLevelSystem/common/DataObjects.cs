@@ -30,8 +30,7 @@ namespace StarLevelSystem.common
         // read as either a bare action scalar or a full mapping; it only claims ProtectionRule, so no
         // other config type is affected.
         public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
-        // DisableAliases as in YamlFormat: an object reused by reference would otherwise come out as &a1 / *a1 anchors,
-        // which read as corruption in the files and debug dumps this also writes.
+        // DisableAliases as in YamlFormat: an object reused by reference would otherwise come out as &a1 / *a1 anchors, which tends to confuse people
         public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).DisableAliases().ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
 
         // For payloads another peer sent. A message that does not parse is logged instead of thrown out of the RPC

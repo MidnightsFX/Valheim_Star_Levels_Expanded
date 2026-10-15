@@ -80,7 +80,44 @@ namespace StarLevelSystem.modules.Loot {
         }
 
 
+        // Spreads everything one drop instantiates over a small area around the drop point, the way vanilla
+        // scatters loot, instead of putting every stack on the same spot. Only the first LootDropScatterPositions
+        // objects roll a new spot; later ones reuse the rolled spots in turn, so huge drops stay cheap.
+        private class DropScatter {
+            private readonly Vector3 center;
+            private readonly float area;
+            private readonly int maxSpots;
+            private readonly List<Vector3> offsets;
+            private readonly List<Quaternion> rotations;
+            private int dropped = 0;
+
+            public DropScatter(Vector3 center, float area) {
+                this.center = center;
+                this.area = area;
+                // Read once so a config change mid-drop cannot shrink the pool under the reuse index.
+                maxSpots = Mathf.Max(1, ValConfig.LootDropScatterPositions.Value);
+                offsets = new List<Vector3>(maxSpots);
+                rotations = new List<Quaternion>(maxSpots);
+            }
+
+            public void Next(out Vector3 position, out Quaternion rotation) {
+                int spot = dropped++;
+                if (spot < maxSpots) {
+                    Vector3 offset = UnityEngine.Random.insideUnitSphere * area;
+                    // Never below the drop point: trees and destructibles drop from ground level.
+                    offset.y = Mathf.Abs(offset.y);
+                    offsets.Add(offset);
+                    rotations.Add(Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f));
+                } else {
+                    spot %= maxSpots;
+                }
+                position = center + offsets[spot];
+                rotation = rotations[spot];
+            }
+        }
+
         private static void DropItemsImmediate(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
+            DropScatter scatter = new DropScatter(centerPos, dropArea);
             foreach (LootEntry drop in drops) {
                 int max_stack_size;
                 if (ValConfig.EnableDebugLootDetails.Value) {
@@ -88,8 +125,9 @@ namespace StarLevelSystem.modules.Loot {
                 }
                 for (int i = 0; i < drop.Amount;) {
                     max_stack_size = drop.MaxAmountPerDrop;
-                    // Drop the item at the specified position
-                    GameObject droppedItem = UnityEngine.Object.Instantiate(drop.Prefab, centerPos, Quaternion.identity);
+                    // Drop the item at a scattered spot near the drop position
+                    scatter.Next(out Vector3 dropPos, out Quaternion dropRot);
+                    GameObject droppedItem = UnityEngine.Object.Instantiate(drop.Prefab, dropPos, dropRot);
                     // Number of units this dropped object represents (defaults to 1 for non-stacked items and creatures)
                     int dropped = 1;
 
@@ -137,6 +175,7 @@ namespace StarLevelSystem.modules.Loot {
 
         private static IEnumerator DropItemsAsync(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
             int obj_spawns = 0;
+            DropScatter scatter = new DropScatter(centerPos, dropArea);
             foreach (LootEntry drop in drops) {
                 int max_stack_size = drop.MaxAmountPerDrop;
                 if (ValConfig.EnableDebugLootDetails.Value) {
@@ -149,8 +188,9 @@ namespace StarLevelSystem.modules.Loot {
                         yield return new WaitForSeconds(0.1f);
                     }
 
-                    // Drop the item at the specified position
-                    GameObject droppedItem = UnityEngine.Object.Instantiate(drop.Prefab, centerPos, Quaternion.identity);
+                    // Drop the item at a scattered spot near the drop position
+                    scatter.Next(out Vector3 dropPos, out Quaternion dropRot);
+                    GameObject droppedItem = UnityEngine.Object.Instantiate(drop.Prefab, dropPos, dropRot);
                     obj_spawns++;
                     // Number of units this dropped object represents (defaults to 1 for non-stacked items and creatures)
                     int dropped = 1;

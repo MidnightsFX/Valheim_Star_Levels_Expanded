@@ -177,6 +177,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> ChanceBaseChancePerLevel;
         public static ConfigEntry<bool> ScaleAllLootByLevel;
         public static ConfigEntry<int> LootDropsPerTick;
+        public static ConfigEntry<int> LootDropScatterPositions;
         public static ConfigEntry<string> LootDropCalculationType;
         public static ConfigEntry<bool> LootEggsDropIncreaseStacks;
         public static ConfigEntry<bool> CreatureLootDropStacked;
@@ -585,6 +586,7 @@ namespace StarLevelSystem.common {
             LootStyles.ParseLootFactor();
             LootDropCalculationType.SettingChanged += LootStyles.LootFactorChanged;
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
+            LootDropScatterPositions = BindServerConfig("LootSystem", "LootDropScatterPositions", 10, "Loot is scattered randomly over a small area around where it drops. This is the number of random spots picked for a single drop; when more items or stacks than this drop at once, they reuse these spots instead of picking new ones.", true, 1, 100);
             ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");
             LootEggsDropIncreaseStacks = BindServerConfig("LootSystem", "LootEggsDropIncreaseStacks", true, "This causes higher level chickens (and other egg producers) to drop MORE eggs instead of higher leveled ones.");
             EggLevelDeterminedByItemQuality = BindServerConfig("LootSystem", "EggLevelDeterminedByItemQuality", false, "When enabled, the level of egg grown creatures is determined by the eggs quality level. Otherwise the grown creature uses its default level configuration.");

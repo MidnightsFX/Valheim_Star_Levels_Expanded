@@ -471,3 +471,9 @@ Planned Features
 [*]A Nemesis or mini-boss generation system[/*]
 [*]World leveling system based on boss kills[/*]
 [/list]
+
+[line]
+
+If you enjoy my mods donations are appreciated. My mods will never be paid and donations are not required.
+
+[url=https://ko-fi.com/midnightsfx][img]https://raster.shields.io/badge/Ko--fi-Support%20me-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white[/img][/url]

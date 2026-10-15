@@ -1,3 +1,9 @@
+**1.26.1**
+ ---
+ ```
+- Makes stacked and not stacked drops able to use the randomized spawn locations now (configurable as LootDropScatterPositions)
+ ```
+
 **1.26.0**
  ---
  ```

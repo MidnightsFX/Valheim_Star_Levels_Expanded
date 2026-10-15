@@ -50,6 +50,24 @@ namespace StarLevelSystem.modules.Loot {
             return drops;
         }
 
+        // Swaps each drop for what the destroying hit turns it into, as vanilla TreeLog.Destroy does through
+        // Game.CheckDropConversion: a log burned down by cinder fire drops coal instead of wood.
+        internal static void ApplyDropConversion(List<LootEntry> drops, HitData hitData, DropType type) {
+            if (hitData == null || Game.instance == null) { return; }
+            foreach (LootEntry drop in drops) {
+                if (drop.Prefab == null) { continue; }
+                ItemDrop itemDrop = drop.Prefab.GetComponent<ItemDrop>();
+                if (itemDrop == null) { continue; }
+                int multiplier = 1;
+                GameObject converted = Game.instance.CheckDropConversion(hitData, itemDrop, drop.Prefab, ref multiplier);
+                if (converted == drop.Prefab) { continue; }
+                drop.Prefab = converted;
+                drop.Amount *= multiplier;
+                // The stack limit follows the new item.
+                drop.MaxAmountPerDrop = LootPerformanceChanges.CheckItemStackingConfig(converted.GetComponent<ItemDrop>(), type);
+            }
+        }
+
         internal static List<LootEntry> ModifyRockDropsOrDefault(Transform tform, DropTable droptable, string name, int level) {
             SelectObjectDistanceBonus(tform, out DistanceLootModifier distance_bonus);
             List<LootEntry> drops = ModifyObjectDropsOrDefault(droptable, name, level, distance_bonus, DropType.Rock);

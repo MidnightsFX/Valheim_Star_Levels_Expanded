@@ -18,9 +18,11 @@ namespace StarLevelSystem.modules.Loot {
         public static class DropItemsPerformancePatch {
             // effectively replace the drop items function since we need to drop things in a way that is not insane for large amounts of loot
             [HarmonyPatch(nameof(CharacterDrop.DropItems))]
-            public static bool Prefix(CharacterDrop __instance, List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea) {
+            public static bool Prefix(CharacterDrop __instance, List<KeyValuePair<GameObject, int>> drops, Vector3 centerPos, float dropArea, bool cheated) {
+                // Vanilla scatters creature loot over the caller's dropArea and pushes each object at up to 5 m/s.
+                LootPerformanceChanges.DropSpread creatureSpread = new LootPerformanceChanges.DropSpread() { Area = dropArea, Push = 5f };
                 // Pass the original drops list through so DropThat compat can map each instantiated drop back to its config.
-                LootPerformanceChanges.DropItemsPreferAsync(centerPos, LootPerformanceChanges.DropItemsDetermineDropStackSize(drops), dropThatCharacterDrop: true, characterDropSource: drops);
+                LootPerformanceChanges.DropItemsPreferAsync(centerPos, LootPerformanceChanges.DropItemsDetermineDropStackSize(drops), dropThatCharacterDrop: true, characterDropSource: drops, spread: creatureSpread, cheated: cheated);
                 return false;
             }
         }
@@ -289,7 +291,12 @@ namespace StarLevelSystem.modules.Loot {
                 int level = LevelSelection.DetermineisticDetermineObjectLevel(instance.transform.position);
                 LootStyles.SelectObjectDistanceBonus(instance.transform, out DistanceLootModifier distance_bonus);
                 List<LootEntry> optimizeDrops = LootStyles.ModifyObjectDropsOrDefault(instance.m_dropWhenDestroyed, Utils.GetPrefabName(instance.gameObject), level, distance_bonus, DropType.Destructible);
-                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
+                // Vanilla's drop point: raised to the ground if the object sat below it, then lifted once by m_spawnYOffset.
+                Vector3 dropPos = instance.transform.position;
+                float groundHeight = ZoneSystem.instance.GetGroundHeight(dropPos);
+                if (dropPos.y < groundHeight) { dropPos.y = groundHeight + 0.1f; }
+                dropPos += Vector3.up * instance.m_spawnYOffset;
+                LootPerformanceChanges.DropItemsPreferAsync(dropPos, optimizeDrops);
             }
         }
 
@@ -340,7 +347,9 @@ namespace StarLevelSystem.modules.Loot {
 
             private static void TreebaseDropDestroyedItems(TreeBase instance) {
                 List<LootEntry> optimizeDrops = LootStyles.ModifyTreeDropsOrDefault(instance);
-                LootPerformanceChanges.DropItemsPreferAsync(instance.transform.position, optimizeDrops);
+                // Lifted once by m_spawnYOffset, as vanilla does, so the loot does not start inside the stump or the ground.
+                Vector3 dropPos = instance.transform.position + Vector3.up * instance.m_spawnYOffset;
+                LootPerformanceChanges.DropItemsPreferAsync(dropPos, optimizeDrops);
             }
         }
 

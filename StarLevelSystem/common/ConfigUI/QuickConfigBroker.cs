@@ -76,6 +76,8 @@ namespace StarLevelSystem.common {
             GUIManager.OnCustomGUIAvailable += OnCustomGUIAvailable;
             SynchronizationManager.OnAdminStatusChanged += OnAdminStatusChanged;
             SynchronizationManager.OnConfigurationSynchronized += OnConfigurationSynchronized;
+            Localization.OnLanguageChange += RelabelButtons;
+            LocalizationManager.OnLocalizationAdded += RelabelButtons;
 
             // Patched with a private Harmony instance rather than [HarmonyPatch] attributes, so a plugin
             // that also calls Harmony.CreateAndPatchAll(assembly) cannot apply it a second time. Exactly
@@ -102,6 +104,8 @@ namespace StarLevelSystem.common {
             GUIManager.OnCustomGUIAvailable -= OnCustomGUIAvailable;
             SynchronizationManager.OnAdminStatusChanged -= OnAdminStatusChanged;
             SynchronizationManager.OnConfigurationSynchronized -= OnConfigurationSynchronized;
+            Localization.OnLanguageChange -= RelabelButtons;
+            LocalizationManager.OnLocalizationAdded -= RelabelButtons;
             if (Instance == this) { Instance = null; }
         }
 
@@ -178,7 +182,7 @@ namespace StarLevelSystem.common {
             if (found != null) { return found.gameObject; }   // already ours, listener included
 
             GameObject go = GUIManager.Instance.CreateButton(
-                text: ConfigUI.L("$modquickconfig_button", "Mod Config"), parent: parent,
+                text: ButtonLabel(), parent: parent,
                 anchorMin: new Vector2(1f, 0f), anchorMax: new Vector2(1f, 0f),
                 position: new Vector2(-20f, 20f), width: ButtonW, height: ButtonH);
             go.name = ButtonObjectName;
@@ -187,6 +191,38 @@ namespace StarLevelSystem.common {
             rt.anchoredPosition = new Vector2(-20f, 20f);
             go.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(OpenList);
             return go;
+        }
+
+        // Re-reads both labels when the player switches language, and when Jotunn has added every mod's words
+        // for the menu. The main menu button goes up as soon as the scene loads, which is BEFORE Jotunn adds
+        // those words for the player's language, and a label read only then kept whatever language the table
+        // happened to hold for the rest of the session -- while every panel, built when it opens, showed the
+        // right one.
+        private void RelabelButtons() {
+            // Runs inside Valheim's language switch, where a throw would also skip every listener after this one.
+            try {
+                string label = ButtonLabel();
+                SetLabel(mainMenuButton, label);
+                SetLabel(pauseButton, label);
+            } catch (Exception e) {
+                Logger.LogWarning($"QuickConfig launcher could not update its button label: {e.Message}");
+            }
+        }
+
+        private static void SetLabel(GameObject button, string label) {
+            // Unity fake-null: either button may have gone down with its scene.
+            if (button == null) { return; }
+            UnityEngine.UI.Text text = button.GetComponentInChildren<UnityEngine.UI.Text>(true);
+            if (text != null) { text.text = label; }
+        }
+
+        // Valheim remembers every Localize() result and forgets them only on its own language switch, while
+        // Jotunn adds the mod words without that -- so a token first looked up before its words were added
+        // keeps answering with that old result. ReLocalizeAll is the public way to make it forget; the broker
+        // holds no Text of Valheim's, so nothing else changes.
+        private string ButtonLabel() {
+            if (Localization.instance != null) { Localization.instance.ReLocalizeAll(transform); }
+            return ConfigUI.L("$modquickconfig_button", "Mod Config");
         }
 
         // Host or admin only.

@@ -1,3 +1,11 @@
+**1.26.2**
+ ---
+ ```
+- Makes log drops specifically follow their extended drop shape
+- Makes drops accept loot conversion, fire now turns wood to coal when on fire, as in vanilla
+- Fixes the Mod Config button sometimes showing in a different language from the game
+ ```
+
 **1.26.1**
  ---
  ```

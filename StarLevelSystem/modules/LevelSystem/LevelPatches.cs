@@ -40,15 +40,21 @@ namespace StarLevelSystem.modules.LevelSystem {
             [HarmonyPatch(nameof(TreeLog.Destroy))]
             [HarmonyPrefix]
             //[HarmonyPriority(Priority.LowerThanNormal)] // We are skipping the original, give everyone else a chance to run first.
-            static bool DropAndSpawnTreeLogs(TreeLog __instance) {
+            static bool DropAndSpawnTreeLogs(TreeLog __instance, HitData hitData, bool cheatedTool) {
                 // Modify Tree Drops
                 List<LootEntry> optimizeDrops = LootStyles.ModifyTreeDropsOrDefault(__instance);
+                LootStyles.ApplyDropConversion(optimizeDrops, hitData, DropType.Tree);
 
                 //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
-                Vector3 position = __instance.transform.position + __instance.transform.up * UnityEngine.Random.Range(-__instance.m_spawnDistance, __instance.m_spawnDistance) + Vector3.up * 0.3f;
-
-                __instance.m_destroyedEffect.Create(position, __instance.transform.rotation);
-                LootPerformanceChanges.DropItemsPreferAsync(position, optimizeDrops);
+                __instance.m_destroyedEffect.Create(__instance.transform.position, __instance.transform.rotation);
+                // Vanilla rolls every piece's spot along the log's length, up to m_spawnDistance either way. Rolling one
+                // spot for the whole drop piled it all in one place. The 0.3 lift is applied once, not per piece.
+                LootPerformanceChanges.DropSpread alongLog = new LootPerformanceChanges.DropSpread() {
+                    Axis = __instance.transform.up,
+                    AxisDistance = __instance.m_spawnDistance
+                };
+                Vector3 dropPos = __instance.transform.position + Vector3.up * 0.3f;
+                LootPerformanceChanges.DropItemsPreferAsync(dropPos, optimizeDrops, spread: alongLog, cheated: cheatedTool);
 
                 // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {

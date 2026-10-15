@@ -14,11 +14,25 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.Loot {
     internal class LootPerformanceChanges {
 
-        public static void DropItemsPreferAsync(Vector3 position, List<LootEntry> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
+        // How one drop's loot leaves its source. The defaults are the small half-sphere and light push every SLS drop
+        // gets; sources that vanilla spreads differently (tree logs, creatures) set their own.
+        public class DropSpread {
+            // Radius of the half-sphere each scatter spot is rolled in.
+            public float Area = 0.5f;
+            // A line each spot is also rolled along, up to AxisDistance either way of the drop point. Tree logs pass
+            // their own length axis, so the loot lands along the whole log as it does in vanilla.
+            public Vector3 Axis = Vector3.zero;
+            public float AxisDistance = 0f;
+            // Top speed of the random push each dropped object gets.
+            public float Push = 2.5f;
+        }
+
+        public static void DropItemsPreferAsync(Vector3 position, List<LootEntry> optimizeDrops, bool immediate = false, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null, DropSpread spread = null, bool cheated = false) {
+            if (spread == null) { spread = new DropSpread(); }
             if (immediate == false) {
-                TaskRunner.Run().StartCoroutine(DropItemsAsync(optimizeDrops, position, 0.5f, dropThatCharacterDrop, characterDropSource));
+                TaskRunner.Run().StartCoroutine(DropItemsAsync(optimizeDrops, position, spread, cheated, dropThatCharacterDrop, characterDropSource));
             } else {
-                DropItemsImmediate(optimizeDrops, position, 0.5f, dropThatCharacterDrop, characterDropSource);
+                DropItemsImmediate(optimizeDrops, position, spread, cheated, dropThatCharacterDrop, characterDropSource);
             }
         }
 
@@ -85,15 +99,15 @@ namespace StarLevelSystem.modules.Loot {
         // objects roll a new spot; later ones reuse the rolled spots in turn, so huge drops stay cheap.
         private class DropScatter {
             private readonly Vector3 center;
-            private readonly float area;
+            private readonly DropSpread spread;
             private readonly int maxSpots;
             private readonly List<Vector3> offsets;
             private readonly List<Quaternion> rotations;
             private int dropped = 0;
 
-            public DropScatter(Vector3 center, float area) {
+            public DropScatter(Vector3 center, DropSpread spread) {
                 this.center = center;
-                this.area = area;
+                this.spread = spread;
                 // Read once so a config change mid-drop cannot shrink the pool under the reuse index.
                 maxSpots = Mathf.Max(1, ValConfig.LootDropScatterPositions.Value);
                 offsets = new List<Vector3>(maxSpots);
@@ -103,9 +117,12 @@ namespace StarLevelSystem.modules.Loot {
             public void Next(out Vector3 position, out Quaternion rotation) {
                 int spot = dropped++;
                 if (spot < maxSpots) {
-                    Vector3 offset = UnityEngine.Random.insideUnitSphere * area;
-                    // Never below the drop point: trees and destructibles drop from ground level.
+                    Vector3 offset = UnityEngine.Random.insideUnitSphere * spread.Area;
+                    // The sphere roll never goes below the drop point: trees and destructibles drop from ground level.
                     offset.y = Mathf.Abs(offset.y);
+                    if (spread.AxisDistance > 0f) {
+                        offset += spread.Axis * UnityEngine.Random.Range(-spread.AxisDistance, spread.AxisDistance);
+                    }
                     offsets.Add(offset);
                     rotations.Add(Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f));
                 } else {
@@ -116,8 +133,8 @@ namespace StarLevelSystem.modules.Loot {
             }
         }
 
-        private static void DropItemsImmediate(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
-            DropScatter scatter = new DropScatter(centerPos, dropArea);
+        private static void DropItemsImmediate(List<LootEntry> drops, Vector3 centerPos, DropSpread spread, bool cheated, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
+            DropScatter scatter = new DropScatter(centerPos, spread);
             foreach (LootEntry drop in drops) {
                 int max_stack_size;
                 if (ValConfig.EnableDebugLootDetails.Value) {
@@ -131,14 +148,19 @@ namespace StarLevelSystem.modules.Loot {
                     // Number of units this dropped object represents (defaults to 1 for non-stacked items and creatures)
                     int dropped = 1;
 
+                    ItemDrop component = droppedItem.GetComponent<ItemDrop>();
+                    if (component is not null) {
+                        // Set on every dropped item, stacked or not, as vanilla's ItemDrop.OnCreateNew does.
+                        component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
+                        component.m_itemData.m_cheated = cheated;
+                    }
+
                     // Modify the dropped item to be dropped in stacks up to the specified amount
                     if (max_stack_size > 1) {
-                        ItemDrop component = droppedItem.GetComponent<ItemDrop>();
                         // Drop in stacks if this is an item
                         if (component is not null) {
                             int stack = Mathf.Min(drop.Amount - i, max_stack_size);
                             component.m_itemData.m_stack = stack;
-                            component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
                             dropped = stack;
                         } else {
                             Character chara = droppedItem.GetComponent<Character>();
@@ -160,11 +182,11 @@ namespace StarLevelSystem.modules.Loot {
                     // Poke the item to make it feel like a loot drop
                     Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
                     if ((bool)component2) {
-                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere * dropArea;
+                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere;
                         if (insideUnitSphere.y < 0f) {
                             insideUnitSphere.y = 0f - insideUnitSphere.y;
                         }
-                        component2.AddForce(insideUnitSphere * 5f, ForceMode.VelocityChange);
+                        component2.AddForce(insideUnitSphere * spread.Push, ForceMode.VelocityChange);
                     }
                     i += dropped;
                 }
@@ -173,9 +195,9 @@ namespace StarLevelSystem.modules.Loot {
 
 
 
-        private static IEnumerator DropItemsAsync(List<LootEntry> drops, Vector3 centerPos, float dropArea, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
+        private static IEnumerator DropItemsAsync(List<LootEntry> drops, Vector3 centerPos, DropSpread spread, bool cheated, bool dropThatCharacterDrop = false, List<KeyValuePair<GameObject, int>> characterDropSource = null) {
             int obj_spawns = 0;
-            DropScatter scatter = new DropScatter(centerPos, dropArea);
+            DropScatter scatter = new DropScatter(centerPos, spread);
             foreach (LootEntry drop in drops) {
                 int max_stack_size = drop.MaxAmountPerDrop;
                 if (ValConfig.EnableDebugLootDetails.Value) {
@@ -195,13 +217,18 @@ namespace StarLevelSystem.modules.Loot {
                     // Number of units this dropped object represents (defaults to 1 for non-stacked items and creatures)
                     int dropped = 1;
 
+                    ItemDrop component = droppedItem.GetComponent<ItemDrop>();
+                    if (component is not null) {
+                        // Set on every dropped item, stacked or not, as vanilla's ItemDrop.OnCreateNew does.
+                        component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
+                        component.m_itemData.m_cheated = cheated;
+                    }
+
                     if (max_stack_size > 1) {
-                        ItemDrop component = droppedItem.GetComponent<ItemDrop>();
                         // Drop in stacks if this is an item
                         if (component is not null) {
                             int stack = Mathf.Min(drop.Amount - i, max_stack_size);
                             component.m_itemData.m_stack = stack;
-                            component.m_itemData.m_worldLevel = (byte)Game.m_worldLevel;
                             dropped = stack;
                         } else {
                             Character chara = droppedItem.GetComponent<Character>();
@@ -223,11 +250,11 @@ namespace StarLevelSystem.modules.Loot {
                     // Make the loot wiggle
                     Rigidbody component2 = droppedItem.GetComponent<Rigidbody>();
                     if ((bool)component2) {
-                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere * dropArea;
+                        Vector3 insideUnitSphere = UnityEngine.Random.insideUnitSphere;
                         if (insideUnitSphere.y < 0f) {
                             insideUnitSphere.y = 0f - insideUnitSphere.y;
                         }
-                        component2.AddForce(insideUnitSphere * 5f, ForceMode.VelocityChange);
+                        component2.AddForce(insideUnitSphere * spread.Push, ForceMode.VelocityChange);
                     }
                     i += dropped;
                 }

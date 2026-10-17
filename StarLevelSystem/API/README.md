@@ -297,7 +297,9 @@ only its interior would be rebuilt), `held` (nothing would be touched), or `none
 | `objectsCleared` / `objectsSpawned` / `vegetationObjects` | int | |
 | `pickablesRefreshed` / `mineRocksRefreshed` / `containersRefreshed` | int | |
 | `terrainReverted` / `doorsSealed` | int | |
-| `zdoGrowth` | int | Net world-object change. A faithful restore is 0 |
+| `zdoGrowth` | int | Net world-object change |
+| `zdoRestored` | int | Of that, objects that were missing and came back: regrown vegetation, and location content beyond what was still standing |
+| `zdoDrift` | int | Growth past `zdoRestored`, never negative. A faithful restore is 0 |
 | `waitedSeconds` / `elapsedSeconds` | float | Time spent waiting in Safe mode, and in total |
 | `zones` | `List<Dictionary<string, object>>` | Per-chunk detail, only when `includeDetail: true`. Left empty on a call from a client when the detail is too large to send back; the counters still arrive |
 

@@ -18,12 +18,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         private static Minimap.PinType customPinType = Minimap.PinType.None;
         private static bool spriteRegistered = false;
-        private static bool triedRegister = false;
+        // The Minimap the pin type was registered on (or registration was tried and failed for). Every
+        // world load builds a fresh Minimap with fresh m_visibleIconTypes/m_icons, so the type is appended
+        // again there and can get a different number than last world.
+        private static Minimap registeredFor;
 
         // Hooked to MinimapManager.OnVanillaMapDataLoaded: register the sprite and flush any buffered pins.
         internal static void OnMapReady() {
-            triedRegister = false;
-            spriteRegistered = false;
             EnsureSpriteRegistered();
             if (pending.Count > 0) {
                 foreach (NemesisBossPin pin in new List<NemesisBossPin>(pending.Values)) {
@@ -57,7 +58,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             string label = settings.PinShowsBossName && Localization.instance != null
                 ? Localization.instance.Localize(pin.Name ?? "")
                 : "";
-            Minimap.PinData icon = Minimap.instance.AddPin(pin.Position, type, label, false, false);
+            Minimap.PinData icon = Minimap.instance.AddPin(pin.Position, type, label, save: false, isChecked: false);
             created.Add(icon);
 
             pins[pin.Id] = created;
@@ -93,11 +94,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
             return spriteRegistered ? customPinType : NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.FallbackPinType;
         }
 
-        // Register a custom pin sprite as a new PinType (mirrors EpicLoot's MinimapController). Runs once.
+        // Register a custom pin sprite as a new PinType (mirrors EpicLoot's MinimapController). Runs once
+        // per Minimap instance.
         private static void EnsureSpriteRegistered() {
-            if (triedRegister) { return; }
-            if (Minimap.instance == null) { return; }
-            triedRegister = true;
+            if (Minimap.instance == null || registeredFor == Minimap.instance) { return; }
+            registeredFor = Minimap.instance;
+            spriteRegistered = false;
+            customPinType = Minimap.PinType.None;
 
             string assetName = NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.MapPinSpriteAsset;
             if (string.IsNullOrEmpty(assetName)) { return; }
@@ -113,19 +116,16 @@ namespace StarLevelSystem.modules.NemesisSystem {
             }
 
             Minimap mm = Minimap.instance;
-            int idx = Enum.GetValues(typeof(Minimap.PinType)).Length + 4; // offset to avoid colliding with other mods' custom types
-            customPinType = (Minimap.PinType)idx;
-
             if (mm.m_visibleIconTypes == null) { return; }
-            if (mm.m_visibleIconTypes.Length <= idx) {
-                bool[] resized = new bool[idx + 1];
-                Array.Copy(mm.m_visibleIconTypes, resized, mm.m_visibleIconTypes.Length);
-                for (int i = mm.m_visibleIconTypes.Length; i < resized.Length; i++) { resized[i] = true; }
-                mm.m_visibleIconTypes = resized;
-            }
-            if (!mm.m_icons.Exists(x => x.m_name == customPinType)) {
-                mm.m_icons.Add(new Minimap.SpriteData { m_name = customPinType, m_icon = sprite });
-            }
+            // Take the next slot at the end, as TargetPortal, Jewelcrafting, VentureValheim and EpicLoot do.
+            // A fixed number lands on another mod's type once enough are appended before this lazy
+            // registration runs: the two then share one filter toggle and our sprite is never added. The
+            // number can change between worlds, which is why Nemesis pins are never saved with the map.
+            int idx = mm.m_visibleIconTypes.Length;
+            Array.Resize(ref mm.m_visibleIconTypes, idx + 1);
+            mm.m_visibleIconTypes[idx] = true;
+            customPinType = (Minimap.PinType)idx;
+            mm.m_icons.Add(new Minimap.SpriteData { m_name = customPinType, m_icon = sprite });
             spriteRegistered = true;
         }
     }

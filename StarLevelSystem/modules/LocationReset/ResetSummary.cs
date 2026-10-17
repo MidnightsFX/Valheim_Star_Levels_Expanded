@@ -76,7 +76,10 @@ namespace StarLevelSystem.modules.LocationReset {
         internal int ContainersRefreshed;
         internal int TerrainReverted;
         internal int DoorsSealed;
+        // Net change, what of it was owed (missing content that came back), and the growth past that.
         internal int ZdoGrowth;
+        internal int ZdoRestored;
+        internal int ZdoDrift;
 
         internal float WaitedSeconds;
         internal float ElapsedSeconds;
@@ -102,6 +105,8 @@ namespace StarLevelSystem.modules.LocationReset {
             // drift this reset caused.
             if (report.ZdoCounted && report.ZoneAdopted == false) {
                 ZdoGrowth += report.ZdoAfter - report.ZdoBefore;
+                ZdoRestored += report.ZdoOwed;
+                ZdoDrift += report.ZdoDrift;
             }
 
             switch (report.LocationResult) {
@@ -219,6 +224,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 { "terrainReverted", TerrainReverted },
                 { "doorsSealed", DoorsSealed },
                 { "zdoGrowth", ZdoGrowth },
+                { "zdoRestored", ZdoRestored },
+                { "zdoDrift", ZdoDrift },
 
                 { "waitedSeconds", WaitedSeconds },
                 { "elapsedSeconds", ElapsedSeconds },
@@ -236,7 +243,7 @@ namespace StarLevelSystem.modules.LocationReset {
             string interior = LocationsInteriorOnly > 0 ? $" ({LocationsInteriorOnly} interior only)" : "";
             return $"Reset{target} complete: {ZonesReset} chunks reset ({ZonesAdopted} adopted while loaded), " +
                 $"{LocationsRebuilt} locations rebuilt{interior}, {ZonesBlocked} skipped as protected, " +
-                $"{ZonesUngenerated} never generated, ZDO drift {ZdoGrowth}.";
+                $"{ZonesUngenerated} never generated, ZDO change {ZdoGrowth} ({ZdoRestored} restored, drift {ZdoDrift}).";
         }
     }
 }

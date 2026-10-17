@@ -761,6 +761,44 @@ namespace StarLevelSystem.modules.LocationReset {
             return surfaceCount;
         }
 
+        // Surface objects in the 3x3 block carrying a location's ownership stamp: what that location
+        // still has standing, measured over the same block and surface BlockZdoCount reports on.
+        internal static int OwnedSurfaceCount(Vector2s zone, long owner) {
+            if (ZDOMan.instance == null) { return 0; }
+
+            int count = 0;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    zdoBuffer.Clear();
+                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), zdoBuffer);
+                    for (int i = 0; i < zdoBuffer.Count; i++) {
+                        ZDO zdo = zdoBuffer[i];
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        if (zdo.GetPosition().y > SkyThreshold) { continue; }
+                        if (LocationOwnership.IsOwnedBy(zdo, owner)) { count++; }
+                    }
+                }
+            }
+            zdoBuffer.Clear();
+            return count;
+        }
+
+        // How many of these ZDOs stand on the surface of the 3x3 block around zone -- the part of a
+        // location's fresh copy that BlockZdoCount will see.
+        internal static int SurfaceCountInBlock(Vector2s zone, List<ZDO> zdos) {
+            int count = 0;
+            for (int i = 0; i < zdos.Count; i++) {
+                ZDO zdo = zdos[i];
+                if (zdo == null || zdo.IsValid() == false) { continue; }
+                Vector3 position = zdo.GetPosition();
+                if (position.y > SkyThreshold) { continue; }
+                Vector2s sector = ZoneSystem.GetZone(position);
+                if (Mathf.Abs(sector.x - zone.x) > 1 || Mathf.Abs(sector.y - zone.y) > 1) { continue; }
+                count++;
+            }
+            return count;
+        }
+
         // Readable name for a prefab hash, for logs. Falls back to the hash itself, which still
         // identifies the prefab even when ZNetScene has not been walked yet.
         internal static string PrefabNameFor(int prefabHash) {
@@ -785,15 +823,25 @@ namespace StarLevelSystem.modules.LocationReset {
         // Matching stays prefab hash + XZ within a tight epsilon, which is unambiguous across a 3x3:
         // zones are 64m apart, so a same-prefab node from a neighbour cannot sit that close to ours
         // unless it IS ours.
-        internal static Dictionary<int, List<Vector2>> TrackedVegetationPositions(Vector2s zone) {
+        //
+        // Pass censusBySector to also get each of the nine sectors' counts, the same figures
+        // CensusZone would give, from the same scan. Every scanned sector gets an entry, empty or not.
+        internal static Dictionary<int, List<Vector2>> TrackedVegetationPositions(Vector2s zone,
+                Dictionary<Vector2s, Dictionary<int, ushort>> censusBySector = null) {
             Dictionary<int, List<Vector2>> positions = new Dictionary<int, List<Vector2>>();
             if (ZDOMan.instance == null) { return positions; }
             if (LocationResetData.VegetationByPrefabHash.Count == 0) { return positions; }
 
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
+                    Vector2s sector = new Vector2s(zone.x + dx, zone.y + dy);
+                    Dictionary<int, ushort> counts = null;
+                    if (censusBySector != null) {
+                        counts = new Dictionary<int, ushort>();
+                        censusBySector[sector] = counts;
+                    }
                     zdoBuffer.Clear();
-                    ZoneObjects.FindObjects(new Vector2s(zone.x + dx, zone.y + dy), zdoBuffer);
+                    ZoneObjects.FindObjects(sector, zdoBuffer);
 
                     for (int i = 0; i < zdoBuffer.Count; i++) {
                         ZDO zdo = zdoBuffer[i];
@@ -805,6 +853,10 @@ namespace StarLevelSystem.modules.LocationReset {
                         }
                         Vector3 p = zdo.GetPosition();
                         list.Add(new Vector2(p.x, p.z));
+
+                        if (counts == null) { continue; }
+                        counts.TryGetValue(zdo.m_prefab, out ushort current);
+                        if (current < ushort.MaxValue) { counts[zdo.m_prefab] = (ushort)(current + 1); }
                     }
                 }
             }

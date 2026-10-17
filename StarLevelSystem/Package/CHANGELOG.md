@@ -1,3 +1,11 @@
+**1.26.3**
+ ---
+ ```
+- Fixes trophies, including boss trophies, no longer dropping more from higher level creatures when all loot is set to scale with level.
+- Fixes location resets adding extra vegetation and pickables to an area instead of only replacing what was taken.
+- Location resets now only warn about world object growth beyond what they actually restored.
+ ```
+
 **1.26.2**
  ---
  ```

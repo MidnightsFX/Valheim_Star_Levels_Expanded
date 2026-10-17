@@ -353,8 +353,11 @@ namespace StarLevelSystem.modules.LocationReset {
                 ZoneLoader.Release(zone);
             }
 
-            // Balanced accounting. A faithful restore returns the block to its original ZDO count;
-            // sustained growth is how a reset system silently bloats a world save over months.
+            // Balanced accounting. A faithful restore grows the block by exactly what was missing and
+            // came back -- see ZoneResetReport.ZdoOwed -- and growth past that, sustained, is how a
+            // reset system silently bloats a world save over months. Judging raw growth instead
+            // warned on every legitimate regrowth and every rebuild of a raided camp, which buried
+            // the real leak (the vegetation replay's second layout) in a warning per chunk.
             //
             // Draining the destroy queue first is what makes the number mean anything. ZDOMan.DestroyZDO
             // only appends to m_destroySendList; a ZDO leaves m_objectsBySector -- the list the count
@@ -389,9 +392,10 @@ namespace StarLevelSystem.modules.LocationReset {
             }
 
             // An adopted zone is live: creatures spawn, players drop things, and items despawn between
-            // the two samples. That noise is not our drift, so it neither counts towards the global
-            // total nor is reported below.
-            if (growth != 0 && report.ZoneAdopted == false) { LocationResetManager.ZdoGrowthTotal += growth; }
+            // the two samples. That noise is not our drift, so ZdoDrift is 0 for one and it neither
+            // counts towards the global total nor is reported below.
+            int drift = report.ZdoDrift;
+            LocationResetManager.ZdoDriftTotal += drift;
 
             if (succeeded == false) {
                 // Clear and respawn are one operation, and a throw between them leaves the location
@@ -400,14 +404,15 @@ namespace StarLevelSystem.modules.LocationReset {
                 // pushes a zone further out and the due gate then waits a full sweep floor on top, so
                 // "60 seconds" was really the floor plus a minute -- six hours with the shipped groups.
                 RetryOrDefer(zone, cfg, report, "reset failed with an error");
-            } else if (report.ZoneAdopted == false && growth > cfg.ZdoGrowthTolerance) {
+            } else if (drift > cfg.ZdoGrowthTolerance) {
                 // Observational only. The reset itself completed, so it stays a success: the caller
                 // goes on to stamp the zone and re-record its census, which must reflect the world
                 // that now exists. Deferring the zone here (this once backed it off for a day and
                 // reported failure) meant a drift report suppressed the very bookkeeping that would
                 // have kept the next pass correct.
-                Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y} gained {growth} ZDOs during a reset " +
-                    $"(before {zdosBefore}, after {zdosAfter}). Reset kept; check sls-loc-audit if this persists.");
+                Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y} gained {growth} ZDOs during a reset, {drift} more " +
+                    $"than the {report.ZdoOwed} it restored (before {zdosBefore}, after {zdosAfter}). " +
+                    "Reset kept; check sls-loc-audit if this persists.");
             }
 
             // An interior-only rebuild promises to leave the surface exactly as it was, so with no
@@ -659,6 +664,11 @@ namespace StarLevelSystem.modules.LocationReset {
             // A zone hosts at most one location and never moves, so its coordinates are this
             // location's identity -- the same key the spawn stamps onto everything it creates.
             long ownerKey = LocationOwnership.KeyFor(zone);
+            // What the location still has standing, so the drift accounting can tell a rebuild putting
+            // back what players destroyed from one stacking a second copy. Surface only, like the
+            // count it is judged against; an interior-only rebuild leaves the surface as it was and
+            // is owed nothing there.
+            int ownedBefore = interiorOnly ? 0 : ZoneProtectionScan.OwnedSurfaceCount(zone, ownerKey);
             // Interior-only: the sky column is cleared and the surface is not touched at all -- no
             // clear, no terrain reset -- so it is left exactly as it was.
             int cleared = ClearLocation(zone, position, rotation, exteriorRadius, instance.m_location, entry, ownerKey, report,
@@ -751,6 +761,11 @@ namespace StarLevelSystem.modules.LocationReset {
             report.DoorsSealed = SealKeyedDoors(zone, position, exteriorRadius, skyOnly: false);
             report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Rebuilt);
             report.LocationCleared = cleared;
+            // The fresh copy is the pristine location, RandomSpawn rolls and all, so whatever it has
+            // beyond what stood before is what was missing. Content from before the ownership stamp
+            // existed carries none, so a location's first rebuild after that counts its whole copy as
+            // owed and cannot be judged; every rebuild after it can.
+            report.LocationOwed = Mathf.Max(0, ZoneProtectionScan.SurfaceCountInBlock(zone, fresh) - ownedBefore);
         }
 
         // Start the clock on a location the sweep has never stamped, from the fast lane. Stamping it is
@@ -1615,13 +1630,22 @@ namespace StarLevelSystem.modules.LocationReset {
         //
         // PlaceVegetation seeds each entry with
         //   worldSeed + zoneX*4271 + zoneY*9187 + prefabName.GetStableHashCode()
-        // so replaying it for one prefab in one zone reproduces that prefab's ORIGINAL positions,
-        // rotations and scales exactly. That determinism is what makes a restore possible, and it is
-        // also why surviving instances must NOT be pre-deleted.
+        // which makes a replay repeat the previous REPLAY exactly -- but not world generation. Each
+        // node's position is drawn before its placement checks, while two later draws happen only for
+        // a node that passes them: the ground-tilt roll (m_chanceToUseGroundTilt) and the respawn
+        // jitter in Pickable.Awake. A check that answers differently now than it did at generation
+        // -- the block check below, ground a player dug, a clear area a mod's location added --
+        // shifts the stream, and every later node of that prefab in the chunk lands somewhere new.
+        // A chunk's first replay used to keep around 40% of what it placed as "missing" for exactly
+        // this reason, while every replay after it matched its predecessor and kept almost nothing.
         //
-        // It does mean the replay re-places EVERY node, including the ones still standing, so the
-        // duplicates have to be rejected afterwards -- see RejectDuplicateGhosts. Vanilla's own
-        // defence is ZoneSystem.IsBlocked, a downward Physics.Raycast, and that cannot work here:
+        // So the replay's output is a set of CANDIDATES, not the nodes that went missing. Surviving
+        // instances must still NOT be pre-deleted, since they are the only record of where the
+        // originals stand; the replay's copies of them are rejected afterwards, and only as many of
+        // the rest are kept as the census says are missing -- see RejectDuplicateGhosts.
+        //
+        // Vanilla's own duplicate defence is ZoneSystem.IsBlocked, a downward Physics.Raycast, and
+        // that cannot work here:
         // ZoneLoader poke-loads the chunk, which for an already-generated zone runs SpawnMode.Client
         // and creates only the zone root and its Heightmap. Existing ZDOs get GameObjects solely from
         // ZNetScene.CreateObjectsAll, around ZNet.GetReferencePosition() -- Vector3.zero on a
@@ -1644,8 +1668,12 @@ namespace StarLevelSystem.modules.LocationReset {
             Vector3 zonePos = ZoneSystem.GetZonePos(zone);
 
             // Captured BEFORE placing: a ghost's ZDO joins the sector index the moment it is created,
-            // so a snapshot taken afterwards would match every ghost against itself.
-            Dictionary<int, List<Vector2>> surviving = ZoneProtectionScan.TrackedVegetationPositions(zone);
+            // so a snapshot taken afterwards would match every ghost against itself -- and would
+            // count every ghost as present, leaving nothing owed. After the location rebuild, though,
+            // so whatever the rebuild just put back is not owed a second time.
+            Dictionary<Vector2s, Dictionary<int, ushort>> census = new Dictionary<Vector2s, Dictionary<int, ushort>>();
+            Dictionary<int, List<Vector2>> surviving = ZoneProtectionScan.TrackedVegetationPositions(zone, census);
+            RegrowthBudget budget = new RegrowthBudget(census);
             List<GameObject> kept = new List<GameObject>();
 
             try {
@@ -1660,7 +1688,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 // Inside the try on purpose: the finally below destroys the ghost GameObjects, and
                 // reaching a ghost's ZDO needs its ZNetView.
-                report.VegetationDuplicatesRejected += RejectDuplicateGhosts(ghosts, surviving, kept);
+                RejectDuplicateGhosts(ghosts, surviving, budget, kept, report);
             } finally {
                 // Restoring the shared vegetation list is not optional: leaving the filtered list in
                 // place would break normal world generation for the rest of the session.
@@ -1689,25 +1717,35 @@ namespace StarLevelSystem.modules.LocationReset {
             }
         }
 
-        // Vegetation placement is seeded per prefab per zone, so replaying it re-places every node --
-        // including the ones that never went away. Anything landing on a surviving node is a
-        // duplicate and its ZDO is dropped again immediately.
+        // The replay re-places every node it can, including the ones that never went away, so each
+        // ghost is settled one of three ways:
+        //
+        //   lands on a surviving node     -> a duplicate, dropped again immediately
+        //   lands anywhere else, and its
+        //   sector is short of its prefab -> kept, and that sector is owed one fewer
+        //   anything else                 -> not missing, dropped like a duplicate
         //
         // Matching is XZ only: the replayed X/Z come straight from the seeded RNG and are identical
-        // to the original, while y is re-snapped to terrain that may have changed since.
+        // to the copy they replay, while y is re-snapped to terrain that may have changed since.
         //
         // A match CONSUMES the survivor it paired with, which matters because PlaceVegetation puts
         // some prefabs down in tight groups: two distinct nodes of one prefab really can sit within
         // the epsilon of each other. Without consuming, a single survivor could absorb both its own
         // replay and its destroyed neighbour's, and that neighbour would never come back. Pairing
         // greedily bounds rejections by the number of survivors, so the worst case is a duplicate
-        // slipping through rather than a node going missing forever.
+        // slipping through rather than a node going missing forever -- and the budget then turns
+        // that slipped duplicate away too, unless the sector really is short of one.
+        //
+        // Ghosts are settled in placement order, which the seeded RNG fixes, so the budget keeps the
+        // same candidates on every replay: last pass's keeps are this pass's survivors, and only
+        // genuinely new losses reach the next candidates in line.
         private const float DuplicateNodeEpsilon = 0.25f;
 
-        private static int RejectDuplicateGhosts(List<GameObject> ghosts,
-                                                 Dictionary<int, List<Vector2>> surviving,
-                                                 List<GameObject> kept) {
-            int rejected = 0;
+        private static void RejectDuplicateGhosts(List<GameObject> ghosts,
+                                                  Dictionary<int, List<Vector2>> surviving,
+                                                  RegrowthBudget budget,
+                                                  List<GameObject> kept,
+                                                  ZoneResetReport report) {
             float sqrEpsilon = DuplicateNodeEpsilon * DuplicateNodeEpsilon;
 
             for (int i = 0; i < ghosts.Count; i++) {
@@ -1718,18 +1756,64 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (zdo == null) { kept.Add(ghost); continue; }
 
                 Vector3 position = zdo.GetPosition();
-                if (TryConsumeSurvivingNodeAt(surviving, zdo.m_prefab, position, sqrEpsilon) == false) {
+                if (TryConsumeSurvivingNodeAt(surviving, zdo.m_prefab, position, sqrEpsilon)) {
+                    report.VegetationDuplicatesRejected++;
+                } else if (budget.TryClaim(position, zdo.m_prefab)) {
                     kept.Add(ghost);
                     continue;
+                } else {
+                    report.VegetationNotMissing++;
                 }
 
                 // Ghost-mode objects are never registered with ZNetScene, so this takes the
                 // ZDOMan.DestroyZDO branch. The GameObject itself is torn down by the caller's
                 // finally along with every other ghost.
                 DestroyZdo(zdo);
-                rejected++;
             }
-            return rejected;
+        }
+
+        // How many of each prefab every sector of the 3x3 block is still short: its census baseline
+        // less what stands there now. A replayed node that matches no survivor is kept only while
+        // its own sector is owed one, so a replay can bring a chunk back up to its baseline and
+        // never past it, whatever the candidates look like.
+        //
+        // Per sector rather than for the chunk being reset, because that is how the census is kept:
+        // a node right on the +32 edge rounds into the neighbouring sector (see
+        // ZoneProtectionScan.TrackedVegetationPositions), and both its count and its loss are that
+        // sector's. A sector with no record for the prefab has no baseline to be short of.
+        private sealed class RegrowthBudget {
+            private readonly Dictionary<Vector2s, Dictionary<int, ushort>> census;
+            private readonly Dictionary<Vector2s, Dictionary<int, int>> owed = new Dictionary<Vector2s, Dictionary<int, int>>();
+
+            // census must have been taken before any ghost was placed: ghosts enter the sector index
+            // as they are created, and counting them would make every sector look whole.
+            internal RegrowthBudget(Dictionary<Vector2s, Dictionary<int, ushort>> census) {
+                this.census = census;
+            }
+
+            internal bool TryClaim(Vector3 position, int prefabHash) {
+                Vector2s sector = ZoneSystem.GetZone(position);
+                // Only the sectors the census covered. Nothing the replay places should land outside
+                // the block, and anything that did would have no count to be short of.
+                if (census.TryGetValue(sector, out Dictionary<int, ushort> counts) == false) { return false; }
+                if (owed.TryGetValue(sector, out Dictionary<int, int> bySector) == false) {
+                    bySector = new Dictionary<int, int>();
+                    owed[sector] = bySector;
+                }
+                if (bySector.TryGetValue(prefabHash, out int left) == false) {
+                    left = 0;
+                    if (LocationResetState.TryGetEntry(sector, prefabHash, out LocationResetState.EntryRecord record)) {
+                        counts.TryGetValue(prefabHash, out ushort present);
+                        left = Mathf.Max(0, record.Baseline - present);
+                    }
+                }
+                if (left <= 0) {
+                    bySector[prefabHash] = 0;
+                    return false;
+                }
+                bySector[prefabHash] = left - 1;
+                return true;
+            }
         }
 
         // Claims the nearest surviving node within the epsilon and removes it from the pool, so no two
@@ -1821,6 +1905,8 @@ namespace StarLevelSystem.modules.LocationReset {
                                                                            bool force, ZoneResetReport report, out List<int> dueHashes) {
             List<ZoneSystem.ZoneVegetation> due = new List<ZoneSystem.ZoneVegetation>();
             dueHashes = new List<int>();
+            // Censused on the first entry that gets as far as needing it, once for the whole list.
+            Dictionary<int, ushort> live = null;
 
             foreach (ZoneSystem.ZoneVegetation veg in ZoneSystem.instance.m_vegetation) {
                 if (veg?.m_prefab == null) { continue; }
@@ -1852,7 +1938,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
                 if (entry.Enabled == false) { continue; }
 
-                if (force == false && LocationResetState.TryGetEntry(zone, hash, out LocationResetState.EntryRecord record)) {
+                bool recorded = LocationResetState.TryGetEntry(zone, hash, out LocationResetState.EntryRecord record);
+                if (force == false && recorded) {
                     long now = LocationResetState.Now;
                     if (record.Stamp > 0 && entry.IsDue(record.Stamp, now, report.RateMultiplier) == false) {
                         report.VegetationEntriesSkipped++;
@@ -1863,12 +1950,28 @@ namespace StarLevelSystem.modules.LocationReset {
                         }
                         continue;
                     }
-                    // Nothing missing here, nothing to regenerate.
-                    if (record.Baseline == 0) {
-                        report.VegetationEntriesSkipped++;
-                        report.Detail($"vegetation '{entry.Name}' skipped - nothing missing (baseline 0)");
-                        continue;
-                    }
+                }
+
+                // Only what is actually missing, forced or not. The replay does not reproduce world
+                // generation's nodes (see RegenerateVegetation), so replaying an entry with nothing
+                // missing never restores anything -- it can only add a second layout. That used to be
+                // the usual case: a location coming due replayed every vegetation entry in its chunk.
+                //
+                // No record means no baseline to be missing anything from. RecordBaseline censuses the
+                // chunk after this pass, which is what lets the next one judge it.
+                if (recorded == false) {
+                    report.Detail($"vegetation '{entry.Name}' skipped - no census baseline yet");
+                    continue;
+                }
+                if (record.Baseline == 0) {
+                    report.Detail($"vegetation '{entry.Name}' skipped - nothing missing (baseline 0)");
+                    continue;
+                }
+                if (live == null) { live = ZoneProtectionScan.CensusZone(zone); }
+                live.TryGetValue(hash, out ushort present);
+                if (present >= record.Baseline) {
+                    report.Detail($"vegetation '{entry.Name}' skipped - nothing missing ({present} of {record.Baseline})");
+                    continue;
                 }
 
                 // Enabled by definition now -- only enabled entries reach here -- so the clone needs

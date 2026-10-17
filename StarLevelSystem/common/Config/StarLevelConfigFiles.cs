@@ -900,7 +900,7 @@ namespace StarLevelSystem.common {
 #     MaxZonesPerSecondFastLane: 200        # ZDO-only refreshes
 #     MaxZonesPerSecondSlowLane: 2          # resets that must load the zone
 #     AdaptiveBackoffFrameMs: 50            # over this frame time, halve the budget next tick
-#     ZdoGrowthTolerance: 0                 # ZDOs a reset may leak before it is reported in the log
+#     ZdoGrowthTolerance: 0                 # ZDOs a reset may add beyond what it restored before it is reported in the log
 #
 # --- Targets registered by other mods ---
 # Mods can register their own reset targets through the Star Level System API - a mod that adds

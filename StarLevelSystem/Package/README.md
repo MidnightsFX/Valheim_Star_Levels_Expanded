@@ -732,10 +732,12 @@ How it works:
   re-tried a couple of times a few minutes later rather than losing its whole cycle.
 - **Locations are restored, not re-rolled.** The original position and rotation are kept, so
   buildings never rotate, shift or clip into the terrain after a reset.
-- **Ore, pickables and vegetation come back in exactly their original spots**, because placement is
-  replayed using the world's own generation seed. Replaying it re-places every node in the chunk, so
-  the ones still standing are matched by position and discarded rather than stacked on top of the
-  survivor — `sls-loc-audit` will tell you if any ever slip through.
+- **Ore, pickables and vegetation only come back when something is actually missing**, and never
+  past the amount the chunk had. Placement is replayed using the world's own generation seed, which
+  re-places every node in the chunk: the ones still standing are matched by position and discarded
+  rather than stacked on top of the survivor, and of the rest only as many are kept as went missing.
+  A regrown node lands where world generation would put one, though not always on the exact spot the
+  lost one stood — `sls-loc-audit` will tell you if any duplicates ever slip through.
 - **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels. Only a player
   inside a dungeon holds its interior back. If players have built around the entrance, the interior
   is still rebuilt and the entrance is left exactly as it is; tombstones, dropped items and player
@@ -923,11 +925,16 @@ Locations:
 was not reset inside it, including the reason anything was skipped:
 
 ```
-Zone -12,34 @ x=-768 z=2176 (BlackForest) reset: refreshed pickables 14, minerock 3 | location 'Crypt2' rebuilt (cleared 214, spawned 218) | ZDO 402->405
+Zone -12,34 @ x=-768 z=2176 (BlackForest) reset: refreshed pickables 14, minerock 3 | location 'Crypt2' rebuilt (cleared 214, spawned 218) | ZDO 402->405, 4 restored
+Zone -11,34 @ x=-704 z=2176 (Meadows) reset: vegetation 6 objects across 1 entries (68 duplicates rejected, 9 not missing) | ZDO 1531->1537, 6 restored
 Zone -12,35 @ x=-768 z=2240 (Meadows) skipped: protected by PlayerBuiltPiece 'wood_floor' at x=-742 z=2251
 Zone -12,36 @ x=-768 z=2304 (Meadows) nothing reset: location 'FireHole' not due, 3 vegetation entries not due
 Zone -9,40 @ x=-576 z=2560 (BlackForest) reset: location 'Crypt3' interior rebuilt, surface left as it was (protected by Portal 'portal_wood' (built by 8FA31C02) at x=-561 z=2577, within 30m) (cleared 188, spawned 190, 12 surface copies dropped)
 ```
+
+The `ZDO` figure is the object count of the chunk and its neighbours before and after the reset, and
+`restored` is how much of that was missing content coming back. A reset that grows the count past
+what it restored is warned about in the BepInEx log.
 
 Turn this off with `EnableLocationResetLog`. `EnableDebugLocationResetDetails` additionally copies
 the background sweep's chunk lines into the BepInEx log and expands every record with a per-entry

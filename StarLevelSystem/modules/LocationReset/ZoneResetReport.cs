@@ -116,8 +116,10 @@ namespace StarLevelSystem.modules.LocationReset {
 
         // Tier 2. VegetationDuplicatesRejected is the replayed nodes that landed on something still
         // standing and were dropped again; a non-zero count here is the system working, not failing.
+        // VegetationNotMissing is the rest of the replay's surplus: nodes standing nowhere, but in a
+        // sector the census says is not short of their prefab, so keeping them would only grow it.
         internal int VegetationEntriesReset, VegetationEntriesSkipped, VegetationObjects;
-        internal int VegetationDuplicatesRejected;
+        internal int VegetationDuplicatesRejected, VegetationNotMissing;
 
         // Reset group the location's timer came from, so the log answers "why is this on a 48h
         // timer" and shows when a distance-scoped group took over.
@@ -148,12 +150,35 @@ namespace StarLevelSystem.modules.LocationReset {
         // means a stale one outlived the clear -- which is exactly what this counter is for.
         internal int DoorsSealed;
 
-        // Block ZDO totals either side of a regeneration; a faithful restore leaves them equal.
-        // Interior is tracked apart from the surface because a regenerated dungeon legitimately comes
-        // back with a different room layout, so its delta is reported but never treated as drift.
+        // Surface objects a full location rebuild put back beyond what the location still had: its
+        // fresh copy less the objects carrying its stamp beforehand. What the location was missing,
+        // in other words, and so growth the rebuild is entitled to.
+        internal int LocationOwed;
+
+        // Block ZDO totals either side of a regeneration. A faithful restore grows them by exactly
+        // what was missing and came back (ZdoOwed); anything past that is drift. Interior is tracked
+        // apart from the surface because a regenerated dungeon legitimately comes back with a
+        // different room layout, so its delta is reported but never treated as drift.
         internal int ZdoBefore, ZdoAfter;
         internal int ZdoInteriorBefore, ZdoInteriorAfter;
         internal bool ZdoCounted;
+
+        // Growth this pass was entitled to: the vegetation it kept, which RegrowthBudget never lets
+        // past what the census said was missing, plus LocationOwed.
+        internal int ZdoOwed {
+            get { return VegetationObjects + LocationOwed; }
+        }
+
+        // Growth past what was owed. Never negative: a reset that also cleared litter or strays
+        // shrinks the block legitimately, and that must not offset a leak elsewhere in the count.
+        // Always 0 for an adopted zone, which is live -- creatures spawn and items drop between the
+        // two samples -- so its count says nothing about the reset.
+        internal int ZdoDrift {
+            get {
+                if (ZdoCounted == false || ZoneAdopted) { return 0; }
+                return Mathf.Max(0, (ZdoAfter - ZdoBefore) - ZdoOwed);
+            }
+        }
 
         private List<string> details;
 
@@ -214,15 +239,23 @@ namespace StarLevelSystem.modules.LocationReset {
                 if (ContainersRefreshed > 0) { inPlace.Add($"containers {ContainersRefreshed}"); }
                 if (inPlace.Count > 0) { parts.Add("refreshed " + string.Join(", ", inPlace)); }
 
-                if (VegetationObjects > 0 || VegetationDuplicatesRejected > 0) {
-                    string duplicates = VegetationDuplicatesRejected > 0
-                        ? $" ({VegetationDuplicatesRejected} duplicates rejected)" : "";
-                    parts.Add($"vegetation {VegetationObjects} objects across {VegetationEntriesReset} entries{duplicates}");
+                if (VegetationObjects > 0 || VegetationDuplicatesRejected > 0 || VegetationNotMissing > 0) {
+                    List<string> dropped = new List<string>();
+                    if (VegetationDuplicatesRejected > 0) { dropped.Add($"{VegetationDuplicatesRejected} duplicates rejected"); }
+                    if (VegetationNotMissing > 0) { dropped.Add($"{VegetationNotMissing} not missing"); }
+                    string rejected = dropped.Count > 0 ? $" ({string.Join(", ", dropped)})" : "";
+                    parts.Add($"vegetation {VegetationObjects} objects across {VegetationEntriesReset} entries{rejected}");
                 }
                 if (IgnoredPiecesCleared > 0) { parts.Add($"cleared {IgnoredPiecesCleared} ignored pieces"); }
                 if (TerrainModificationsUndone > 0) { parts.Add($"terrain {TerrainModificationsUndone} reverted"); }
                 parts.Add(DescribeLocation());
-                if (ZdoCounted) { parts.Add($"ZDO {ZdoBefore}->{ZdoAfter}"); }
+                if (ZdoCounted) {
+                    // Owed and drift only when non-zero, so the common "nothing came back" line keeps
+                    // its old shape and a drifting chunk stands out.
+                    string owed = ZdoOwed > 0 ? $", {ZdoOwed} restored" : "";
+                    string drift = ZdoDrift > 0 ? $", {ZdoDrift} unexplained" : "";
+                    parts.Add($"ZDO {ZdoBefore}->{ZdoAfter}{owed}{drift}");
+                }
                 // Only when there is an interior to talk about; most chunks have none.
                 if (ZdoCounted && (ZdoInteriorBefore > 0 || ZdoInteriorAfter > 0)) {
                     parts.Add($"interior {ZdoInteriorBefore}->{ZdoInteriorAfter}");

@@ -82,6 +82,13 @@ namespace StarLevelSystem.modules.Loot {
                 ).ThrowIfNotMatch("Unable to patch Character drop generator, amount branch anchor.")
                 .Advance(2).InsertAndAdvance(
                     Transpilers.EmitDelegate(OverrideLootScalingEnabler)
+                )
+                // Amount branch, second gate: `&& !drop.m_levelMultiplierNotAmount`, read once in GenerateDropList.
+                .MatchStartForward(
+                    new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(CharacterDrop.Drop), nameof(CharacterDrop.Drop.m_levelMultiplierNotAmount)))
+                ).ThrowIfNotMatch("Unable to patch Character drop generator, amount-only gate.")
+                .Advance(1).InsertAndAdvance(
+                    Transpilers.EmitDelegate(OverrideLevelMultiplierNotAmount)
                 ).MatchStartForward(
                     new CodeMatch(OpCodes.Ldloc_S),
                     new CodeMatch(OpCodes.Ldc_I4_S),
@@ -95,6 +102,14 @@ namespace StarLevelSystem.modules.Loot {
             private static bool OverrideLootScalingEnabler(bool defaultlootLevelMultiplier) {
                 if (ValConfig.ScaleAllLootByLevel.Value) { return true; }
                 return defaultlootLevelMultiplier;
+            }
+
+            // Vanilla sets m_levelMultiplierNotAmount on drops whose chance grows with level but whose amount does not,
+            // such as trophies. Overriding m_levelMultiplier alone left those at one, so ScaleAllLootByLevel clears
+            // this gate too.
+            private static bool OverrideLevelMultiplierNotAmount(bool levelMultiplierNotAmount) {
+                if (ValConfig.ScaleAllLootByLevel.Value) { return false; }
+                return levelMultiplierNotAmount;
             }
 
             // Chance multiplier for the vanilla chance branch, written by DetermineLootScale at the

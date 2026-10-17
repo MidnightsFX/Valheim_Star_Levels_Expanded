@@ -55,7 +55,7 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static long LocationsHeldByPlayers = 0;
         internal static long LocationsHeldByBuilds = 0;
         internal static long InteriorOnlyResets = 0;
-        internal static long ZdoGrowthTotal = 0;
+        internal static long ZdoDriftTotal = 0;
         internal static double SweepStartedAt = 0d;
         internal static string LastAction = "idle";
 

@@ -1295,10 +1295,11 @@ namespace StarLevelSystem.common
             // If the server's average frame time exceeds this, halve the budget next tick.
             [DefaultValue(50f)]
             public float AdaptiveBackoffFrameMs { get; set; } = 50f;
-            // A true restore returns a chunk to its baseline ZDO count. Growth above this tolerance is
-            // reported in the log and counted towards the cumulative drift figure, but does not defer
-            // the zone -- the reset itself completed, and suppressing the zone's bookkeeping over a
-            // drift reading is what previously left its census permanently stale.
+            // A true restore grows a chunk by exactly what was missing and came back. Growth past that
+            // counts towards the cumulative drift figure, and above this tolerance is reported in the
+            // log, but does not defer the zone -- the reset itself completed, and suppressing the
+            // zone's bookkeeping over a drift reading is what previously left its census permanently
+            // stale.
             [DefaultValue(0)]
             public int ZdoGrowthTolerance { get; set; } = 0;
         }

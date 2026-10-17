@@ -175,7 +175,7 @@ namespace StarLevelSystem.modules.LocationReset {
             sb.AppendLine($"Interior-only      : {LocationResetManager.InteriorOnlyResets}");
             sb.AppendLine($"Short retries      : {LocationResetManager.RetriedZones} " +
                 $"({LocationResetManager.RetriesExhaustedZones} gave up after {LocationResetState.MaxTransientRetries})");
-            sb.AppendLine($"Cumulative ZDO drift: {LocationResetManager.ZdoGrowthTotal} (expected 0)");
+            sb.AppendLine($"Cumulative ZDO drift: {LocationResetManager.ZdoDriftTotal} (expected 0)");
 
             // Projected time to work through every generated zone at the current observed rate. This
             // is the number to check against the "half a world per week" target.

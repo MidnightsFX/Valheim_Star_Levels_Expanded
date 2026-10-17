@@ -657,9 +657,9 @@ namespace StarLevelSystem.modules.UI {
                 chance = CustomLootChance(drop, lt, level, ring);
             } else {
                 LootScale s = LootScaleAt(lt, level, ring);
-                // The amount branch also scales a drop that opts out, once ScaleAllLootByLevel is on; the chance
-                // branch keeps vanilla's gate either way.
-                bool scales = drop.ScalesWithLevel || lt.scaleAllLoot;
+                // The amount branch also scales a drop that opts out, or that scales only its chance, once
+                // ScaleAllLootByLevel is on; the chance branch keeps vanilla's gate either way.
+                bool scales = (drop.ScalesWithLevel && drop.ChanceOnly == false) || lt.scaleAllLoot;
                 amountMin = scales ? s.AmountMin : 1f;
                 amountMax = scales ? s.AmountMax : 1f;
                 // The low end of the multiplier: the chance branch reads the same single roll the amounts do, so a ring
@@ -726,6 +726,9 @@ namespace StarLevelSystem.modules.UI {
             internal int Max = 1;
             internal float Chance = 1f;
             internal bool ScalesWithLevel = true;
+            // Vanilla's m_levelMultiplierNotAmount: the level raises this drop's chance but not its amount, unless
+            // ScaleAllLootByLevel is on. Trophies are marked this way.
+            internal bool ChanceOnly;
             // Set for a drop that comes from a creature's own table in LootSettings.yaml. Those scale by their own
             // per-drop factors instead of the multiplier the whole creature shares.
             internal bool Custom;
@@ -745,7 +748,7 @@ namespace StarLevelSystem.modules.UI {
         private static List<LootSampleDrop> LootSampleStandIn() {
             return new List<LootSampleDrop>() {
                 new LootSampleDrop { Name = ConfigUI.L("$sls_cfg_loot_stand_in_stack"), Min = 3, Max = 5 },
-                new LootSampleDrop { Name = ConfigUI.L("$sls_cfg_loot_stand_in_trophy"), Chance = 0.25f },
+                new LootSampleDrop { Name = ConfigUI.L("$sls_cfg_loot_stand_in_trophy"), Chance = 0.25f, ChanceOnly = true },
             };
         }
 
@@ -785,8 +788,9 @@ namespace StarLevelSystem.modules.UI {
                 Max = drop.m_amountMax,
                 Chance = drop.m_chance,
                 // m_dontScale only picks the roll vanilla uses for the base amount; m_levelMultiplier is the gate
-                // the level scaling itself sits behind.
+                // the level scaling itself sits behind, and m_levelMultiplierNotAmount keeps it off the amount.
                 ScalesWithLevel = drop.m_levelMultiplier,
+                ChanceOnly = drop.m_levelMultiplierNotAmount,
                 // That roll is the one Game.ScaleDrops applies the world's resource rate in.
                 WorldScaled = drop.m_dontScale == false && WorldRates.ScalesWithResourceRate(drop.m_prefab),
             };

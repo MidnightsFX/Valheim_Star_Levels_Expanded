@@ -738,7 +738,10 @@ namespace StarLevelSystem.common {
         }
 
         public static IEnumerator OnServerReceivedNemesisBossAdd(long sender, ZPackage package) {
-            ApplyNemesisBossAdd(package.ReadString(), sender);
+            // The sender gets it back too: the creating client only sends the boss here and never adds it to its own
+            // pool, so excluding it left the miniboss missing on the machine of the player it was made from.
+            // OnClientReceiveMiniBossAdd drops a boss it already has.
+            ApplyNemesisBossAdd(package.ReadString(), ZNet.GetUID());
             yield return null;
         }
 
@@ -748,9 +751,9 @@ namespace StarLevelSystem.common {
         }
 
         // Authoritatively add a nemesis miniboss to the shared pool, persist it, and propagate it
-        // to every peer except senderToExclude. Called both from the server RPC handler (excluding
-        // the originating client) and directly on a host/listen-server, where GetServerPeer() is
-        // null so there is no server peer to send an RPC to. Pass ZNet.GetUID() to exclude nobody.
+        // to every peer except senderToExclude. Called both from the server RPC handler and directly
+        // on a host/listen-server, where GetServerPeer() is null so there is no server peer to send an
+        // RPC to. Both pass ZNet.GetUID(), which excludes nobody.
         internal static void ApplyNemesisBossAdd(string yaml, long senderToExclude) {
             // Nothing is added, persisted or forwarded for a payload that does not parse: a null entry would be written
             // into the pool and the file.

@@ -572,11 +572,10 @@ namespace StarLevelSystem.modules.UI {
                         Logger.LogWarning($"Modifier {entry.Key} has no definition, skipping its hud icon.");
                         continue;
                     }
-                    if (cmd.StarVisual != null) {
-                        if (CreatureModifiersData.LoadedModifierSprites.ContainsKey(cmd.StarVisual)) {
-                            Sprite starSprite = CreatureModifiersData.LoadedModifierSprites[cmd.StarVisual];
-                            starReplacements.Add(star, starSprite);
-                        }
+                    // A null or destroyed sprite (an API mod's sprite can be destroyed after it was cached) would
+                    // draw as a white box; leaving the slot out falls through to the default star below.
+                    if (cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.TryGetValue(cmd.StarVisual, out Sprite starSprite) && starSprite != null) {
+                        starReplacements.Add(star, starSprite);
                     }
                     star++;
                 }

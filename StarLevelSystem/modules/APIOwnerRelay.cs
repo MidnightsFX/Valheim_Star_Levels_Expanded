@@ -111,10 +111,18 @@ namespace StarLevelSystem.modules {
                 // Unowned by now: the same rule the caller follows. The setter below claims it.
             }
 
+            // The stat values in these calls are checked where every setter applies them (CreatureStatOverrides.Apply);
+            // the level and modifier type are checked here, as they arrive from another peer.
             switch (op) {
-                case Op.SetLevel:
-                    APIReciever.UpdateCreatureLevel(chara, args.ReadInt());
-                    break;
+                case Op.SetLevel: {
+                        int level = args.ReadInt();
+                        if (level < 1) {
+                            Logger.LogWarning($"SLS-API: dropping a replayed {op} for {chara.name}: {level} is not a creature level.");
+                            break;
+                        }
+                        APIReciever.UpdateCreatureLevel(chara, level);
+                        break;
+                    }
                 case Op.SetSpawnManaged:
                     APIReciever.SetCreatureSpawnManaged(chara, args.ReadBool());
                     break;
@@ -156,7 +164,12 @@ namespace StarLevelSystem.modules {
                 case Op.AddModifier: {
                         string modifierName = args.ReadString();
                         int modifierType = args.ReadInt();
-                        APIReciever.AddModifierToCreature(chara, modifierName, modifierType, args.ReadBool());
+                        bool update = args.ReadBool();
+                        if (Enum.IsDefined(typeof(DataObjects.ModifierType), modifierType) == false) {
+                            Logger.LogWarning($"SLS-API: dropping a replayed {op} for {chara.name}: {modifierType} is not a modifier type.");
+                            break;
+                        }
+                        APIReciever.AddModifierToCreature(chara, modifierName, modifierType, update);
                         break;
                     }
                 default:

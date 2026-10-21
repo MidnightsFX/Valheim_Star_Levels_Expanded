@@ -120,6 +120,9 @@ namespace StarLevelSystem.modules.UI {
                         value.m_level3?.gameObject?.SetActive(false);
                     }
                 } else {
+                    // Another mod can skip ShowHud for a boss (its prefix returning false), which leaves no hud built
+                    // for it here, so there is nothing to reparent.
+                    if (value == null || value.m_gui == null || UIHudControl.BossHudRoot == null) { return; }
                     // Boss hud, setup elements
                     // Reparent to our container
                     // It is important that the world position is NOT KEPT. This allows existing, but extremely fragile scale settings to be kept

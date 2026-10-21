@@ -145,9 +145,13 @@ namespace StarLevelSystem.modules.Loot {
 
                 float min;
                 float max;
+                // The linear styles add their scale once per star on top of a 1x base, as MultiplyLootPerLevel does, so a
+                // starred creature never multiplies its drops by less than a 0-star one. The default scale of 1 still
+                // gives level x the vanilla amount.
+                int stars = char_level - 1;
                 if (LootStyles.SelectedLootFactor == LootFactorType.PerLevel) {
-                    min = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
-                    max = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                    min = 1f + stars * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                    max = 1f + stars * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
                 } else if (LootStyles.SelectedLootFactor == LootFactorType.Exponential) {
                     // Implicit 1x base plus the per-level scale, raised to the star count (level-1) so a
                     // 0-star creature stays 1x. Matches ExponentLootPerLevel's effective base of
@@ -159,19 +163,22 @@ namespace StarLevelSystem.modules.Loot {
                     // Chance gate + linear amounts: drop amounts scale exactly like PerLevel, while the
                     // chance branch multiplies by a configurable per-level ramp instead of the amount
                     // multiplier (see ChanceScaleOverride).
-                    min = char_level * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
-                    max = char_level * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                    min = 1f + stars * (distance_bonus.MinAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
+                    max = 1f + stars * (distance_bonus.MaxAmountScaleFactorBonus + ValConfig.PerLevelLootScale.Value);
                 } else {
                     // Fallback just leveled loot scale without distance bonus
                     // With a min of 1 to prevent 0 drops
-                    min = char_level * ValConfig.PerLevelLootScale.Value;
-                    max = char_level * ValConfig.PerLevelLootScale.Value;
+                    min = 1f + stars * ValConfig.PerLevelLootScale.Value;
+                    max = 1f + stars * ValConfig.PerLevelLootScale.Value;
                 }
                 // Clamp before rounding: Pow can reach float Infinity at very high max levels, and the
                 // vanilla body multiplies drop amounts by this value in int math.
                 min = Mathf.Min(min, LootStyles.MaxLootScaleResult);
                 max = Mathf.Min(max, LootStyles.MaxLootScaleResult);
-                int result = Mathf.RoundToInt(UnityEngine.Random.Range(min, max));
+                // A linear multiplier rounds up with the chance of its fraction, so 1.5 per star averages 1.5 rather than
+                // always rounding to 2. Exponential keeps rounding to the nearest, as ExponentLootPerLevel does.
+                float roll = UnityEngine.Random.Range(min, max);
+                int result = LootStyles.SelectedLootFactor == LootFactorType.Exponential ? Mathf.RoundToInt(roll) : LootStyles.RandomRound(roll);
                 if (result < 1) { result = 1; }
                 if (ValConfig.EnableDebugLootDetails.Value) {
                     string chanceDetail = LootStyles.SelectedLootFactor == LootFactorType.ChancePerLevel ? $" Chance multiplier {chancePerLevelChanceMultiplier}." : "";

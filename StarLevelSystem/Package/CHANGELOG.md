@@ -1,3 +1,15 @@
+**1.26.4**
+ ---
+ ```
+- Eitr draining creatures now show their own icon and name.
+- Fixes a nemesis miniboss never reaching the player it was made from on a dedicated server.
+- Fixes starred creatures sometimes dropping less loot than unstarred ones, and small loot gains per star are no longer rounded away.
+- Location resets no longer delete items and pieces from mods the server does not have installed.
+- Fixes reset locations being rebuilt slightly turned after a server restart, which could leave old spawners behind.
+- Fixes an error with boss health bars when another mod changes them.
+- Adds a Vietnamese translation.
+ ```
+
 **1.26.3**
  ---
  ```

@@ -70,6 +70,7 @@
     <None Remove="Localization\Thai.json" />
     <None Remove="Localization\Turkish.json" />
     <None Remove="Localization\Ukrainian.json" />
+    <None Remove="Localization\Vietnamese.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -109,6 +110,7 @@
     <EmbeddedResource Include="Localization\Thai.json" />
     <EmbeddedResource Include="Localization\Turkish.json" />
     <EmbeddedResource Include="Localization\Ukrainian.json" />
+    <EmbeddedResource Include="Localization\Vietnamese.json" />
   </ItemGroup>
 
   <ItemGroup>

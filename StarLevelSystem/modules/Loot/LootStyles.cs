@@ -377,26 +377,32 @@ namespace StarLevelSystem.modules.Loot {
         }
 
         // This builds the total amount of loot from this style of loot modification
-        // Loot amount x level x modifiers
+        // Loot amount x (1 + stars x PerLevelLootScale x (factor + distance bonus))
+        // The 1x base is what a 0-star creature drops; each star adds to it. Scaling the whole level instead
+        // (level x scale x factor) also scaled that base, so a factor under 0.5 made a 1-star creature drop less
+        // than a 0-star one: the Oozer's iron scrap (factor 0.2) became 0.4 and rounded to nothing. At the
+        // default scale of 1 and factor of 1 both forms are level x the amount.
         private static int MultiplyLootPerLevel(int lootDrop_amount, int level, DistanceLootModifier damageMod, float scale_factor = 1f, StringBuilder detail = null) {
-            if (level == 1) {
+            if (level <= 1) {
                 // no scaling for level 1, just return the base loot amount
                 if (detail != null) { detail.AppendLine($"  level 1: no per-level scaling, amount stays {lootDrop_amount}."); }
                 return lootDrop_amount;
             }
-            float min_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + damageMod.MinAmountScaleFactorBonus);
-            float max_drop_scale = (level * ValConfig.PerLevelLootScale.Value) * (scale_factor + damageMod.MaxAmountScaleFactorBonus);
+            int stars = level - 1;
+            float min_drop_scale = 1f + stars * ValConfig.PerLevelLootScale.Value * (scale_factor + damageMod.MinAmountScaleFactorBonus);
+            float max_drop_scale = 1f + stars * ValConfig.PerLevelLootScale.Value * (scale_factor + damageMod.MaxAmountScaleFactorBonus);
             // If its the same no need to randomize
-            if (min_drop_scale == max_drop_scale) {
-                int result = Mathf.RoundToInt(min_drop_scale * lootDrop_amount);
-                AppendOrLog(detail, $"  MultiplyLootPerLevel {result} = base {lootDrop_amount} * {min_drop_scale} scale from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus:{damageMod.MinAmountScaleFactorBonus})");
-                return result;
-            }
-            int min_drop = Mathf.RoundToInt(min_drop_scale * lootDrop_amount);
-            int max_drop = Mathf.RoundToInt(max_drop_scale * lootDrop_amount);
-            int randomized_result = UnityEngine.Random.Range(min_drop, max_drop);
-            AppendOrLog(detail, $"  MultiplyLootPerLevel {randomized_result} picked from [{min_drop}..{max_drop}) = base {lootDrop_amount} * scale min:{min_drop_scale}/max:{max_drop_scale} from (lvl:{level} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus min:{damageMod.MinAmountScaleFactorBonus}/max:{damageMod.MaxAmountScaleFactorBonus})");
-            return randomized_result;
+            float drop_scale = min_drop_scale == max_drop_scale ? min_drop_scale : UnityEngine.Random.Range(min_drop_scale, max_drop_scale);
+            int result = RandomRound(Mathf.Clamp(drop_scale * lootDrop_amount, 0f, MaxLootScaleResult));
+            AppendOrLog(detail, $"  MultiplyLootPerLevel {result} = base {lootDrop_amount} * {drop_scale} scale (picked from {min_drop_scale}..{max_drop_scale}) from 1 + (stars:{stars} * PerLevelLootScale:{ValConfig.PerLevelLootScale.Value}) * (factor:{scale_factor} + scaleFactorBonus min:{damageMod.MinAmountScaleFactorBonus}/max:{damageMod.MaxAmountScaleFactorBonus})");
+            return result;
+        }
+
+        // Rounds up with the probability of the fraction, so a scaled amount averages exactly what was computed:
+        // 1.2 gives 1 four times in five and 2 the fifth, where rounding to the nearest always gave 1.
+        internal static int RandomRound(float value) {
+            int whole = Mathf.FloorToInt(value);
+            return UnityEngine.Random.value < value - whole ? whole + 1 : whole;
         }
 
         private static int ExponentLootPerLevel(int lootDrop_amount, int level, DistanceLootModifier damageMod, float scale_factor = 1, StringBuilder detail = null) {

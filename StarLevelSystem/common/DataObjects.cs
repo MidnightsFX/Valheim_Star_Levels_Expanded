@@ -842,7 +842,7 @@ namespace StarLevelSystem.common
             public GameObject SecondaryEffectAPI { get; set; }
 
             // TODO: Add fallbacks to load prefabs that are not in the embedded resource bundle
-            public void LoadAndSetGameObjects() {
+            public void LoadAndSetGameObjects(string modifierName) {
                 if (FromAPI) {
                     LoadAPIGameObjects();
                     return;
@@ -855,7 +855,13 @@ namespace StarLevelSystem.common
                     string path = $"assets/custom/starlevels/icons/{StarVisual}.png";
                     if (CreatureModifiersData.SelectedModifierDisplayStyle == ModifierDisplayStyle.Stars) { path = $"assets/custom/starlevels/icons2/{StarVisual}.png"; }
                     Sprite game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>(path);
-                    CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, game_obj);
+                    // Kept out of the cache when missing: the hud only swaps in sprites it finds there, so the
+                    // modifier keeps the default star instead of an Image with no sprite, which draws as a white box.
+                    if (game_obj == null) {
+                        Logger.LogWarning($"Modifier {modifierName} has no icon at '{path}', showing the default star instead.");
+                    } else {
+                        CreatureModifiersData.LoadedModifierSprites.Add(StarVisual, game_obj);
+                    }
                 }
                 if (VisualEffect != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(VisualEffect)) {
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(VisualEffect);

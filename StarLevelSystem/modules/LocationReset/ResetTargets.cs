@@ -601,7 +601,7 @@ namespace StarLevelSystem.modules.LocationReset {
             }
 
             Vector3 position = proxy.GetPosition();
-            Quaternion rotation = proxy.GetRotation();
+            Quaternion rotation = LocationRotation(proxy);
             float exteriorRadius = instance.m_location.m_exteriorRadius;
             float terrainRadius = TerrainRadiusFor(entry, exteriorRadius);
 
@@ -1168,6 +1168,24 @@ namespace StarLevelSystem.modules.LocationReset {
             return resealed;
         }
 
+        // The rotation the location was placed at, for the clear, the stray-spawner match and the rebuild.
+        //
+        // Vanilla places every location at a yaw on a 22.5-degree step (ZoneSystem.PlaceLocations rolls
+        // 0-15 steps, or rounds the slope direction to one). The proxy does not keep it exactly: ZDO.Save
+        // writes rotation through ZPackage.WriteSmallRotation, which truncates to half a degree, so after a
+        // world save and reload a 225-degree location can read 224.5. Used as read, the rebuild turned the
+        // whole location by that half degree, and a child 30 m out moved 0.26 m -- past the 0.25 m that
+        // CollectStraySpawners matches spawners on, so stray spawners survived. Snapped back to the step
+        // only when it is that close to one, so a location a mod placed at some other angle keeps it.
+        private const float LocationYawStep = 22.5f;
+
+        private static Quaternion LocationRotation(ZDO proxy) {
+            Vector3 angles = proxy.GetRotation().eulerAngles;
+            float stepped = Mathf.Round(angles.y / LocationYawStep) * LocationYawStep;
+            if (Mathf.Abs(Mathf.DeltaAngle(angles.y, stepped)) < 1f) { angles.y = stepped % 360f; }
+            return Quaternion.Euler(angles);
+        }
+
         // Spawners the radius sweep above could not reach.
         //
         // A location's children are placed at locationPos + locationRot * childOffset, so we know
@@ -1523,6 +1541,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // Fails closed ahead of everything else, matching WarnOnProtectionConflicts' promise that
             // ProtectedPrefabs beats an ignore list.
             if (LocationResetData.ExtraProtectedPrefabHashes.Contains(zdo.m_prefab)) { return true; }
+            if (IsUnknownPrefab(zdo)) { return true; }
             if (entry == null) { return false; }
             if (ZoneProtectionScan.TryClassify(zdo, out ProtectionCategory category) == false) { return false; }
 
@@ -1539,6 +1558,20 @@ namespace StarLevelSystem.modules.LocationReset {
             // owned content the footprint scan never classifies -- and either way, keeping it is the
             // safe side.
             return entry.ActionFor(category) != ProtectionAction.Ignore;
+        }
+
+        // An object whose prefab this machine never registered. A dedicated server loads no client-only
+        // mod, and some mods register prefabs on clients alone (EpicLoot's belt and rings among them), yet
+        // a player still drops or builds them and the server stores their ZDOs. TryClassify knows a
+        // prefab only by the components it saw on it, so an unknown hash came back unclassified -- that
+        // is, ordinary content -- and the clear destroyed it for good. Not knowing what something is
+        // is no licence to delete it, so it is kept, and each such prefab is logged once.
+        private static bool IsUnknownPrefab(ZDO zdo) {
+            if (ZNetScene.instance == null || ZNetScene.instance.GetPrefab(zdo.m_prefab) != null) { return false; }
+            if (LoggedUnknownPrefabs.Add(zdo.m_prefab)) {
+                Logger.LogLocationResetAlways($"Keeping objects with unknown prefab hash {zdo.m_prefab} (first seen at {zdo.GetPosition()}): this machine has no prefab for it, so a reset cannot tell what it is. It is usually an item or piece from a mod installed only on clients.");
+            }
+            return true;
         }
 
         // ShouldPreserve for an object carrying this location's own stamp.
@@ -1897,8 +1930,12 @@ namespace StarLevelSystem.modules.LocationReset {
         // than once per chunk across an eighty-thousand-chunk sweep.
         private static readonly HashSet<int> LoggedDisabledVegetation = new HashSet<int>();
 
-        internal static void ResetVegetationDiagnostics() {
+        // Unknown prefab hashes IsUnknownPrefab has already reported, once per world for the same reason.
+        private static readonly HashSet<int> LoggedUnknownPrefabs = new HashSet<int>();
+
+        internal static void ResetDiagnostics() {
             LoggedDisabledVegetation.Clear();
+            LoggedUnknownPrefabs.Clear();
         }
 
         private static List<ZoneSystem.ZoneVegetation> SelectDueVegetation(Vector2s zone, LocationResetConfigSnapshot cfg,

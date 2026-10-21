@@ -146,6 +146,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
         // to everyone. False when the creature has no live ZDO to work from.
         internal static bool Apply(Character chara, StatGroup group, Dictionary<int, float?> stats) {
             if (chara == null || chara.m_nview == null || chara.m_nview.IsValid() == false) { return false; }
+            if (ValidStats(chara, group, stats) == false) { return false; }
             bool owner = chara.m_nview.IsOwner();
             // The owner writes first, so its rebuild below already reads the new values back.
             if (owner) { Store(chara, group, stats); }
@@ -184,6 +185,35 @@ namespace StarLevelSystem.modules.CreatureSetup {
             SizeModifications.SetSizeModification(chara.gameObject, chara.m_nview, entry, true);
             HealthModifications.ForceApplyHealthModifications(chara, entry);
             UIHudControl.InvalidateCacheEntry(chara);
+            return true;
+        }
+
+        // Every caller's values pass through here, including other peers' RPCs, so none are taken on trust. A stat number
+        // outside its group's enum was cast and stored on the ZDO under a key nothing reads back, and a NaN or infinite
+        // value spread into every stat built from it - a NaN health leaves a creature that cannot be killed. The whole
+        // call is refused rather than applied in part.
+        private static bool ValidStats(Character chara, StatGroup group, Dictionary<int, float?> stats) {
+            if (stats == null) { return false; }
+            Type keys;
+            switch (group) {
+                case StatGroup.Base: keys = typeof(CreatureBaseAttribute); break;
+                case StatGroup.PerLevel: keys = typeof(CreaturePerLevelAttribute); break;
+                case StatGroup.DamageTaken:
+                case StatGroup.DamageBonus: keys = typeof(DamageType); break;
+                default:
+                    Logger.LogWarning($"Ignoring a stat change for {chara.name}: {(int)group} is not a stat group.");
+                    return false;
+            }
+            foreach (KeyValuePair<int, float?> stat in stats) {
+                if (Enum.IsDefined(keys, stat.Key) == false) {
+                    Logger.LogWarning($"Ignoring a {group} stat change for {chara.name}: {stat.Key} is not a {keys.Name}.");
+                    return false;
+                }
+                if (stat.Value.HasValue && (float.IsNaN(stat.Value.Value) || float.IsInfinity(stat.Value.Value))) {
+                    Logger.LogWarning($"Ignoring a {group} stat change for {chara.name}: {Enum.ToObject(keys, stat.Key)} was set to {stat.Value.Value}.");
+                    return false;
+                }
+            }
             return true;
         }
 

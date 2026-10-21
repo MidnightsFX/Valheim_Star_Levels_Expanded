@@ -359,9 +359,9 @@ namespace StarLevelSystem.Data
                 },
                 { ModifierNames.EitrDrain.ToString(), new CreatureModifierDefinition()
                     {
-                        NamePrefix = "$staminaDrain_prefix1",
+                        NamePrefix = "$EitrDrain_prefix1",
                         NamingConvention = NameSelectionStyle.RandomFirst,
-                        StarVisual = "eitrdrain",
+                        StarVisual = "eitrEater",
                     }
                 }
             };
@@ -903,7 +903,7 @@ namespace StarLevelSystem.Data
                     continue;
                 }
                 Logger.LogDebug($"Loading assets for: {mod}");
-                definition.LoadAndSetGameObjects();
+                definition.LoadAndSetGameObjects(mod.Key);
             }
         }
 

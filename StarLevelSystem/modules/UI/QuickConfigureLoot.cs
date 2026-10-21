@@ -389,16 +389,17 @@ namespace StarLevelSystem.modules.UI {
             RefreshLootTable(lt);
         }
 
-        // What the selected style does, in the terms the sliders above are labelled in.
+        // What the selected style does, in the terms the sliders above are labelled in. The linear styles' tokens carry a
+        // _base suffix since they gained the 1x base: a cached language file keeps its old text for a key it already has.
         private static string DescribeLootStyle(StagedLoot lt) {
             string scale = FormatLootBonus(lt.perLevelScale);
             switch (lt.style) {
                 case LootFactorType.Exponential:
                     return L("$sls_cfg_loot_style_exponential", scale);
                 case LootFactorType.ChancePerLevel:
-                    return L("$sls_cfg_loot_style_chance_per_level", scale, FormatLootBonus(lt.chanceBase), FormatLootBonus(lt.perLevelChanceScale));
+                    return L("$sls_cfg_loot_style_chance_per_level_base", scale, FormatLootBonus(lt.chanceBase), FormatLootBonus(lt.perLevelChanceScale));
                 default:
-                    return L("$sls_cfg_loot_style_per_level", scale);
+                    return L("$sls_cfg_loot_style_per_level_base", scale);
             }
         }
 
@@ -620,14 +621,14 @@ namespace StarLevelSystem.modules.UI {
             }
             if (level > 1) {
                 if (lt.style == LootFactorType.Exponential) {
-                    s.AmountMin = Mathf.Pow(1f + lt.perLevelScale + minBonus, level - 1);
-                    s.AmountMax = Mathf.Pow(1f + lt.perLevelScale + maxBonus, level - 1);
+                    s.AmountMin = RoundLootScale(Mathf.Pow(1f + lt.perLevelScale + minBonus, level - 1));
+                    s.AmountMax = RoundLootScale(Mathf.Pow(1f + lt.perLevelScale + maxBonus, level - 1));
                 } else {
-                    s.AmountMin = level * (minBonus + lt.perLevelScale);
-                    s.AmountMax = level * (maxBonus + lt.perLevelScale);
+                    // A 1x base plus the scale per star, rounded up with the chance of its fraction, so the multiplier
+                    // can land on either whole number around it.
+                    s.AmountMin = Mathf.Max(1f, RoundLootDown(1f + (level - 1) * (minBonus + lt.perLevelScale)));
+                    s.AmountMax = Mathf.Max(1f, RoundLootUp(1f + (level - 1) * (maxBonus + lt.perLevelScale)));
                 }
-                s.AmountMin = RoundLootScale(s.AmountMin);
-                s.AmountMax = RoundLootScale(s.AmountMax);
             }
             // Every style but ChancePerLevel keeps vanilla's behaviour of scaling the chance by the amount multiplier.
             if (lt.style != LootFactorType.ChancePerLevel) {
@@ -639,6 +640,16 @@ namespace StarLevelSystem.modules.UI {
 
         private static float RoundLootScale(float value) {
             return Mathf.Max(1f, Mathf.Round(Mathf.Min(value, LootStyles.MaxLootScaleResult)));
+        }
+
+        // The ends of what LootStyles.RandomRound can give for a value. The slack keeps float error in a whole
+        // result (1 + 5 x 0.2 is a hair over 2) from showing a step that never happens.
+        private static float RoundLootDown(float value) {
+            return Mathf.Floor(Mathf.Min(value, LootStyles.MaxLootScaleResult) + 0.0001f);
+        }
+
+        private static float RoundLootUp(float value) {
+            return Mathf.Ceil(Mathf.Min(value, LootStyles.MaxLootScaleResult) - 0.0001f);
         }
 
         // One drop's cell at this level: the amount range, with its chance under it when the drop is not certain.
@@ -667,8 +678,11 @@ namespace StarLevelSystem.modules.UI {
                 chance = drop.Chance * (drop.ScalesWithLevel ? s.ChanceMin : 1f);
             }
 
-            int low = Mathf.RoundToInt(Mathf.Min(baseMin * amountMin, LootStyles.MaxLootScaleResult));
-            int high = Mathf.RoundToInt(Mathf.Min(baseMax * amountMax, LootStyles.MaxLootScaleResult));
+            // MultiplyLootPerLevel rounds a custom drop's scaled amount up with the chance of its fraction; the shared
+            // multiplier above is already whole, which either rounding leaves as it is.
+            bool randomRounded = lt.style != LootFactorType.Exponential;
+            int low = randomRounded ? (int)RoundLootDown(baseMin * amountMin) : Mathf.RoundToInt(Mathf.Min(baseMin * amountMin, LootStyles.MaxLootScaleResult));
+            int high = randomRounded ? (int)RoundLootUp(baseMax * amountMax) : Mathf.RoundToInt(Mathf.Min(baseMax * amountMax, LootStyles.MaxLootScaleResult));
             // The world's Resources modifier, before the cap as on both drop paths. Vanilla scales a vanilla drop's rolled
             // amount and SLS a custom drop's scaled one, which only differ here by rounding.
             if (drop.WorldScaled) {
@@ -701,8 +715,8 @@ namespace StarLevelSystem.modules.UI {
                 min = Mathf.Pow(lt.perLevelScale + minBonus + factor, level - 1);
                 max = Mathf.Pow(lt.perLevelScale + maxBonus + factor, level - 1);
             } else {
-                min = level * lt.perLevelScale * (factor + minBonus);
-                max = level * lt.perLevelScale * (factor + maxBonus);
+                min = 1f + (level - 1) * lt.perLevelScale * (factor + minBonus);
+                max = 1f + (level - 1) * lt.perLevelScale * (factor + maxBonus);
             }
             min = Mathf.Min(min, LootStyles.MaxLootScaleResult);
             max = Mathf.Min(max, LootStyles.MaxLootScaleResult);

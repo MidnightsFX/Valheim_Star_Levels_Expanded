@@ -1,3 +1,11 @@
+**1.27.0**
+ ---
+ ```
+- Dungeon resets use less server resources, and a dungeon whose rooms fail to load is left alone with an error naming the room.
+- Reset reports now say when a location raised errors while it was being rebuilt, this can happen if a mods prefab is missing
+- New default configs now reset bear caves, the Deep North villages, dungeons and shipwrecks, and more small ruins across the earlier biomes.
+ ```
+
 **1.26.4**
  ---
  ```

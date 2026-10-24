@@ -296,15 +296,14 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
             }
 
-            // The location prefab must be fully loaded BEFORE the synchronous section. In Full mode the
-            // LocationProxy client-spawns the prefab immediately, but LocationProxy.SpawnLocation bails
-            // and retries next frame when ShouldDelayProxyLocationSpawning is true -- driven by an
-            // async asset load that is typically incomplete the first time a given location type is
-            // reset. A deferral means the terrain shaping misses SnapToGround.SnappAll entirely, which
-            // is precisely the floating-contents bug. Waiting has to happen here; RegenerateLocation
-            // cannot yield. Skipped when the location will not be rebuilt on this pass at all.
+            // The location prefab and its dungeon rooms must be loaded BEFORE the synchronous section --
+            // see LocationPreload. Loading has to happen here; RegenerateLocation cannot yield. Last
+            // before the regeneration so nothing it holds can expire in between, and skipped when the
+            // location will not be rebuilt on this pass at all.
+            LocationPreload preload = null;
             if (locationCeiling != LocationGate.Scope.None) {
-                yield return WaitForLocationPrefab(zone, cfg, cfg.MaxZoneLoadWaitSeconds);
+                yield return LocationPreload.Prepare(zone, cfg, TerrainZonesFor(zone, extraZones),
+                                                     cfg.MaxZoneLoadWaitSeconds, (p) => { preload = p; });
             }
 
             // Sampled here rather than at the top of the method: poke-loading a neighbour that was
@@ -339,12 +338,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 // Vanilla's own ordering: locations first so vegetation sees the fresh clear areas.
                 // Always called, even with no location work, so the chunk record says what the
                 // location's state is -- the gate inside decides whether anything is touched.
-                RegenerateLocation(zone, cfg, force, report, scope?.Location, extraZones);
+                RegenerateLocation(zone, cfg, force, report, scope?.Location, extraZones, preload);
                 if (plan != null) { RegenerateVegetation(zone, cfg, plan, report, extraZones); }
             } catch (System.Exception e) {
                 succeeded = false;
                 Logger.LogLocationResetError($"Reset of zone {zone.x},{zone.y} failed and will be retried: {e}");
             } finally {
+                preload?.Release();
                 // Release is a no-op for chunks this class did not load, so a neighbour that was
                 // already live (a player standing in it) is never torn down.
                 if (extraZones != null) {
@@ -502,10 +502,11 @@ namespace StarLevelSystem.modules.LocationReset {
         // too. (Radial camps still vary slightly: their wall placement collision-tests against live
         // colliders, which differ between runs.)
         //
-        // ceiling is the pre-flight LocationGate verdict (null = nothing may be touched), and
-        // extraZones the neighbour chunks RegenerateZone actually loaded for terrain.
+        // ceiling is the pre-flight LocationGate verdict (null = nothing may be touched), extraZones
+        // the neighbour chunks RegenerateZone actually loaded for terrain, and preload what it loaded
+        // for the respawn (null when it loaded nothing).
         private static void RegenerateLocation(Vector2s zone, LocationResetConfigSnapshot cfg, bool force, ZoneResetReport report,
-                                               LocationGate.Verdict ceiling, List<Vector2s> extraZones) {
+                                               LocationGate.Verdict ceiling, List<Vector2s> extraZones, LocationPreload preload) {
             ZoneSystem zs = ZoneSystem.instance;
             if (zs.m_locationInstances.TryGetValue(zone, out ZoneSystem.LocationInstance instance) == false) { return; }
             // No record for the miss above: most chunks in the world hold no location at all, and
@@ -530,7 +531,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // An explicit request for this location by name overrides the configuration lookup. The
             // caller named it, so "no group covers it" is not an answer -- see TargetOverride.
             if (cfg.TargetPrefabHash == locationHash && cfg.TargetOverride != null) {
-                RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, cfg.TargetOverride, ceiling, extraZones);
+                RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, cfg.TargetOverride, ceiling, extraZones, preload);
                 return;
             }
 
@@ -548,7 +549,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.Disabled);
                 return;
             }
-            RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, entry, ceiling, extraZones);
+            RegenerateLocationWith(zone, cfg, force, report, instance, locationHash, entry, ceiling, extraZones, preload);
         }
 
         // The reset itself, once a governing entry has been settled on. Split out so an explicitly
@@ -560,7 +561,8 @@ namespace StarLevelSystem.modules.LocationReset {
                                                    ZoneResetReport report, ZoneSystem.LocationInstance instance,
                                                    int locationHash,
                                                    LocationResetData.ResolvedResetEntry entry,
-                                                   LocationGate.Verdict ceiling, List<Vector2s> extraZones) {
+                                                   LocationGate.Verdict ceiling, List<Vector2s> extraZones,
+                                                   LocationPreload preload) {
             ZoneSystem zs = ZoneSystem.instance;
             report.GroupName = entry.GroupName;
 
@@ -660,6 +662,18 @@ namespace StarLevelSystem.modules.LocationReset {
                 return;
             }
 
+            // Everything the respawn needs has to be in memory already, or the clear goes ahead and
+            // the respawn then stalls the server loading rooms, or places a dungeon without the ones
+            // that would not load. Checked only now, so a location this pass was never going to
+            // rebuild -- held, terrain-only, interior preserved -- reports what it really was. Left
+            // un-stamped, so the next cycle tries again.
+            if (preload == null || preload.Ready == false) {
+                if (preload != null) { preload.LogProblems(zone, entry.Name); }
+                report.LocationHeldReason = preload?.Problem ?? "its prefab was not loaded for this pass";
+                report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.AssetsNotLoaded);
+                return;
+            }
+
             ZDOID oldProxyId = proxy.m_uid;
             // A zone hosts at most one location and never moves, so its coordinates are this
             // location's identity -- the same key the spawn stamps onto everything it creates.
@@ -698,15 +712,25 @@ namespace StarLevelSystem.modules.LocationReset {
             // The trade is that these are real objects, not ghosts, so we own their teardown.
             HashSet<ZDO> before = SnapshotInstances();
             List<ZDO> fresh = new List<ZDO>();
+            SpawnErrorCapture spawnErrors = new SpawnErrorCapture();
+            Application.logMessageReceived += spawnErrors.OnLog;
             try {
                 instance.m_location.m_prefab.Load();
                 zs.SpawnLocation(instance.m_location, seed, position, rotation, ZoneSystem.SpawnMode.Full, null);
             } finally {
+                Application.logMessageReceived -= spawnErrors.OnLog;
                 // Nothing here should be ghost-initing, but the flag is a global static and a throw
                 // inside vanilla would otherwise turn every subsequent spawn in the game into a ghost.
                 ZNetView.FinishGhostInit();
                 report.LocationSpawned = DestroyNewInstances(before, fresh);
                 instance.m_location.m_prefab.Release();
+            }
+            report.SpawnErrors = spawnErrors.Count;
+            report.FirstSpawnError = spawnErrors.First;
+            if (spawnErrors.Count > 0) {
+                Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y}: {spawnErrors.Count} error(s) were logged while " +
+                    $"'{entry.Name}' respawned, first: {spawnErrors.First}. The rebuild went ahead; an error raised " +
+                    "while a location spawns usually points at a fault in the mod that adds it.");
             }
 
             // Interior-only: SpawnLocation has no way to build half a location, so it built all of it.
@@ -787,6 +811,29 @@ namespace StarLevelSystem.modules.LocationReset {
             report.GroupName = entry.GroupName;
             report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.FirstSightStamped);
             return true;
+        }
+
+        // Errors Unity logs while a respawn runs. Unity catches an exception thrown from a component's
+        // Awake inside Instantiate and only logs it, so a broken prefab -- a Location flagged as having
+        // an interior with no interior prefab, for one -- never reaches the try/catch in RegenerateZone,
+        // and its rebuild used to be reported as clean. Main-thread log callbacks run synchronously
+        // inside the logging call, so subscribing around the spawn sees exactly what it raised.
+        private sealed class SpawnErrorCapture {
+            private const int MaxMessageLength = 200;
+
+            internal int Count;
+            // First line of the first one, for the chunk record.
+            internal string First;
+
+            internal void OnLog(string condition, string stackTrace, LogType type) {
+                if (type != LogType.Exception && type != LogType.Error && type != LogType.Assert) { return; }
+                Count++;
+                if (First != null) { return; }
+                string line = condition ?? "";
+                int newline = line.IndexOfAny(new char[] { '\r', '\n' });
+                if (newline >= 0) { line = line.Substring(0, newline); }
+                First = line.Length > MaxMessageLength ? line.Substring(0, MaxMessageLength) + "..." : line;
+            }
         }
 
         // ZDOs that currently have a live GameObject. Used to bracket a Full-mode spawn so exactly the
@@ -913,9 +960,6 @@ namespace StarLevelSystem.modules.LocationReset {
             return removed;
         }
 
-        // Poll vanilla's own readiness gate for this chunk's location prefab. PokeCanSpawnLocation both
-        // reports readiness and registers the load request, so calling it repeatedly is what drives the
-        // load to completion. No-op for chunks with no configured location.
         // The entry that will actually govern this chunk's location on this pass, or false when
         // nothing will touch it.
         //
@@ -944,24 +988,6 @@ namespace StarLevelSystem.modules.LocationReset {
             entry = entry.ForDistance(ZoneRates.DistanceFor(zone));
             if (entry.Enabled == false) { entry = null; return false; }
             return true;
-        }
-
-        private static IEnumerator WaitForLocationPrefab(Vector2s zone, LocationResetConfigSnapshot cfg, float maxWaitSeconds) {
-            ZoneSystem zs = ZoneSystem.instance;
-            if (zs == null) { yield break; }
-            if (GoverningLocation(zone, cfg, out ZoneSystem.LocationInstance instance, out _) == false) { yield break; }
-
-            float deadline = Time.realtimeSinceStartup + Mathf.Max(1f, maxWaitSeconds);
-            while (Time.realtimeSinceStartup < deadline) {
-                if (zs.PokeCanSpawnLocation(instance.m_location, true)) { yield break; }
-                // This wait can outlast the 4s TTL on a poked zone that has no live instances yet.
-                ZoneLoader.KeepAlive(zone);
-                yield return null;
-            }
-            // Fall through on timeout: the reset still runs, and a deferred proxy spawn is a cosmetic
-            // placement problem rather than a reason to abandon a half-cleared location.
-            Logger.LogLocationResetWarning($"Zone {zone.x},{zone.y}: location prefab '{instance.m_location.m_prefabName}' " +
-                $"did not finish loading within {maxWaitSeconds}s; its contents may be placed against unshaped terrain.");
         }
 
         // Every terrain reset has to run against LIVE TerrainComp/TerrainModifier components, which do

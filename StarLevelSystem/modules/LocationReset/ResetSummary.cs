@@ -64,6 +64,9 @@ namespace StarLevelSystem.modules.LocationReset {
         // Of LocationsRebuilt, the dungeons whose interior alone was rebuilt because something held
         // their surface back. Counted in LocationsRebuilt too: the location did come back.
         internal int LocationsInteriorOnly;
+        // Of LocationsRebuilt, the ones whose respawn logged errors. Counted in LocationsRebuilt too:
+        // the spawn completed, but part of the location may not have initialised.
+        internal int LocationsWithSpawnErrors;
         internal int LocationsTerrainOnly;
         internal int LocationsSkipped;
         internal readonly List<string> LocationNames = new List<string>();
@@ -112,11 +115,13 @@ namespace StarLevelSystem.modules.LocationReset {
             switch (report.LocationResult) {
                 case ZoneResetReport.LocationOutcome.Rebuilt:
                     LocationsRebuilt++;
+                    if (report.SpawnErrors > 0) { LocationsWithSpawnErrors++; }
                     AddLocationName(report.LocationName);
                     break;
                 case ZoneResetReport.LocationOutcome.InteriorRebuilt:
                     LocationsRebuilt++;
                     LocationsInteriorOnly++;
+                    if (report.SpawnErrors > 0) { LocationsWithSpawnErrors++; }
                     AddLocationName(report.LocationName);
                     break;
                 case ZoneResetReport.LocationOutcome.TerrainOnly:
@@ -155,6 +160,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 { "ownedCleared", report.OwnedCleared },
                 { "vegetationPreserved", report.VegetationPreserved },
                 { "spawned", report.LocationSpawned },
+                { "spawnErrors", report.SpawnErrors },
+                { "firstSpawnError", report.FirstSpawnError ?? "" },
                 { "terrain", report.TerrainModificationsUndone },
                 { "adopted", report.ZoneAdopted },
             };
@@ -210,6 +217,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
                 { "locationsRebuilt", LocationsRebuilt },
                 { "locationsInteriorOnly", LocationsInteriorOnly },
+                { "locationsWithSpawnErrors", LocationsWithSpawnErrors },
                 { "locationsTerrainOnly", LocationsTerrainOnly },
                 { "locationsSkipped", LocationsSkipped },
                 // A copy, not the live list: this dictionary outlives the routine that built it.
@@ -240,9 +248,12 @@ namespace StarLevelSystem.modules.LocationReset {
                 return $"Reset {Outcome}{code}: {Reason}";
             }
             string target = string.IsNullOrEmpty(Target) ? "" : $" of '{Target}'";
-            string interior = LocationsInteriorOnly > 0 ? $" ({LocationsInteriorOnly} interior only)" : "";
+            List<string> notes = new List<string>();
+            if (LocationsInteriorOnly > 0) { notes.Add($"{LocationsInteriorOnly} interior only"); }
+            if (LocationsWithSpawnErrors > 0) { notes.Add($"{LocationsWithSpawnErrors} with spawn errors"); }
+            string rebuiltNotes = notes.Count > 0 ? $" ({string.Join(", ", notes)})" : "";
             return $"Reset{target} complete: {ZonesReset} chunks reset ({ZonesAdopted} adopted while loaded), " +
-                $"{LocationsRebuilt} locations rebuilt{interior}, {ZonesBlocked} skipped as protected, " +
+                $"{LocationsRebuilt} locations rebuilt{rebuiltNotes}, {ZonesBlocked} skipped as protected, " +
                 $"{ZonesUngenerated} never generated, ZDO change {ZdoGrowth} ({ZdoRestored} restored, drift {ZdoDrift}).";
         }
     }

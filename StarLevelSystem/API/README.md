@@ -293,6 +293,7 @@ only its interior would be rebuilt), `held` (nothing would be touched), or `none
 | `zonesUngenerated` / `zonesAdopted` | int | Never-generated chunks, and chunks worked on while loaded |
 | `locationsRebuilt` / `locationsTerrainOnly` / `locationsSkipped` | int | |
 | `locationsInteriorOnly` | int | Of `locationsRebuilt`, dungeons whose interior alone was rebuilt because their surface was held back |
+| `locationsWithSpawnErrors` | int | Of `locationsRebuilt`, locations whose respawn logged errors. The location came back, but part of it may not have initialised — usually a fault in the mod that adds it |
 | `locationNames` | `List<string>` | What was actually rebuilt |
 | `objectsCleared` / `objectsSpawned` / `vegetationObjects` | int | |
 | `pickablesRefreshed` / `mineRocksRefreshed` / `containersRefreshed` | int | |

@@ -1049,6 +1049,7 @@ namespace StarLevelSystem.Data {
                         // Locations rather than vegetation: destroyed and rebuilt, not refreshed.
                         "Mistlands_Giant1", "Mistlands_Giant2",
                         "Mistlands_Swords1", "Mistlands_Swords2", "Mistlands_Swords3",
+                        "DN_gammeltrollFrac01", "DN_gammeltrollFrac02",
                     },
                 } },
                 // Berry bushes are NOT Pickable_* prefabs, so $Pickable misses every one of them.
@@ -1079,7 +1080,8 @@ namespace StarLevelSystem.Data {
                         "WoodHouse4", "WoodHouse5", "WoodHouse6",
                         "WoodHouse7", "WoodHouse8", "WoodHouse9",
                         "WoodHouse10", "WoodHouse11", "WoodHouse12",
-                        "WoodHouse13", "CombatRuin01", "WoodFarm1", "WoodVillage1"
+                        "WoodHouse13", "CombatRuin01", "WoodFarm1", "WoodVillage1",
+                        "Dolmen01", "Dolmen02", "Dolmen03", "Runestone_Boars"
                     },
                 } },
                 { "Leviathans", new LocationResetGroup() {
@@ -1095,19 +1097,30 @@ namespace StarLevelSystem.Data {
                     Members = new List<string>() { 
                         "Crypt2", "TrollCave02", "Crypt3", "Crypt4", "Greydwarf_camp1",
                         "StoneTowerRuins03", "StoneTowerRuins07", "StoneTowerRuins08",
-                        "StoneTowerRuins09", "StoneTowerRuins10"
+                        "StoneTowerRuins09", "StoneTowerRuins10",
+                        // Deep North: a Bjorn's den with a small hand-built interior.
+                        "BearCave"
+                    },
+                } },
+                { "BlackforestLocations", new LocationResetGroup() {
+                    ResetHours = 48f,
+                    Members = new List<string>() {
+                        "Ruin1", "Ruin2", "StoneHouse3", "StoneHouse4", "Runestone_Greydwarfs"
                     },
                 } },
                 { "Shipwrecks", new LocationResetGroup() {
                     ResetHours = 128f,
-                    Members = new List<string>() { "ShipWreck01", "ShipWreck02", "ShipWreck03", "ShipWreck04" },
+                    Members = new List<string>() {
+                        "ShipWreck01", "ShipWreck02", "ShipWreck03", "ShipWreck04",
+                        "ShipWreck01_DN", "ShipWreck02_DN"
+                    },
                 } },
                 { "SwampDungeonResources", new LocationResetGroup() {
                     ResetHours = 128f,
                     Members = new List<string>() { 
                         "InfestedTree01", "SunkenCrypt4", "SwampHut5", "SwampHut1", 
-                        "SwampHut2", "SwampHut3", "SwampHut4", "SwampRuin1", "SwampRuin2", 
-                        "SwampWell1", "MountainWell1" },
+                        "SwampHut2", "SwampHut3", "SwampHut4", "SwampRuin1", "SwampRuin2",
+                        "SwampWell1", "MountainWell1", "Grave1", "Runestone_Draugr" },
                 } },
                 { "MountainLocations", new LocationResetGroup() {
                     ResetHours = 48f,
@@ -1133,7 +1146,9 @@ namespace StarLevelSystem.Data {
                 } },
                 { "MistlandMinorLocations", new LocationResetGroup() {
                     ResetHours = 128f,
-                    Members = new List<string>() { "Mistlands_RoadPost1", "Mistlands_Viaduct1", "Mistlands_Viaduct2" },
+                    Members = new List<string>() {
+                        "Mistlands_RoadPost1", "Mistlands_Viaduct1", "Mistlands_Viaduct2", "Mistlands_RockSpire1"
+                    },
                 } },
                 { "MistlandLocations", new LocationResetGroup() {
                     ResetHours = 48f,
@@ -1171,7 +1186,22 @@ namespace StarLevelSystem.Data {
                         "FortressRuins", "CharredTowerRuins1_dvergr",
                         "CharredRuins1", "CharredRuins4",
                         "CharredTowerRuins1", "CharredTowerRuins2", "CharredTowerRuins3",
-                        "SulfurArch", "CharredRuins2", "CharredRuins3", "VoltureNest"
+                        "SulfurArch", "CharredRuins2", "CharredRuins3", "VoltureNest",
+                        // The location of the same name: a ruin laid out from rooms, like WoodVillage1.
+                        "AshlandRuins"
+                    },
+                } },
+                // DN_Bossroom is deliberately absent: the Frozen King's room has not been tested
+                // through a rebuild yet, so it is not shipped among BossAltars.
+                { "DeepNorthDungeons", new LocationResetGroup() {
+                    ResetHours = 48f,
+                    Members = new List<string>() { "TheHole01", "MorkBorg" },
+                } },
+                { "DeepNorthLocations", new LocationResetGroup() {
+                    ResetHours = 48f,
+                    Members = new List<string>() {
+                        "NorthVillage", "DN_hut01", "LumberCamp", "NorthMemorialPlace",
+                        "ShipSetting02", "ShipSetting03"
                     },
                 } },
             };

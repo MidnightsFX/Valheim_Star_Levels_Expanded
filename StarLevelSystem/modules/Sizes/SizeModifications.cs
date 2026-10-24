@@ -147,25 +147,37 @@ namespace StarLevelSystem.modules.Sizes {
         }
 
         // This is important because some creatures or objects have their sizes adjusted during runtime, we want all of the original sizes
+        // Runs on every world load. Every entry is checked with Unity's == null: another mod can leave a destroyed prefab in
+        // ObjectDB.m_items (seen on the second world load of a session), and reading .name off one threw and abandoned the rest of the cache.
         internal static void PrepareSizeRefCache() {
             string clone = "(Clone)";
 
-            foreach (Character charGO in Resources.FindObjectsOfTypeAll<Character>().Where(obj => obj.name.EndsWith(clone) == false).ToList()) {
+            foreach (Character charGO in Resources.FindObjectsOfTypeAll<Character>().Where(obj => obj != null && obj.name.EndsWith(clone) == false).ToList()) {
                 if (SizeEstimateCache.ContainsKey(charGO.name)) { continue; }
                 SizeEstimateCache.Add(charGO.name, charGO.transform.localScale);
             }
 
-            foreach (Humanoid humGO in Resources.FindObjectsOfTypeAll<Humanoid>().Where(obj => obj.name.EndsWith(clone) == false).ToList()) {
+            foreach (Humanoid humGO in Resources.FindObjectsOfTypeAll<Humanoid>().Where(obj => obj != null && obj.name.EndsWith(clone) == false).ToList()) {
                 if (SizeEstimateCache.ContainsKey(humGO.name)) { continue; }
                 SizeEstimateCache.Add(humGO.name, humGO.transform.localScale);
             }
 
-            foreach (GameObject itemGO in ObjectDB.m_instance.m_items) {
-                if (SizeEstimateCache.ContainsKey(itemGO.name)) { continue; }
-                SizeEstimateCache.Add(itemGO.name, itemGO.transform.localScale);
+            if (ObjectDB.m_instance != null) {
+                List<GameObject> items = ObjectDB.m_instance.m_items;
+                for (int i = 0; i < items.Count; i++) {
+                    GameObject itemGO = items[i];
+                    if (itemGO == null) {
+                        // The entry before it names whose block of items the dead one sits in.
+                        string after = i > 0 && items[i - 1] != null ? items[i - 1].name : "nothing";
+                        Logger.LogDebug($"Skipping a missing or destroyed ObjectDB item at index {i} (after {after}) while caching reference sizes.");
+                        continue;
+                    }
+                    if (SizeEstimateCache.ContainsKey(itemGO.name)) { continue; }
+                    SizeEstimateCache.Add(itemGO.name, itemGO.transform.localScale);
+                }
             }
 
-            foreach (Ragdoll ragDollGO in Resources.FindObjectsOfTypeAll<Ragdoll>().Where(obj => obj.name.EndsWith(clone) == false).ToList()) {
+            foreach (Ragdoll ragDollGO in Resources.FindObjectsOfTypeAll<Ragdoll>().Where(obj => obj != null && obj.name.EndsWith(clone) == false).ToList()) {
                 if (SizeEstimateCache.ContainsKey(ragDollGO.name)) { continue; }
                 SizeEstimateCache.Add(ragDollGO.name, ragDollGO.transform.localScale);
             }

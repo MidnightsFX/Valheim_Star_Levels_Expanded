@@ -50,6 +50,9 @@ namespace StarLevelSystem.modules.LocationReset {
             // nothing was touched. LocationHeldReason says what, LocationHeldTransient whether it is
             // worth a short retry.
             Held,
+            // Due, but its prefab or one of its dungeon rooms did not load in time, so nothing was
+            // touched rather than rebuild it without them. LocationHeldReason names what was missing.
+            AssetsNotLoaded,
         }
 
         internal Vector2s Zone;
@@ -131,8 +134,14 @@ namespace StarLevelSystem.modules.LocationReset {
         // Objects destroyed by the clear, or terrain modifications undone in TerrainOnly mode.
         internal int LocationCleared;
         internal int LocationSpawned;
-        // Why the location (or, for InteriorRebuilt, its surface) was held back, and whether that is a
-        // player who will move on -- the sweep retries those within minutes instead of a full cycle.
+        // Errors Unity logged while the location respawned, and the first line of the first. Unity
+        // only logs an exception thrown from a component's Awake, so the spawn still completes and
+        // these are the one sign that part of the location did not initialise.
+        internal int SpawnErrors;
+        internal string FirstSpawnError;
+        // Why the location (or, for InteriorRebuilt, its surface) was held back, or for AssetsNotLoaded
+        // what did not load, and whether that is a player who will move on -- the sweep retries those
+        // within minutes instead of a full cycle.
         internal string LocationHeldReason;
         internal bool LocationHeldTransient;
         // Interior-only rebuilds: copies of the surface that the rebuild laid down and that were
@@ -292,11 +301,11 @@ namespace StarLevelSystem.modules.LocationReset {
             if (string.IsNullOrEmpty(GroupName) == false) { name = $"{name}' via group '{GroupName}"; }
             switch (LocationResult) {
                 case LocationOutcome.Rebuilt:
-                    return $"location '{name}' rebuilt ({DescribeRebuild()}{DescribeTerrain()})";
+                    return $"location '{name}' rebuilt ({DescribeRebuild()}{DescribeTerrain()}){DescribeSpawnErrors()}";
                 case LocationOutcome.InteriorRebuilt:
                     string discarded = SurfaceDiscarded > 0 ? $", {SurfaceDiscarded} surface copies dropped" : "";
                     return $"location '{name}' interior rebuilt, surface left as it was ({LocationHeldReason}) " +
-                        $"({DescribeRebuild()}{discarded})";
+                        $"({DescribeRebuild()}{discarded}){DescribeSpawnErrors()}";
                 case LocationOutcome.Held:
                     return $"location '{name}' held: {LocationHeldReason}";
                 case LocationOutcome.TerrainOnly:
@@ -321,6 +330,8 @@ namespace StarLevelSystem.modules.LocationReset {
                     return $"location '{name}' is not the one this reset was aimed at";
                 case LocationOutcome.CatalogNotReady:
                     return $"location '{name}' left alone: the world catalogue is not indexed yet";
+                case LocationOutcome.AssetsNotLoaded:
+                    return $"location '{name}' not rebuilt: {LocationHeldReason}";
                 default:
                     return "";
             }
@@ -339,6 +350,12 @@ namespace StarLevelSystem.modules.LocationReset {
             string foreign = ForeignOwnedSkipped > 0 ? $", skipped {ForeignOwnedSkipped} owned elsewhere" : "";
             string dupes = SparedDuplicatesRemoved > 0 ? $", {SparedDuplicatesRemoved} spared duplicates dropped" : "";
             return $"cleared {LocationCleared}{owned}{strays}{linked}{spared}{foreign}, spawned {LocationSpawned}{dupes}{resealed}";
+        }
+
+        private string DescribeSpawnErrors() {
+            if (SpawnErrors <= 0) { return ""; }
+            string plural = SpawnErrors == 1 ? "error" : "errors";
+            return $" with {SpawnErrors} {plural} during the spawn, first: {FirstSpawnError}";
         }
 
         private string DescribeDeferral() {

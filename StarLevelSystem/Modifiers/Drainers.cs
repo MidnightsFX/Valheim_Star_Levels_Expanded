@@ -42,19 +42,14 @@ namespace StarLevelSystem.Modifiers
             return mods != null && (mods.ContainsKey(StaminaDrainName) || mods.ContainsKey(EitrDrainName));
         }
 
-        private static float ReadConfig(CreatureModConfig cfg, string key, float fallback)
-        {
-            if (cfg != null && cfg.Config != null && cfg.Config.TryGetValue(key, out float v)) { return v; }
-            return fallback;
-        }
 
         private static float ReductionFor(CreatureModConfig cfg, DrainOutcome outcome)
         {
             switch (outcome)
             {
-                case DrainOutcome.Parry: return ReadConfig(cfg, "ParryReduction", DefaultParryReduction);
-                case DrainOutcome.Block: return ReadConfig(cfg, "BlockReduction", DefaultBlockReduction);
-                case DrainOutcome.Dodge: return ReadConfig(cfg, "DodgeReduction", DefaultDodgeReduction);
+                case DrainOutcome.Parry: return cfg.Get("ParryReduction", DefaultParryReduction);
+                case DrainOutcome.Block: return cfg.Get("BlockReduction", DefaultBlockReduction);
+                case DrainOutcome.Dodge: return cfg.Get("DodgeReduction", DefaultDodgeReduction);
                 default: return 0f;
             }
         }

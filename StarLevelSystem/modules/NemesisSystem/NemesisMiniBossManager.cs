@@ -15,7 +15,15 @@ namespace StarLevelSystem.modules.NemesisSystem {
         internal static int NumNemesisNames = 60;
         internal static int NumNemesisPrefixes = 6;
         internal static int NumNemesisPostfixes = 4;
+        // Generated minions are named this followed by the creature's own name, stored in SLS_NAME.
+        internal const string MinionNamePrefix = "$SLS_minion";
 
+        // A generated minion spawned before SLS_NEMESIS_SPAWN existed. Remote ones from then carry their boss's
+        // whole biome loot table (see LootSystemData.GetCustomLoot).
+        internal static bool IsUnflaggedMinion(ZDO zdo) {
+            if (zdo == null || zdo.GetBool(SLS_NEMESIS_SPAWN, false) || zdo.GetBool(SLS_NEMESIS_BOSS, false)) { return false; }
+            return zdo.GetString(SLS_NAME, "").StartsWith(MinionNamePrefix, StringComparison.Ordinal);
+        }
 
 
         // This builds a localizable boss name using prefix, postfix
@@ -70,7 +78,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                     if (mchara != null) {
                         minions.Add(new NemesisSpawn() {
                             Faction = Character.Faction.Boss,
-                            CustomName = $"$SLS_minion {mchara.m_name}",
+                            CustomName = $"{MinionNamePrefix} {mchara.m_name}",
                             Prefab = nm.PrefabName,
                             SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount + 1),
                             CreatureBaseValueModifiers = nm.CreatureBaseValueModifiers,

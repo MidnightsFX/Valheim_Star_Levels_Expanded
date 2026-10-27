@@ -55,6 +55,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // Always corrected, so one saved with stars before it was pinned comes back at level 1.
             if (BossPhases.IsPinned(character)) { return true; }
             if (CompositeLazyCache.IsSpawnManaged(character)) { return false; }
+            if (KeepVanillaLevelForPlayerSummon(character)) { return false; }
             if (character != null && character.m_nview != null && character.IsTamed()) {
                 return ValConfig.OverLevelTamesGetRerolledOnLoad.Value;
             }
@@ -66,6 +67,13 @@ namespace StarLevelSystem.modules.LevelSystem {
         // OverLevelTamesGetRerolledOnLoad.
         public static bool SkipRandomLevelForTame(Character character) {
             return ValConfig.TamesSkipRandomLevelRoll.Value && character != null && character.m_nview != null && character.IsTamed();
+        }
+
+        // Summons keep the level the game or their mod gave them: the roll, the over-level reroll and the ability-spawn
+        // takeover all skip them, and one that arrives with no level stays at level 1. Matched on faction, not IsTamed:
+        // the nature staff roots have no Tameable, only Dead Raiser skeletons do.
+        public static bool KeepVanillaLevelForPlayerSummon(Character character) {
+            return ValConfig.PlayerSummonsKeepVanillaLevel.Value && character != null && character.IsPlayer() == false && character.m_faction == Character.Faction.Players;
         }
 
         public static int DetermineLevel(Character character, ZDO cZDO, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, int leveloverride = 0, bool allowRoll = true) {
@@ -95,7 +103,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     return clevel <= 0 ? 0 : clevel;
                 }
                 // Returned level 1 is persisted to s_level by StartZOwnerCreatureRoutines, so this only happens once.
-                if (clevel <= 0 && SkipRandomLevelForTame(character)) { return 1; }
+                if (clevel <= 0 && (SkipRandomLevelForTame(character) || KeepVanillaLevelForPlayerSummon(character))) { return 1; }
                 // Global key based generator built levelup replaces default, if it exists, otherwise its null
                 SortedDictionary<int, float> conditional_levelup = ConditionalScaleSystem.GetConditionalLevelupChance(biome);
 

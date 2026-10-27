@@ -107,6 +107,11 @@ namespace StarLevelSystem.Data
             ElementalChaos = 57,
             Reflection = 58,
             Small = 59,
+            Stalward = 60,
+            Regenerating = 61,
+            Vampiric = 62,
+            Shielded = 63,
+            EarthCaller = 64,
         }
 
         public static Dictionary<string, CreatureModifierDefinition> ModifierDefinitions = new Dictionary<string, CreatureModifierDefinition>()
@@ -305,6 +310,22 @@ namespace StarLevelSystem.Data
                         SecondaryEffect = "DeathPoisonNova",
                     }
                 },
+                { ModifierNames.FrostNova.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$FrostNova_prefix1",
+                        NamingConvention = NameSelectionStyle.RandomFirst,
+                        StarVisual = "frostnova",
+                        SecondaryEffect = "DeathFrostNova",
+                    }
+                },
+                { ModifierNames.LightningNova.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$LightningNova_prefix1",
+                        NamingConvention = NameSelectionStyle.RandomFirst,
+                        StarVisual = "lightningnova",
+                        SecondaryEffect = "DeathLightningNova",
+                    }
+                },
                 { ModifierNames.Lootbags.ToString(), new CreatureModifierDefinition()
                     {
                         NamePrefix = "$Lootbags_prefix1",
@@ -320,6 +341,7 @@ namespace StarLevelSystem.Data
                         NamePrefix = "$alert_prefix1",
                         NameSuffix = "$alert_suffix1",
                         NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "alert",
                         //visualEffect
                         SetupEvent = Alert.Setup,
                         TeardownEvent = Alert.Teardown
@@ -330,6 +352,7 @@ namespace StarLevelSystem.Data
                         NamePrefix = "$big_prefix1",
                         NameSuffix = "$big_suffix1",
                         NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "big",
                         //visualEffect
                         RunOnceEvent = Big.RunOnce
                     }
@@ -339,6 +362,7 @@ namespace StarLevelSystem.Data
                         NamePrefix = "$small_prefix1",
                         NameSuffix = "$small_suffix1",
                         NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "small",
                         RunOnceEvent = Small.RunOnce
                     }
                 },
@@ -346,6 +370,7 @@ namespace StarLevelSystem.Data
                     {
                         NamePrefix = "$fast_prefix1",
                         NamingConvention = NameSelectionStyle.RandomFirst,
+                        StarVisual = "fast",
                         //visualEffect
                         RunOnceEvent = Fast.RunOnce
                     }
@@ -363,14 +388,80 @@ namespace StarLevelSystem.Data
                         NamingConvention = NameSelectionStyle.RandomFirst,
                         StarVisual = "eitrEater",
                     }
-                }
+                },
+                { ModifierNames.Stalward.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$Stalward_prefix1",
+                        NameSuffix = "$Stalward_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "stalward",
+                    }
+                },
+                { ModifierNames.Regenerating.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$Regenerating_prefix1",
+                        NameSuffix = "$Regenerating_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "regenerating",
+                    }
+                },
+                { ModifierNames.Vampiric.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$Vampiric_prefix1",
+                        NameSuffix = "$Vampiric_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "vampiric",
+                    }
+                },
+                { ModifierNames.Shielded.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$Shielded_prefix1",
+                        NameSuffix = "$Shielded_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "shielded",
+                        VisualEffect = Shielded.ShimmerEffect,
+                        VisualEffectStyle = VisualEffectStyle.objectCenter,
+                        SetupEvent = Shielded.Setup,
+                        TeardownEvent = Shielded.Teardown,
+                    }
+                },
+                { ModifierNames.EarthCaller.ToString(), new CreatureModifierDefinition()
+                    {
+                        NamePrefix = "$EarthCaller_prefix1",
+                        NameSuffix = "$EarthCaller_suffix1",
+                        NamingConvention = NameSelectionStyle.RandomBoth,
+                        StarVisual = "earthcaller",
+                        SecondaryEffect = EarthCaller.SpikeEffect,
+                        SetupEvent = EarthCaller.Setup,
+                        TeardownEvent = EarthCaller.Teardown,
+                    }
+                },
             };
 
         public static DNum ModifierNamesLookupTable = new DNum(Enum.GetValues(typeof(ModifierNames)));
 
+        // Bumped whenever a release adds built-in modifiers, with the new names listed under the new number in
+        // ModifiersAddedInVersion. A Modifiers.yaml lists its own pools in full and those replace the built-in ones,
+        // so without this an existing install never sees a new modifier. ModifierConfigUpdate compares a file's
+        // ModifiersVersion against this and offers the player the ones their file is missing, once.
+        internal const int CurrentModifiersVersion = 1;
+
+        internal static readonly Dictionary<int, List<string>> ModifiersAddedInVersion = new Dictionary<int, List<string>>() {
+            { 1, new List<string>() {
+                nameof(ModifierNames.Stalward),
+                nameof(ModifierNames.Regenerating),
+                nameof(ModifierNames.Vampiric),
+                nameof(ModifierNames.Shielded),
+                nameof(ModifierNames.EarthCaller),
+                nameof(ModifierNames.FrostNova),
+                nameof(ModifierNames.LightningNova),
+            } },
+        };
+
         static CreatureModifierCollection CustomModifiers = new CreatureModifierCollection();
         static CreatureModifierCollection APIAdded = new CreatureModifierCollection();
         internal static readonly CreatureModifierCollection DefaultModifiers = new CreatureModifierCollection() {
+            ModifiersVersion = CurrentModifiersVersion,
             BossModifiers = new Dictionary<string, CreatureModifierConfiguration>() {
                 {ModifierNames.BossSummoner.ToString(), new CreatureModifierConfiguration() {
                     SelectionWeight = 10,
@@ -425,6 +516,53 @@ namespace StarLevelSystem.Data
                         BasePower = 0.05f
                         },
                     UnallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.Stalward.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Share of stagger damage ignored: 0.5 halves it, rising per level up to MaxReduction.
+                        BasePower = 0.5f,
+                        PerlevelPower = 0.02f,
+                        Config = new Dictionary<string, float>() {
+                            { "MaxReduction", 0.9f },
+                        },
+                        },
+                    }
+                },
+                {ModifierNames.Shielded.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Shield size as a share of maximum health. Refills over RegenDuration seconds once it has
+                        // gone RegenDelay seconds without being hit.
+                        BasePower = 0.15f,
+                        PerlevelPower = 0.01f,
+                        Config = new Dictionary<string, float>() {
+                            { "RegenDuration", 15f },
+                            { "RegenDelay", 4f },
+                        },
+                        },
+                    }
+                },
+                {ModifierNames.EarthCaller.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Spike damage as a multiple of the boss's own estimated hit, split between blunt and pierce.
+                        BasePower = 0.5f,
+                        PerlevelPower = 0.05f,
+                        // The most seconds into a fight before its first cast, the seconds between later casts (a
+                        // random wait in this range), the rumble before a spike erupts, the metres a spike's hit
+                        // reaches, how far from the boss players are targeted, and how hard a spike throws them upward.
+                        Config = new Dictionary<string, float>() {
+                            { "FirstCastDelay", 5f },
+                            { "MinInterval", 5f },
+                            { "MaxInterval", 15f },
+                            { "Delay", 0.75f },
+                            { "Radius", 3.2f },
+                            { "Range", 40f },
+                            { "LaunchSpeed", 8f },
+                        },
+                        },
                     }
                 },
             },
@@ -537,6 +675,30 @@ namespace StarLevelSystem.Data
                         },
                         },
                     UnallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.Vampiric.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 6,
+                    Config = new CreatureModConfig() {
+                        // Share of the health its hits take that it heals.
+                        BasePower = 0.15f,
+                        PerlevelPower = 0.01f,
+                        },
+                    UnallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.Shielded.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 5,
+                    Config = new CreatureModConfig() {
+                        // Shield size as a share of maximum health. Refills over RegenDuration seconds once it has
+                        // gone RegenDelay seconds without being hit.
+                        BasePower = 0.3f,
+                        PerlevelPower = 0.02f,
+                        Config = new Dictionary<string, float>() {
+                            { "RegenDuration", 15f },
+                            { "RegenDelay", 4f },
+                        },
+                        },
                     }
                 },
             },
@@ -679,7 +841,51 @@ namespace StarLevelSystem.Data
                             Biome.AshLands,
                         }
                     }
-                }
+                },
+                {ModifierNames.Stalward.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 6,
+                    Config = new CreatureModConfig() {
+                        // Share of stagger damage ignored: 0.5 halves it, rising per level up to MaxReduction.
+                        BasePower = 0.5f,
+                        PerlevelPower = 0.02f,
+                        Config = new Dictionary<string, float>() {
+                            { "MaxReduction", 0.9f },
+                        },
+                        },
+                    }
+                },
+                {ModifierNames.Regenerating.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 6,
+                    Config = new CreatureModConfig() {
+                        // Share of its maximum health healed per second once it has gone OutOfCombatDelay seconds unhurt.
+                        BasePower = 0.01f,
+                        PerlevelPower = 0.002f,
+                        Config = new Dictionary<string, float>() {
+                            { "OutOfCombatDelay", 4f },
+                        },
+                        },
+                    }
+                },
+                {ModifierNames.FrostNova.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Burst damage as a multiple of the creature's own estimated hit.
+                        BasePower = 2.0f,
+                        PerlevelPower = 0.1f,
+                        },
+                    UnallowedCreatures = NonCombatCreatures
+                    }
+                },
+                {ModifierNames.LightningNova.ToString(), new CreatureModifierConfiguration() {
+                    SelectionWeight = 10,
+                    Config = new CreatureModConfig() {
+                        // Burst damage as a multiple of the creature's own estimated hit.
+                        BasePower = 1.8f,
+                        PerlevelPower = 0.1f,
+                        },
+                    UnallowedCreatures = NonCombatCreatures
+                    }
+                },
             },
             ModifierGlobalSettings = new GlobalModifierSettings() { GlobalIgnorePrefabList = new List<string>() { "piece_TrainingDummy" } }
         };
@@ -878,6 +1084,7 @@ namespace StarLevelSystem.Data
             LoadPrefabs();
             ClearProbabilityCaches();
             Logger.LogDebug("Loading Modifier Configuration.");
+            modules.Modifiers.ModifierConfigUpdate.Check(parsed);
         }
 
         internal static void LoadPrefabs() {
@@ -885,10 +1092,21 @@ namespace StarLevelSystem.Data
                 Logger.LogDebug("Embedded asset bundle is unavailable (game exiting or world unloading); skipping modifier prefab load.");
                 return;
             }
+            // Timed on the first pass, which is the one that reads every icon and effect out of the bundle; later passes
+            // only pick up modifiers added since.
+            System.Diagnostics.Stopwatch timer = loggedFirstPrefabLoad ? null : System.Diagnostics.Stopwatch.StartNew();
             LoadPrefabsFor(ActiveCreatureModifiers.MinorModifiers);
             LoadPrefabsFor(ActiveCreatureModifiers.MajorModifiers);
             LoadPrefabsFor(ActiveCreatureModifiers.BossModifiers);
+            DeathNova.AttachIndicators();
+            EarthCaller.AttachVisual();
+            if (timer != null) {
+                loggedFirstPrefabLoad = true;
+                Logger.LogDebug($"Loaded {LoadedModifierSprites.Count} modifier icons and {LoadedModifierEffects.Count + LoadedSecondaryEffects.Count} effects from the asset bundle in {timer.Elapsed.TotalMilliseconds:0.0} ms.");
+            }
         }
+
+        private static bool loggedFirstPrefabLoad;
 
         // TryGetValue rather than the indexer. A modifier name this build does not define used to throw out
         // of here, and that throw was what triggered the revert-to-defaults in UpdateModifierConfig. Now

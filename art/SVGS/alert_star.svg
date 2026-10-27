@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <defs>
+    <linearGradient id="alertBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6c252"/>
+      <stop offset="100%" stop-color="#9a5a08"/>
+    </linearGradient>
+    
+  </defs>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="url(#alertBase)"/>
+  <g>
+    <polygon points="340,336 275,250 340,60" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 340,60 405,250" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 405,250 610,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 610,250 450,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 450,370 510,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 510,560 340,440" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 340,440 170,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 170,560 230,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 230,370 70,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 70,250 275,250" fill="#000000" opacity="0.12"/>
+  </g>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#4a2a04" stroke-width="9" stroke-linejoin="miter"/>
+  <defs>
+    <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fffaf0"/>
+      <stop offset="100%" stop-color="#f0d6a0"/>
+    </linearGradient>
+  </defs>
+  <path d="M300,248 C360,240 392,292 380,338 C372,370 346,378 342,402 C338,428 312,436 296,418 C284,404 290,388 300,380 C316,368 320,356 324,340 C330,312 316,292 300,292 C282,292 272,306 272,320 L248,320 C248,282 268,250 300,248 Z" fill="url(#cream)" stroke="#3b2a08" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M302,312 C318,314 320,334 308,346" fill="none" stroke="#3b2a08" stroke-width="7" stroke-linecap="round"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M410.6,310.3 A40,40 0 0,1 410.6,361.7" stroke="#4a2a04" stroke-width="21"/>
+    <path d="M433.6,291 A70,70 0 0,1 433.6,381" stroke="#4a2a04" stroke-width="21"/>
+    <path d="M410.6,310.3 A40,40 0 0,1 410.6,361.7" stroke="#fff3d6" stroke-width="11"/>
+    <path d="M433.6,291 A70,70 0 0,1 433.6,381" stroke="#fff3d6" stroke-width="11"/>
+  </g>
+</svg>

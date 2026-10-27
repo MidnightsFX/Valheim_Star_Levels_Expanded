@@ -1,4 +1,5 @@
 using JetBrains.Annotations;
+using StarLevelSystem.common;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -18,7 +19,7 @@ namespace StarLevelSystem.Modifiers
             if (ccache == null || creature == null || config == null) { return; }
             float roll = GetRoll(creature, config);
             float shrink = (config.BasePower + (config.PerlevelPower * creature.m_level)) * roll;
-            float damageReduction = ReadConfig(config, "DamageReduction", DefaultDamageReduction) * roll;
+            float damageReduction = config.Get("DamageReduction", DefaultDamageReduction) * roll;
             // Additive like Big, so the two cancel the same way whichever runs first. DetermineScaleMultiplier
             // clamps the size; damage is clamped here so an oversized reduction cannot turn hits negative.
             ccache.CreatureBaseValueModifiers[CreatureBaseAttribute.Size] -= shrink;
@@ -38,15 +39,10 @@ namespace StarLevelSystem.Modifiers
             // modifier, so the two normally arrive together. Until then show the full effect; this peer's size
             // comes from the owner's SLS_SIZE once that arrives, and only the owner reads the damage.
             if (creature.m_nview.IsOwner() == false) { return 1f; }
-            float minimum = Mathf.Clamp01(ReadConfig(config, "MinimumRoll", DefaultMinimumRoll));
+            float minimum = Mathf.Clamp01(config.Get("MinimumRoll", DefaultMinimumRoll));
             float roll = UnityEngine.Random.Range(minimum, 1f);
             zdo.Set(SLS_SMALL, roll);
             return roll;
-        }
-
-        private static float ReadConfig(CreatureModConfig cfg, string key, float fallback) {
-            if (cfg != null && cfg.Config != null && cfg.Config.TryGetValue(key, out float v)) { return v; }
-            return fallback;
         }
     }
 }

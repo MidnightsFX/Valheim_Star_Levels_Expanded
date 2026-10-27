@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.anklebreaker.unity-mcp": "https://github.com/AnkleBreaker-Studio/unity-mcp-plugin.git#main",
     "com.unity.ai.navigation": "2.0.12",
     "com.unity.assetbundlebrowser": "https://github.com/Unity-Technologies/AssetBundles-Browser.git",
     "com.unity.burst": "1.8.29",

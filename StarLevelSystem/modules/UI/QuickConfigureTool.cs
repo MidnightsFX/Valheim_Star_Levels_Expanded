@@ -655,6 +655,11 @@ namespace StarLevelSystem.modules.UI {
 
                 // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
                 ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
+                // Only when flipped: it reads off whenever the YAML switch is off, and an unrelated save would otherwise
+                // turn this entry off underneath an admin who left it on.
+                if (staged.enableNemesisRemote != baseline.enableNemesisRemote) {
+                    ValConfig.EnableNemesisRemoteSpawning.Value = staged.enableNemesisRemote;
+                }
 
                 // Location reset - the master switch and sweep budget are ConfigEntries; the rest is in the
                 // LocationResetSettings YAML.
@@ -859,9 +864,17 @@ namespace StarLevelSystem.modules.UI {
         // The copy keeps NemesisVersion and every section this panel does not show; any other version resets the file.
         private static void SaveNemesis(List<string> failures, List<string> warnings) {
             NemesisConfiguration live = NemesisSystemData.SLE_Nemesis_Settings;
-            if (live == null || staged.NemesisMatches(baseline)) { return; }
+            if (live == null) { return; }
+            // Turning remote bosses on needs the YAML's own switch on too. Turning them off leaves it alone: the
+            // ConfigEntry is enough to stop them.
+            bool enableRemoteInFile = staged.enableNemesisRemote && baseline.enableNemesisRemote == false && live.RemoteSpawning?.Enabled != true;
+            if (staged.NemesisMatches(baseline) && enableRemoteInFile == false) { return; }
 
             NemesisConfiguration copy = CopyForEdit(YamlConfigManager.NemesisSettings, live);
+            if (enableRemoteInFile) {
+                if (copy.RemoteSpawning == null) { copy.RemoteSpawning = new RemoteNemesisSpawnSettings(); }
+                copy.RemoteSpawning.Enabled = true;
+            }
             copy.NemesisActionCooldownSeconds = staged.nemCooldown;
             copy.NemesisInfluenceRadius = staged.nemInfluence;
             copy.NemesisMinSpawnDistance = staged.nemMinSpawn;
@@ -1054,8 +1067,10 @@ namespace StarLevelSystem.modules.UI {
             // Whether each boss's night spawns are allowed, keyed by its defeat key. See QuickConfigureNightSpawns.cs.
             public Dictionary<string, bool> nightSpawnsOn;
 
-            // Nemesis system. enableNemesis is a ConfigEntry; the rest live in the NemesisSettings YAML.
-            public bool enableNemesis;
+            // Nemesis system. enableNemesis is a ConfigEntry; the rest live in the NemesisSettings YAML. enableNemesisRemote is
+            // both: remote bosses only spawn with the ConfigEntry and the YAML's RemoteSpawning.Enabled on, so it reads on
+            // only when both are.
+            public bool enableNemesis, enableNemesisRemote;
             public float nemCooldown, nemInfluence, nemMinSpawn;
             public float neutralScore, minScore, maxScore, decayPerUpdate, scoreInterval, bossKillBonus, deathReduction;
             public Dictionary<string, StagedNemesisAction> nemesisActions;
@@ -1160,6 +1175,7 @@ namespace StarLevelSystem.modules.UI {
 
                 s.nemesisActions = new Dictionary<string, StagedNemesisAction>();
                 NemesisConfiguration nemesisCFG = NemesisSystemData.SLE_Nemesis_Settings;
+                s.enableNemesisRemote = ValConfig.EnableNemesisRemoteSpawning.Value && nemesisCFG?.RemoteSpawning?.Enabled == true;
                 if (nemesisCFG != null) {
                     s.nemCooldown = nemesisCFG.NemesisActionCooldownSeconds;
                     s.nemInfluence = nemesisCFG.NemesisInfluenceRadius;
@@ -1393,7 +1409,7 @@ namespace StarLevelSystem.modules.UI {
                     && displayStyle == o.displayStyle && biomeCapAuto == o.biomeCapAuto
                     && enableSlsRaids == o.enableSlsRaids
                     && raidCheckMinutes == o.raidCheckMinutes && maxRaidAttempts == o.maxRaidAttempts && maxActiveRaids == o.maxActiveRaids
-                    && enableNemesis == o.enableNemesis;
+                    && enableNemesis == o.enableNemesis && enableNemesisRemote == o.enableNemesisRemote;
                 if (scalars == false) { return false; }
 
                 if (GeneratorsEqual(generator, o.generator) == false) { return false; }

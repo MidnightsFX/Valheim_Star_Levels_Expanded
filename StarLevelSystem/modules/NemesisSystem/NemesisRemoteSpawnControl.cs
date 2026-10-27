@@ -345,8 +345,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Shared boss/minion spawn routine (reused by the reactive Nemesis path)
         // -------------------------------------------------------------------------------------------------
 
-        // Spawn a full miniboss group (minions + boss) at a point. Applies the biome loot table; the boss
-        // carries the SLS_NEMESIS_BOSS flag and (when provided) the pin id so its death removes the pin.
+        // Spawn a full miniboss group (minions + boss) at a point. Applies the biome loot table to the boss; the
+        // boss carries the SLS_NEMESIS_BOSS flag and (when provided) the pin id so its death removes the pin.
         internal static void SpawnMinibossGroup(NemesisMiniboss boss, Vector3 point, Heightmap.Biome biome, int extraLevelBonus, string pinId) {
             if (boss == null) { return; }
             List<ExtendedCharacterDrop> biomeLoot = null;
@@ -354,9 +354,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
             Quaternion rot = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
             Logger.LogInfo($"[NemesisRemote] SpawnMinibossGroup at {point} biome={biome} boss='{boss.BossSpawn?.Prefab}' minions={boss.Minions?.Count ?? 0} biomeLoot={(biomeLoot?.Count ?? 0)}");
 
+            // Minions keep their own drops. They used to be given the boss's table as well, so a group of up to four
+            // stacks of a dozen or more paid it out once per minion: thousands of coins where the boss alone drops hundreds.
             if (boss.Minions != null) {
                 foreach (NemesisSpawn minion in boss.Minions) {
-                    SpawnNemesisSpawn(minion, point, rot, extraLevelBonus, biomeLoot, null);
+                    SpawnNemesisSpawn(minion, point, rot, extraLevelBonus, null, null);
                 }
             }
             if (boss.BossSpawn != null) {
@@ -387,6 +389,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
                 if (spawn.Faction != Character.Faction.TrainingDummy) {
                     spawnChara.m_faction = spawn.Faction;
+                }
+                if (spawnChara.m_nview != null) {
+                    spawnChara.m_nview.GetZDO().Set(SLS_NEMESIS_SPAWN, true);
                 }
                 if (spawn.IsBoss) {
                     spawnChara.m_boss = true;
@@ -460,6 +465,127 @@ namespace StarLevelSystem.modules.NemesisSystem {
             if (hasPrimary) { merged.AddRange(primary); }
             if (hasExtra) { merged.AddRange(extra); }
             return merged;
+        }
+
+        // -------------------------------------------------------------------------------------------------
+        // Cleanup (server, sls-nemesis-cleanup)
+        // -------------------------------------------------------------------------------------------------
+
+        // Non-empty sectors walked per frame, the slice vanilla's GetAllZDOsWithPrefabIterative takes.
+        private const int CleanupSectorsPerFrame = 400;
+        // The world a cleanup is walking, null when none is. Not a bool: a coroutine stopped along with its world never
+        // reaches its finally, and a flag left set would refuse every cleanup in the next world loaded this session.
+        private static ZDOMan cleanupWorld = null;
+
+        internal class CleanupReport {
+            internal int Spawners;
+            internal int Bosses;
+            internal int Creatures;
+            internal int Pins;
+            internal int TamedSkipped;
+        }
+
+        // Removes the Nemesis spawns in the world: dormant remote spawners, Nemesis bosses, their minions and the
+        // reactive spawns, along with the bosses' map pins. A radius of 0 or less is the whole world; otherwise only
+        // what lies within radius of center across the ground. Tamed creatures are left alone. Nothing drops loot.
+        // Server only. A coroutine because it walks every ZDO in the world, a slice of sectors per frame. Reports null
+        // when it could not run or the world closed under it.
+        internal static IEnumerator CleanupNemesisSpawns(Vector3 center, float radius, Action<CleanupReport> onComplete) {
+            if (IsCleanupRunning() || ZDOMan.instance == null || ZNetScene.instance == null) { onComplete?.Invoke(null); yield break; }
+            cleanupWorld = ZDOMan.instance;
+            try {
+                bool wholeWorld = radius <= 0f;
+                Vector2 centerXZ = new Vector2(center.x, center.z);
+                int spawnerHash = SpawnerPrefabName.GetStableHashCode();
+                HashSet<int> creatureHashes = CreaturePrefabHashes();
+
+                CleanupReport report = new CleanupReport();
+                List<ZDOID> doomed = new List<ZDOID>();
+                HashSet<string> removedPins = new HashSet<string>();
+                // Every pin a spawner or boss still carries, in range or not: a registry entry missing from this
+                // is left over from a boss that is gone, and still counts against the spawn caps.
+                HashSet<string> livePins = new HashSet<string>();
+
+                List<ZDO>[] sectors = ZDOMan.instance.m_objectsBySector;
+                int walked = 0;
+                for (int i = 0; i < sectors.Length; i++) {
+                    List<ZDO> sector = sectors[i];
+                    if (sector == null) { continue; }
+                    foreach (ZDO zdo in sector) {
+                        if (zdo == null || zdo.IsValid() == false) { continue; }
+                        int prefab = zdo.GetPrefab();
+                        bool isSpawner = prefab == spawnerHash;
+                        if (isSpawner == false && (creatureHashes.Contains(prefab) == false || IsNemesisSpawn(zdo) == false)) { continue; }
+
+                        string pinId = zdo.GetString(SLS_NEMESIS_PIN, "");
+                        if (pinId.Length > 0) { livePins.Add(pinId); }
+
+                        if (wholeWorld == false) {
+                            Vector3 pos = zdo.GetPosition();
+                            if (Vector2.Distance(new Vector2(pos.x, pos.z), centerXZ) > radius) { continue; }
+                        }
+                        if (isSpawner) {
+                            report.Spawners++;
+                        } else if (zdo.GetBool(ZDOVars.s_tamed, false)) {
+                            report.TamedSkipped++;
+                            continue;
+                        } else if (zdo.GetBool(SLS_NEMESIS_BOSS, false)) {
+                            report.Bosses++;
+                        } else {
+                            report.Creatures++;
+                        }
+                        doomed.Add(zdo.m_uid);
+                        if (pinId.Length > 0) { removedPins.Add(pinId); }
+                    }
+
+                    walked++;
+                    if (walked % CleanupSectorsPerFrame == 0) {
+                        yield return null;
+                        // The world was closed (or reloaded) under the scan.
+                        if (ZDOMan.instance == null || ZDOMan.instance.m_objectsBySector != sectors) { onComplete?.Invoke(null); yield break; }
+                    }
+                }
+
+                foreach (NemesisBossPin pin in ActiveRemoteBosses.Values.ToList()) {
+                    if (pin == null || livePins.Contains(pin.Id)) { continue; }
+                    if (wholeWorld || Vector2.Distance(new Vector2(pin.Position.x, pin.Position.z), centerXZ) <= radius) {
+                        removedPins.Add(pin.Id);
+                    }
+                }
+
+                // Owned ones go at once; the rest are deleted by whoever simulates them, or by the server when nobody does.
+                OwnerRoutedDestroy.Request(doomed);
+                foreach (string pinId in removedPins) {
+                    RemoveActiveBoss(pinId);
+                }
+                report.Pins = removedPins.Count;
+                onComplete?.Invoke(report);
+            } finally {
+                cleanupWorld = null;
+            }
+        }
+
+        internal static bool IsCleanupRunning() {
+            return cleanupWorld != null && cleanupWorld == ZDOMan.instance;
+        }
+
+        // SLS_NEMESIS_SPAWN marks everything spawned since it was added. Older spawns are known by what they were
+        // given: the boss flag, a custom loot table (only Nemesis spawns get one) or a generated minion's name.
+        private static bool IsNemesisSpawn(ZDO zdo) {
+            return zdo.GetBool(SLS_NEMESIS_SPAWN, false)
+                || zdo.GetBool(SLS_NEMESIS_BOSS, false)
+                || string.IsNullOrEmpty(zdo.GetString(SLS_CUSTOM_LOOT, "")) == false
+                || NemesisMiniBossManager.IsUnflaggedMinion(zdo);
+        }
+
+        // Every non-player creature prefab, so the scan only reads ZDO fields on creatures.
+        private static HashSet<int> CreaturePrefabHashes() {
+            HashSet<int> hashes = new HashSet<int>();
+            foreach (KeyValuePair<int, GameObject> prefab in ZNetScene.instance.m_namedPrefabs) {
+                if (prefab.Value == null || prefab.Value.GetComponent<Character>() == null || prefab.Value.GetComponent<Player>() != null) { continue; }
+                hashes.Add(prefab.Key);
+            }
+            return hashes;
         }
     }
 }

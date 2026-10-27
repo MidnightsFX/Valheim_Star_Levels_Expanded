@@ -6,6 +6,7 @@ using Jotunn.Managers;
 using Jotunn.Utils;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers.Shared;
 using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.LevelSystem;
@@ -13,6 +14,9 @@ using StarLevelSystem.modules.NemesisSystem;
 using StarLevelSystem.modules.Raids;
 using StarLevelSystem.modules.Sizes;
 using StarLevelSystem.modules.UI;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
@@ -28,7 +32,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.27.0";
+        public const string PluginVersion = "1.28.0";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -49,7 +53,7 @@ namespace StarLevelSystem
             TaskRunner.Setup();
             Compatibility.CheckModCompat();
 
-            EmbeddedResourceBundle = AssetUtils.LoadAssetBundleFromResources("StarLevelSystem.assets.starlevelsystems", typeof(StarLevelSystem).Assembly);
+            EmbeddedResourceBundle = LoadEmbeddedBundle("StarLevelSystem.assets.starlevelsystems");
             HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), harmonyInstanceId: PluginGUID);
             Compatibility.ApplyConditionalPatches(HarmonyInstance);
             // The seven per-file Init() calls are gone: Common/Config registers every config file, writes
@@ -77,14 +81,45 @@ namespace StarLevelSystem
             MinimapManager.OnVanillaMapDataLoaded += ZoneScaleSystem.Initialize;
             MinimapManager.OnVanillaMapDataLoaded += NemesisMinimap.OnMapReady;
             PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
+            PrefabManager.OnPrefabsRegistered += NovaBurstFx.Register;
             // ConfigNetwork tracks the sync flag itself now, and patches ZNet.Shutdown to reset it -- the
             // reset used to be a manual call in LevelScalingPatches that was easy to forget.
             UIHudControl.LoadAssets();
+            ModifierStatusEffects.Register();
             RaidControl.LoadAssets();
             TerminalManager.Init();
             NemesisSystem.Initialize();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
             //DocumentationUpdater.UpdateDocumentation();
+        }
+
+        // Jotunn's AssetUtils.LoadAssetBundleFromResources hands Unity the resource stream and disposes it straight after
+        // AssetBundle.LoadFromStream. The bundle is chunk-compressed (LZ4), which Unity reads lazily, a chunk at a time, so
+        // the first asset in a chunk it had not already cached read from a closed stream: "ManagedStream object must be
+        // readable", then a native "Overflow in memory allocator" that took the game down. Which assets that hit depended
+        // on the bundle's layout, so a rebuild could start or stop it. A copy in memory has no stream to lose.
+        private static AssetBundle LoadEmbeddedBundle(string resourceName) {
+            Stopwatch timer = Stopwatch.StartNew();
+            Assembly assembly = typeof(StarLevelSystem).Assembly;
+            string name = assembly.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(resourceName));
+            if (name == null) {
+                Log.LogError($"The asset bundle {resourceName} is not embedded in this build.");
+                return null;
+            }
+            byte[] bytes;
+            using (Stream stream = assembly.GetManifestResourceStream(name)) {
+                bytes = new byte[stream.Length];
+                int read = 0;
+                while (read < bytes.Length) {
+                    int got = stream.Read(bytes, read, bytes.Length - read);
+                    if (got <= 0) { break; }
+                    read += got;
+                }
+            }
+            AssetBundle bundle = AssetBundle.LoadFromMemory(bytes);
+            // global:: because inside the plugin class Logger is BepInEx's instance logger.
+            global::StarLevelSystem.Logger.LogDebug($"Opened the embedded asset bundle ({bytes.Length / 1024} KB) from memory in {timer.Elapsed.TotalMilliseconds:0.0} ms.");
+            return bundle;
         }
     }
 }

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <defs>
+    <linearGradient id="bigBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#df8a45"/>
+      <stop offset="100%" stop-color="#6e2f0e"/>
+    </linearGradient>
+    
+  </defs>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="url(#bigBase)"/>
+  <g>
+    <polygon points="340,336 275,250 340,60" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 340,60 405,250" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 405,250 610,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 610,250 450,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 450,370 510,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 510,560 340,440" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 340,440 170,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 170,560 230,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 230,370 70,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 70,250 275,250" fill="#000000" opacity="0.12"/>
+  </g>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#3f1804" stroke-width="9" stroke-linejoin="miter"/>
+  <g stroke="#3f1804" stroke-width="28" stroke-linecap="round"><line x1="340" y1="302" x2="340" y2="244"/><line x1="372" y1="326" x2="428" y2="308"/><line x1="361" y1="363" x2="396" y2="409"/><line x1="319" y1="363" x2="284" y2="409"/><line x1="308" y1="326" x2="252" y2="308"/></g>
+  <g stroke="#fff0c8" stroke-width="16" stroke-linecap="round"><line x1="340" y1="302" x2="340" y2="244"/><line x1="372" y1="326" x2="428" y2="308"/><line x1="361" y1="363" x2="396" y2="409"/><line x1="319" y1="363" x2="284" y2="409"/><line x1="308" y1="326" x2="252" y2="308"/></g>
+  <polygon points="340,208 360,244 320,244" fill="#fff0c8" stroke="#3f1804" stroke-width="6" stroke-linejoin="round"/><polygon points="462,297 434,327 422,289" fill="#fff0c8" stroke="#3f1804" stroke-width="6" stroke-linejoin="round"/><polygon points="417,438 380,421 412,397" fill="#fff0c8" stroke="#3f1804" stroke-width="6" stroke-linejoin="round"/><polygon points="263,438 268,397 300,421" fill="#fff0c8" stroke="#3f1804" stroke-width="6" stroke-linejoin="round"/><polygon points="218,297 258,289 246,327" fill="#fff0c8" stroke="#3f1804" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="340" cy="336" r="18" fill="#fff0c8" stroke="#3f1804" stroke-width="6"/>
+</svg>

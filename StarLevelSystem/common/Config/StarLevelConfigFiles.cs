@@ -70,6 +70,10 @@ namespace StarLevelSystem.common {
                 Defaults = () => CreatureModifiersData.DefaultModifiers,
                 Apply = CreatureModifiersData.ApplyLoaded,
                 Validate = CreatureModifiersData.ValidateModifiers,
+                // Stamps ModifiersVersion when the file already has every built-in modifier. Not a SchemaVersion:
+                // the framework would stamp and rewrite on load without asking, and a file that is missing new
+                // modifiers has to wait for the player's answer (ModifierConfigUpdate).
+                MigrateInPlace = modules.Modifiers.ModifierConfigUpdate.StampIfNothingMissing,
                 OnFailure = ConfigFailurePolicy.RevertToDefaults,
                 NeedsPrefabs = true,
                 AllowAdminEdit = true,
@@ -414,8 +418,14 @@ namespace StarLevelSystem.common {
 # Valid modifier names are exactly the keys in the generated default sections
 # (Brutal, Fast, Big, Small, Alert, Fire, Frost, Poison, Lightning, ElementalChaos,
 # Reflection, StaminaDrain, EitrDrain, Resist*, SoulEater, LifeLink, Splitter,
-# Lootbags, FireNova, PoisonNova, Evolving, BossSummoner, ...). New modifiers can only be
+# Lootbags, FireNova, FrostNova, PoisonNova, LightningNova, Evolving, Stalward,
+# Regenerating, Vampiric, Shielded, BossSummoner, EarthCaller, ...). New modifiers can only be
 # added through the mod API, not from yaml. Big and Small never roll on the same creature.
+#
+# ModifiersVersion records which release's built-in modifiers this file has been checked
+# against. When an update adds modifiers this file does not list, the game asks once, on the
+# main menu, whether to add them (a dedicated server logs their names instead). Setting it to
+# the current number by hand keeps your own list as it is.
 #
 # Each entry:
 #
@@ -435,12 +445,26 @@ namespace StarLevelSystem.common {
 # hit added as that element; for resists it is the damage reduction; for
 # SoulEater/LifeLink/Splitter it drives their growth/split/link strength; for
 # Reflection it is the chance (0-1) that a projectile hitting it is reflected;
-# for Small it is the most of its size a creature can lose.
+# for Small it is the most of its size a creature can lose; for Stalward it is the
+# share of stagger it ignores; for Regenerating the share of its maximum health it
+# heals per second once unhurt; for Vampiric the share of the health its hits take
+# that it heals; for Shielded the size of its shield as a share of maximum health;
+# for the death novas and EarthCaller the damage as a multiple of the creature's own hit.
 # Some modifiers read extra keys from Config (e.g. the drain modifiers accept
 # BlockReduction / ParryReduction / DodgeReduction, Reflection accepts
 # ReflectedDamage, the fraction of the damage a reflected shot keeps, and Small
 # accepts DamageReduction, the damage lost at the full shrink, and MinimumRoll,
-# the least share (0-1) of the full effect each Small creature rolls), and
+# the least share (0-1) of the full effect each Small creature rolls; Stalward
+# accepts MaxReduction, the most stagger it can ever ignore; Regenerating accepts
+# OutOfCombatDelay, the seconds without being hit before it heals; Shielded accepts
+# RegenDelay, the seconds without being hit before the shield refills, and
+# RegenDuration, the seconds an empty shield takes to fill; EarthCaller accepts
+# FirstCastDelay, the most seconds into a fight before its first spikes,
+# MinInterval and MaxInterval, the range its random wait between later spikes is drawn
+# from, Delay, the seconds a spot rumbles before the spike erupts, Radius, the
+# metres the spike's hit reaches around that spot, Range, how far
+# from the boss players are targeted, and LaunchSpeed, how hard a spike throws them
+# upward), and
 # BossSummoner uses BiomeObjects to pick its summons per biome and accepts
 # SummonStarLimit, the share (0-1) of the summoner's stars its summons may
 # have, rounded down (default 0.5, negative = no limit):
@@ -644,10 +668,13 @@ namespace StarLevelSystem.common {
 #     BossesHuntPlayers: true        # bosses hunt the nearest player like their minions;
 #                                    # false uses each candidate's own CreatureAI
 #
-# NemesisBossLootTables adds biome-keyed bonus loot to remote bosses and their
-# minions, using the same drop blocks as LootSettings.yaml. The console command
-# sls-nemesis-spawn places a remote boss for testing, and sls-nemesis-score
-# inspects or sets a player's score.
+# NemesisBossLootTables adds biome-keyed bonus loot to remote bosses (not their
+# minions, which keep their normal drops), using the same drop blocks as
+# LootSettings.yaml: Chance is a fraction, so 0.25 is 25% and 1 always drops.
+# The console command sls-nemesis-spawn places a remote boss for testing,
+# sls-nemesis-cleanup removes Nemesis spawns from the world (all of them, or
+# those within a range of you), and sls-nemesis-score inspects or sets a
+# player's score.
 #################################################";
 
         private const string LocationResetHeader = @"#################################################

@@ -1,4 +1,5 @@
 using HarmonyLib;
+using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -34,10 +35,6 @@ namespace StarLevelSystem.Modifiers {
         private static GameObject _reflectVfx;
         private static GameObject _reflectSfx;
 
-        private static float ReadConfig(CreatureModConfig cfg, string key, float fallback) {
-            if (cfg != null && cfg.Config != null && cfg.Config.TryGetValue(key, out float v)) { return v; }
-            return fallback;
-        }
 
         // Projectiles whose owner is wired into them by more than m_owner: the harpoon's line is drawn to its
         // owner, and the fishing float / grappling point a cast spawns look up the owner's rod and player ID.
@@ -129,7 +126,7 @@ namespace StarLevelSystem.Modifiers {
                 // The reflector becomes the shooter. It has to: Character.RPC_Damage drops player-on-player hits
                 // when PvP is off, so a shot still owned by the archer could never hurt them. Owning it also stops
                 // the next step's ray (which starts back inside the creature) from hitting the reflector again.
-                float damageKept = Mathf.Max(0f, ReadConfig(cfg, "ReflectedDamage", DefaultReflectedDamage));
+                float damageKept = Mathf.Max(0f, cfg.Get("ReflectedDamage", DefaultReflectedDamage));
                 projectile.m_owner = target;
                 projectile.m_hitOwner = false;
                 // An untamed reflector's shot can hit other monsters too; a tamed one's spares its own side.

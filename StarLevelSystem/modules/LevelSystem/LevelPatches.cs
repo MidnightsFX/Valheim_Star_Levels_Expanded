@@ -631,8 +631,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
 
             public static void SetSpawnAbilityLevelControl(Character chara, int providedLevel) {
-                // Tames skipping random rolls keep the vanilla skill-based summon level.
-                if (ValConfig.ControlAbilitySpawnedCreatures.Value && LevelSelection.SkipRandomLevelForTame(chara) == false) {
+                // Tames skipping random rolls and player summons keep the vanilla skill-based summon level.
+                if (ValConfig.ControlAbilitySpawnedCreatures.Value && LevelSelection.SkipRandomLevelForTame(chara) == false && LevelSelection.KeepVanillaLevelForPlayerSummon(chara) == false) {
                     CreatureSetupControl.CreatureSpawnerSetup(chara);
                     return;
                 }

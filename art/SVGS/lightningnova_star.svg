@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="#3a1580" transform="translate(340 336) scale(1.0) translate(-340 -336)"/>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="#5a2bb3" transform="translate(340 336) scale(0.84) translate(-340 -336)"/>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="#7f52dc" transform="translate(340 336) scale(0.68) translate(-340 -336)"/>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="#ad8bf5" transform="translate(340 336) scale(0.52) translate(-340 -336)"/>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="#e6d8ff" transform="translate(340 336) scale(0.36) translate(-340 -336)"/>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="#fff6b0" transform="translate(340 336) scale(0.2) translate(-340 -336)"/>
+  <line x1="340" y1="336" x2="340" y2="60" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="610" y2="250" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="510" y2="560" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="170" y2="560" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="70" y2="250" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="405" y2="250" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="450" y2="370" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="340" y2="440" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="230" y2="370" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <line x1="340" y1="336" x2="275" y2="250" stroke="#ffffff" stroke-width="2.5" opacity="0.35"/>
+  <circle cx="340" cy="316" r="30" fill="#fff6b0" opacity="0.85"/>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#1e0a45" stroke-width="9" stroke-linejoin="miter"/>
+</svg>

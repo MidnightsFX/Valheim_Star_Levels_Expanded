@@ -203,6 +203,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> UseDeterministicTreeScaling;
         public static ConfigEntry<bool> RandomizeTameChildrenLevels;
         public static ConfigEntry<bool> TamesSkipRandomLevelRoll;
+        public static ConfigEntry<bool> PlayerSummonsKeepVanillaLevel;
         public static ConfigEntry<bool> RandomizeTameChildrenModifiers;
         public static ConfigEntry<bool> SpawnMultiplicationAppliesToTames;
         public static ConfigEntry<bool> BossCreaturesNeverSpawnMultiply;
@@ -332,6 +333,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> ShowQuickConfigureButton;
         public static ConfigEntry<FirstRunMode> FirstTimeSetup;
         public static ConfigEntry<bool> AutoTuneBiomeStarCaps;
+        public static ConfigEntry<bool> ShowNovaIndicator;
 
         // The first-time setup's line in the shared per-user first-run record (common/ConfigUI). Never change the key
         // once shipped; raise the revision to show a reworked setup to users who have seen this one.
@@ -492,6 +494,10 @@ namespace StarLevelSystem.common {
                 new ConfigDescription("On the quick configure panel's Level Distribution page, scale each biome's star cap with the Max stars slider. Turn this off to type each biome's cap in yourself on that page.",
                 null,
                 new ConfigurationManagerAttributes { }));
+            ShowNovaIndicator = Config.Bind("Client config", "ShowNovaIndicator", false,
+                new ConfigDescription("Draw a circle on the ground where a creature's death nova is about to burst, filling in until it does. Only affects what you see.",
+                null,
+                new ConfigurationManagerAttributes { }));
             MigrateFirstTimeSetup();
 
 
@@ -530,6 +536,7 @@ namespace StarLevelSystem.common {
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
             RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
             TamesSkipRandomLevelRoll = BindServerConfig("LevelSystem", "TamesSkipRandomLevelRoll", false, "When enabled, tamed creatures that spawn without a level (summons, spawn multiplied tames, egg hatchlings when EggLevelDeterminedByItemQuality is off) stay at level 1 (0 stars) instead of rolling a random level. Levels inherited from parents are still applied.");
+            PlayerSummonsKeepVanillaLevel = BindServerConfig("LevelSystem", "PlayerSummonsKeepVanillaLevel", false, "When enabled, creatures that fight on the players' side (nature staff roots, Dead Raiser skeletons, other mods' summons) keep the level the game or their mod gives them instead of rolling a random level.");
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");

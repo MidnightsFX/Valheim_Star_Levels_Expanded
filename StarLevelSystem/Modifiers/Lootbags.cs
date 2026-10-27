@@ -30,9 +30,11 @@ namespace StarLevelSystem.Modifiers
                     CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), mods[ModifierNames.Lootbags.ToString()]);
                     List<LootEntry> ExtraLoot = new List<LootEntry>();
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
-                    
+                    HashSet<GameObject> fixedDrops = FixedCustomDrops(__instance.m_character);
+
                     foreach (var kvp in __result) {
                         if (kvp.Key == null) { continue; }
+                        if (fixedDrops != null && fixedDrops.Contains(kvp.Key)) { continue; }
                         int maxPerStack = LootPerformanceChanges.CheckItemStackingConfig(kvp.Key.GetComponent<ItemDrop>(), DropType.Item);
                         ExtraLoot.Add(new LootEntry() { Prefab = kvp.Key, Amount = Mathf.RoundToInt(kvp.Value * UnityEngine.Random.Range(0.5f, 1) * modifier), MaxAmountPerDrop = maxPerStack });
                     }
@@ -40,6 +42,19 @@ namespace StarLevelSystem.Modifiers
                     // immediate path instantiated every item synchronously inside the death frame.
                     LootPerformanceChanges.DropItemsPreferAsync(__instance.gameObject.transform.position, ExtraLoot);
                 }
+            }
+
+            // Drops this creature's own loot table (a Nemesis boss's reward) marks as not scaling. They are a fixed
+            // payout: multiplying them let a Lootbags boss drop several times its table's coin range.
+            private static HashSet<GameObject> FixedCustomDrops(Character character) {
+                List<ExtendedCharacterDrop> customLoot = LootSystemData.GetCustomLoot(character);
+                if (customLoot == null) { return null; }
+                HashSet<GameObject> fixedDrops = new HashSet<GameObject>();
+                foreach (ExtendedCharacterDrop loot in customLoot) {
+                    if (loot?.GameDrop?.m_prefab == null) { continue; }
+                    if (loot.DoesNotScale || loot.Drop.DontScale) { fixedDrops.Add(loot.GameDrop.m_prefab); }
+                }
+                return fixedDrops;
             }
         }
     }

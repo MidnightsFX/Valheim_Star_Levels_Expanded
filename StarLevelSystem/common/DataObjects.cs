@@ -75,6 +75,8 @@ namespace StarLevelSystem.common
         public static readonly string SLS_EVOLVE = "SLS_Evolve";
         // How much of the Small modifier's full effect this creature rolled (0-1). See Modifiers/Small.cs.
         public static readonly string SLS_SMALL = "SLS_Small";
+        // A Shielded creature's remaining shield in hit points; -1 until its owner first fills it (Modifiers/Shielded.cs).
+        public static readonly string SLS_SHIELD = "SLS_Shield";
         public static readonly string SLS_SIZE = "SLS_SIZE";
         public static readonly string SLS_NEMESIS_SCORE = "SLS_NEM_SCORE";
         public static readonly string SLS_NEMESIS_SCOREDATA = "SLS_NEM_SCOREDATA";
@@ -82,6 +84,9 @@ namespace StarLevelSystem.common
         public static readonly string SLS_CUSTOM_LOOT = "SLS_CUSTOM_LOOT";
         public static readonly string SLS_NEMESIS_BOSS = "SLS_NEM_BOSS";
         public static readonly string SLS_NEMESIS_PIN = "SLS_NEM_PIN";
+        // Set on every creature a Nemesis spawn made (bosses, minions and reactive spawns), so sls-nemesis-cleanup can
+        // find them, and so a minion from before the flag can be told apart (see LootSystemData.GetCustomLoot).
+        public static readonly string SLS_NEMESIS_SPAWN = "SLS_NEM_SPAWN";
         // The CreatureBaseValueModifiers / CreaturePerLevelValueModifiers a spawn definition (NemesisSpawn,
         // NemesisMinion) gave one creature, serialized like SLS_MODSV2. They used to live only in the session
         // cache entry built at spawn time, so a remote Nemesis boss lost its 4x health and 1.5x damage the first
@@ -865,20 +870,32 @@ namespace StarLevelSystem.common
                 }
                 if (VisualEffect != null && !CreatureModifiersData.LoadedModifierEffects.ContainsKey(VisualEffect)) {
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(VisualEffect);
-                    CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
-                    PrefabManager.Instance.AddPrefab(prefab_obj);
-                    FixMocksIfAddedLate(prefab_obj);
-                    // Stored even when null: SetupCreatureVFX reads this by key and skips a null effect.
-                    GameObject mockFixedGO = PrefabLookup.FindOrWarn(VisualEffect, "a modifier visual effect");
-                    CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockFixedGO);
+                    // A name the bundle does not have (an asset not built into it yet) costs the creature its effect,
+                    // not the whole modifier: CustomPrefab throws on a null prefab, and that threw out of the load.
+                    if (game_obj == null) {
+                        Logger.LogWarning($"Modifier {modifierName} has no visual effect '{VisualEffect}' in the asset bundle; it will show none.");
+                        CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, null);
+                    } else {
+                        CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
+                        PrefabManager.Instance.AddPrefab(prefab_obj);
+                        FixMocksIfAddedLate(prefab_obj);
+                        // Stored even when null: SetupCreatureVFX reads this by key and skips a null effect.
+                        GameObject mockFixedGO = PrefabLookup.FindOrWarn(VisualEffect, "a modifier visual effect");
+                        CreatureModifiersData.LoadedModifierEffects.Add(VisualEffect, mockFixedGO);
+                    }
                 }
                 if (SecondaryEffect != null && !CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(SecondaryEffect)) {
                     GameObject game_obj = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(SecondaryEffect);
-                    CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
-                    PrefabManager.Instance.AddPrefab(prefab_obj);
-                    FixMocksIfAddedLate(prefab_obj);
-                    GameObject mockFixedGO = PrefabLookup.FindOrWarn(SecondaryEffect, "a modifier secondary effect");
-                    CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockFixedGO);
+                    if (game_obj == null) {
+                        Logger.LogWarning($"Modifier {modifierName} has no secondary effect '{SecondaryEffect}' in the asset bundle; it will do nothing that needs it.");
+                        CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, null);
+                    } else {
+                        CustomPrefab prefab_obj = new CustomPrefab(game_obj, true);
+                        PrefabManager.Instance.AddPrefab(prefab_obj);
+                        FixMocksIfAddedLate(prefab_obj);
+                        GameObject mockFixedGO = PrefabLookup.FindOrWarn(SecondaryEffect, "a modifier secondary effect");
+                        CreatureModifiersData.LoadedSecondaryEffects.Add(SecondaryEffect, mockFixedGO);
+                    }
                 }
             }
 
@@ -935,6 +952,9 @@ namespace StarLevelSystem.common
 
         public class CreatureModifierCollection
         {
+            // Which set of built-in modifiers this file has been checked against (CreatureModifiersData.
+            // CurrentModifiersVersion). Absent, and so 0, in every file written before the field existed.
+            public int ModifiersVersion { get; set; }
             public GlobalModifierSettings ModifierGlobalSettings { get; set; } = new GlobalModifierSettings();
             public Dictionary<string, CreatureModifierConfiguration> MajorModifiers { get; set; }
             public Dictionary<string, CreatureModifierConfiguration> MinorModifiers { get; set; }
@@ -1600,7 +1620,7 @@ namespace StarLevelSystem.common
             [Description("Server-driven ambient remote spawning of Nemesis minibosses across the world.")]
             public RemoteNemesisSpawnSettings RemoteSpawning { get; set; } = new RemoteNemesisSpawnSettings();
 
-            [Description("Biome-keyed extra loot granted to remotely-spawned Nemesis bosses and their minions. Merged onto each creature's per-instance loot table.")]
+            [Description("Biome-keyed extra loot granted to remotely-spawned Nemesis bosses (their minions keep their normal drops). Merged onto the boss's per-instance loot table.")]
             public Dictionary<Heightmap.Biome, List<ExtendedCharacterDrop>> NemesisBossLootTables { get; set; } = new Dictionary<Heightmap.Biome, List<ExtendedCharacterDrop>>();
         }
 

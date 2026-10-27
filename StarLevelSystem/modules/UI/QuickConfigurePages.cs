@@ -67,6 +67,11 @@ namespace StarLevelSystem.modules.UI {
             { "Brutal", "$sls_cfg_mod_brutal" },
             { "ElementalChaos", "$sls_cfg_mod_elemental_chaos" },
             { "Reflection", "$sls_cfg_mod_reflection" },
+            { "Stalward", "$sls_cfg_mod_stalward" },
+            { "Regenerating", "$sls_cfg_mod_regenerating" },
+            { "Vampiric", "$sls_cfg_mod_vampiric" },
+            { "Shielded", "$sls_cfg_mod_shielded" },
+            { "EarthCaller", "$sls_cfg_mod_earth_caller" },
         };
 
         // Each boss's defeat key to vanilla's own token for its name, so it reads as it does in game.
@@ -1101,6 +1106,7 @@ namespace StarLevelSystem.modules.UI {
             ConfigUI.CreateScroll(parent, 0f, scrollY, LeftW, scrollH, out Transform left, out float lw);
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_nem_header_settings"));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_nem_enable", staged.enableNemesis, v => staged.enableNemesis = v), Tip(ValConfig.EnableNemesisSystem)));
+            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_nem_remote", staged.enableNemesisRemote, v => staged.enableNemesisRemote = v), Tip("EnableNemesisRemoteSpawning", "$sls_cfg_tip_nem_remote")));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_cooldown", Mathf.Min(0f, staged.nemCooldown), Mathf.Max(120f, staged.nemCooldown), staged.nemCooldown, false, v => staged.nemCooldown = v), Tip("NemesisActionCooldownSeconds", "$sls_cfg_tip_nem_cooldown")));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_influence", Mathf.Min(0f, staged.nemInfluence), Mathf.Max(1000f, staged.nemInfluence), staged.nemInfluence, false, v => staged.nemInfluence = v), Tip("NemesisInfluenceRadius", "$sls_cfg_tip_nem_influence")));
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_min_spawn", Mathf.Min(0f, staged.nemMinSpawn), Mathf.Max(500f, staged.nemMinSpawn), staged.nemMinSpawn, false, v => staged.nemMinSpawn = v), Tip("NemesisMinSpawnDistance", "$sls_cfg_tip_nem_min_spawn")));
@@ -1128,6 +1134,8 @@ namespace StarLevelSystem.modules.UI {
         private static void ResetNemesisPage() {
             staged.enableNemesis = DefaultOf(ValConfig.EnableNemesisSystem);
             NemesisConfiguration shipped = ShippedDefaults(YamlConfigManager.NemesisSettings);
+            // Read as the snapshot reads it: on only when both switches ship on.
+            staged.enableNemesisRemote = DefaultOf(ValConfig.EnableNemesisRemoteSpawning) && shipped?.RemoteSpawning?.Enabled == true;
             if (shipped == null) { return; }
             staged.nemCooldown = shipped.NemesisActionCooldownSeconds;
             staged.nemInfluence = shipped.NemesisInfluenceRadius;

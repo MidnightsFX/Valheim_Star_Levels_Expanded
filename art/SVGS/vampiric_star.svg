@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <defs>
+    <linearGradient id="vampiricBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cf2a44"/>
+      <stop offset="100%" stop-color="#560513"/>
+    </linearGradient>
+    
+  </defs>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="url(#vampiricBase)"/>
+  <g>
+    <polygon points="340,336 275,250 340,60" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 340,60 405,250" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 405,250 610,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 610,250 450,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 450,370 510,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 510,560 340,440" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 340,440 170,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 170,560 230,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 230,370 70,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 70,250 275,250" fill="#000000" opacity="0.12"/>
+  </g>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#2a020a" stroke-width="9" stroke-linejoin="miter"/>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ddd3c2"/>
+    </linearGradient>
+    <linearGradient id="blood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff5a6c"/>
+      <stop offset="100%" stop-color="#a0001a"/>
+    </linearGradient>
+  </defs>
+  <rect x="254" y="226" width="172" height="34" rx="17" fill="#3a040e" stroke="#1c0206" stroke-width="5"/>
+  <path d="M280,254 L324,254 Q314,322 302,378 Q290,322 280,254 Z" fill="url(#ivory)" stroke="#2a0309" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M356,254 L400,254 Q390,322 378,378 Q366,322 356,254 Z" fill="url(#ivory)" stroke="#2a0309" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M378,396 C394,420 402,432 402,444 A24,24 0 0,1 354,444 C354,432 362,420 378,396 Z" fill="url(#blood)" stroke="#4a000c" stroke-width="5"/>
+  <path d="M302,380 C308,390 310,396 310,402 A8,8 0 0,1 294,402 C294,396 296,390 302,380 Z" fill="url(#blood)"/>
+</svg>

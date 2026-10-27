@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 1024 1024">
+  <g transform="scale(12.8)"><g stroke="#4e1f06" stroke-width="8" stroke-linecap="round"><line x1="46" y1="34" x2="62" y2="18"/><line x1="34" y1="34" x2="18" y2="18"/><line x1="46" y1="46" x2="62" y2="62"/><line x1="34" y1="46" x2="18" y2="62"/></g>
+  <g stroke="#d9762f" stroke-width="5" stroke-linecap="round"><line x1="46" y1="34" x2="62" y2="18"/><line x1="34" y1="34" x2="18" y2="18"/><line x1="46" y1="46" x2="62" y2="62"/><line x1="34" y1="46" x2="18" y2="62"/></g>
+  <polygon points="68,12 54,14 66,26" fill="#d9762f" stroke="#4e1f06" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="12,12 26,14 14,26" fill="#d9762f" stroke="#4e1f06" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="68,68 54,66 66,54" fill="#d9762f" stroke="#4e1f06" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="12,68 26,66 14,54" fill="#d9762f" stroke="#4e1f06" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="40" cy="40" r="6" fill="#d9762f" stroke="#4e1f06" stroke-width="1.5"/></g>
+</svg>

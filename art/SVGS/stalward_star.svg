@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <defs>
+    <linearGradient id="stalwardBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8b9db0"/>
+      <stop offset="100%" stop-color="#3c4957"/>
+    </linearGradient>
+    
+  </defs>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="url(#stalwardBase)"/>
+  <g>
+    <polygon points="340,336 275,250 340,60" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 340,60 405,250" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 405,250 610,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 610,250 450,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 450,370 510,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 510,560 340,440" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 340,440 170,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 170,560 230,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 230,370 70,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 70,250 275,250" fill="#000000" opacity="0.12"/>
+  </g>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#1c252e" stroke-width="9" stroke-linejoin="miter"/>
+  <defs>
+    <linearGradient id="bronze" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6cf86"/>
+      <stop offset="100%" stop-color="#a5692b"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#3b2510" stroke-width="30" stroke-linecap="round" fill="none">
+    <circle cx="340" cy="196" r="24"/>
+    <line x1="340" y1="222" x2="340" y2="440"/>
+    <line x1="278" y1="256" x2="402" y2="256"/>
+    <path d="M238,372 Q252,452 340,454 Q428,452 442,372"/>
+  </g>
+  <g stroke="url(#bronze)" stroke-width="18" stroke-linecap="round" fill="none">
+    <circle cx="340" cy="196" r="24"/>
+    <line x1="340" y1="222" x2="340" y2="440"/>
+    <line x1="278" y1="256" x2="402" y2="256"/>
+    <path d="M238,372 Q252,452 340,454 Q428,452 442,372"/>
+  </g>
+  <polygon points="212,384 246,334 270,388" fill="url(#bronze)" stroke="#3b2510" stroke-width="6" stroke-linejoin="round"/>
+  <polygon points="468,384 434,334 410,388" fill="url(#bronze)" stroke="#3b2510" stroke-width="6" stroke-linejoin="round"/>
+</svg>

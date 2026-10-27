@@ -11,7 +11,8 @@ namespace StarLevelSystem.Data
         public static NemesisConfiguration SLE_Nemesis_Settings = DefaultConfiguration;
 
         public static readonly NemesisConfiguration DefaultConfiguration = new NemesisConfiguration() {
-            NemesisVersion = 5,
+            // 6: loot table chances are fractions like everywhere else; 5 wrote them as percentages (see MigrateToCurrent).
+            NemesisVersion = 6,
             NemesisActionCooldownSeconds = 10,
             NemesisInfluenceRadius = 300f,
             NemesisMinSpawnDistance = 30f,
@@ -96,9 +97,9 @@ namespace StarLevelSystem.Data
                                 CustomName = "Treasure Troll",
                                 CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>() { { CreatureBaseAttribute.Size, 0.3f } },
                                 CustomLoot = new List<ExtendedCharacterDrop>() {
-                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 250, Max = 750, Prefab = "Coins", Chance = 100f } },
-                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 10, Max = 15, Prefab = "Ruby", Chance = 25f } },
-                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 15, Max = 20, Prefab = "Amber", Chance = 25f } }
+                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 250, Max = 750, Prefab = "Coins", Chance = 1f } },
+                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 10, Max = 15, Prefab = "Ruby", Chance = 0.25f } },
+                                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 15, Max = 20, Prefab = "Amber", Chance = 0.25f } }
                                 }
                             },
                     }}},
@@ -675,50 +676,50 @@ namespace StarLevelSystem.Data
             },
             NemesisBossLootTables = new Dictionary<Heightmap.Biome, List<ExtendedCharacterDrop>>() {
                 { Heightmap.Biome.Meadows, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 50, Max = 150, Prefab = "Coins", Chance = 100f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 50, Max = 150, Prefab = "Coins", Chance = 1f } },
                 }},
                 { Heightmap.Biome.BlackForest, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 100, Max = 250, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 100, Max = 250, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 0.25f } },
                 }},
                 { Heightmap.Biome.Swamp, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 150, Max = 300, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 150, Max = 300, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 0.15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 0.25f } },
                 }},
                 { Heightmap.Biome.Mountain, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 200, Max = 350, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 25f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 10f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 200, Max = 350, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Amber", Chance = 0.25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 0.15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 0.1f } },
                 }},
                 { Heightmap.Biome.Plains, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 250, Max = 400, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 50f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 25f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 5f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 250, Max = 400, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 0.5f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 0.15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 0.25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 0.05f } },
                 }},
                 { Heightmap.Biome.Mistlands, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 300, Max = 500, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 50f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 15f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 25f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 10f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 300, Max = 500, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 0.5f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 0.15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 0.25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 0.1f } },
                 }},
                 { Heightmap.Biome.AshLands, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 400, Max = 600, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 60f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 25f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 35f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 15f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 400, Max = 600, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 0.6f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 0.25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 0.35f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 0.15f } },
                 }},
                 { Heightmap.Biome.Ocean, new List<ExtendedCharacterDrop>() {
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 500, Max = 800, Prefab = "Coins", Chance = 100f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 75f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 50f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 30f } },
-                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 25f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 500, Max = 800, Prefab = "Coins", Chance = 1f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 5, Max = 10, Prefab = "Amber", Chance = 0.75f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "Ruby", Chance = 0.5f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 3, Prefab = "AmberPearl", Chance = 0.3f } },
+                    new ExtendedCharacterDrop() { Drop = new Drop() { DontScale = true, Min = 1, Max = 1, Prefab = "SilverNecklace", Chance = 0.25f } },
                 }},
             }
         };
@@ -755,13 +756,51 @@ namespace StarLevelSystem.Data
         }
 
         // Any version other than the current one is replaced wholesale -- the original check was != rather
-        // than <, so a newer file was discarded too, and that behaviour is preserved deliberately.
+        // than <, so a newer file was discarded too, and that behaviour is preserved deliberately -- unless it is
+        // version 5, whose only difference is fixed in place. Same shape as RaidsData.MigrateToCurrent.
         internal static NemesisConfiguration MigrateToCurrent(NemesisConfiguration parsed) {
+            if (parsed != null && parsed.NemesisVersion == 5) {
+                int rescaled = RescalePercentLootChances(parsed);
+                Logger.LogInfo($"Nemesis config is from version 5; converted {rescaled} loot drop chances from percentages and kept everything else.");
+                return parsed;
+            }
             Logger.LogInfo("Nemesis config version does not match this build, resetting it to the defaults.");
             // Fresh copy: returning the shared DefaultConfiguration would make it the live, runtime-mutated
             // settings object, and the migration path also writes the returned object over the user's file.
             return YamlFormat.Default.Deserializer.Deserialize<NemesisConfiguration>(
                 YamlFormat.Default.Serializer.Serialize(DefaultConfiguration));
+        }
+
+        // Version 5 shipped its Nemesis loot chances as percentages (25 for 25%), but a drop chance is a fraction and
+        // anything from 1 up always drops, so every gem and necklace in those tables dropped every time. Any chance
+        // above 1 in the boss loot tables and the spawn events' own loot is read as the percentage it was meant as.
+        private static int RescalePercentLootChances(NemesisConfiguration config) {
+            int rescaled = 0;
+            if (config.NemesisBossLootTables != null) {
+                foreach (List<ExtendedCharacterDrop> table in config.NemesisBossLootTables.Values) {
+                    rescaled += RescalePercentLootChances(table);
+                }
+            }
+            if (config.ChanceChanges?.CreatureOps != null) {
+                foreach (NemesisChanceEntry entry in config.ChanceChanges.CreatureOps.Values) {
+                    if (entry?.SpawnConfig == null) { continue; }
+                    foreach (NemesisSpawn spawn in entry.SpawnConfig) {
+                        rescaled += RescalePercentLootChances(spawn?.CustomLoot);
+                    }
+                }
+            }
+            return rescaled;
+        }
+
+        private static int RescalePercentLootChances(List<ExtendedCharacterDrop> loot) {
+            if (loot == null) { return 0; }
+            int rescaled = 0;
+            foreach (ExtendedCharacterDrop drop in loot) {
+                if (drop?.Drop == null || drop.Drop.Chance <= 1f) { continue; }
+                drop.Drop.Chance = Math.Min(1f, drop.Drop.Chance / 100f);
+                rescaled++;
+            }
+            return rescaled;
         }
     }
 }

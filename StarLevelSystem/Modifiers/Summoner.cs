@@ -31,12 +31,7 @@ namespace StarLevelSystem.Modifiers
             // Always re-run rather than only on first attach: SetupSummoner is idempotent, and this is what
             // picks up a config reload that changed the cap, the interval or the summon pool.
             if (Logger.IsDebugEnabled) { Logger.LogDebug($"Setting up Summoner for {creature.name} with {summonPrefabs.Count} summonable prefabs"); }
-            summoner.SetupSummoner(creature, summonPrefabs, Mathf.RoundToInt(config.BasePower), config.PerlevelPower, ReadConfig(config, "SummonStarLimit", DefaultSummonStarLimit));
-        }
-
-        private static float ReadConfig(CreatureModConfig cfg, string key, float fallback) {
-            if (cfg != null && cfg.Config != null && cfg.Config.TryGetValue(key, out float v)) { return v; }
-            return fallback;
+            summoner.SetupSummoner(creature, summonPrefabs, Mathf.RoundToInt(config.BasePower), config.PerlevelPower, config.Get("SummonStarLimit", DefaultSummonStarLimit));
         }
 
         // Wired as the BossSummoner TeardownEvent. Removing the modifier used to leave the component and its

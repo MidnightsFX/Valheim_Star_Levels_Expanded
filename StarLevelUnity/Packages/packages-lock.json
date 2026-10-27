@@ -1,5 +1,15 @@
 {
   "dependencies": {
+    "com.anklebreaker.unity-mcp": {
+      "version": "https://github.com/AnkleBreaker-Studio/unity-mcp-plugin.git#main",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0",
+        "com.unity.test-framework": "1.1.33"
+      },
+      "hash": "3b28d4cea5911db575bbb5ab07f3241dfd024cf3"
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.12",
       "depth": 0,

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <defs>
+    <linearGradient id="fastBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c9ec60"/>
+      <stop offset="100%" stop-color="#557a0e"/>
+    </linearGradient>
+    
+  </defs>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="url(#fastBase)"/>
+  <g>
+    <polygon points="340,336 275,250 340,60" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 340,60 405,250" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 405,250 610,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 610,250 450,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 450,370 510,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 510,560 340,440" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 340,440 170,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 170,560 230,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 230,370 70,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 70,250 275,250" fill="#000000" opacity="0.12"/>
+  </g>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#2c4006" stroke-width="9" stroke-linejoin="miter"/>
+  <defs>
+    <linearGradient id="chevron" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e9f7c4"/>
+    </linearGradient>
+  </defs>
+  <polygon points="275,262 315,262 375,330 315,398 275,398 335,330" fill="url(#chevron)" stroke="#2c4006" stroke-width="7" stroke-linejoin="round"/>
+  <polygon points="345,262 385,262 445,330 385,398 345,398 405,330" fill="url(#chevron)" stroke="#2c4006" stroke-width="7" stroke-linejoin="round"/>
+  <g stroke-linecap="round">
+    <g stroke="#2c4006" stroke-width="20"><line x1="214" y1="300" x2="258" y2="300"/><line x1="200" y1="330" x2="262" y2="330"/><line x1="232" y1="360" x2="262" y2="360"/></g>
+    <g stroke="#ffffff" stroke-width="10"><line x1="214" y1="300" x2="258" y2="300"/><line x1="200" y1="330" x2="262" y2="330"/><line x1="232" y1="360" x2="262" y2="360"/></g>
+  </g>
+</svg>

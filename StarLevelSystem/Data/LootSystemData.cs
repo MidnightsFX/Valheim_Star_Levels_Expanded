@@ -1,4 +1,5 @@
 using StarLevelSystem.common;
+using StarLevelSystem.modules.NemesisSystem;
 using System;
 using System.Collections.Generic;
 using static StarLevelSystem.common.DataObjects;
@@ -254,6 +255,9 @@ namespace StarLevelSystem.Data
             if (chara?.m_nview == null || chara.m_nview.GetZDO() == null) { return null; }
             string raw = chara.m_nview.GetZDO().GetString(DataObjects.SLS_CUSTOM_LOOT, null);
             if (string.IsNullOrEmpty(raw)) { return null; }
+            // A remote Nemesis minion from before that was fixed holds its boss's loot table, which paid out once per
+            // minion. It drops its normal loot instead, so groups already standing in a world stop doing that too.
+            if (NemesisMiniBossManager.IsUnflaggedMinion(chara.m_nview.GetZDO())) { return null; }
             try {
                 var loot = DataObjects.yamlDeserializer.Deserialize<List<ExtendedCharacterDrop>>(raw);
                 // Resolve prefab references (GameDrop) since the DoesNotScale path dereferences them directly.

@@ -48,6 +48,8 @@ StarLevelSystem.API.AddNewModifier(
 
 );
 ```
+Give it a modifier ID of 100 or more. IDs 0-99 are reserved for Star Level System's own modifiers, and
+an ID that is already in use is refused.
 
 ### Attribute changes are saved on the creature
 

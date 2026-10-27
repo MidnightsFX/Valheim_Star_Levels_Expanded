@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="60 40 560 560">
+  <defs>
+    <linearGradient id="earthcallerBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#bd8650"/>
+      <stop offset="100%" stop-color="#57310f"/>
+    </linearGradient>
+    
+  </defs>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="url(#earthcallerBase)"/>
+  <g>
+    <polygon points="340,336 275,250 340,60" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 340,60 405,250" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 405,250 610,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 610,250 450,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 450,370 510,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 510,560 340,440" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 340,440 170,560" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 170,560 230,370" fill="#000000" opacity="0.12"/>
+    <polygon points="340,336 230,370 70,250" fill="#ffffff" opacity="0.16"/>
+    <polygon points="340,336 70,250 275,250" fill="#000000" opacity="0.12"/>
+  </g>
+  <polygon points="340,60 405,250 610,250 450,370 510,560 340,440 170,560 230,370 70,250 275,250" fill="none" stroke="#2a1606" stroke-width="9" stroke-linejoin="miter"/>
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e2d9ce"/>
+      <stop offset="100%" stop-color="#7a6f65"/>
+    </linearGradient>
+  </defs>
+  <path d="M214,432 L466,432 L452,456 L228,456 Z" fill="#3a220c"/>
+  <polygon points="340,176 386,432 294,432" fill="url(#stone)" stroke="#3a2f26" stroke-width="6" stroke-linejoin="round"/>
+  <polygon points="262,432 288,298 320,432" fill="url(#stone)" stroke="#3a2f26" stroke-width="6" stroke-linejoin="round"/>
+  <polygon points="362,432 398,282 432,432" fill="url(#stone)" stroke="#3a2f26" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M220,440 L284,428 L318,448 L362,426 L410,446 L462,436" fill="none" stroke="#1e1006" stroke-width="7" stroke-linejoin="round"/>
+  <polygon points="242,286 262,274 268,298" fill="url(#stone)" stroke="#3a2f26" stroke-width="3"/>
+  <polygon points="436,250 456,258 444,276" fill="url(#stone)" stroke="#3a2f26" stroke-width="3"/>
+  <polygon points="292,238 306,228 312,248" fill="url(#stone)" stroke="#3a2f26" stroke-width="3"/>
+  <circle cx="250" cy="420" r="16" fill="#e8d9c4" opacity="0.55"/>
+  <circle cx="436" cy="418" r="14" fill="#e8d9c4" opacity="0.5"/>
+</svg>

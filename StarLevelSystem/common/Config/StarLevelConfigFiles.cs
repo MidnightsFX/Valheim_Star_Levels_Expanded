@@ -71,8 +71,8 @@ namespace StarLevelSystem.common {
                 Apply = CreatureModifiersData.ApplyLoaded,
                 Validate = CreatureModifiersData.ValidateModifiers,
                 // Stamps ModifiersVersion when the file already has every built-in modifier. Not a SchemaVersion:
-                // the framework would stamp and rewrite on load without asking, and a file that is missing new
-                // modifiers has to wait for the player's answer (ModifierConfigUpdate).
+                // the framework would stamp and rewrite on load unconditionally, and a file that is missing new
+                // modifiers keeps its old version so the missing names keep being logged (ModifierConfigUpdate).
                 MigrateInPlace = modules.Modifiers.ModifierConfigUpdate.StampIfNothingMissing,
                 OnFailure = ConfigFailurePolicy.RevertToDefaults,
                 NeedsPrefabs = true,
@@ -423,9 +423,8 @@ namespace StarLevelSystem.common {
 # added through the mod API, not from yaml. Big and Small never roll on the same creature.
 #
 # ModifiersVersion records which release's built-in modifiers this file has been checked
-# against. When an update adds modifiers this file does not list, the game asks once, on the
-# main menu, whether to add them (a dedicated server logs their names instead). Setting it to
-# the current number by hand keeps your own list as it is.
+# against. When an update adds modifiers this file does not list, their names are logged as a
+# warning. Setting it to the current number by hand keeps your own list as it is.
 #
 # Each entry:
 #

@@ -443,7 +443,7 @@ namespace StarLevelSystem.Data
         // Bumped whenever a release adds built-in modifiers, with the new names listed under the new number in
         // ModifiersAddedInVersion. A Modifiers.yaml lists its own pools in full and those replace the built-in ones,
         // so without this an existing install never sees a new modifier. ModifierConfigUpdate compares a file's
-        // ModifiersVersion against this and offers the player the ones their file is missing, once.
+        // ModifiersVersion against this and logs the ones the file is missing.
         internal const int CurrentModifiersVersion = 1;
 
         internal static readonly Dictionary<int, List<string>> ModifiersAddedInVersion = new Dictionary<int, List<string>>() {

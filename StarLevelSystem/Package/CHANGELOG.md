@@ -4,7 +4,7 @@
 - Adds six creature and one boss modifiers: Stalward, Regenerating, Vampiric, Shielded, Frost Nova, Lightning Nova and Earth Caller (boss)
 	- Alert, Big, Small and Fast now have their own icons.
 	- Adds an optional circle that shows where a death nova will burst.
-	- Players with an existing modifier config are asked once whether to add the new modifiers.
+	- Delete your Modifiers.yaml to get the new defaults
 - Adds an option for summons on the players' side, like nature staff roots, to keep their normal level instead of rolling stars.
 - Fixes every Nemesis minion dropping its boss's reward, including groups already in the world.
 - Nemesis boss gem and jewelry drops are now chances rather than guaranteed, and loot bag bosses no longer multiply that reward.

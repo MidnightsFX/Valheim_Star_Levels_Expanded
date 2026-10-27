@@ -3,9 +3,10 @@
  ```
 - Evolving creatures now show a bar under their health with their progress to the next level
 - Creatures above five stars now show icons for up to 5 modifiers
-- A Gammeltroll's petrified remains are now as big as the troll was, and give more gold the more stars it had
 - Fixes sls-kill-all not killing every creature
 - Fixes frost caves, dvergr towns and other large dungeons never resetting on slower servers
+- Fixes nonCharacterSpecificLoot not being applied in some cases
+	- ice cave stalagtites now drop crystals again by default
  ```
 
 **1.28.0**

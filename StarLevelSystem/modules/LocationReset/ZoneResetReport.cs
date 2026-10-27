@@ -50,8 +50,9 @@ namespace StarLevelSystem.modules.LocationReset {
             // nothing was touched. LocationHeldReason says what, LocationHeldTransient whether it is
             // worth a short retry.
             Held,
-            // Due, but its prefab or one of its dungeon rooms did not load in time, so nothing was
-            // touched rather than rebuild it without them. LocationHeldReason names what was missing.
+            // Due, but its prefab or one of its dungeon rooms was not loaded, so nothing was touched
+            // rather than rebuild it without them. LocationHeldReason names what was missing, and
+            // LocationHeldTransient whether it is still loading (a short retry) or failed (a fault).
             AssetsNotLoaded,
         }
 

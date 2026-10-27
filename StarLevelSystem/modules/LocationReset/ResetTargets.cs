@@ -298,8 +298,10 @@ namespace StarLevelSystem.modules.LocationReset {
 
             // The location prefab and its dungeon rooms must be loaded BEFORE the synchronous section --
             // see LocationPreload. Loading has to happen here; RegenerateLocation cannot yield. Last
-            // before the regeneration so nothing it holds can expire in between, and skipped when the
-            // location will not be rebuilt on this pass at all.
+            // before the regeneration so vanilla's spawn gate, polled open in there, cannot expire in
+            // between, and skipped when the location will not be rebuilt on this pass at all. The
+            // assets themselves outlive this pass: the preload keeps them for the next chunk with the
+            // same location, and drops them itself once they go unused.
             LocationPreload preload = null;
             if (locationCeiling != LocationGate.Scope.None) {
                 yield return LocationPreload.Prepare(zone, cfg, TerrainZonesFor(zone, extraZones),
@@ -344,7 +346,8 @@ namespace StarLevelSystem.modules.LocationReset {
                 succeeded = false;
                 Logger.LogLocationResetError($"Reset of zone {zone.x},{zone.y} failed and will be retried: {e}");
             } finally {
-                preload?.Release();
+                // The preload is not released here: its assets stay cached for the next chunk with the
+                // same location, and LocationPreload drops them once they go unused.
                 // Release is a no-op for chunks this class did not load, so a neighbour that was
                 // already live (a player standing in it) is never torn down.
                 if (extraZones != null) {
@@ -666,10 +669,12 @@ namespace StarLevelSystem.modules.LocationReset {
             // the respawn then stalls the server loading rooms, or places a dungeon without the ones
             // that would not load. Checked only now, so a location this pass was never going to
             // rebuild -- held, terrain-only, interior preserved -- reports what it really was. Left
-            // un-stamped, so the next cycle tries again.
+            // un-stamped. Loads still in flight are a transient hold, and the sweep retries the chunk
+            // in minutes; a load that failed is a fault, and the next cycle tries again.
             if (preload == null || preload.Ready == false) {
                 if (preload != null) { preload.LogProblems(zone, entry.Name); }
                 report.LocationHeldReason = preload?.Problem ?? "its prefab was not loaded for this pass";
+                report.LocationHeldTransient = preload != null && preload.Transient;
                 report.RecordLocation(entry.Name, ZoneResetReport.LocationOutcome.AssetsNotLoaded);
                 return;
             }

@@ -329,8 +329,13 @@ namespace StarLevelSystem.modules.LocationReset {
                 }
 
                 // The verdict taken right before the clear is the one that counts: a player who walked
-                // into the dungeon while the zone loaded turns this pass into a short retry.
-                if (report.LocationResult == ZoneResetReport.LocationOutcome.Held && report.LocationHeldTransient) { playerHold = true; }
+                // into the dungeon while the zone loaded turns this pass into a short retry. So does a
+                // location whose assets were still loading when the wait ran out: they finish in the
+                // background, and the retry finds them in.
+                bool transientHold = report.LocationHeldTransient
+                    && (report.LocationResult == ZoneResetReport.LocationOutcome.Held
+                        || report.LocationResult == ZoneResetReport.LocationOutcome.AssetsNotLoaded);
+                if (transientHold) { playerHold = true; }
                 if (report.LocationResult == ZoneResetReport.LocationOutcome.InteriorRebuilt) { InteriorOnlyResets++; }
 
                 // Only when the vegetation tier was allowed to run. A chunk held back re-recording its

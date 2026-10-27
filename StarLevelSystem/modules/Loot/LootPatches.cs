@@ -275,9 +275,24 @@ namespace StarLevelSystem.modules.Loot {
             }
 
             internal static void MineDrop(MineRock5 instance, Vector3 vector) {
-                int level = LevelSelection.DeterministicDetermineRockLevel(vector);
-                List<LootEntry> optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, Utils.GetPrefabName(instance.gameObject), level);
+                string name = MineRock5PrefabName(instance);
+                // Remains a creature left behind scale by its stars instead of the rock level (see CreatureRemains).
+                int remainsLevel = CreatureRemains.CarriedLevel(instance.m_nview);
+                List<LootEntry> optimizeDrops;
+                if (remainsLevel > 0) {
+                    optimizeDrops = LootStyles.ModifyRemainsDropsOrDefault(instance.transform, instance.m_dropItems, name, remainsLevel);
+                } else {
+                    optimizeDrops = LootStyles.ModifyRockDropsOrDefault(instance.transform, instance.m_dropItems, name, LevelSelection.DeterministicDetermineRockLevel(vector));
+                }
                 LootPerformanceChanges.DropItemsPreferAsync(vector, optimizeDrops);
+            }
+
+            // Vanilla's MineRock5.Awake renames every instance "___MineRock5 m_meshFilter" by naming the MeshFilter it
+            // adds to it, so the object's name never matches a custom loot entry. The ZDO keeps the real prefab.
+            private static string MineRock5PrefabName(MineRock5 instance) {
+                ZDO zdo = instance.m_nview != null ? instance.m_nview.GetZDO() : null;
+                GameObject prefab = zdo != null && ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(zdo.GetPrefab()) : null;
+                return prefab != null ? prefab.name : Utils.GetPrefabName(instance.gameObject);
             }
         }
 

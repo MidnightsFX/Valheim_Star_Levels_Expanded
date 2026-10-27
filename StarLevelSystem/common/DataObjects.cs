@@ -136,6 +136,9 @@ namespace StarLevelSystem.common
         // s_hue/s_saturation/s_value on the same ZDO. Only the peer the creature died on recolours its corpse, so every
         // other peer applies the colour from these when its copy loads. See SizePatches.ApplyStoredRagdollLook.
         public static readonly string SLS_RAGDOLL_COLOR = "SLS_RDCOLOR";
+        // The level of the creature that left these remains, kept on the remains and on what they break into, so the
+        // Gammeltroll's petrified gold vein can scale its ore by the troll's stars. See modules/Loot/CreatureRemains.cs.
+        public static readonly string SLS_REMAINS_LEVEL = "SLS_REMAINS_LVL";
 
         public enum CreatureBaseAttribute {
             BaseHealth = 0,

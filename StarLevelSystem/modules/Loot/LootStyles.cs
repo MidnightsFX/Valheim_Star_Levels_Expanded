@@ -74,6 +74,35 @@ namespace StarLevelSystem.modules.Loot {
             return drops;
         }
 
+        // Loot from what a creature left behind, such as the Gammeltroll's petrified gold vein (see CreatureRemains). The
+        // remains are the creature's loot, so their ore grows with its stars rather than with the rock level.
+        internal static List<LootEntry> ModifyRemainsDropsOrDefault(Transform tform, DropTable droptable, string name, int creatureLevel) {
+            // A custom table for the remains takes over, scaled at the creature's level like any other object's.
+            if (LootSystemData.SLS_Drop_Settings != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot != null && LootSystemData.SLS_Drop_Settings.NonCharacterSpecificLoot.ContainsKey(name)) {
+                return ModifyRockDropsOrDefault(tform, droptable, name, creatureLevel);
+            }
+            if (droptable == null) { return new List<LootEntry>(); }
+            List<LootEntry> drops = OptimizeToDropStacks(droptable.GetDropList(), DropType.Rock);
+            int stars = creatureLevel - 1;
+            float scale = 1f + stars * ValConfig.PerLevelRemainsLootScale.Value;
+            if (stars <= 0 || scale <= 1f) { return drops; }
+
+            bool logloot = ValConfig.EnableDebugLootDetails.Value;
+            StringBuilder sb = logloot ? new StringBuilder() : null;
+            foreach (LootEntry drop in drops) {
+                string dropName = Utils.GetPrefabName(drop.Prefab);
+                if (CreatureRemains.UnscaledDrops.Contains(dropName)) { continue; }
+                int before = drop.Amount;
+                drop.Amount = RandomRound(Mathf.Clamp(drop.Amount * scale, 0f, MaxLootScaleResult));
+                // Stars can multiply the ore many times over, so it always drops in full stacks. Unstacked, a collapsing
+                // vein starts one drop per area, and each drop spawns its first LootDropsPerTick pieces in the same frame.
+                drop.MaxAmountPerDrop = LootPerformanceChanges.CheckItemStackingConfig(drop.Prefab.GetComponent<ItemDrop>(), DropType.None);
+                if (logloot) { sb.AppendLine($"  {dropName}: {before} * {scale} (1 + stars:{stars} * PerLevelRemainsLootScale:{ValConfig.PerLevelRemainsLootScale.Value}) = {drop.Amount}"); }
+            }
+            if (logloot) { Logger.LogLoot($"Remains drops for {name} (creature level {creatureLevel}):\n{sb}"); }
+            return drops;
+        }
+
         internal static List<LootEntry> ModifyPickableDropsOrDefault(Transform tform, string name, int level) {
             SelectObjectDistanceBonus(tform, out DistanceLootModifier distance_bonus);
             List<LootEntry> drops = ModifyObjectDropsOrDefault(null, name, level, distance_bonus, DropType.Destructible, tform, honorOnePerPlayer: true, isPickable: true);

@@ -266,24 +266,32 @@ namespace StarLevelSystem.common
             }
             float range = args.ReadRadius(0, 500f, 10000f);
 
-            List<Character> nearbyCreatures = SLSExtensions.GetCharactersInRange(args.Center, range);
-            int removed = 0;
-            foreach (Character chara in nearbyCreatures)
+            // Through OwnerRoutedDestroy, never a plain Destroy. The old ZNet.Destroy call binds to
+            // UnityEngine.Object.Destroy: it took down this client's GameObject and left the ZDO loaded, so the
+            // scene rebuilt every creature a frame later (VCP's dead-instance repair; vanilla alone leaves a frozen
+            // ghost for other players). Only the ZDO owner can delete a ZDO, so a creature another player owns is
+            // relayed to that player through the server rather than claimed here.
+            // No CharacterDrop removal either: a scene destroy never runs CharacterDrop.OnDeath, so nothing drops,
+            // and stripping it from a creature whose delete runs elsewhere would only leave that creature lootless.
+            List<ZDOID> ids = new List<ZDOID>();
+            int ownedHere = 0;
+            foreach (Character chara in SLSExtensions.GetCharactersInRange(args.Center, range))
             {
-                if (chara.IsPlayer() || chara.IsTamed()) { continue; }
-
-                CharacterDrop cdrop = chara.gameObject.GetComponent<CharacterDrop>();
-                if (cdrop != null)
-                {
-                    GameObject.Destroy(cdrop);
-                }
-                if (chara != null)
-                {
-                    ZNet.Destroy(chara.gameObject);
-                    removed++;
-                }
+                if (chara == null || chara.IsPlayer() || chara.IsTamed()) { continue; }
+                ZNetView nview = chara.m_nview;
+                if (nview == null || nview.IsValid() == false) { continue; }
+                ids.Add(nview.GetZDO().m_uid);
+                if (nview.IsOwner()) { ownedHere++; }
             }
-            args.Output.Info($"Removed {removed} creatures within {range}m.");
+            OwnerRoutedDestroy.Request(ids);
+
+            int routed = ids.Count - ownedHere;
+            if (routed == 0)
+            {
+                args.Output.Info($"Removed {ids.Count} creatures within {range}m.");
+                return;
+            }
+            args.Output.Info($"Removed {ids.Count} creatures within {range}m: {ownedHere} deleted here, {routed} sent to the players who own them.");
         }
     }
 }

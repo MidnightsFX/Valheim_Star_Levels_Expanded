@@ -176,6 +176,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> PerLevelLootChanceScale;
         public static ConfigEntry<float> ChanceBaseChancePerLevel;
         public static ConfigEntry<bool> ScaleAllLootByLevel;
+        public static ConfigEntry<float> PerLevelRemainsLootScale;
         public static ConfigEntry<int> LootDropsPerTick;
         public static ConfigEntry<int> LootDropScatterPositions;
         public static ConfigEntry<string> LootDropCalculationType;
@@ -272,6 +273,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> EnemyHealthbarScalarX;
         public static ConfigEntry<float> EnemyHealthbarScalarY;
         public static ConfigEntry<bool> EnableEnemyHealthbarNumberDisplay;
+        public static ConfigEntry<bool> EnableEvolvingProgressBar;
         public static ConfigEntry<float> HealthDisplayFontSizeAdjustment;
         public static ConfigEntry<bool> StackMultipleBossHealthbars;
         public static ConfigEntry<float> BossHealthbarSpacing;
@@ -595,6 +597,7 @@ namespace StarLevelSystem.common {
             LootDropsPerTick = BindServerConfig("LootSystem", "LootDropsPerTick", 20, "The number of loot drops that are generated per tick, reducing this will reduce lag when massive amounts of loot is generated at once.", true, 1, 100);
             LootDropScatterPositions = BindServerConfig("LootSystem", "LootDropScatterPositions", 10, "Loot is scattered randomly over a small area around where it drops. This is the number of random spots picked for a single drop; when more items or stacks than this drop at once, they reuse these spots instead of picking new ones.", true, 1, 100);
             ScaleAllLootByLevel = BindServerConfig("LootSystem", "ScaleAllLootByLevel", false, "Enables scaling of all loot which does not normally scale per level. Typically this is just trophies.");
+            PerLevelRemainsLootScale = BindServerConfig("LootSystem", "PerLevelRemainsLootScale", 1f, "Extra ore that a creature's remains give for each of its stars, such as the gold vein a Gammeltroll leaves behind. 1 = each star adds the remains' normal ore again, 0 = vanilla. Stone does not scale.", false, 0f, 4f);
             LootEggsDropIncreaseStacks = BindServerConfig("LootSystem", "LootEggsDropIncreaseStacks", true, "This causes higher level chickens (and other egg producers) to drop MORE eggs instead of higher leveled ones.");
             EggLevelDeterminedByItemQuality = BindServerConfig("LootSystem", "EggLevelDeterminedByItemQuality", false, "When enabled, the level of egg grown creatures is determined by the eggs quality level. Otherwise the grown creature uses its default level configuration.");
             CreatureLootDropStacked = BindServerConfig("LootSystem", "CreatureLootDropStacked", true, "When enabled, character drops will be automatically stacked before dropping (significantly more performant).");
@@ -694,6 +697,7 @@ namespace StarLevelSystem.common {
             UseCustomHealthFont = Config.Bind("UI", "UseCustomHealthFont", false, "[Client side Config] Enable to use a custom version of the Norse font.");
             HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.", false, 0.1f);
             EnableEnemyHealthbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
+            EnableEvolvingProgressBar = BindServerConfig("UI", "EnableEvolvingProgressBar", true, "Shows a bar under an evolving creature's health that fills as it gets closer to its next level.");
             StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row). When disabled, the boss bars are squished horizontally so they sit side-by-side.");
             BossHealthbarSpacing = BindServerConfig("UI", "BossHealthbarSpacing", 30f, "Gap, in pixels, between boss healthbars (vertical gap when stacked, horizontal gap when squished).", true, 0f, 120f);
             BossHudTopBuffer = Config.Bind("UI", "BossHudTopBuffer", 120,

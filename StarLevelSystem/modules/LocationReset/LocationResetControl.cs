@@ -124,6 +124,9 @@ namespace StarLevelSystem.modules.LocationReset {
             // The scene is going away; just forget the bookkeeping rather than trying to release
             // zones out of a world that is already tearing down.
             ZoneLoader.Clear();
+            // The asset loader outlives the world, so the cached location prefabs and rooms are
+            // released properly rather than forgotten.
+            LocationPreload.Clear();
             ZoneProtectionScan.ResetPrefabSets();
             LocationResetData.ResetWorldCatalogIndex();
             // Balanced by a finalizer within a session, but a world torn down mid-spawn would
@@ -175,6 +178,9 @@ namespace StarLevelSystem.modules.LocationReset {
             sb.AppendLine($"Interior-only      : {LocationResetManager.InteriorOnlyResets}");
             sb.AppendLine($"Short retries      : {LocationResetManager.RetriedZones} " +
                 $"({LocationResetManager.RetriesExhaustedZones} gave up after {LocationResetState.MaxTransientRetries})");
+            // Location prefabs and dungeon rooms held in memory for the next rebuild of the same
+            // location; see LocationPreload. Dropped after a quarter hour unused.
+            sb.AppendLine($"Location assets    : {LocationPreload.CachedCount} cached");
             sb.AppendLine($"Cumulative ZDO drift: {LocationResetManager.ZdoDriftTotal} (expected 0)");
 
             // Projected time to work through every generated zone at the current observed rate. This

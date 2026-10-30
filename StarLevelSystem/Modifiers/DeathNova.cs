@@ -74,8 +74,8 @@ namespace StarLevelSystem.Modifiers
 
             private static void TriggerNova(Character chara, Dictionary<string, ModifierType> mods, string novaName, float bluntFraction, NovaElement element, float elementFraction) {
                 if (mods.TryGetValue(novaName, out ModifierType modType) == false) { return; }
-                CreatureModifierConfiguration cmdef = CreatureModifiersData.GetModifierDef(novaName, modType);
-                if (cmdef == null || cmdef.Config == null) { return; }
+                CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(chara, novaName, modType);
+                if (cmcfg == null) { return; }
                 if (ModifierDefinitions.TryGetValue(novaName, out var novaDef) == false) { return; }
                 GameObject go = CreatureModifiers.ApplySecondaryVFX(novaDef.SecondaryEffect, chara.transform.position, chara.transform.rotation);
                 if (go == null) { return; }
@@ -83,7 +83,7 @@ namespace StarLevelSystem.Modifiers
                 Aoe aoe = go.GetComponent<Aoe>();
                 // Configure damage. The nova's Aoe has no owner, so its hits carry no attacker, and vanilla only applies
                 // the world's enemy damage rate to hits from a creature, so it is applied here.
-                float dmgmod = (cmdef.Config.BasePower + (cmdef.Config.PerlevelPower * chara.m_level)) * Game.m_enemyDamageRate;
+                float dmgmod = (cmcfg.BasePower + (cmcfg.PerlevelPower * chara.m_level)) * Game.m_enemyDamageRate;
                 if (aoe) {
                     float characterdmg = SLSExtensions.EstimateCharacterDamage(chara, DamageEstimateType.Average);
                     if (characterdmg <= 0) {

@@ -64,8 +64,12 @@ namespace StarLevelSystem.common
         public static readonly string SLS_DAMAGE_MODIFIER = "SLS_DMOD";
         public static readonly string SLS_DAMAGE_BONUSES = "SLS_DBON";
         public static readonly string SLS_SPAWN_MULT = "SLS_MULT";
+        // Pre-V2 modifier storage, a BinaryFormatter dictionary; only read, and replaced by SLS_MODSV2 by the owner.
         public static readonly string SLS_MODIFIERS = "SLS_MODS";
+        // The creature's modifier set, in the compact form StoredModifierFormat writes (older saves hold JSON text).
         public static readonly string SLS_MODSV2 = "SLS_MODV2";
+        // The creature's own modifier values, see ModifierConfigOverride. Only on creatures that were given some.
+        public static readonly string SLS_MODCFG = "SLS_MODCFG";
         public static readonly string SLS_CHARNAME = "SLS_CHARNAME";
         public static readonly string SLS_TREE = "SLE_Tree";
         public static readonly string SLS_FISH = "SLE_Fish";
@@ -953,6 +957,30 @@ namespace StarLevelSystem.common
             public Dictionary<string, float> Config { get; set; }
         }
 
+        // One creature's own values for one modifier. Whatever is set replaces the Modifiers.yaml value for that
+        // creature only; the rest stays configured. Set through the API and by the ModifierOverrides of Nemesis and raid
+        // spawns, stored in SLS_MODCFG, and applied by CreatureModifierOverrides.GetEffectiveConfig.
+        public class ModifierConfigOverride {
+            [DefaultValue(null)]
+            public float? BasePower { get; set; }
+            [DefaultValue(null)]
+            public float? PerlevelPower { get; set; }
+            [DefaultValue(null)]
+            public Dictionary<string, float> Config { get; set; }
+
+            internal bool IsEmpty() {
+                return BasePower.HasValue == false && PerlevelPower.HasValue == false && (Config == null || Config.Count == 0);
+            }
+
+            internal ModifierConfigOverride Copy() {
+                return new ModifierConfigOverride() {
+                    BasePower = BasePower,
+                    PerlevelPower = PerlevelPower,
+                    Config = Config != null ? new Dictionary<string, float>(Config) : null,
+                };
+            }
+        }
+
         public class CreatureModifierCollection
         {
             // Which set of built-in modifiers this file has been checked against (CreatureModifiersData.
@@ -1562,6 +1590,10 @@ namespace StarLevelSystem.common
             public bool UseRaidLevelSystem { get; set; } = true;
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
             public List<string> ModifiersNotAllowed { get; set; } = null;
+            // This spawn's own values for modifiers its creatures carry or may roll, by modifier name: BasePower,
+            // PerlevelPower and Config entries in place of the Modifiers.yaml ones. See ModifierConfigOverride.
+            [DefaultValue(null)]
+            public Dictionary<string, ModifierConfigOverride> ModifierOverrides { get; set; } = null;
             [DefaultValue(null)]
             public SortedDictionary<int, float> CustomCreatureLevelUpChance { get; set; } = null;
             [DefaultValue(null)]
@@ -1692,6 +1724,9 @@ namespace StarLevelSystem.common
             public int MaxAmount { get; set; }
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
+            // As on NemesisSpawn.
+            [DefaultValue(null)]
+            public Dictionary<string, ModifierConfigOverride> ModifierOverrides { get; set; } = null;
         }
 
         public class NemesisChanceChanges {
@@ -1756,6 +1791,10 @@ namespace StarLevelSystem.common
             public Character.Faction Faction { get; set; } = Character.Faction.TrainingDummy;
             [DefaultValue(null)]
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
+            // This spawn's own values for modifiers its creatures carry or may roll, by modifier name: BasePower,
+            // PerlevelPower and Config entries in place of the Modifiers.yaml ones. See ModifierConfigOverride.
+            [DefaultValue(null)]
+            public Dictionary<string, ModifierConfigOverride> ModifierOverrides { get; set; } = null;
             public Dictionary<CreatureBaseAttribute, float> CreatureBaseValueModifiers { get; set; }
             public Dictionary<CreaturePerLevelAttribute, float> CreaturePerLevelValueModifiers { get; set; }
             [DefaultValue(null)]

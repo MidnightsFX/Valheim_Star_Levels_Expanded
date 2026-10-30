@@ -29,8 +29,8 @@ namespace StarLevelSystem.Data
         private static Dictionary<ZDOID, int> TreeSessionCache = new Dictionary<ZDOID, int>(ZDOIDComparer.Instance);
 
         // Memoized SLS_MODSV2 parses: raw ZDO string -> parsed dictionary, per creature.
-        // GetCreatureModifiers is called per hit and per death, and the YAML deserialize only needs
-        // to re-run when the stored string actually changed. Evicted with the other per-ZDOID caches.
+        // GetCreatureModifiers is called per hit and per death, and the decode only needs to re-run
+        // when the stored string actually changed. Evicted with the other per-ZDOID caches.
         private static Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>> ModifierParseCache = new Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>>(ZDOIDComparer.Instance);
 
         public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
@@ -52,6 +52,7 @@ namespace StarLevelSystem.Data
             Logger.LogDebug("Flushing creature cache...");
             SessionCache.Clear();
             ModifierParseCache.Clear();
+            CreatureModifierOverrides.FlushCache();
             // Tree levels are recomputed deterministically, so flushing here is what lets
             // TreeMaxLevel/EnableTreeScaling config changes apply without a relog.
             TreeSessionCache.Clear();
@@ -285,6 +286,8 @@ namespace StarLevelSystem.Data
                         );
                     SetCreatureModifiers(chara, characterEntry.CreatureModifiers);
                 }
+            } else {
+                MigrateStoredModifiers(chara);
             }
             // 
             //if (characterEntry.CreatureModifiers != null) {
@@ -358,12 +361,16 @@ namespace StarLevelSystem.Data
             return parsed != null && parsed.TryGetValue(modifier, out type);
         }
 
+        // The returned dictionary is shared with every later read of the same stored value: copy it before changing it.
         private static Dictionary<string, ModifierType> ParseStoredModifiers(ZDO zdo, string mods) {
             ZDOID cid = zdo.m_uid;
             if (ModifierParseCache.TryGetValue(cid, out KeyValuePair<string, Dictionary<string, ModifierType>> cached) && cached.Key == mods) {
                 return cached.Value;
             }
-            if (StoredModifierFormat.TryParse(mods, out Dictionary<string, ModifierType> parsed) == false) {
+            Dictionary<string, ModifierType> parsed;
+            if (StoredModifierFormat.IsCompact(mods)) {
+                StoredModifierFormat.TryDecodeSet(mods, out parsed);
+            } else if (StoredModifierFormat.TryParse(mods, out parsed) == false) {
                 try {
                     parsed = DataObjects.yamlDeserializer.Deserialize<Dictionary<string, ModifierType>>(mods);
                 }
@@ -379,16 +386,43 @@ namespace StarLevelSystem.Data
         public static void SetCreatureModifiers(Character chara, Dictionary<string, ModifierType> modifiers)
         {
             if (IsZOwner(chara)) {
-                if (StoredModifierFormat.TrySerialize(modifiers, out string stored) == false) {
-                    stored = DataObjects.yamlSerializerJsonCompat.Serialize(modifiers);
-                }
-                chara.m_nview.GetZDO().Set(SLS_MODSV2, stored);
+                WriteStoredModifiers(chara, modifiers);
             }
             CharacterCacheEntry cce = GetCacheEntry(chara);
             if (cce != null) {
                 cce.CreatureModifiers = modifiers;
                 UpdateCharacterCacheEntry(chara, cce);
             }
+        }
+
+        // Rewrites a set an older version stored (JSON text, or the pre-V2 binary) in the compact form, once the owner
+        // has the creature. Every peer reads the old forms too, so this only shrinks what the ZDO carries from now on.
+        internal static void MigrateStoredModifiers(Character chara) {
+            if (IsZOwner(chara) == false) { return; }
+            ZDO zdo = chara.m_nview.GetZDO();
+            string stored = zdo.GetString(SLS_MODSV2, null);
+            if (StoredModifierFormat.IsCompact(stored)) { return; }
+            if (stored == null && zdo.GetByteArray(SLS_MODIFIERS) == null) { return; }
+            Dictionary<string, ModifierType> mods = GetCreatureModifiers(chara);
+            // Unreadable: left for the owner's setup, which rolls a set as for a creature that has none.
+            if (mods == null || mods.Count == 0) { return; }
+            WriteStoredModifiers(chara, mods);
+        }
+
+        private static void WriteStoredModifiers(Character chara, Dictionary<string, ModifierType> modifiers) {
+            // No set at all (an entry whose stored set did not read) is left unwritten, to be rolled; storing it would
+            // read back as a creature that rolled no modifiers.
+            if (modifiers == null) { return; }
+            List<string> dropped = new List<string>();
+            string stored = StoredModifierFormat.EncodeSet(modifiers, dropped);
+            if (dropped.Count > 0) {
+                Logger.LogDebug($"{chara.name}: modifiers {string.Join(", ", dropped)} have no modifier ID here and were not stored.");
+            }
+            ZDO zdo = chara.m_nview.GetZDO();
+            zdo.Set(SLS_MODSV2, stored);
+            // The pre-V2 key goes from this peer's copy, so its own sends stop carrying it. Others keep theirs (a removed
+            // key never reaches a peer that has it) but read SLS_MODSV2 first.
+            zdo.RemoveByteArray(SLS_MODIFIERS.GetStableHashCode());
         }
 
         // Persists the stat overrides a spawn definition gave this creature (a NemesisSpawn's or NemesisMinion's
@@ -528,6 +562,7 @@ namespace StarLevelSystem.Data
                 // Every other per-ZDOID cache has to be dropped here too, otherwise they grow for the
                 // whole session (trees/creature huds are never otherwise evicted on despawn).
                 ModifierParseCache.Remove(id);
+                CreatureModifierOverrides.Forget(id);
                 RemoveTreeCacheEntry(id);
                 UIHudControl.RemoveExtendedHudFromCache(id);
                 MountScaling.Forget(id);

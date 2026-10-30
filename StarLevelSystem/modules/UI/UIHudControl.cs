@@ -829,7 +829,7 @@ namespace StarLevelSystem.modules.UI {
             // Full once it can't evolve any further.
             float progress = 1f;
             if (IsAtEvolveCap(chara, level) == false) {
-                CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(EvolvingKey, hud.EvolvingType);
+                CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(chara, EvolvingKey, hud.EvolvingType);
                 int levelupReq = Mathf.RoundToInt(cmcfg.BasePower + (cmcfg.PerlevelPower * level));
                 if (levelupReq > 0) { progress = Mathf.Clamp01((float)kills / levelupReq); }
             }

@@ -28,7 +28,7 @@ namespace StarLevelSystem.Modifiers {
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(attacker);
                 if (mods == null) { return; }
                 if (mods.Keys.Contains(ModifierNames.ElementalChaos.ToString())) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.ElementalChaos.ToString(), mods[ModifierNames.ElementalChaos.ToString()]);
+                    CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(attacker, ModifierNames.ElementalChaos.ToString(), mods[ModifierNames.ElementalChaos.ToString()]);
                     // The value is a FRACTION of the hit's damage added as the rolled element (see
                     // AddDamagesToHit). The old ceiling of 500 meant a misconfigured power turned into
                     // a 500x damage hit instead of being rejected; 5 (+500% as one element) is already

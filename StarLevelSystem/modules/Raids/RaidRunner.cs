@@ -322,6 +322,8 @@ namespace StarLevelSystem.modules.Raids {
                                 if (rmonitor.RaidSpawnDef.Faction != Character.Faction.TrainingDummy) {
                                     chara.m_faction = rmonitor.RaidSpawnDef.Faction;
                                 }
+                                // Stored ahead of setup, which is what sets the modifiers up and so reads these.
+                                CreatureModifierOverrides.Set(chara, rmonitor.RaidSpawnDef.ModifierOverrides);
                                 CreatureSetupControl.CreatureSpawnerSetup(chara, level, false, requiredModifiers: rmonitor.RaidSpawnDef.RequiredModifiers, notAllowedModifiers: rmonitor.RaidSpawnDef.ModifiersNotAllowed);
                             }
 

@@ -288,10 +288,78 @@ namespace StarLevelSystem.modules
             bool added = CreatureModifiers.AddCreatureModifier(chara, (ModifierType)modifierType, modifierName, update);
             // Stored now, so every peer with the creature loaded rebuilds its view of it, whatever `update` says: nothing
             // else would apply the modifier to their entry and size. See ModifierPeerRefresh.
-            if (added && CompositeLazyCache.IsZOwner(chara)) { ModifierPeerRefresh.Send(chara, modifierName); }
+            if (added && CompositeLazyCache.IsZOwner(chara)) { ModifierPeerRefresh.SendChanged(chara); }
             // Replayed whatever this peer made of it: its copy of the modifier list can be behind the owner's.
             APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.AddModifier, args => { args.Write(modifierName); args.Write(modifierType); args.Write(update); });
             return added;
+        }
+
+        // The calls below change only what the owner stores, and every peer's view follows from that through
+        // ModifierPeerRefresh, the caller's included. A non-owner only forwards the call, and reports it as done.
+
+        public static bool RemoveModifierFromCreature(Character chara, string modifierName) {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null || string.IsNullOrEmpty(modifierName)) { return false; }
+            APIOwnerRelay.ClaimIfUnowned(chara);
+            if (CompositeLazyCache.IsZOwner(chara) == false) {
+                APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.RemoveModifier, args => args.Write(modifierName));
+                return true;
+            }
+            bool removed = CreatureModifiers.RemoveCreatureModifier(chara, modifierName);
+            if (removed) { ModifierPeerRefresh.SendChanged(chara); }
+            return removed;
+        }
+
+        // Values a modifier runs with on this one creature, in place of its Modifiers.yaml ones: "BasePower",
+        // "PerlevelPower" or a Config key. See CreatureModifierOverrides.
+        public static bool SetCreatureModifierConfig(Character chara, string modifierName, Dictionary<string, float> values) {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null || values == null || values.Count == 0) { return false; }
+            if (string.IsNullOrEmpty(modifierName) || modifierName == CreatureModifiers.NoMods || ModifierNamesLookupTable.ContainsName(modifierName) == false) {
+                Logger.LogWarning($"SLS-API: {modifierName} is not a modifier; no values were set on {chara.name}.");
+                return false;
+            }
+            foreach (KeyValuePair<string, float> value in values) {
+                if (string.IsNullOrEmpty(value.Key) || float.IsNaN(value.Value) || float.IsInfinity(value.Value)) {
+                    Logger.LogWarning($"SLS-API: {modifierName} value '{value.Key}' = {value.Value} is not usable; no values were set on {chara.name}.");
+                    return false;
+                }
+            }
+            APIOwnerRelay.ClaimIfUnowned(chara);
+            if (CompositeLazyCache.IsZOwner(chara) == false) {
+                APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.SetModifierConfig, args => { args.Write(modifierName); APIOwnerRelay.WriteValues(args, values); });
+                return true;
+            }
+            if (CreatureModifierOverrides.Set(chara, modifierName, values)) { RefreshIfCarried(chara, modifierName); }
+            return true;
+        }
+
+        public static bool ClearCreatureModifierConfig(Character chara, string modifierName, string key = null) {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null || string.IsNullOrEmpty(modifierName)) { return false; }
+            APIOwnerRelay.ClaimIfUnowned(chara);
+            if (CompositeLazyCache.IsZOwner(chara) == false) {
+                APIOwnerRelay.SendToOwner(chara, APIOwnerRelay.Op.ClearModifierConfig, args => { args.Write(modifierName); args.Write(key != null); args.Write(key ?? string.Empty); });
+                return true;
+            }
+            bool cleared = CreatureModifierOverrides.Clear(chara, modifierName, key);
+            if (cleared) { RefreshIfCarried(chara, modifierName); }
+            return cleared;
+        }
+
+        // modifierType: 0-2 for that configured entry, anything else for the type the creature carries it as (Major when
+        // it does not carry it).
+        public static Dictionary<string, float> GetCreatureModifierConfig(Character chara, string modifierName, int modifierType = -1) {
+            if (chara == null || string.IsNullOrEmpty(modifierName)) { return null; }
+            ModifierType type = ModifierType.Major;
+            if (Enum.IsDefined(typeof(ModifierType), modifierType)) {
+                type = (ModifierType)modifierType;
+            } else if (CompositeLazyCache.TryGetCreatureModifier(chara, modifierName, out ModifierType carried)) {
+                type = carried;
+            }
+            return CreatureModifierOverrides.GetEffectiveValues(chara, modifierName, type);
+        }
+
+        // Values for a modifier the creature does not carry change nothing it does yet, so no peer needs to rebuild.
+        private static void RefreshIfCarried(Character chara, string modifierName) {
+            if (CompositeLazyCache.TryGetCreatureModifier(chara, modifierName, out _)) { ModifierPeerRefresh.SendChanged(chara); }
         }
 
         public static bool AddNewModifierToSLS(

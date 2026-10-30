@@ -39,13 +39,13 @@ namespace StarLevelSystem.modules.Modifiers {
                 switch (kvp.Value)
                 {
                     case ModifierType.Boss:
-                        RunOnceModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.BossModifiers);
+                        RunOnceModifier(kvp.Key, kvp.Value, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.BossModifiers);
                         break;
                     case ModifierType.Major:
-                        RunOnceModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers);
+                        RunOnceModifier(kvp.Key, kvp.Value, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers);
                         break;
                     case ModifierType.Minor:
-                        RunOnceModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers);
+                        RunOnceModifier(kvp.Key, kvp.Value, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers);
                         break;
                 }
                 appliedMods += 1;
@@ -79,20 +79,21 @@ namespace StarLevelSystem.modules.Modifiers {
                 switch (kvp.Value)
                 {
                     case ModifierType.Boss:
-                        StartupModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.BossModifiers);
+                        StartupModifier(kvp.Key, kvp.Value, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.BossModifiers);
                         break;
                     case ModifierType.Major:
-                        StartupModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers);
+                        StartupModifier(kvp.Key, kvp.Value, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MajorModifiers);
                         break;
                     case ModifierType.Minor:
-                        StartupModifier(kvp.Key, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers);
+                        StartupModifier(kvp.Key, kvp.Value, character, cacheEntry, CreatureModifiersData.ActiveCreatureModifiers.MinorModifiers);
                         break;
                 }
                 appliedMods += 1;
             }
         }
 
-        private static void RunOnceModifier(string mod, Character character, CharacterCacheEntry cacheEntry, Dictionary<string, CreatureModifierConfiguration> availableMods)
+        // Both run with the creature's own values for the modifier, where it has any (CreatureModifierOverrides).
+        private static void RunOnceModifier(string mod, ModifierType type, Character character, CharacterCacheEntry cacheEntry, Dictionary<string, CreatureModifierConfiguration> availableMods)
         {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod))
@@ -101,21 +102,19 @@ namespace StarLevelSystem.modules.Modifiers {
                 Logger.LogWarning($"Modifier {mod} not found in CreatureModifiersData, skipping runonce setup for {character.name}");
                 return;
             }
-            var selectedMod = availableMods[mod];
             //Logger.LogDebug($"Setting up mod");
-            CreatureModifiersData.ModifierDefinitions[mod].RunOnceMethodCall(character, selectedMod.Config, cacheEntry);
+            CreatureModifiersData.ModifierDefinitions[mod].RunOnceMethodCall(character, CreatureModifierOverrides.GetEffectiveConfig(character, mod, type), cacheEntry);
         }
 
-        private static void StartupModifier(string mod, Character character, CharacterCacheEntry cacheEntry, Dictionary<string, CreatureModifierConfiguration> availableMods) {
+        private static void StartupModifier(string mod, ModifierType type, Character character, CharacterCacheEntry cacheEntry, Dictionary<string, CreatureModifierConfiguration> availableMods) {
             //Logger.LogDebug($"Setting up minor modifier {mod} for character {character.name}");
             if (!availableMods.ContainsKey(mod)) {
                 if (mod == NoMods) { return; }
                 Logger.LogWarning($"Modifier {mod} not found in CreatureModifiersData, skipping setup for {character.name}");
                 return;
             }
-            var selectedMod = availableMods[mod];
             //Logger.LogDebug($"Setting up mod");
-            CreatureModifiersData.ModifierDefinitions[mod].SetupMethodCall(character, selectedMod.Config, cacheEntry);
+            CreatureModifiersData.ModifierDefinitions[mod].SetupMethodCall(character, CreatureModifierOverrides.GetEffectiveConfig(character, mod, type), cacheEntry);
             //Logger.LogDebug($"Setting up mod vfx");
             SetupCreatureVFX(character, CreatureModifiersData.ModifierDefinitions[mod]);
         }
@@ -459,22 +458,25 @@ namespace StarLevelSystem.modules.Modifiers {
             }
         }
 
-        public static void RemoveCreatureModifier(Character character, string modifier) {
+        // Returns whether the creature carried the modifier.
+        public static bool RemoveCreatureModifier(Character character, string modifier) {
             Dictionary<string, ModifierType> characterMods = CompositeLazyCache.GetCreatureModifiers(character);
-            if (characterMods.Keys.Contains(modifier))
-            {
-                Logger.LogDebug($"{character.name} has {modifier}, removing.");
-                if (characterMods.Remove(modifier)) {
-                    CompositeLazyCache.SetCreatureModifiers(character, characterMods);
-                }
-                // Some modifiers leave something running behind their Setup - BossSummoner attaches a
-                // component with a repeating invoke - and dropping the name from the ZDO does not stop it.
-                // TryGetValue because API-added and unknown modifier names both reach this path.
-                if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modifier, out CreatureModifierDefinition removedDef)) {
-                    removedDef.TeardownMethodCall(character);
-                }
-                UIHudControl.InvalidateCacheEntry(character);
+            if (characterMods == null || characterMods.ContainsKey(modifier) == false) { return false; }
+            // A copy: the stored set is shared with every later read of it, and is only changed by storing a new one.
+            characterMods = new Dictionary<string, ModifierType>(characterMods);
+            Logger.LogDebug($"{character.name} has {modifier}, removing.");
+            characterMods.Remove(modifier);
+            // Rolled, with nothing left: the same as a creature that rolled no modifiers.
+            if (characterMods.Count == 0) { characterMods.Add(NoMods, ModifierType.Minor); }
+            CompositeLazyCache.SetCreatureModifiers(character, characterMods);
+            // Some modifiers leave something running behind their Setup - BossSummoner attaches a
+            // component with a repeating invoke - and dropping the name from the ZDO does not stop it.
+            // TryGetValue because API-added and unknown modifier names both reach this path.
+            if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modifier, out CreatureModifierDefinition removedDef)) {
+                removedDef.TeardownMethodCall(character);
             }
+            UIHudControl.InvalidateCacheEntry(character);
+            return true;
         }
 
         public static bool AddCreatureModifier(Character character, ModifierType modType, string newModifier, bool applyChanges = true)
@@ -483,8 +485,9 @@ namespace StarLevelSystem.modules.Modifiers {
                 Logger.LogDebug($"No modifier specified to add to {character.name}, skipping.");
                 return false;
             }
-            // Select major and minor based on creature whole config
-            Dictionary<string, ModifierType> savedMods = CompositeLazyCache.GetCreatureModifiers(character);
+            // Select major and minor based on creature whole config. A copy, as in RemoveCreatureModifier.
+            Dictionary<string, ModifierType> stored = CompositeLazyCache.GetCreatureModifiers(character);
+            Dictionary<string, ModifierType> savedMods = stored != null ? new Dictionary<string, ModifierType>(stored) : new Dictionary<string, ModifierType>();
 
             if (savedMods.Count > 0 && savedMods.ContainsKey(newModifier)) {
                 Logger.LogDebug($"{character.name} already has {newModifier}, skipping.");
@@ -496,10 +499,10 @@ namespace StarLevelSystem.modules.Modifiers {
             //Logger.LogDebug($"Adding Modifier to ZDO.");
             CharacterCacheEntry scd = CompositeLazyCache.GetCacheEntry(character);
 
-            CreatureModifierConfiguration selectedMod = CreatureModifiersData.GetModifierDef(newModifier, modType);
+            CreatureModConfig selectedConfig = CreatureModifierOverrides.GetEffectiveConfig(character, newModifier, modType);
             //Logger.LogDebug($"Setting up modifier.");
-            CreatureModifiersData.ModifierDefinitions[newModifier].SetupMethodCall(character, selectedMod.Config, scd);
-            CreatureModifiersData.ModifierDefinitions[newModifier].RunOnceMethodCall(character, selectedMod.Config, scd);
+            CreatureModifiersData.ModifierDefinitions[newModifier].SetupMethodCall(character, selectedConfig, scd);
+            CreatureModifiersData.ModifierDefinitions[newModifier].RunOnceMethodCall(character, selectedConfig, scd);
             SetupCreatureVFX(character, CreatureModifiersData.ModifierDefinitions[newModifier]);
 
             // Keep the cached name in step with the new modifier list. InvalidateCacheEntry below only rebuilds
@@ -622,7 +625,7 @@ namespace StarLevelSystem.modules.Modifiers {
             // Only this peer's entry has the new modifier's changes. Every other player's view of the creature, its size
             // and the resists their own hits read, only follows once told, as for a modifier given by command. This peer
             // handles it before the call returns, which replaces its cache entry.
-            ModifierPeerRefresh.Send(character, newModifier);
+            ModifierPeerRefresh.SendChanged(character);
             return true;
         }
 

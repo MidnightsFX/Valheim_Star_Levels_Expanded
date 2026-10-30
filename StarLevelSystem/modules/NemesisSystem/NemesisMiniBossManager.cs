@@ -82,7 +82,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
                             Prefab = nm.PrefabName,
                             SpawnGroupSize = UnityEngine.Random.Range(nm.MinAmount, nm.MaxAmount + 1),
                             CreatureBaseValueModifiers = nm.CreatureBaseValueModifiers,
-                            CreaturePerLevelValueModifiers = nm.CreaturePerLevelValueModifiers
+                            CreaturePerLevelValueModifiers = nm.CreaturePerLevelValueModifiers,
+                            ModifierOverrides = nm.ModifierOverrides
                         });
                     }
                 }

@@ -32,7 +32,7 @@ namespace StarLevelSystem.Modifiers
                 Character attacker = hit.GetAttacker();
                 if (attacker == null || attacker == __instance || attacker.IsPlayer() || attacker.IsDead()) { return; }
                 if (CompositeLazyCache.TryGetCreatureModifier(attacker, VampiricKey, out ModifierType type) == false) { return; }
-                float power = Mathf.Clamp01(CreatureModifiersData.GetConfig(VampiricKey, type).PowerAt(attacker.m_level));
+                float power = Mathf.Clamp01(CreatureModifierOverrides.GetEffectiveConfig(attacker, VampiricKey, type).PowerAt(attacker.m_level));
                 if (power <= 0f) { return; }
                 __state = new Feeding() { Attacker = attacker, HealthBefore = __instance.GetHealth(), Power = power };
             }

@@ -206,6 +206,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     if (evolveKills > 0) { grownZDO.Set(SLS_EVOLVE, evolveKills); }
                     float smallRoll = childZDO.GetFloat(SLS_SMALL, -1f);
                     if (smallRoll >= 0f) { grownZDO.Set(SLS_SMALL, smallRoll); }
+                    CreatureModifierOverrides.CopyStored(childZDO, grownZDO);
                 }
 
                 Logger.LogDebug($"Grown up {grownup.m_name} inheriting level {level} from child.");
@@ -313,6 +314,10 @@ namespace StarLevelSystem.modules.LevelSystem {
                     //// TODO: Add randomization, limits and variations to children
                     if (cdc_parent != null) {
                         CompositeLazyCache.SetCreatureModifiers(chara, cdc_parent.CreatureModifiers);
+                        // With the parent's modifiers go the parent's own values for them.
+                        if (proc.m_character.m_nview != null) {
+                            CreatureModifierOverrides.CopyStored(proc.m_character.m_nview.GetZDO(), chara.m_nview.GetZDO());
+                        }
                     }
                 }
 

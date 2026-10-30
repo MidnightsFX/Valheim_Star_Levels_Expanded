@@ -32,7 +32,7 @@ namespace StarLevelSystem.Modifiers
                 float maxHealth = creature.GetMaxHealth();
                 if (creature.GetHealth() >= maxHealth) { return; }
                 if (CompositeLazyCache.TryGetCreatureModifier(creature, RegeneratingKey, out ModifierType type) == false) { return; }
-                CreatureModConfig cfg = CreatureModifiersData.GetConfig(RegeneratingKey, type);
+                CreatureModConfig cfg = CreatureModifierOverrides.GetEffectiveConfig(creature, RegeneratingKey, type);
                 // Vanilla resets m_timeSinceHurt on every hit that hurts, damage-over-time ticks included.
                 if (__instance.m_timeSinceHurt < cfg.Get("OutOfCombatDelay", DefaultOutOfCombatDelay)) { return; }
                 float power = cfg.PowerAt(creature.m_level);

@@ -40,6 +40,10 @@ namespace StarLevelSystem
         private static readonly MethodInfo GetPossibleModifiersForType;
         private static readonly MethodInfo GetAllModifiersForCreature;
         private static readonly MethodInfo AddModifierToCreature;
+        private static readonly MethodInfo RemoveModifierFromCreatureMethod;
+        private static readonly MethodInfo SetCreatureModifierConfigMethod;
+        private static readonly MethodInfo ClearCreatureModifierConfigMethod;
+        private static readonly MethodInfo GetCreatureModifierConfigMethod;
 
         private static readonly MethodInfo AddNewModifierToSLS;
 
@@ -77,6 +81,12 @@ namespace StarLevelSystem
         /// </summary>
         public static bool SupportsSpawnManaged => SetCreatureSpawnManagedMethod != null;
 
+        /// <summary>
+        /// True when the installed Star Level System has per-creature modifier values (SetCreatureModifierConfig and the
+        /// rest of that section) and RemoveModifierFromTargetCreature. Older builds make those calls return false or null.
+        /// </summary>
+        public static bool SupportsModifierConfig => SetCreatureModifierConfigMethod != null;
+
         static API() {
             APIReciever = Type.GetType("StarLevelSystem.modules.APIReciever, StarLevelSystem");
             if (APIReciever == null) return;
@@ -103,6 +113,10 @@ namespace StarLevelSystem
             GetPossibleModifiersForType = APIReciever.GetMethod("GetPossibleModifiersForType", BindingFlags.Public | BindingFlags.Static);
             GetAllModifiersForCreature = APIReciever.GetMethod("GetAllModifiersForCreature", BindingFlags.Public | BindingFlags.Static);
             AddModifierToCreature = APIReciever.GetMethod("AddModifierToCreature", BindingFlags.Public | BindingFlags.Static);
+            RemoveModifierFromCreatureMethod = APIReciever.GetMethod("RemoveModifierFromCreature", BindingFlags.Public | BindingFlags.Static);
+            SetCreatureModifierConfigMethod = APIReciever.GetMethod("SetCreatureModifierConfig", BindingFlags.Public | BindingFlags.Static);
+            ClearCreatureModifierConfigMethod = APIReciever.GetMethod("ClearCreatureModifierConfig", BindingFlags.Public | BindingFlags.Static);
+            GetCreatureModifierConfigMethod = APIReciever.GetMethod("GetCreatureModifierConfig", BindingFlags.Public | BindingFlags.Static);
             AddNewModifierToSLS = APIReciever.GetMethod("AddNewModifierToSLS", BindingFlags.Public | BindingFlags.Static);
 
             RegisterLocationResetTargetMethod = APIReciever.GetMethod("RegisterLocationResetTarget", BindingFlags.Public | BindingFlags.Static);
@@ -482,6 +496,63 @@ namespace StarLevelSystem
         /// own the creature forwards the call to the owner.</returns>
         public static bool AddModifierToTargetCreature(Character creatureId, string modifierName, int modifierType, bool update = true) {
             return (bool)AddModifierToCreature.Invoke(null, new object[] { creatureId, modifierName, modifierType, update });
+        }
+
+        /// <summary>
+        /// Takes a modifier off a creature. It stops on every machine with the creature loaded, and its share of the
+        /// creature's stats goes. Values given to the creature for that modifier (SetCreatureModifierConfig) are kept.
+        /// Check SupportsModifierConfig first.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// <param name="modifierName">The modifiers name</param>
+        /// returns>bool: true when removed, or sent to the creature's owner from a machine that does not own it; false
+        /// when the creature does not carry it or Star Level System is too old</returns>
+        public static bool RemoveModifierFromTargetCreature(Character creatureId, string modifierName) {
+            return (bool)Call(RemoveModifierFromCreatureMethod, false, creatureId, modifierName);
+        }
+
+        ////////////////////////////////////////
+        /// Per-creature Modifier Values
+        ////////////////////////////////////////
+
+        /// <summary>
+        /// Gives one creature its own values for a modifier, in place of the ones in Modifiers.yaml. Keys are "BasePower",
+        /// "PerlevelPower", or any key of that modifier's Config (for example "RegenDelay" for Shielded); keys you leave
+        /// out keep the configured value. Merged into what the creature already has. Kept on the creature whether or not
+        /// it carries the modifier now, so it can be set before the creature rolls and survives the modifier being
+        /// removed and given again. Check SupportsModifierConfig first.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// <param name="modifierName">The modifiers name</param>
+        /// <param name="values">Value name to value</param>
+        /// returns>bool: true when stored, or sent to the creature's owner; false for an unknown modifier, a value that is
+        /// not a finite number, or a Star Level System too old to have this</returns>
+        public static bool SetCreatureModifierConfig(Character creatureId, string modifierName, Dictionary<string, float> values) {
+            return (bool)Call(SetCreatureModifierConfigMethod, false, creatureId, modifierName, values);
+        }
+
+        /// <summary>
+        /// Drops values given with SetCreatureModifierConfig, so the modifier goes back to its configured ones.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// <param name="modifierName">The modifiers name</param>
+        /// <param name="key">One value to drop ("BasePower", "PerlevelPower" or a Config key), or null for all of them</param>
+        /// returns>bool: true when dropped, or sent to the creature's owner; false when there was nothing to drop</returns>
+        public static bool ClearCreatureModifierConfig(Character creatureId, string modifierName, string key = null) {
+            return (bool)Call(ClearCreatureModifierConfigMethod, false, creatureId, modifierName, key);
+        }
+
+        /// <summary>
+        /// The values a modifier runs with on this creature: "BasePower", "PerlevelPower" and each Config key, with the
+        /// creature's own values in place of the configured ones.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// <param name="modifierName">The modifiers name</param>
+        /// <param name="modifierType">Which configured entry to start from: Major (0), Minor (1), Boss (2), or -1 for the
+        /// type the creature carries the modifier as (Major when it does not carry it)</param>
+        /// returns>Dictionary of value name to value, or null when Star Level System is too old</returns>
+        public static Dictionary<string, float> GetCreatureModifierConfig(Character creatureId, string modifierName, int modifierType = -1) {
+            return (Dictionary<string, float>)Call(GetCreatureModifierConfigMethod, null, creatureId, modifierName, modifierType);
         }
 
         ////////////////////////////////////////

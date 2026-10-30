@@ -1,3 +1,11 @@
+**1.30.0**
+ ---
+ ```
+- Optimized creature modifier data
+	- Other mods, Nemesis spawns and raid spawns can give individual creatures their own modifier values.
+	- This allows fine tuning modifier intensity on a per creature basis.
+ ```
+
 **1.29.0**
  ---
  ```

@@ -57,7 +57,7 @@ namespace StarLevelSystem.Modifiers
         private static void ApplyDrain(Character target, DrainContext ctx, string modName, bool stamina)
         {
             if (!ctx.Mods.ContainsKey(modName)) { return; }
-            CreatureModConfig cfg = CreatureModifiersData.GetConfig(modName, ctx.Mods[modName]);
+            CreatureModConfig cfg = CreatureModifierOverrides.GetEffectiveConfig(ctx.Attacker, modName, ctx.Mods[modName]);
             float power = cfg.BasePower + (cfg.PerlevelPower * ctx.Attacker.m_level);
             float reduction = ReductionFor(cfg, ctx.Outcome);
             float drain = ctx.BaseDamage * power * (1f - reduction);

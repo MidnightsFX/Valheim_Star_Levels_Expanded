@@ -32,7 +32,7 @@ namespace StarLevelSystem.Modifiers
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance);
                 if (mods != null && mods.ContainsKey(ModifierNames.Splitter.ToString())) {
                     
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Splitter.ToString(), mods[ModifierNames.Splitter.ToString()]);
+                    CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(__instance, ModifierNames.Splitter.ToString(), mods[ModifierNames.Splitter.ToString()]);
                     float totalsplits = cmcfg.BasePower + (__instance.m_level * cmcfg.PerlevelPower);
                     // Split based on scaled creature level and the base split power
                     bool shouldTame = __instance.IsTamed();

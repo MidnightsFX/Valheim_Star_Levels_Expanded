@@ -72,7 +72,7 @@ namespace StarLevelSystem.Modifiers {
                 // dodge side effect it has for them; when we bail here vanilla runs it again and returns.
                 if (projectile.IsValidTarget(target) == false) { return true; }
 
-                CreatureModConfig cfg = CreatureModifiersData.GetConfig(ReflectionName, modType);
+                CreatureModConfig cfg = CreatureModifierOverrides.GetEffectiveConfig(target, ReflectionName, modType);
                 float chance = Mathf.Clamp01(cfg.BasePower + (cfg.PerlevelPower * target.m_level));
                 if (UnityEngine.Random.value >= chance) {
                     if (projectile.m_onlyStopOnTerrain) {

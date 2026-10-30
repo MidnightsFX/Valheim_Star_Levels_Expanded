@@ -37,6 +37,9 @@ namespace StarLevelSystem.modules {
             SetAllDamageBonus,
             ApplyUpdates,
             AddModifier,
+            RemoveModifier,
+            SetModifierConfig,
+            ClearModifierConfig,
         }
 
         [HarmonyPatch(typeof(Character), nameof(Character.Awake))]
@@ -71,6 +74,25 @@ namespace StarLevelSystem.modules {
                 package.Write(attribute.Key);
                 package.Write(attribute.Value);
             }
+        }
+
+        // A modifier's per-creature values, by name (see CreatureModifierOverrides).
+        internal static void WriteValues(ZPackage package, Dictionary<string, float> values) {
+            package.Write(values.Count);
+            foreach (KeyValuePair<string, float> value in values) {
+                package.Write(value.Key);
+                package.Write(value.Value);
+            }
+        }
+
+        private static Dictionary<string, float> ReadValues(ZPackage package) {
+            int count = package.ReadInt();
+            Dictionary<string, float> values = new Dictionary<string, float>(count);
+            for (int i = 0; i < count; i++) {
+                string key = package.ReadString();
+                values[key] = package.ReadSingle();
+            }
+            return values;
         }
 
         private static Dictionary<int, float> ReadAttributes(ZPackage package) {
@@ -170,6 +192,22 @@ namespace StarLevelSystem.modules {
                             break;
                         }
                         APIReciever.AddModifierToCreature(chara, modifierName, modifierType, update);
+                        break;
+                    }
+                // The modifier name and values are checked by the setters, as for a call made on this peer.
+                case Op.RemoveModifier:
+                    APIReciever.RemoveModifierFromCreature(chara, args.ReadString());
+                    break;
+                case Op.SetModifierConfig: {
+                        string modifierName = args.ReadString();
+                        APIReciever.SetCreatureModifierConfig(chara, modifierName, ReadValues(args));
+                        break;
+                    }
+                case Op.ClearModifierConfig: {
+                        string modifierName = args.ReadString();
+                        bool oneKey = args.ReadBool();
+                        string key = args.ReadString();
+                        APIReciever.ClearCreatureModifierConfig(chara, modifierName, oneKey ? key : null);
                         break;
                     }
                 default:

@@ -443,6 +443,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 // creature settings alone on every reload and ownership handoff, which is what stripped remote
                 // bosses of their extra health and damage after a server restart.
                 CompositeLazyCache.SetStatOverrides(spawnChara, spawn.CreatureBaseValueModifiers, spawn.CreaturePerLevelValueModifiers);
+                // Stored ahead of setup, which is what sets the modifiers up and so reads these.
+                CreatureModifierOverrides.Set(spawnChara, spawn.ModifierOverrides);
                 if (spawn.RequiredModifiers != null && spawn.RequiredModifiers.Count > 0) {
                     cce.CreatureModifiers = spawn.RequiredModifiers;
                     CompositeLazyCache.SetCreatureModifiers(spawnChara, spawn.RequiredModifiers);

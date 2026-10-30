@@ -1037,7 +1037,12 @@ namespace StarLevelSystem.Data
             if (CustomModifiers.BossModifiers != null && CustomModifiers.BossModifiers.Count > 0) { ActiveCreatureModifiers.BossModifiers.AddRange(CustomModifiers.BossModifiers); }
             if (APIAdded.BossModifiers != null && APIAdded.BossModifiers.Count > 0) { ActiveCreatureModifiers.BossModifiers.AddRange(APIAdded.BossModifiers); }
             if (APIAdded.BossModifiers == null && CustomModifiers.BossModifiers == null) { ActiveCreatureModifiers.BossModifiers.AddRange(DefaultModifiers.BossModifiers); }
+            ConfigGeneration++;
         }
+
+        // Moves on every time the pools above are rebuilt, so a creature's merged per-creature config
+        // (CreatureModifierOverrides) is rebuilt from the new values instead of the ones it was merged with.
+        internal static int ConfigGeneration = 0;
 
         // Registers a modifier added through the public API (definition + configuration), then
         // re-merges the active set so the new modifier participates in selection immediately.

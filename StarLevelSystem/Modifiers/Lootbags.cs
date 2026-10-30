@@ -27,7 +27,7 @@ namespace StarLevelSystem.Modifiers
                 }
                 Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(__instance.m_character);
                 if (mods != null && mods.ContainsKey(ModifierNames.Lootbags.ToString())) {
-                    CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Lootbags.ToString(), mods[ModifierNames.Lootbags.ToString()]);
+                    CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(__instance.m_character, ModifierNames.Lootbags.ToString(), mods[ModifierNames.Lootbags.ToString()]);
                     List<LootEntry> ExtraLoot = new List<LootEntry>();
                     float modifier = cmcfg.BasePower + cmcfg.PerlevelPower * __instance.m_character.m_level;
                     HashSet<GameObject> fixedDrops = FixedCustomDrops(__instance.m_character);

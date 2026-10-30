@@ -66,7 +66,7 @@ namespace StarLevelSystem.Modifiers
             CharacterCacheEntry cDetails = CompositeLazyCache.GetCacheEntry(character);
             Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(character);
             if (cDetails == null || mods == null || mods.ContainsKey(soulEaterKey) == false) { return; }
-            CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(soulEaterKey, mods[soulEaterKey]);
+            CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(character, soulEaterKey, mods[soulEaterKey]);
             float powerIncrease = cmcfg.PerlevelPower * character.m_level;
             if (Logger.IsDebugEnabled) { Logger.LogDebug($"SoulEater Increased on {character.name} by {cmcfg.PerlevelPower} * {character.m_level} = {powerIncrease}"); }
             DamageModifications.ForceUpdateDamageMod(character, powerIncrease);

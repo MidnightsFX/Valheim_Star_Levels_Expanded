@@ -366,6 +366,9 @@ ChanceChanges:
         Faction: Boss                       # faction to assign to the creature
         RequiredModifiers:                  # modifiers the creature must have
           Fire: Major
+        ModifierOverrides:                  # this spawn's own values for its modifiers, in place of the ones in Modifiers.yaml
+          Fire:
+            BasePower: 0.5                  # BasePower, PerlevelPower and Config entries, any of them; the rest stay as configured
       - Prefab: Charred_Archer
         SpawnGroupSize: 2
         Faction: Boss
@@ -386,6 +389,9 @@ NemesisMinionTemplatesByBiome:
       BaseHealth: 2
     CreaturePerLevelValueModifiers:
       DamagePerLevel: 0.01
+    ModifierOverrides:                 # the minions' own values for modifiers they have or roll, as on a spawn above
+      Fast:
+        BasePower: 0.1
 ```
 
 
@@ -621,6 +627,9 @@ Below is an example of many of the details that can be configured for a given ra
     - Poison
     RequiredModifiers:            # Modifiers that the creature must spawn with, this also requires the modifier type (Boss, Major, Minor)
       Fire: Major
+    ModifierOverrides:            # This spawn's own values for modifiers its creatures have or roll, in place of the ones in Modifiers.yaml
+      Fire:
+        PerlevelPower: 0.05       # BasePower, PerlevelPower and Config entries, any of them; the rest stay as configured
     CustomCreatureLevelUpChance:  # Custom level chances for this creature
       1: 50
       2: 25

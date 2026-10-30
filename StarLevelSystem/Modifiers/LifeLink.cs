@@ -26,9 +26,9 @@ namespace StarLevelSystem.Modifiers
                 if (__instance == null || __instance.IsPlayer()) { return; }
                 if (CompositeLazyCache.TryGetCreatureModifier(__instance, LifeLinkKey, out ModifierType lifeLinkType)) {
                     //Logger.LogDebug($"Lifelink triggered for {__instance.name}");
-                    CreatureModifierConfiguration cm = CreatureModifiersData.GetModifierDef(LifeLinkKey, lifeLinkType);
+                    CreatureModConfig cfg = CreatureModifierOverrides.GetEffectiveConfig(__instance, LifeLinkKey, lifeLinkType);
                     // Fraction of the hit the linked target keeps; the linked neighbour absorbs the rest.
-                    float kept_fraction = 1 - (cm.Config.BasePower + (cm.Config.PerlevelPower * __instance.m_level));
+                    float kept_fraction = 1 - (cfg.BasePower + (cfg.PerlevelPower * __instance.m_level));
                     kept_fraction = Mathf.Clamp(kept_fraction, 0.1f, 1f);
 
                     HitData transferHit = new HitData() { m_attacker = hit.m_attacker, m_damage = hit.m_damage };

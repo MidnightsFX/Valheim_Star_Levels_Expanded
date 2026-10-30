@@ -26,7 +26,7 @@ namespace StarLevelSystem.Modifiers
             public static void Prefix(Character __instance, ref float damage) {
                 if (damage <= 0f || __instance == null || __instance.IsPlayer()) { return; }
                 if (CompositeLazyCache.TryGetCreatureModifier(__instance, StalwardKey, out ModifierType type) == false) { return; }
-                CreatureModConfig cfg = CreatureModifiersData.GetConfig(StalwardKey, type);
+                CreatureModConfig cfg = CreatureModifierOverrides.GetEffectiveConfig(__instance, StalwardKey, type);
                 float maxReduction = Mathf.Clamp01(cfg.Get("MaxReduction", DefaultMaxReduction));
                 float reduction = Mathf.Clamp(cfg.PowerAt(__instance.m_level), 0f, maxReduction);
                 damage *= 1f - reduction;

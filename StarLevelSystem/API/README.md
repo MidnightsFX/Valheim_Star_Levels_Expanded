@@ -42,6 +42,16 @@ int modifierType = 0; // 0 = Major, 1 = Minor, 2 = Boss
 StarLevelSystem.API.AddModifierToTargetCreature(Character creatureId, modifierName, modifierType, bool update = true);
 ```
 
+To give one creature its own values for a modifier:
+```csharp
+// This creature's Shielded holds a bigger shield that comes back sooner; every other Shielded creature is unchanged.
+StarLevelSystem.API.SetCreatureModifierConfig(creature, "Shielded", new Dictionary<string, float>() {
+	{ "BasePower", 0.6f },
+	{ "RegenDelay", 2f },
+});
+```
+See [Per-creature modifier values](#per-creature-modifier-values).
+
 To add a new custom creature modifier to the modifier system.
 ```csharp
 StarLevelSystem.API.AddNewModifier(
@@ -62,7 +72,8 @@ reload. Set a value once, when you spawn or first adjust the creature, and it st
 Only the machine that **owns** the creature writes its ZDO. A call from any other machine applies
 there at once and is forwarded to the owner, which saves it a moment later. A creature nobody owns
 is taken by the calling machine first. The same holds for `SetCreatureLevel`,
-`AddModifierToTargetCreature`, `ApplyCreatureUpdates` and `SetCreatureSpawnManaged`.
+`AddModifierToTargetCreature`, `RemoveModifierFromTargetCreature`, `SetCreatureModifierConfig`,
+`ClearCreatureModifierConfig`, `ApplyCreatureUpdates` and `SetCreatureSpawnManaged`.
 
 Once the owner has saved a modifier from `AddModifierToTargetCreature`, every machine with the
 creature loaded, the owner included, rebuilds its stats, size and speed with the modifier, whatever
@@ -87,6 +98,39 @@ on top, 2.75. Set the base you want instead (1.5 here, which Big then raises to 
 Before 1.23.2 a setter wrote its value over the modified one, so the modifiers' share was missing
 until the creature's stats were next rebuilt (a reload, an ownership handoff, a config reload), and
 was added on top of the value from then on.
+
+### Per-creature modifier values
+
+Every modifier runs with the values its entry in `Modifiers.yaml` gives it: `BasePower`,
+`PerlevelPower` and the keys of its `Config` (for example `RegenDelay` and `RegenDuration` for
+Shielded, `MaxReduction` for Stalward). `SetCreatureModifierConfig` gives one creature its own values
+in place of those. The keys are `"BasePower"`, `"PerlevelPower"` (in any case) or a `Config` key
+(exactly as `Modifiers.yaml` writes it). Keys you leave out keep the configured value, and a second
+call merges into the first.
+
+- The values belong to the creature, not to the modifier it carries now. You can set them before
+  Star Level System rolls the creature's modifiers ("if it rolls Fast, use this"), and they stay
+  when the modifier is removed and given again. They are saved on the creature like the attribute
+  setters above.
+- They apply whatever type (Major, Minor, Boss) the creature carries the modifier as.
+- `GetCreatureModifierConfig` returns what the modifier runs with on that creature, the creature's
+  own values included. `ClearCreatureModifierConfig` drops one value, or all of them for that
+  modifier.
+- A machine that does not own the creature forwards these calls to the owner and returns `true`
+  once the modifier name and values are valid; it cannot tell whether the owner had anything to
+  remove or clear. Its own view, and `GetCreatureModifierConfig` there, change once the owner's save
+  reaches it, a moment later. Every machine with the creature loaded then rebuilds its stats, size
+  and speed.
+- Earth Caller's `LaunchSpeed` always uses the configured value: the knock-up it gives a player does
+  not know which boss cast it.
+- Nemesis and raid spawns take the same values from their config, under `ModifierOverrides`.
+
+`RemoveModifierFromTargetCreature` takes a modifier off a creature. It stops on every machine with
+the creature loaded, and its share of the creature's stats goes.
+
+Guard all of these on `SupportsModifierConfig`: an older Star Level System returns `false` or `null`.
+
+A creature's modifiers are saved in a compact form from 1.30.0 onward. Which are not backwards-compatible.
 
 ### Creatures your mod spawns
 

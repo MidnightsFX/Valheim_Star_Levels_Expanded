@@ -59,7 +59,7 @@ namespace StarLevelSystem.Modifiers {
             if (chara == null || chara.m_nview == null || chara.m_nview.IsValid() == false || chara.m_nview.IsOwner() == false) { return; }
             Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(chara);
             if (mods != null && mods.Keys.Contains(ModifierNames.Evolving.ToString())) {
-                CreatureModConfig cmcfg = CreatureModifiersData.GetConfig(ModifierNames.Evolving.ToString(), mods[ModifierNames.Evolving.ToString()]);
+                CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(chara, ModifierNames.Evolving.ToString(), mods[ModifierNames.Evolving.ToString()]);
                 int level = chara.m_level;
                 // Held at the max level wherever the over-level reroll would act on the next one: the cache rebuild below
                 // rolled a fresh random level into the entry (so size and colors followed it, not the evolved level), and

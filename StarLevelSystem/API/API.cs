@@ -47,6 +47,12 @@ namespace StarLevelSystem
 
         private static readonly MethodInfo AddNewModifierToSLS;
 
+        // Enemy hud
+        private static readonly MethodInfo SetEnemyHudChangesDisabledMethod;
+        private static readonly MethodInfo GetDisabledEnemyHudChangesMethod;
+        private static readonly MethodInfo GetCreatureHudInfoMethod;
+        private static readonly MethodInfo GetCreatureEvolveProgressMethod;
+
         // Location Reset
         private static readonly MethodInfo RegisterLocationResetTargetMethod;
         private static readonly MethodInfo UnregisterLocationResetTargetMethod;
@@ -87,6 +93,13 @@ namespace StarLevelSystem
         /// </summary>
         public static bool SupportsModifierConfig => SetCreatureModifierConfigMethod != null;
 
+        /// <summary>
+        /// True when the installed Star Level System has the Enemy Hud section: SetEnemyHudChangesDisabled,
+        /// GetDisabledEnemyHudChanges, GetCreatureHudInfo and GetCreatureEvolveProgress. Older builds make those calls
+        /// return false, 0, null and -1.
+        /// </summary>
+        public static bool SupportsEnemyHud => SetEnemyHudChangesDisabledMethod != null;
+
         static API() {
             APIReciever = Type.GetType("StarLevelSystem.modules.APIReciever, StarLevelSystem");
             if (APIReciever == null) return;
@@ -118,6 +131,11 @@ namespace StarLevelSystem
             ClearCreatureModifierConfigMethod = APIReciever.GetMethod("ClearCreatureModifierConfig", BindingFlags.Public | BindingFlags.Static);
             GetCreatureModifierConfigMethod = APIReciever.GetMethod("GetCreatureModifierConfig", BindingFlags.Public | BindingFlags.Static);
             AddNewModifierToSLS = APIReciever.GetMethod("AddNewModifierToSLS", BindingFlags.Public | BindingFlags.Static);
+
+            SetEnemyHudChangesDisabledMethod = APIReciever.GetMethod("SetEnemyHudChangesDisabled", BindingFlags.Public | BindingFlags.Static);
+            GetDisabledEnemyHudChangesMethod = APIReciever.GetMethod("GetDisabledEnemyHudChanges", BindingFlags.Public | BindingFlags.Static);
+            GetCreatureHudInfoMethod = APIReciever.GetMethod("GetCreatureHudInfo", BindingFlags.Public | BindingFlags.Static);
+            GetCreatureEvolveProgressMethod = APIReciever.GetMethod("GetCreatureEvolveProgress", BindingFlags.Public | BindingFlags.Static);
 
             RegisterLocationResetTargetMethod = APIReciever.GetMethod("RegisterLocationResetTarget", BindingFlags.Public | BindingFlags.Static);
             UnregisterLocationResetTargetMethod = APIReciever.GetMethod("UnregisterLocationResetTarget", BindingFlags.Public | BindingFlags.Static);
@@ -553,6 +571,86 @@ namespace StarLevelSystem
         /// returns>Dictionary of value name to value, or null when Star Level System is too old</returns>
         public static Dictionary<string, float> GetCreatureModifierConfig(Character creatureId, string modifierName, int modifierType = -1) {
             return (Dictionary<string, float>)Call(GetCreatureModifierConfigMethod, null, creatureId, modifierName, modifierType);
+        }
+
+        ////////////////////////////////////////
+        /// Enemy Hud
+        ////////////////////////////////////////
+
+        // The changes Star Level System makes to the enemy hud, for SetEnemyHudChangesDisabled. Combine them with |.
+
+        /// <summary>Scaling the normal health bar, and sizing, stacking and reparenting the boss bars with their name and
+        /// background images. With this off Star Level System adds its own objects but changes none of the hud's, and its
+        /// stars sit centred on the hud's own level_2 row, following it wherever it goes.</summary>
+        public const int EnemyHudBarLayout = 1;
+        /// <summary>The star per level, the numbered star above five stars with its modifier icons, and hiding the hud's own
+        /// level_2 and level_3. With this off those two work as in vanilla.</summary>
+        public const int EnemyHudStars = 2;
+        /// <summary>The bar under an Evolving creature's health bar.</summary>
+        public const int EnemyHudEvolveBar = 4;
+        /// <summary>The health numbers on the health bar.</summary>
+        public const int EnemyHudHealthNumbers = 8;
+        public const int EnemyHudAll = EnemyHudBarLayout | EnemyHudStars | EnemyHudEvolveBar | EnemyHudHealthNumbers;
+
+        /// <summary>
+        /// Turns off changes Star Level System makes to the enemy hud, for a UI mod that lays out or draws the hud itself.
+        /// `changes` replaces what an earlier call with the same sourceId turned off, so 0 turns them back on; a change
+        /// stays off while any mod has it off. Project Auga gets EnemyHudBarLayout without asking, until it calls this.
+        /// Call it from your plugin's Awake: everything except EnemyHudHealthNumbers applies when the enemy hud is next
+        /// built, which every world load does. Check SupportsEnemyHud first.
+        /// </summary>
+        /// <param name="sourceId">Your plugin GUID</param>
+        /// <param name="changes">EnemyHud* values combined with |</param>
+        /// returns>bool: false for an empty sourceId, or a Star Level System too old to have this</returns>
+        public static bool SetEnemyHudChangesDisabled(string sourceId, int changes) {
+            return (bool)Call(SetEnemyHudChangesDisabledMethod, false, sourceId, changes);
+        }
+
+        /// <summary>
+        /// The enemy hud changes turned off now, by every mod together (EnemyHud* values combined), Auga's default included.
+        /// </summary>
+        /// returns>int, 0 when nothing is turned off or Star Level System is too old to have this</returns>
+        public static int GetDisabledEnemyHudChanges() {
+            return (int)Call(GetDisabledEnemyHudChangesMethod, 0);
+        }
+
+        /// <summary>
+        /// What Star Level System's star row shows for a creature, for a UI mod that draws it itself. Only reads, and is safe
+        /// to call before Star Level System has set the creature up. Check SupportsEnemyHud first.
+        /// Keys:
+        ///   "ready" (bool): Star Level System has set the creature up. Until then its modifiers may be missing.
+        ///   "level" (int): the creature's level, 1 for no stars.
+        ///   "stars" (int): level - 1, the number the star row counts.
+        ///   "highLevel" (bool): above five stars. Star Level System then shows one star numbered "stars", and the
+        ///     modifier icons after it, instead of a star per level.
+        ///   "name" (string): the localized name it puts on the hud, with its modifiers' prefixes and suffixes.
+        ///   "modifiers" (List&lt;string&gt;), "modifierTypes" (List&lt;int&gt;, Major 0, Minor 1, Boss 2) and
+        ///     "modifierIcons" (List&lt;Sprite&gt;): the creature's modifiers in the order the stars show them, an icon
+        ///     null when the modifier has none or icons are turned off.
+        ///   "starIcons" (List&lt;Sprite&gt;): one per star when not highLevel, null for a plain star.
+        ///   "highLevelIcons" (List&lt;Sprite&gt;): the icons after the numbered star when highLevel, at most five.
+        ///   "evolveProgress" (float): the evolve bar's fill, 0 to 1, or -1 when it shows no bar.
+        ///   "healthNumbers" (bool): the server wants health numbers on enemy health bars. Star Level System draws them
+        ///     unless EnemyHudHealthNumbers is turned off.
+        /// Builds new lists on every call, so ask when a hud is shown and when the creature's level changes or "ready" was
+        /// false, not every frame.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// returns>Dictionary of the keys above, or null for a player, a creature that is not networked, or a Star Level System
+        /// too old to have this</returns>
+        public static Dictionary<string, object> GetCreatureHudInfo(Character creatureId) {
+            return (Dictionary<string, object>)Call(GetCreatureHudInfoMethod, null, creatureId);
+        }
+
+        /// <summary>
+        /// The fill of the creature's evolve bar, 0 to 1 (1 once it can't evolve any further), or -1 when Star Level System
+        /// shows no evolve bar for it. Reads the creature's biome settings, so redraw when its level or kills change, or every
+        /// couple of seconds, rather than every frame.
+        /// </summary>
+        /// <param name="creatureId">The creature's Character class</param>
+        /// returns>float fill, or -1</returns>
+        public static float GetCreatureEvolveProgress(Character creatureId) {
+            return (float)Call(GetCreatureEvolveProgressMethod, -1f, creatureId);
         }
 
         ////////////////////////////////////////

@@ -305,9 +305,10 @@ Add keys from modded bosses where they belong in your progression. An entry whos
 listed boss has been defeated. A file that still holds the vanilla list from before the Deep North update gets
 `defeated_frozenking_p3` (set when the Deep North's final boss dies) and its tier added on load; a list you changed is left alone. The tier changes as soon as a boss key is set or removed, for creatures spawned after that.
 
-The active tier replaces the biome's levelup chances and its level range: creatures there roll between the tier generators'
-`MinLevel` and `MaxLevel`, whatever `BiomeMinLevelOverride` / `BiomeMaxLevelOverride` say. An `All` entry inside a tier is the
-fallback for biomes the tier does not name. A creature entry with its own curve still wins, and bosses keep `MaxBossLevel`.
+The active tier replaces the biome's levelup chances and its minimum level: creatures there roll at least the tier generators'
+`MinLevel`, whatever `BiomeMinLevelOverride` says. The tier's `MaxLevel` can only raise the biome's cap: where it is lower than
+`MaxLevel` (or `BiomeMaxLevelOverride`), that cap stays, so beating a boss never lowers a biome's levels. An `All` entry inside a
+tier is the fallback for biomes the tier does not name. A creature entry with its own curve still wins, and bosses keep `MaxBossLevel`.
 
 ### Nemesis System
 The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
@@ -1095,6 +1096,8 @@ Once you are ready to install mods, they must be unzipped first and go into the 
   - Its `[Pickable]` yields apply to every pickable, including ones with an SLS loot table (on drops that scale with level, alongside the world's Resources modifier)
   - Its `[Game]` difficulty scales (`gameDifficultyDamageScale`, `gameDifficultyHealthScale`) multiply onto SLS's multiplayer scaling, and apply on their own when SLS's is off. Turning on the `[Game]` section for any of its options also turns these on at their vanilla-like defaults (4% / 30% per player); set both to 0 to keep only SLS's scaling
   - Its `[Gathering]` and `[LootDrop]` multipliers apply to everything without an SLS loot table; trees, rocks, objects and creatures with their own SLS loot table drop exactly what that table says
+- Project Auga lays out the enemy health bars and boss bars itself, so with Auga installed SLS only adds its stars, modifier icons, evolve bar and health numbers to Auga's bars. `EnemyHealthbarScalarX`, `EnemyHealthbarScalarY`, `StackMultipleBossHealthbars`, `BossHealthbarSpacing`, `BossHudTopBuffer` and `BossHealthbarWidthPercent` do nothing then
+- Other UI mods can turn off any of SLS's enemy hud changes the same way through the API, and draw SLS's stars and evolve progress themselves (see the API documentation)
 
 Compatibility is being worked on for the following mods:
 - CarryMeMaster

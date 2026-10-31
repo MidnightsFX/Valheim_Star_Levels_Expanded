@@ -33,8 +33,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         // The level range (stars + 1) the active tier gives a creature in this biome: the tier replaces the biome's
-        // Min/Max as well as its curve. Only where the tier is the curve the creature rolls from - a creature entry with
-        // its own curve outranks it. Bosses are the caller's concern: MaxBossLevel caps them wherever they stand.
+        // minimum as well as its curve, while its top only raises the cap (see LevelSelection.GetMaxCreatureLevel).
+        // Only where the tier is the curve the creature rolls from - a creature entry with its own curve outranks it.
+        // Bosses are the caller's concern: MaxBossLevel caps them wherever they stand.
         internal static bool TryGetConditionalLevelRange(Heightmap.Biome biome, CreatureSpecificSetting creature_settings, out int minLevel, out int maxLevel) {
             minLevel = 0;
             maxLevel = 0;

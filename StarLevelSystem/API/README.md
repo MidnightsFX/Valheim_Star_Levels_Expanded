@@ -154,6 +154,119 @@ before your mod made this call. Guard on `SupportsSpawnManaged`: an older Star L
 
 ---
 
+## Enemy huds and UI mods
+
+Star Level System adds its own things to every enemy hud: the creature's name with its modifiers, a
+star per level up to five stars (a star carries a modifier's icon in its place), one numbered star
+followed by up to five modifier icons above five stars, a thin evolve bar under the health bar of an
+Evolving creature, and optionally health numbers on the bar. It also scales the health bar
+(`EnemyHealthbarScalarX/Y`) and sizes and stacks the boss bars.
+
+A UI mod that lays out or draws the enemy hud itself can turn any of that off, read what Star Level
+System would show and draw it in its own style, or both. Everything in this section needs
+`SupportsEnemyHud`: an older Star Level System returns `false`, `0`, `null` and `-1`.
+
+### Turning off Star Level System's hud changes
+
+```csharp
+// In your plugin's Awake, with the soft BepInDependency on Star Level System from the top of this page.
+if (StarLevelSystem.API.SupportsEnemyHud) {
+	// We lay out the bars ourselves and draw the stars from GetCreatureHudInfo.
+	StarLevelSystem.API.SetEnemyHudChangesDisabled(MyPlugin.PluginGUID,
+		StarLevelSystem.API.EnemyHudBarLayout | StarLevelSystem.API.EnemyHudStars);
+}
+```
+
+| Value | Constant | What Star Level System stops doing |
+|---|---|---|
+| 1 | `EnemyHudBarLayout` | Scaling the normal health bar, and sizing, stacking and reparenting the boss bars and moving their name and `bkg`/`darken` images. The settings for those (`EnemyHealthbarScalarX/Y`, `StackMultipleBossHealthbars`, `BossHealthbarSpacing`, `BossHudTopBuffer`, `BossHealthbarWidthPercent`) then do nothing. Its stars follow your hud's own `level_2` row, see below. |
+| 2 | `EnemyHudStars` | Its stars, numbered star and modifier icons, and hiding the hud's own `level_2` and `level_3`, which then show for levels 2 and 3 as in vanilla. |
+| 4 | `EnemyHudEvolveBar` | The evolve bar. |
+| 8 | `EnemyHudHealthNumbers` | The health numbers, whatever `EnableEnemyHealthbarNumberDisplay` says. |
+| 15 | `EnemyHudAll` | All of the above. |
+
+- Each call replaces what your earlier calls turned off, so `0` turns everything back on. A change
+  stays off while any mod has it off, and `GetDisabledEnemyHudChanges` returns what is off now, every
+  mod's set together.
+- Call it from your `Awake`. Everything except the health numbers decides which objects Star Level
+  System builds into the hud, so it applies the next time the enemy hud is built, which every world
+  load does. The log names every mod that turned something off when the hud is built.
+- The creature's name keeps its modifiers: it comes from `Character.GetHoverName`, which Star Level
+  System patches everywhere, not from a change to the hud.
+- **Project Auga** (`randyknapp.mods.auga`) gets `EnemyHudBarLayout` without asking. Once Auga calls
+  `SetEnemyHudChangesDisabled` itself, its own set replaces that default, `0` included.
+
+### Names Star Level System needs on a replaced hud
+
+A UI mod that swaps vanilla's `EnemyHud` prefab for its own has to keep these names, because Star
+Level System finds them, unless the change in the last column is turned off:
+
+| Hud | Path | Used for | Not needed with |
+|---|---|---|---|
+| `m_baseHud` | `level_2/star`, with an `Image` and a child `star (1)` with an `Image` | cloned for every star and modifier icon; `star` is the dark back star, `star (1)` the lit one | `EnemyHudStars` |
+| `m_baseHud` | `level_3/star` | hidden; vanilla's level 3 has a second star | `EnemyHudStars` |
+| both | `Name` (`TextMeshProUGUI`), `Health` | the name, and the parent of the evolve bar and health numbers | |
+| both | `Health/health_slow/bar`, `Health/health_fast/bar`, a `GuiBar` on `health_slow` and `health_fast` | scaling the bar (normal huds) and sizing the boss bar | `EnemyHudBarLayout` |
+| `m_baseHudBoss` | `Health/bkg`, `Health/darken` | moved into `Health/Background` and sized with the boss bar | `EnemyHudBarLayout` |
+
+Vanilla's own `ShowHud` and `UpdateHuds` also need `level_2`, `level_3`, `Alerted` and `Aware`.
+
+### Where Star Level System's stars go on your hud
+
+With `EnemyHudBarLayout` off and the rest on, Star Level System builds its stars, evolve bar and
+health numbers on your hud and keeps them up to date. It adds those objects and changes nothing of
+yours: no size, position or parent of `Health`, its bars, `bkg`, `darken`, `Name` or anything you
+added to them.
+
+- **The stars go where your hud's own stars go.** The star holders (`SLS_level_2` to `SLS_level_6`
+  and `SLS_level_n`) hang under one `SLS_stars` object, which takes the anchors, pivot, size and
+  position of your hud's own `level_2` row when the hud is built, and keeps its position every frame
+  after that. So place your `level_2` row (and your other level rows) where stars belong, before
+  Star Level System's `EnemyHud.Awake` postfix or at any time later, and its stars follow. On a
+  normal hud it keeps your own `level_2` and `level_3` hidden while it draws stars.
+- Inside `SLS_stars` the stars are centred, 16 apart on a normal hud and 20 on a boss hud, and drop
+  a few units while the evolve bar shows. Above five stars the numbered star and its modifier icons
+  are centred as one group; its number is a legacy `Text` at
+  `SLS_level_n/level_n_name(Clone)/Text`, drawn to the left of the star.
+- A hud without a `level_2` gets `SLS_stars` where Star Level System's first star goes on vanilla's
+  hud, and you can move it yourself. Never move its children: Star Level System rewrites their
+  positions.
+- The evolve bar is `Health/SLS_evolve_bar`, 3 units tall, 1 below `Health`, stretched across its
+  full width. Star Level System only shows, hides and fills it, so you can inset or move it, once, on
+  the `m_baseHud` and `m_baseHudBoss` templates in your own `EnemyHud.Awake` postfix with
+  `[HarmonyAfter("MidnightsFX.StarLevelSystem")]`.
+- The health numbers are `Health/HealthText(Clone)`, made on each hud the first time it updates.
+
+### Drawing it yourself
+
+```csharp
+Dictionary<string, object> info = StarLevelSystem.API.GetCreatureHudInfo(creature);
+if (info != null) {
+	int stars = (int)info["stars"];
+	bool highLevel = (bool)info["highLevel"];       // one numbered star instead of a star per level
+	List<Sprite> starIcons = (List<Sprite>)info["starIcons"];       // per star, null = plain star
+	List<Sprite> highLevelIcons = (List<Sprite>)info["highLevelIcons"];
+}
+float evolve = StarLevelSystem.API.GetCreatureEvolveProgress(creature);   // -1 = no evolve bar
+```
+
+`GetCreatureHudInfo` returns a dictionary with `ready`, `level`, `stars`, `highLevel`, `name`,
+`modifiers`, `modifierTypes`, `modifierIcons`, `starIcons`, `highLevelIcons`, `evolveProgress` and
+`healthNumbers`; the comment on the method describes each. It only reads, and is safe to call before
+Star Level System has set the creature up: `ready` is `false` until it has, and the modifiers may
+still be missing then. It returns `null` for a player or a creature that is not networked. It builds
+new lists on every call, so ask when a hud is shown and again when the creature's level changes or
+`ready` was `false`, not every frame.
+
+Turn off `EnemyHudStars`, `EnemyHudEvolveBar` or `EnemyHudHealthNumbers` for whatever you draw
+yourself, or Star Level System draws it as well. `healthNumbers` stays the server's setting, so you
+can follow it with your own numbers.
+
+A mod that does not copy this API can call the same methods on
+`StarLevelSystem.modules.APIReciever` by reflection.
+
+---
+
 ## Location Resets
 
 Star Level System can restore looted locations, dungeons, ore, pickables and vegetation on a

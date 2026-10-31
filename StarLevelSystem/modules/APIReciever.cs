@@ -8,6 +8,7 @@ using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.LocationReset;
 using StarLevelSystem.modules.Modifiers;
 using StarLevelSystem.modules.Sizes;
+using StarLevelSystem.modules.UI;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -360,6 +361,39 @@ namespace StarLevelSystem.modules
         // Values for a modifier the creature does not carry change nothing it does yet, so no peer needs to rebuild.
         private static void RefreshIfCarried(Character chara, string modifierName) {
             if (CompositeLazyCache.TryGetCreatureModifier(chara, modifierName, out _)) { ModifierPeerRefresh.SendChanged(chara); }
+        }
+
+        // The enemy hud changes a UI mod turns off, by its plugin GUID. See EnemyHudChanges.
+        public static bool SetEnemyHudChangesDisabled(string sourceId, int changes) {
+            return EnemyHudChanges.Set(sourceId, changes);
+        }
+
+        public static int GetDisabledEnemyHudChanges() {
+            EnemyHudChanges.Refresh();
+            return (int)EnemyHudChanges.Disabled;
+        }
+
+        // Enemy hud information, for a UI mod that draws what SLS's star row shows (see UIHudControl.GetHudInfo). These
+        // only read, and a UI mod calls them from its own hud code, which can run before SLS has set the creature up, or
+        // before its config and modifier data are loaded: anything missing gives null or -1 rather than an exception.
+        public static Dictionary<string, object> GetCreatureHudInfo(Character chara) {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null || chara.IsPlayer()) { return null; }
+            try {
+                return UIHudControl.GetHudInfo(chara);
+            } catch (Exception e) {
+                Logger.LogDebug($"SLS-API: no hud info for {chara.name} yet: {e.Message}");
+                return null;
+            }
+        }
+
+        public static float GetCreatureEvolveProgress(Character chara) {
+            if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { return -1f; }
+            try {
+                return UIHudControl.GetEvolveProgress(chara);
+            } catch (Exception e) {
+                Logger.LogDebug($"SLS-API: no evolve progress for {chara.name} yet: {e.Message}");
+                return -1f;
+            }
         }
 
         public static bool AddNewModifierToSLS(

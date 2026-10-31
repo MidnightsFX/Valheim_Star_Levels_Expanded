@@ -27,6 +27,14 @@ namespace StarLevelSystem.modules
         // Active only when CustomRaids is installed AND the compat toggle is enabled.
         public static bool CustomRaidsCompatActive => IsCustomRaidsEnabled && ValConfig.EnableCustomRaidsCompat.Value;
 
+        // Project Auga replaces the whole EnemyHud with its own prefab and lays out its bars itself, so SLS leaves the bar
+        // layout to it unless Auga says otherwise (see EnemyHudChanges). Read from Chainloader when asked rather than in
+        // CheckModCompat: nothing makes BepInEx load Auga ahead of SLS, and the reader that counts, EnemyHud.Awake, runs
+        // once every plugin is loaded. There is deliberately no soft BepInDependency on Auga: its APIManager rewrites and
+        // reloads the assembly of every plugin that names Auga as a dependency.
+        internal const string AugaGUID = "randyknapp.mods.auga";
+        public static bool IsAugaEnabled => BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(AugaGUID);
+
 
         private const string DropThatGUID = "asharppen.valheim.drop_that";
         private const string DropThatSessionManagerTypeName = "DropThat.Drop.CharacterDropSystem.Managers.CharacterDropSessionManager";

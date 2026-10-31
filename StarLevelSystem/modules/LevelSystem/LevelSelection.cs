@@ -28,7 +28,10 @@ namespace StarLevelSystem.modules.LevelSystem {
         // Bosses are capped by MaxBossLevel wherever they stand. A biome cap or a conditional tier describes that
         // biome's own creatures, the same way a boss curve outranks the biome and conditional curves. Everything
         // else starts at MaxLevel, which BiomeMaxLevelOverride replaces, which the active conditional tier's range
-        // replaces. A creature entry's CreatureMaxLevelOverride beats all of them.
+        // can only raise. A creature entry's CreatureMaxLevelOverride beats all of them.
+        // A tier steps biomes up as bosses fall, but the newest biomes' first step ends far below a high MaxLevel (the
+        // shipped Fader tier tops the Ashlands and Deep North out at 7 stars). Letting it replace the cap lowered levels
+        // there, and the over-level correction then cut every creature already in those biomes down to the tier's top.
         // asBoss measures a creature against the boss cap before it is one (a Nemesis promotion).
         public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, bool? asBoss = null) {
             // A pinned boss phase stays at level 1 whatever the config says; see BossPhases.
@@ -37,7 +40,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             int max_level = (boss ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value) + 1;
             if (boss == false) {
                 if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride + 1; }
-                if (ConditionalScaleSystem.TryGetConditionalLevelRange(biome, creature_settings, out _, out int conditionalMax)) { max_level = conditionalMax; }
+                if (ConditionalScaleSystem.TryGetConditionalLevelRange(biome, creature_settings, out _, out int conditionalMax)) { max_level = Math.Max(max_level, conditionalMax); }
             }
             if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride + 1; }
             return max_level;

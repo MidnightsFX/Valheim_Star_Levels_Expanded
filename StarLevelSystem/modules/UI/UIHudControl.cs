@@ -47,8 +47,17 @@ namespace StarLevelSystem.modules.UI {
         private const float HighLevelIconSpacing = 16f;
         private const float HighLevelIconSpacingBoss = 20f;
 
+        // While a UI mod lays out the hud (EnemyHudChanges.BarLayoutOff) SLS never sizes or moves the hud's own objects, and
+        // its star holders sit centred in one object of this name that takes the place of the hud's own level_2 row
+        // (GatherStarRow, PositionCenteredStarRow, FollowOwnStarRow).
+        internal const string StarRowName = "SLS_stars";
+        // Star spacing in SLS_stars, the same as the template positions below use.
+        private const float StarSpacing = 16f;
+        private const float BossStarSpacing = 20f;
+
         // Template positions of the star holders. Huds are moved from these rather than from where they are, so a hud
         // rebuilt over a gui that was already moved (a display style change rebuilds them all) lands in the same place.
+        // Not used while EnemyHudChanges.BarLayoutOff.
         private static readonly Dictionary<int, Vector3> StarPositions = new Dictionary<int, Vector3>();
         private static readonly Dictionary<int, Vector3> BossStarPositions = new Dictionary<int, Vector3>();
         private static Vector3 StarNPosition;
@@ -123,6 +132,10 @@ namespace StarLevelSystem.modules.UI {
             public int LastEvolveKills { get; set; } = -1;
             public int LastEvolveLevel { get; set; } = -1;
             public float NextEvolveRefresh { get; set; }
+
+            // On a hud a UI mod lays out: SLS's SLS_stars row and the hud's own level_2 row it follows (FollowOwnStarRow).
+            public RectTransform StarRowRect { get; set; }
+            public RectTransform OwnLevelRow { get; set; }
         }
 
         // Marks the boss hud layout as needing re-application; the actual Unity work is done
@@ -289,8 +302,50 @@ namespace StarLevelSystem.modules.UI {
             SetupHighLevelModifierRow(star, star_7_boss.transform, true);
             star_7_boss.SetActive(false);
 
+            if (EnemyHudChanges.BarLayoutOff) {
+                GatherStarRow(baseHud, StarPositions[2]);
+                GatherStarRow(bossHud, BossStarPositions[2]);
+            }
+        }
+
+        internal static void SetupEvolveBars(Transform baseHud, Transform bossHud) {
             SetupEvolveBar(baseHud.Find("Health"), false);
             SetupEvolveBar(bossHud.Find("Health"), true);
+        }
+
+        // Puts the star holders under one SLS_stars object laid out like the hud's own level_2 row, so SLS's stars go where
+        // the hud's own would: the UI mod placed that row already (Auga does in its EnemyHud.Awake prefix, ahead of this),
+        // and FollowOwnStarRow keeps SLS_stars on it. A hud without a level_2 gets the row where SLS's first star goes on
+        // vanilla's hud, and the UI mod can move it. SLS centres the stars inside it (PositionCenteredStarRow).
+        private static void GatherStarRow(Transform hud, Vector3 fallbackPosition) {
+            GameObject row = new GameObject(StarRowName, typeof(RectTransform));
+            row.layer = hud.gameObject.layer;
+            RectTransform rowRT = (RectTransform)row.transform;
+            rowRT.SetParent(hud, false);
+            if (hud.Find("level_2") is RectTransform own) {
+                rowRT.anchorMin = own.anchorMin;
+                rowRT.anchorMax = own.anchorMax;
+                rowRT.pivot = own.pivot;
+                rowRT.sizeDelta = own.sizeDelta;
+                rowRT.anchoredPosition = own.anchoredPosition;
+                rowRT.localScale = own.localScale;
+            } else {
+                rowRT.sizeDelta = Vector2.zero;
+                rowRT.localPosition = fallbackPosition;
+            }
+            foreach (string holderName in new[] { "SLS_level_2", "SLS_level_3", "SLS_level_4", "SLS_level_5", "SLS_level_6", "SLS_level_n" }) {
+                Transform holder = hud.Find(holderName);
+                if (holder == null) { continue; }
+                holder.SetParent(rowRT, false);
+                holder.localPosition = Vector3.zero;
+            }
+        }
+
+        // Where a hud's star holders hang: its SLS_stars row while a UI mod lays out the hud, the hud itself otherwise.
+        private static Transform StarRow(Transform gui) {
+            if (EnemyHudChanges.BarLayoutOff == false) { return gui; }
+            Transform row = gui.Find(StarRowName);
+            return row != null ? row : gui;
         }
 
         // A separator and a row of icon holders after the numbered star, filled in per hud by UpdateHudModifiers. They
@@ -326,7 +381,9 @@ namespace StarLevelSystem.modules.UI {
             RectTransform barRT = (RectTransform)bar.transform;
             barRT.SetParent(health, false);
             barRT.pivot = new Vector2(0.5f, 1f);
-            if (boss) {
+            // A UI mod laying out the hud sizes the boss bar itself and SetBossBarWidth never runs, so the boss bar is
+            // stretched along Health like the normal one and follows whatever size it is given.
+            if (boss && EnemyHudChanges.BarLayoutOff == false) {
                 // The boss Health rect keeps its prefab size while SetBossBarWidth sizes the bars, so the width is set
                 // there too. The visible bar is 20 tall inside the 15 tall rect, which is why this sits lower.
                 barRT.anchorMin = barRT.anchorMax = new Vector2(0.5f, 0f);
@@ -431,7 +488,7 @@ namespace StarLevelSystem.modules.UI {
             if (hud == null || chara == null) { return; }
             if (hud.HudLink == null || hud.HudLink.m_gui == null) { return; }
 
-            if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value == false) {
+            if (ValConfig.EnableEnemyHealthbarNumberDisplay.Value == false || EnemyHudChanges.HealthNumbersOff) {
                 if (hud.HealthText != null) { hud.HealthText.gameObject.SetActive(false); }
                 return;
             }
@@ -451,8 +508,12 @@ namespace StarLevelSystem.modules.UI {
                 }
                 // Health text boss fixes? resize?
                 if (hud.IsBoss) {
-                    RectTransform hthRT = HealthTextHolder.transform as RectTransform;
-                    hthRT.localPosition = new Vector3(0, 4, 0);
+                    // The lift centres the numbers on vanilla's boss bar, which is drawn 20 tall in a 15 tall rect; on a hud
+                    // a UI mod lays out they stay centred on Health.
+                    if (EnemyHudChanges.BarLayoutOff == false) {
+                        RectTransform hthRT = HealthTextHolder.transform as RectTransform;
+                        hthRT.localPosition = new Vector3(0, 4, 0);
+                    }
                     hud.HealthText.fontSize = 20f;
                     hud.HealthText.characterSpacing = 12f;
                 }
@@ -470,8 +531,18 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
+        // What vanilla's UpdateHuds does with the hud's own level stars every frame.
+        private static void ShowVanillaLevelStars(EnemyHud.HudData ehud) {
+            int level = ehud.m_character.GetLevel();
+            if (ehud.m_level2) { ehud.m_level2.gameObject.SetActive(level == 2); }
+            if (ehud.m_level3) { ehud.m_level3.gameObject.SetActive(level == 3); }
+        }
+
         public static void UpdateHudForAllLevels(EnemyHud.HudData ehud) {
             if (ehud == null || ehud.m_character == null) return;
+            // With SLS's stars turned off the hud's own level_2 and level_3 work as in vanilla, whose per-frame toggles the
+            // UpdateHuds transpiler replaced with this call.
+            if (EnemyHudChanges.StarsOff) { ShowVanillaLevelStars(ehud); }
             if (ehud.m_character.IsPlayer()) return;
             int level = ehud.m_character.GetLevel();
             // if (level <= 1) return;
@@ -491,12 +562,14 @@ namespace StarLevelSystem.modules.UI {
                 // Logger.LogInfo($"Hud already exists for {czoid}, loading");
                 // Cached items which have been destroyed need to be removed and re-attached
                 extended_hud = known_hud;
-                if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null) {
+                // A destroyed gui takes the star holders with it; without SLS's stars the gui itself is the only sign.
+                if (extended_hud == null || extended_hud.Starlevel.ContainsKey(3) && extended_hud.Starlevel[3] == null || extended_hud.HudLink == null || extended_hud.HudLink.m_gui == null) {
                     Logger.LogDebug($"UI Cache Invalid for {czid}, removing.");
                     RemoveExtendedHudFromCache(czid);
                     //CompositeLazyCache.ClearCachedCreature(ehud.m_character);
                     return;
                 }
+                FollowOwnStarRow(extended_hud);
 
                 // Kept above the staleness guard below: the health numbers do not depend on the level or
                 // modifier cache, so a creature SLS has not resolved yet must still show real numbers.
@@ -546,8 +619,8 @@ namespace StarLevelSystem.modules.UI {
                     CurrentBossHuds.Add(extended_hud);
                 }
 
-                // Modify the size of the health bar if its enabled
-                if ((ValConfig.EnemyHealthbarScalarX.Value != 1f || ValConfig.EnemyHealthbarScalarY.Value != 1f) && extended_hud.IsBoss == false) {
+                // Modify the size of the health bar if its enabled. A UI mod laying out the hud sizes its bars itself.
+                if (EnemyHudChanges.BarLayoutOff == false && (ValConfig.EnemyHealthbarScalarX.Value != 1f || ValConfig.EnemyHealthbarScalarY.Value != 1f) && extended_hud.IsBoss == false) {
                     RectTransform healthRect = ehud.m_gui.transform.Find("Health").GetComponent<RectTransform>();
                     Vector2 newHudSize = new Vector2(100f * ValConfig.EnemyHealthbarScalarX.Value, 5 * ValConfig.EnemyHealthbarScalarY.Value);
                     //Logger.LogDebug($"Resizing healthbar for {czid} from {healthRect.sizeDelta} to {newHudSize}");
@@ -572,17 +645,23 @@ namespace StarLevelSystem.modules.UI {
                 UpdateHudModifiers(czid, extended_hud, mods);
                 // Need to find and add the N level text for updating here
                 characterExtendedHuds.Add(czid, extended_hud);
+                FollowOwnStarRow(extended_hud);
             }
             // Show the creatures health value
 
             // Ahead of the early out below, which only cares about the level: kills change the bar without changing it.
             UpdateEvolveBar(extended_hud, ehud.m_character);
 
+            // Without SLS's stars there are no star holders to switch.
+            if (EnemyHudChanges.StarsOff) { return; }
+
             // Set star level, this can change if the characters level gets modified. Only touch the
             // star GameObjects when the displayed level actually changed - SetActive is a
             // managed->native call and this method runs per visible creature per frame.
             if (extended_hud.DisplayedStarLevel == level) { return; }
             extended_hud.DisplayedStarLevel = level;
+            // Centred stars move with how many show.
+            if (EnemyHudChanges.BarLayoutOff) { PositionStarRow(extended_hud); }
             switch (level) {
                 case 2:
                     extended_hud.Starlevel[2].SetActive(true);
@@ -703,16 +782,38 @@ namespace StarLevelSystem.modules.UI {
                 }
             }
 
+            Transform guiT = extended_hud.HudLink.m_gui.transform;
+            extended_hud.HasEvolving = mods.TryGetValue(EvolvingKey, out ModifierType evolvingType);
+            extended_hud.EvolvingType = evolvingType;
+            extended_hud.LastEvolveKills = -1;
+            if (extended_hud.EvolveBar == null) {
+                Transform bar = guiT.Find($"Health/{EvolveBarName}");
+                if (bar != null) {
+                    extended_hud.EvolveBar = bar.gameObject;
+                    extended_hud.EvolveFill = bar.Find("fill") as RectTransform;
+                    // A hud rebuilt over an existing gui starts from what that gui shows.
+                    extended_hud.EvolveBarShown = bar.gameObject.activeSelf;
+                }
+            }
+
+            // Everything below fills in and places SLS's star holders.
+            if (EnemyHudChanges.StarsOff) { return; }
+
+            Transform starRow = StarRow(guiT);
+            if (starRow != guiT && extended_hud.StarRowRect == null) {
+                extended_hud.StarRowRect = starRow as RectTransform;
+                extended_hud.OwnLevelRow = guiT.Find("level_2") as RectTransform;
+            }
             int star_index = 2;
             while (star_index < 7) {
                 if (extended_hud.Starlevel.ContainsKey(star_index) == false) {
-                    extended_hud.Starlevel.Add(star_index, extended_hud.HudLink.m_gui.transform.Find($"SLS_level_{star_index}").gameObject);
+                    extended_hud.Starlevel.Add(star_index, starRow.Find($"SLS_level_{star_index}").gameObject);
                 }
                 if (extended_hud.StarLevelBack.ContainsKey(star_index) == false) {
-                    extended_hud.StarLevelBack.Add(star_index, extended_hud.HudLink.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
+                    extended_hud.StarLevelBack.Add(star_index, starRow.Find($"SLS_level_{star_index}/star(Clone)").gameObject.GetComponent<Image>());
                 }
                 if (extended_hud.StarLevelFront.ContainsKey(star_index) == false) {
-                    extended_hud.StarLevelFront.Add(star_index, extended_hud.HudLink.m_gui.transform.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
+                    extended_hud.StarLevelFront.Add(star_index, starRow.Find($"SLS_level_{star_index}/star(Clone)/star (1)").gameObject.GetComponent<Image>());
                 }
                 //Logger.LogDebug($"Assigning star level {star_index}");
                 // No replacement resets the slot to the default star, which is needed for when modifiers are removed and the cache is still valid
@@ -722,11 +823,10 @@ namespace StarLevelSystem.modules.UI {
             }
 
             //Logger.LogDebug($"Assigning star level N");
-            Transform guiT = extended_hud.HudLink.m_gui.transform;
-            extended_hud.StarLevelN = guiT.Find("SLS_level_n").gameObject;
-            extended_hud.StarLevelNBackImage = guiT.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
-            extended_hud.StarLevelNFrontImage = guiT.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
-            extended_hud.StarLevelNText = guiT.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
+            extended_hud.StarLevelN = starRow.Find("SLS_level_n").gameObject;
+            extended_hud.StarLevelNBackImage = starRow.Find("SLS_level_n/star(Clone)").gameObject.GetComponent<Image>();
+            extended_hud.StarLevelNFrontImage = starRow.Find("SLS_level_n/star(Clone)/star (1)").gameObject.GetComponent<Image>();
+            extended_hud.StarLevelNText = starRow.Find("SLS_level_n/level_n_name(Clone)/Text").gameObject.GetComponent<Text>();
             // The numbered star is the level alone; the modifiers get the icon row after it.
             extended_hud.StarLevelNFrontImage.sprite = defaultStar;
             extended_hud.StarLevelNFrontImage.rectTransform.sizeDelta = new Vector2(17, 17);
@@ -735,13 +835,13 @@ namespace StarLevelSystem.modules.UI {
 
             if (extended_hud.HighLevelIcons.Count == 0) {
                 for (int i = 0; i < HighLevelIconSlots; i++) {
-                    Transform icon = guiT.Find($"SLS_level_n/{HighLevelIconName}{i}");
+                    Transform icon = starRow.Find($"SLS_level_n/{HighLevelIconName}{i}");
                     if (icon == null) { break; }
                     extended_hud.HighLevelIcons.Add(icon.gameObject);
                     extended_hud.HighLevelIconBack.Add(icon.Find("star(Clone)")?.GetComponent<Image>());
                     extended_hud.HighLevelIconFront.Add(icon.Find("star(Clone)/star (1)")?.GetComponent<Image>());
                 }
-                extended_hud.HighLevelSeparator = guiT.Find($"SLS_level_n/{HighLevelSeparatorName}")?.gameObject;
+                extended_hud.HighLevelSeparator = starRow.Find($"SLS_level_n/{HighLevelSeparatorName}")?.gameObject;
             }
             // Walked by slot, so the icons keep the order the stars use. Modifiers without a sprite are left out here rather
             // than drawn as a plain star, which would read as another level star.
@@ -757,18 +857,6 @@ namespace StarLevelSystem.modules.UI {
             if (extended_hud.HighLevelSeparator != null) { extended_hud.HighLevelSeparator.SetActive(iconCount > 0); }
             extended_hud.HighLevelIconCount = iconCount;
 
-            extended_hud.HasEvolving = mods.TryGetValue(EvolvingKey, out ModifierType evolvingType);
-            extended_hud.EvolvingType = evolvingType;
-            extended_hud.LastEvolveKills = -1;
-            if (extended_hud.EvolveBar == null) {
-                Transform bar = guiT.Find($"Health/{EvolveBarName}");
-                if (bar != null) {
-                    extended_hud.EvolveBar = bar.gameObject;
-                    extended_hud.EvolveFill = bar.Find("fill") as RectTransform;
-                    // A hud rebuilt over an existing gui starts from what that gui shows.
-                    extended_hud.EvolveBarShown = bar.gameObject.activeSelf;
-                }
-            }
             PositionStarRow(extended_hud);
         }
 
@@ -790,6 +878,10 @@ namespace StarLevelSystem.modules.UI {
         // hud, whose stars spread out from the middle, the numbered star is pulled left by half its icon row to stay centered.
         private static void PositionStarRow(StarLevelHud hud) {
             Vector3 shift = hud.EvolveBarShown ? new Vector3(0f, hud.IsBoss ? -BossEvolveStarShift : -EvolveStarShift, 0f) : Vector3.zero;
+            if (EnemyHudChanges.BarLayoutOff) {
+                PositionCenteredStarRow(hud, shift);
+                return;
+            }
             Dictionary<int, Vector3> positions = hud.IsBoss ? BossStarPositions : StarPositions;
             foreach (KeyValuePair<int, GameObject> slot in hud.Starlevel) {
                 if (slot.Value != null && positions.TryGetValue(slot.Key, out Vector3 position)) {
@@ -801,6 +893,34 @@ namespace StarLevelSystem.modules.UI {
                 if (hud.IsBoss) { nPosition.x -= hud.HighLevelIconCount * HighLevelIconSpacingBoss * 0.5f; }
                 hud.StarLevelN.transform.localPosition = nPosition + shift;
             }
+        }
+
+        // On a hud a UI mod lays out, the stars are centred in SLS_stars the way a hud's own star rows centre theirs: the
+        // stars the level shows around the middle, or the numbered star and its icon row as one group. Depends on the
+        // level, so it runs again whenever the shown level changes.
+        private static void PositionCenteredStarRow(StarLevelHud hud, Vector3 shift) {
+            Vector3 center = hud.StarRowRect != null ? (Vector3)hud.StarRowRect.rect.center : Vector3.zero;
+            center += shift;
+            float spacing = hud.IsBoss ? BossStarSpacing : StarSpacing;
+            int shown = Mathf.Clamp(hud.DisplayedStarLevel - 1, 0, 5);
+            foreach (KeyValuePair<int, GameObject> slot in hud.Starlevel) {
+                if (slot.Value == null) { continue; }
+                float x = ((slot.Key - 2) - ((shown - 1) * 0.5f)) * spacing;
+                slot.Value.transform.localPosition = center + new Vector3(x, 0f, 0f);
+            }
+            if (hud.StarLevelN != null) {
+                float iconSpacing = hud.IsBoss ? HighLevelIconSpacingBoss : HighLevelIconSpacing;
+                float iconRow = hud.HighLevelIconCount > 0 ? HighLevelIconStart + ((hud.HighLevelIconCount - 1) * iconSpacing) : 0f;
+                hud.StarLevelN.transform.localPosition = center + new Vector3(iconRow * -0.5f, 0f, 0f);
+            }
+        }
+
+        // SLS_stars stays on the hud's own level_2 row, wherever the UI mod puts that, also when it moves it later (Auga does
+        // when its StarsBelowHealthBar setting changes). Runs per visible creature per frame, so it only writes on a change.
+        private static void FollowOwnStarRow(StarLevelHud hud) {
+            if (hud.StarRowRect == null || hud.OwnLevelRow == null) { return; }
+            Vector2 position = hud.OwnLevelRow.anchoredPosition;
+            if (hud.StarRowRect.anchoredPosition != position) { hud.StarRowRect.anchoredPosition = position; }
         }
 
         // Runs per visible creature per frame, so it only redraws when the kills or level move (or on the slow refresh).
@@ -826,14 +946,79 @@ namespace StarLevelSystem.modules.UI {
             hud.LastEvolveLevel = level;
             hud.NextEvolveRefresh = Time.time + EvolveRefreshInterval;
 
-            // Full once it can't evolve any further.
-            float progress = 1f;
-            if (IsAtEvolveCap(chara, level) == false) {
-                CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(chara, EvolvingKey, hud.EvolvingType);
-                int levelupReq = Mathf.RoundToInt(cmcfg.BasePower + (cmcfg.PerlevelPower * level));
-                if (levelupReq > 0) { progress = Mathf.Clamp01((float)kills / levelupReq); }
+            hud.EvolveFill.anchorMax = new Vector2(EvolveProgress(chara, hud.EvolvingType, kills, level), 1f);
+        }
+
+        // The evolve bar's fill: kills towards the next level, full once it can't evolve any further.
+        private static float EvolveProgress(Character chara, ModifierType evolvingType, int kills, int level) {
+            if (IsAtEvolveCap(chara, level)) { return 1f; }
+            CreatureModConfig cmcfg = CreatureModifierOverrides.GetEffectiveConfig(chara, EvolvingKey, evolvingType);
+            int levelupReq = Mathf.RoundToInt(cmcfg.BasePower + (cmcfg.PerlevelPower * level));
+            return levelupReq > 0 ? Mathf.Clamp01((float)kills / levelupReq) : 1f;
+        }
+
+        // For API.GetCreatureEvolveProgress: the fill SLS's evolve bar shows for the creature, or -1 when it shows none.
+        internal static float GetEvolveProgress(Character chara) {
+            if (ValConfig.EnableEvolvingProgressBar.Value == false) { return -1f; }
+            if (CompositeLazyCache.TryGetCreatureModifier(chara, EvolvingKey, out ModifierType evolvingType) == false) { return -1f; }
+            int kills = chara.m_nview.GetZDO().GetInt(EvolveKillsKey, 0);
+            return EvolveProgress(chara, evolvingType, kills, chara.GetLevel());
+        }
+
+        // For API.GetCreatureHudInfo: what SLS's star row shows for a creature, for a UI mod that draws it itself. Follows
+        // UpdateHudModifiers: the star slots go to the modifiers SLS has a definition for, in their stored order, and above
+        // five stars the ones with an icon follow the numbered star. Only reads, so it never builds the creature's cache
+        // entry; "ready" is false until SLS has.
+        internal static Dictionary<string, object> GetHudInfo(Character chara) {
+            int level = chara.GetLevel();
+            int stars = Mathf.Max(0, level - 1);
+            bool highLevel = level > 6;
+            bool showIcons = CreatureModifiersData.SelectedModifierDisplayStyle != ModifierDisplayStyle.None;
+
+            List<string> modifiers = new List<string>();
+            List<int> modifierTypes = new List<int>();
+            List<Sprite> modifierIcons = new List<Sprite>();
+            Dictionary<string, ModifierType> mods = CompositeLazyCache.GetCreatureModifiers(chara);
+            if (mods != null) {
+                foreach (KeyValuePair<string, ModifierType> entry in mods) {
+                    if (entry.Key == CreatureModifiers.NoMods) { continue; }
+                    if (CreatureModifiersData.ModifierDefinitions.TryGetValue(entry.Key, out CreatureModifierDefinition cmd) == false || cmd == null) { continue; }
+                    Sprite icon = null;
+                    if (showIcons && cmd.StarVisual != null && CreatureModifiersData.LoadedModifierSprites.TryGetValue(cmd.StarVisual, out Sprite starSprite) && starSprite != null) {
+                        icon = starSprite;
+                    }
+                    modifiers.Add(entry.Key);
+                    modifierTypes.Add((int)entry.Value);
+                    modifierIcons.Add(icon);
+                }
             }
-            hud.EvolveFill.anchorMax = new Vector2(progress, 1f);
+
+            List<Sprite> starIcons = new List<Sprite>();
+            List<Sprite> highLevelIcons = new List<Sprite>();
+            if (highLevel) {
+                foreach (Sprite icon in modifierIcons) {
+                    if (icon != null && highLevelIcons.Count < HighLevelIconSlots) { highLevelIcons.Add(icon); }
+                }
+            } else {
+                for (int i = 0; i < stars; i++) {
+                    starIcons.Add(i < modifierIcons.Count ? modifierIcons[i] : null);
+                }
+            }
+
+            return new Dictionary<string, object>() {
+                { "ready", CompositeLazyCache.GetCacheEntry(chara) != null },
+                { "level", level },
+                { "stars", stars },
+                { "highLevel", highLevel },
+                { "name", chara.GetHoverName() },
+                { "modifiers", modifiers },
+                { "modifierTypes", modifierTypes },
+                { "modifierIcons", modifierIcons },
+                { "starIcons", starIcons },
+                { "highLevelIcons", highLevelIcons },
+                { "evolveProgress", GetEvolveProgress(chara) },
+                { "healthNumbers", ValConfig.EnableEnemyHealthbarNumberDisplay.Value },
+            };
         }
 
         // Same gate and bound Evolve.CountKill stops counting kills at.

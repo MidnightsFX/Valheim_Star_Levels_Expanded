@@ -503,7 +503,7 @@ namespace StarLevelSystem.common {
             MigrateFirstTimeSetup();
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have. A biome's BiomeMaxLevelOverride or an active boss-conditional tier (LevelSettings.yaml) sets its own cap in place of this one, and bosses use MaxBossLevel.", false, 1, 200);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have. A biome's BiomeMaxLevelOverride (LevelSettings.yaml) sets its own cap in place of this one, an active boss-conditional tier can raise the cap but never lowers it, and bosses use MaxBossLevel.", false, 1, 200);
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
             MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The Maximum number of stars that a boss creature can have. Applies wherever the boss stands: biome caps and conditional tiers do not change it, a CreatureMaxLevelOverride naming the boss does.", false, 1, 200);
             MaxBossLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;

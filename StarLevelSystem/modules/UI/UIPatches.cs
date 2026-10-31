@@ -18,20 +18,46 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.UI {
     internal static class UIPatches {
 
+        // A UI mod that swaps the EnemyHud for its own prefab (Project Auga does) must keep these vanilla names, because
+        // SLS finds them on the new hud:
+        //   m_baseHud      level_2/star (a dark star Image with the lit star Image "star (1)" inside; SLS clones it for every
+        //                  star and modifier icon it draws), level_3/star, Name (TMP), Health/health_slow/bar and
+        //                  Health/health_fast/bar (each with a GuiBar on health_slow / health_fast)
+        //   m_baseHudBoss  Name, Health/health_slow/bar, Health/health_fast/bar, and Health/bkg and Health/darken, which
+        //                  SLS moves into Health/Background (then Background/bkg and Background/darken) to size them
+        // Vanilla's ShowHud and UpdateHuds need level_2, level_3, Alerted and Aware on m_baseHud as well. A UI mod can turn
+        // off what SLS changes on the hud through the API (EnemyHudChanges), and then needs fewer of these: with the bar
+        // layout off SLS only adds its own objects and leaves every size and position above alone (Auga gets that by
+        // default), and centres its stars in one SLS_stars object that sits on the hud's own level_2 row
+        // (UIHudControl.GatherStarRow); with the stars off it needs neither star. See API/README.md.
         [HarmonyPatch(typeof(EnemyHud), nameof(EnemyHud.Awake))]
         public static class EnableLevelDisplay {
             public static void Postfix(EnemyHud __instance) {
-                // Logger.LogDebug($"Updating Enemy Hud, expanding stars");
-                // Need a patch to show the number of stars something is
-                // Need to setup the 1-5 stars, and the 5-n stars
-                GameObject star = __instance.m_baseHud.transform.Find("level_2/star").gameObject;
+                EnemyHudChanges.LatchForHudBuild();
 
-                // Destroys the extra star for level 3, so that we can just enable levels 2-6 to add their respective star
-                // Object.Destroy(__instance.m_baseHud.transform.Find("level_3/star").gameObject);
-                __instance.m_baseHud.transform.Find("level_3/star").gameObject.SetActive(false);
+                if (EnemyHudChanges.StarsOff == false) {
+                    // Logger.LogDebug($"Updating Enemy Hud, expanding stars");
+                    // Need a patch to show the number of stars something is
+                    // Need to setup the 1-5 stars, and the 5-n stars
+                    GameObject star = __instance.m_baseHud.transform.Find("level_2/star").gameObject;
 
-                // Levels 1-5 get their stars, then we also get the n* setup
-                UIHudControl.StarLevelHudDisplay(star, __instance.m_baseHud.transform, __instance.m_baseHudBoss.transform);
+                    // Destroys the extra star for level 3, so that we can just enable levels 2-6 to add their respective star
+                    // Object.Destroy(__instance.m_baseHud.transform.Find("level_3/star").gameObject);
+                    __instance.m_baseHud.transform.Find("level_3/star").gameObject.SetActive(false);
+
+                    // Levels 1-5 get their stars, then we also get the n* setup
+                    UIHudControl.StarLevelHudDisplay(star, __instance.m_baseHud.transform, __instance.m_baseHudBoss.transform);
+                }
+                if (EnemyHudChanges.EvolveBarOff == false) {
+                    UIHudControl.SetupEvolveBars(__instance.m_baseHud.transform, __instance.m_baseHudBoss.transform);
+                }
+
+                // Everything below shapes the boss bar. Leaving BossHudRoot null also turns off the boss reparenting in
+                // ShowHud and the stacking in UpdateHuds.
+                if (EnemyHudChanges.BarLayoutOff) {
+                    UIHudControl.BossHudRoot = null;
+                    return;
+                }
 
                 // Setup boss huds for stacking support
                 Logger.LogDebug("Setting BossHud root");
@@ -112,7 +138,8 @@ namespace StarLevelSystem.modules.UI {
                 // non-bosses and players
                 __instance.m_huds.TryGetValue(c, out var value);
                 if (!c.IsBoss()) {
-                    if (value != null) {
+                    // With SLS's stars turned off the hud's own level stars are left to vanilla (UpdateHudForAllLevels).
+                    if (value != null && EnemyHudChanges.StarsOff == false) {
                         if (value.m_level2 == null || value.m_level3 == null) {
                             return;
                         }
@@ -121,7 +148,8 @@ namespace StarLevelSystem.modules.UI {
                     }
                 } else {
                     // Another mod can skip ShowHud for a boss (its prefix returning false), which leaves no hud built
-                    // for it here, so there is nothing to reparent.
+                    // for it here, so there is nothing to reparent. A UI mod that lays out the boss bars itself
+                    // (EnemyHudChanges.BarLayoutOff) leaves BossHudRoot null, so its boss huds stay where it put them.
                     if (value == null || value.m_gui == null || UIHudControl.BossHudRoot == null) { return; }
                     // Boss hud, setup elements
                     // Reparent to our container

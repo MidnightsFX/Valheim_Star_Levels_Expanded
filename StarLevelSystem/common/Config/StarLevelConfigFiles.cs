@@ -140,9 +140,9 @@ namespace StarLevelSystem.common {
 # client, so edit it on the server (or hosting player). Edits apply live.
 # Levels vs stars: level 1 has no stars, level 2 = 1 star, level 3 = 2 stars.
 # Star caps: MaxLevel in the main .cfg caps creatures unless their biome sets a
-# BiomeMaxLevelOverride, and an active boss-conditional tier replaces that biome's
-# range in turn. MaxBossLevel caps bosses wherever they stand. A creature entry's
-# CreatureMaxLevelOverride beats all of these.
+# BiomeMaxLevelOverride, and an active boss-conditional tier can raise that cap
+# (never lower it). MaxBossLevel caps bosses wherever they stand. A creature
+# entry's CreatureMaxLevelOverride beats all of these.
 #
 # --- Levelup chances ---
 # Every chance table is 'level: chance', the percent chance for a creature to
@@ -274,10 +274,12 @@ namespace StarLevelSystem.common {
 # and the latest defeated key that has an entry applies. Tiers update as soon
 # as a boss key is set or removed; no relog needed.
 #
-# The active tier replaces the biome's own curve AND its level range: creatures
-# there roll between the tier generators' MinLevel and MaxLevel, whatever
-# BiomeMinLevelOverride / BiomeMaxLevelOverride say. A creature entry with its
-# own curve still wins, and bosses keep MaxBossLevel.
+# The active tier replaces the biome's own curve AND its minimum level:
+# creatures there roll at least the tier generators' MinLevel, whatever
+# BiomeMinLevelOverride says. The tier's MaxLevel can only raise the biome's
+# cap: where it is lower than MaxLevel (or BiomeMaxLevelOverride), that cap
+# stays, so beating a boss never lowers a biome's levels. A creature entry
+# with its own curve still wins, and bosses keep MaxBossLevel.
 #
 #   ConditionalBossKeyOrder:
 #   - defeated_eikthyr

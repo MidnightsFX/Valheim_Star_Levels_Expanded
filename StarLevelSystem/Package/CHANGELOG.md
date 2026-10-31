@@ -1,3 +1,13 @@
+**1.31.0**
+ ---
+ ```
+- Adds compatibility options for other mods to control HUD changes for creatures 
+	- API Options for other UI mods
+	- Adds compatibility with Auga
+- Defeating a boss with conditional scaling on no longer lowers the level cap in the newest biomes or knocks existing creatures down to it.
+- Adds some missing translations
+ ```
+
 **1.30.0**
  ---
  ```

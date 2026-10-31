@@ -665,7 +665,7 @@ namespace StarLevelSystem.common
             [DefaultValue(0)]
             public int BiomeMinLevelOverride { get; set; }
 
-            [Description("Star cap for creatures in this biome, replacing MaxLevel here. Bosses use MaxBossLevel instead, and an active boss-conditional tier replaces this cap with its own range.")]
+            [Description("Star cap for creatures in this biome, replacing MaxLevel here. Bosses use MaxBossLevel instead, and an active boss-conditional tier can raise this cap but never lowers it.")]
             public int BiomeMaxLevelOverride { get; set; }
 
             [Description("How strong distance effects are in this biome. 1.0 = no change, 2.0 = 2x stronger, 0.5 = 50% weaker.")]

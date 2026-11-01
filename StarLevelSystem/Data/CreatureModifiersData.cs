@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StarLevelSystem.Modifiers;
+using StarLevelSystem.Modifiers.Shared;
 using UnityEngine;
 using static Heightmap;
 using static StarLevelSystem.common.DataObjects;
@@ -1105,6 +1106,7 @@ namespace StarLevelSystem.Data
             LoadPrefabsFor(ActiveCreatureModifiers.BossModifiers);
             DeathNova.AttachIndicators();
             EarthCaller.AttachVisual();
+            ModifierSounds.Apply();
             if (timer != null) {
                 loggedFirstPrefabLoad = true;
                 Logger.LogDebug($"Loaded {LoadedModifierSprites.Count} modifier icons and {LoadedModifierEffects.Count + LoadedSecondaryEffects.Count} effects from the asset bundle in {timer.Elapsed.TotalMilliseconds:0.0} ms.");

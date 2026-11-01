@@ -32,7 +32,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.31.0";
+        public const string PluginVersion = "1.31.1";
 
         public ValConfig cfg;
         // Use this class to add your own localization to the game
@@ -82,6 +82,7 @@ namespace StarLevelSystem
             MinimapManager.OnVanillaMapDataLoaded += NemesisMinimap.OnMapReady;
             PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
             PrefabManager.OnPrefabsRegistered += NovaBurstFx.Register;
+            PrefabManager.OnPrefabsRegistered += ModifierSounds.Apply;
             // ConfigNetwork tracks the sync flag itself now, and patches ZNet.Shutdown to reset it -- the
             // reset used to be a manual call in LevelScalingPatches that was easy to forget.
             UIHudControl.LoadAssets();

@@ -1,3 +1,9 @@
+**1.31.1**
+ ---
+ ```
+- Fixes Volatile sound effects not following sfx controls
+```
+
 **1.31.0**
  ---
  ```

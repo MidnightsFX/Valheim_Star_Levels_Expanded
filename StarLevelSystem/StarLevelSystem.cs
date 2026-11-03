@@ -32,7 +32,7 @@ namespace StarLevelSystem
     {
         public const string PluginGUID = "MidnightsFX.StarLevelSystem";
         public const string PluginName = "StarLevelSystem";
-        public const string PluginVersion = "1.31.1";
+        public const string PluginVersion = "1.32.0";
 
         public ValConfig cfg;
         // No Jotunn instances should be created before Awake, or RPC names will not match

@@ -1,4 +1,5 @@
 ﻿using StarLevelSystem.common;
+using StarLevelSystem.modules;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.LevelSystem;
 using System.Collections.Generic;
@@ -23,7 +24,7 @@ namespace StarLevelSystem.Modifiers
             // biome resolved (or in a biome with no BiomeObjects) kept an inert SLSSummoner forever: every
             // later Setup saw a non-null component and returned without ever initializing it.
             if (config.BiomeObjects == null) { return; }
-            if (config.BiomeObjects.TryGetValue(ccache.Biome, out List<string> summonPrefabs) == false) { return; }
+            if (BiomeRegistry.TryGetEntry(config.BiomeObjects, ccache.Biome, out List<string> summonPrefabs) == false) { return; }
             if (summonPrefabs == null || summonPrefabs.Count == 0) { return; }
 
             SLSSummoner summoner = creature.GetComponent<SLSSummoner>();

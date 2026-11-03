@@ -49,7 +49,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         // The biome's own entry within the active tier, else that tier's 'All' entry as its fallback.
         private static Heightmap.Biome EntryBiome(Heightmap.Biome biome) {
-            return CurrentGlobalKeyConditionalLevelup.ContainsKey(biome) ? biome : Heightmap.Biome.All;
+            return BiomeRegistry.TryGetKey(CurrentGlobalKeyConditionalLevelup, biome, out Heightmap.Biome key) ? key : Heightmap.Biome.All;
         }
 
         private static void RebuildCache() {

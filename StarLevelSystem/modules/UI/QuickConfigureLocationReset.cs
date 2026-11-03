@@ -21,6 +21,11 @@ namespace StarLevelSystem.modules.UI {
             Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth, Heightmap.Biome.Ocean,
         };
 
+        // The biomes above and any custom ones, keyed as the rates hold them.
+        private static IEnumerable<Heightmap.Biome> ResetRateRows(Dictionary<Heightmap.Biome, float> rates) {
+            return ResetRateBiomes.Concat(BiomeRegistry.CustomBiomes.Select(custom => BiomeRegistry.ConfigKeyFor(rates, custom)));
+        }
+
         // Shorter timers make the sweep re-examine the whole world that often; see LocationResetData.MinAPIResetHours.
         private const float MinResetHours = 1f;
         private const float MaxResetHours = 336f;
@@ -224,7 +229,7 @@ namespace StarLevelSystem.modules.UI {
 
             ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_locreset_header_biome_rates"));
             ScrollRow(left, lw, 50f, t => ConfigUI.AddTextRow(t, lw, 50f, "$sls_cfg_locreset_biome_help", 12, GUIManager.Instance.ValheimBeige));
-            foreach (Heightmap.Biome biome in ResetRateBiomes) {
+            foreach (Heightmap.Biome biome in ResetRateRows(lr.biomeRates)) {
                 Heightmap.Biome b = biome;   // capture per iteration
                 float rate = lr.RateFor(b);
                 ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, BiomeName(b),
@@ -403,7 +408,7 @@ namespace StarLevelSystem.modules.UI {
                 }
             }
 
-            foreach (Heightmap.Biome biome in ResetRateBiomes) {
+            foreach (Heightmap.Biome biome in ResetRateRows(s.biomeRates)) {
                 if (s.RateFor(biome) == b.RateFor(biome)) { continue; }
                 if (copy.BiomeRates == null) { copy.BiomeRates = new Dictionary<Heightmap.Biome, float>(); }
                 copy.BiomeRates[biome] = s.RateFor(biome);

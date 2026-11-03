@@ -72,10 +72,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
             // Collect biomes that are below their target and cap.
             List<Heightmap.Biome> needy = new List<Heightmap.Biome>();
             foreach (KeyValuePair<Heightmap.Biome, int> kv in settings.TargetPerBiome) {
-                int active = NemesisRemoteSpawnControl.CountActivePerBiome(kv.Key);
+                // A name that is not a biome in this world has nowhere to scout. Left in, it would spend this interval's
+                // budget and force-load far zones to find that out.
+                if (BiomeRegistry.Resolve(kv.Key, out Heightmap.Biome target) == false) { continue; }
+                int active = NemesisRemoteSpawnControl.CountActivePerBiome(target);
                 int cap = int.MaxValue;
-                if (settings.MaxConcurrentPerBiome != null && settings.MaxConcurrentPerBiome.TryGetValue(kv.Key, out int c)) { cap = c; }
-                if (active < kv.Value && active < cap) { needy.Add(kv.Key); }
+                if (BiomeRegistry.TryGetEntry(settings.MaxConcurrentPerBiome, target, out int c)) { cap = c; }
+                if (active < kv.Value && active < cap) { needy.Add(target); }
             }
             if (needy.Count == 0) { yield break; }
             needy = needy.ShuffleList();

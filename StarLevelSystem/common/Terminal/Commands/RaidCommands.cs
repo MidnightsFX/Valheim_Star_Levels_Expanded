@@ -212,7 +212,7 @@ namespace StarLevelSystem.common
         private static string BiomeAt(Vector3 pos)
         {
             if (WorldGenerator.instance == null) { return "unknown biome"; }
-            return WorldGenerator.instance.GetBiome(pos).ToString();
+            return modules.BiomeRegistry.IdentifierOf(modules.BiomeLookup.World(pos));
         }
     }
 }

@@ -689,6 +689,7 @@ namespace StarLevelSystem.Data
             CompositeLazyCache.FlushCache();
             ConditionalScaleSystem.ResetCache();
             LevelSelection.ClearMergedBiomeSettings();
+            BiomeRegistry.OnLevelSettingsApplied();
             RestartCreatureAttributeUpdate();
         }
 
@@ -734,33 +735,38 @@ namespace StarLevelSystem.Data
         private static void ValidateLevelSettings(CreatureLevelSettings settings) {
             if (settings == null) { return; }
 
-            if (settings.LevelupChanceTablesBySpan != null) {
-                foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in settings.LevelupChanceTablesBySpan) {
-                    SortedDictionary<int, float> table = entry.Value;
-                    if (table == null || table.Count == 0) {
-                        Logger.LogWarning($"LevelupChanceTablesBySpan '{entry.Key}' is empty; Table generators covering {entry.Key} levels will use the Exponential curve.");
-                        continue;
-                    }
-                    // Keys are sorted and unique, so this is exactly "one entry for each of 1..span".
-                    if (table.Count != entry.Key || table.Keys.First() != 1 || table.Keys.Last() != entry.Key) {
-                        Logger.LogWarning($"LevelupChanceTablesBySpan '{entry.Key}' should have keys 1-{entry.Key}, but has {string.Join(", ", table.Keys)}. Keys outside 1-{entry.Key} are ignored and missing keys leave those levels out of the roll.");
-                    }
-                    float previous = float.MaxValue;
-                    foreach (KeyValuePair<int, float> kvp in table) {
-                        if (kvp.Value >= previous) {
-                            Logger.LogWarning($"LevelupChanceTablesBySpan '{entry.Key}': key {kvp.Key} ({kvp.Value}) is not lower than the key before it ({previous}). Values are the % chance to roll past each level and must decrease, otherwise that level can never be rolled.");
-                            break;
-                        }
-                        previous = kvp.Value;
-                    }
-                }
-            }
+            ValidateChanceTables("LevelupChanceTablesBySpan", settings.LevelupChanceTablesBySpan, "use the Exponential curve");
+            ValidateChanceTables("BossLevelupChanceTablesBySpan", settings.BossLevelupChanceTablesBySpan, "read LevelupChanceTablesBySpan instead");
 
             if (settings.ConditionalCreatureLevelupChance != null) {
                 HashSet<string> ordered = new HashSet<string>(ConditionalScaleSystem.BossKeyOrder(settings).Where(k => k != null), StringComparer.OrdinalIgnoreCase);
                 foreach (string key in settings.ConditionalCreatureLevelupChance.Keys) {
                     if (key != null && ordered.Contains(key) == false) {
                         Logger.LogWarning($"ConditionalCreatureLevelupChance key '{key}' is not in ConditionalBossKeyOrder, so it only applies while no listed boss key is defeated. Add it to ConditionalBossKeyOrder to give it a tier.");
+                    }
+                }
+            }
+        }
+
+        private static void ValidateChanceTables(string name, Dictionary<int, SortedDictionary<int, float>> tables, string whenEmpty) {
+            if (tables != null) {
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in tables) {
+                    SortedDictionary<int, float> table = entry.Value;
+                    if (table == null || table.Count == 0) {
+                        Logger.LogWarning($"{name} '{entry.Key}' is empty; Table generators covering {entry.Key} levels will {whenEmpty}.");
+                        continue;
+                    }
+                    // Keys are sorted and unique, so this is exactly "one entry for each of 1..span".
+                    if (table.Count != entry.Key || table.Keys.First() != 1 || table.Keys.Last() != entry.Key) {
+                        Logger.LogWarning($"{name} '{entry.Key}' should have keys 1-{entry.Key}, but has {string.Join(", ", table.Keys)}. Keys outside 1-{entry.Key} are ignored and missing keys leave those levels out of the roll.");
+                    }
+                    float previous = float.MaxValue;
+                    foreach (KeyValuePair<int, float> kvp in table) {
+                        if (kvp.Value >= previous) {
+                            Logger.LogWarning($"{name} '{entry.Key}': key {kvp.Key} ({kvp.Value}) is not lower than the key before it ({previous}). Values are the % chance to roll past each level and must decrease, otherwise that level can never be rolled.");
+                            break;
+                        }
+                        previous = kvp.Value;
                     }
                 }
             }
@@ -778,7 +784,7 @@ namespace StarLevelSystem.Data
             if (defaultChances != null) { settings.DefaultCreatureLevelUpChance = defaultChances; }
             settings.DefaultGeneratorNightMultiplier = defaultNight;
 
-            SortedDictionary<int, float> bossChances = LevelGeneratorResolver.BuildLevelupChance(settings.BossLevelupGenerators, settings.BossLevelupGeneratorRefs, out float bossNight);
+            SortedDictionary<int, float> bossChances = LevelGeneratorResolver.BuildLevelupChance(settings.BossLevelupGenerators, settings.BossLevelupGeneratorRefs, out float bossNight, settings.BossLevelupChanceTablesBySpan);
             if (bossChances != null) { settings.BossCreatureLevelUpChance = bossChances; }
             settings.BossGeneratorNightMultiplier = bossNight;
 

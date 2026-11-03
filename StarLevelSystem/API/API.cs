@@ -49,6 +49,11 @@ namespace StarLevelSystem
 
         // Enemy hud
         private static readonly MethodInfo SetEnemyHudChangesDisabledMethod;
+
+        // Custom biomes
+        private static readonly MethodInfo RegisterBiomeMethod;
+        private static readonly MethodInfo TryGetBiomeByNameMethod;
+        private static readonly MethodInfo GetBiomeNameMethod;
         private static readonly MethodInfo GetDisabledEnemyHudChangesMethod;
         private static readonly MethodInfo GetCreatureHudInfoMethod;
         private static readonly MethodInfo GetCreatureEvolveProgressMethod;
@@ -100,6 +105,12 @@ namespace StarLevelSystem
         /// </summary>
         public static bool SupportsEnemyHud => SetEnemyHudChangesDisabledMethod != null;
 
+        /// <summary>
+        /// True when the installed Star Level System has the custom biome section: RegisterBiome, TryGetBiomeByName and
+        /// GetBiomeName. Older builds make those return false, false and null.
+        /// </summary>
+        public static bool SupportsCustomBiomes => RegisterBiomeMethod != null;
+
         static API() {
             APIReciever = Type.GetType("StarLevelSystem.modules.APIReciever, StarLevelSystem");
             if (APIReciever == null) return;
@@ -133,6 +144,9 @@ namespace StarLevelSystem
             AddNewModifierToSLS = APIReciever.GetMethod("AddNewModifierToSLS", BindingFlags.Public | BindingFlags.Static);
 
             SetEnemyHudChangesDisabledMethod = APIReciever.GetMethod("SetEnemyHudChangesDisabled", BindingFlags.Public | BindingFlags.Static);
+            RegisterBiomeMethod = APIReciever.GetMethod("RegisterBiome", BindingFlags.Public | BindingFlags.Static);
+            TryGetBiomeByNameMethod = APIReciever.GetMethod("TryGetBiomeByName", BindingFlags.Public | BindingFlags.Static);
+            GetBiomeNameMethod = APIReciever.GetMethod("GetBiomeName", BindingFlags.Public | BindingFlags.Static);
             GetDisabledEnemyHudChangesMethod = APIReciever.GetMethod("GetDisabledEnemyHudChanges", BindingFlags.Public | BindingFlags.Static);
             GetCreatureHudInfoMethod = APIReciever.GetMethod("GetCreatureHudInfo", BindingFlags.Public | BindingFlags.Static);
             GetCreatureEvolveProgressMethod = APIReciever.GetMethod("GetCreatureEvolveProgress", BindingFlags.Public | BindingFlags.Static);
@@ -697,6 +711,44 @@ namespace StarLevelSystem
             List<Heightmap.Biome> allowed_biomes = null) {
             return (bool)AddNewModifierToSLS.Invoke(null, new object[] { modifierID, modifier_name, setupMethod, selectionWeight, basepower, perlevelpower, biomeConfig, namingStyle,
                 name_suffixes, name_prefixes, visualStyle, starIcon, visualEffect, allowed_creatures, unallowed_creatures, allowed_biomes });
+        }
+
+        ////////////////////////////////////////
+        /// CUSTOM BIOMES
+        ////////////////////////////////////////
+
+        /// <summary>
+        /// Tells Star Level System about a biome your mod adds, for mods that do not make it visible through
+        /// Enum.GetValues(typeof(Heightmap.Biome)) the way Expand World Data does. Admins can then name it in config files.
+        /// Check SupportsCustomBiomes first.
+        /// </summary>
+        /// <param name="name">The name config files use for the biome</param>
+        /// <param name="biome">A single bit no vanilla biome uses</param>
+        /// <param name="settingsFrom">The biome whose settings it uses when it has no entry of its own. An admin's
+        /// BiomeFallbacks entry beats this. None leaves it on the All entry alone.</param>
+        /// returns>bool: false when the name is empty or vanilla's, or the value is not a single unused bit</returns>
+        public static bool RegisterBiome(string name, Heightmap.Biome biome, Heightmap.Biome settingsFrom = Heightmap.Biome.None) {
+            return (bool)Call(RegisterBiomeMethod, false, name, biome, settingsFrom);
+        }
+
+        /// <summary>
+        /// The biome with this name, vanilla or custom, as it is in this world right now. Expand World Data assigns values
+        /// by the order of its file, so look this up rather than keeping a number.
+        /// </summary>
+        public static bool TryGetBiomeByName(string name, out Heightmap.Biome biome) {
+            biome = Heightmap.Biome.None;
+            if (TryGetBiomeByNameMethod == null) { return false; }
+            object[] arguments = { name, biome };
+            bool found = (bool)TryGetBiomeByNameMethod.Invoke(null, arguments);
+            biome = (Heightmap.Biome)arguments[1];
+            return found;
+        }
+
+        /// <summary>
+        /// The biome's name as players read it, which for a custom biome is the name its mod gave it.
+        /// </summary>
+        public static string GetBiomeName(Heightmap.Biome biome) {
+            return (string)Call(GetBiomeNameMethod, null, biome);
         }
 
         ////////////////////////////////////////

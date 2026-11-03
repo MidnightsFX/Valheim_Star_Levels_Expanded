@@ -16,13 +16,13 @@ namespace StarLevelSystem.modules
     {
         // Mod flags
         public static bool IsDropThatEnabled = false;
-        public static bool IsExpandWorldEnabled = false;
         public static bool IsFGNEnabled = false;
         public static bool IsCustomRaidsEnabled = false;
         public static bool IsJewelcraftingEnabled = false;
         public static bool IsVentureLocationResetEnabled = false;
         public static bool IsUpgradeWorldEnabled = false;
         public static bool IsValheimPlusEnabled = false;
+        public static bool IsExpandWorldDataEnabled = false;
 
         // Active only when CustomRaids is installed AND the compat toggle is enabled.
         public static bool CustomRaidsCompatActive => IsCustomRaidsEnabled && ValConfig.EnableCustomRaidsCompat.Value;
@@ -98,9 +98,6 @@ namespace StarLevelSystem.modules
                 if (plugins.Keys.Contains("com.Fire.FiresGhettoNetworkMod")) {
                     IsFGNEnabled = true;
                 }
-                if (plugins.Keys.Contains("expand_world_size")) {
-                    IsExpandWorldEnabled = true;
-                }
                 if (plugins.Keys.Contains("asharppen.valheim.custom_raids")) {
                     IsCustomRaidsEnabled = true;
                     Logger.LogInfo("Valheim.CustomRaids detected; CustomRaids raids will fire alongside SLS raids while EnableCustomRaidsCompat is enabled.");
@@ -134,6 +131,11 @@ namespace StarLevelSystem.modules
                 if (plugins.TryGetValue(ValheimPlusGUID, out BepInEx.BaseUnityPlugin valheimPlus)) {
                     IsValheimPlusEnabled = true;
                     BindValheimPlus(valheimPlus.GetType().Assembly);
+                }
+                // Loaded ahead of SLS the same way, though its biome names only arrive in its Start, after this.
+                if (plugins.TryGetValue(ExpandWorldDataBiomes.PluginGuid, out BepInEx.BaseUnityPlugin expandWorldData)) {
+                    IsExpandWorldDataEnabled = true;
+                    ExpandWorldDataBiomes.Bind(expandWorldData.GetType().Assembly);
                 }
             } catch {
                 Logger.LogWarning("Unable to check mod compatibility. Ensure that Bepinex can load.");
@@ -219,6 +221,7 @@ namespace StarLevelSystem.modules
         // Applies compatibility patches that depend on another mod's methods. Called from Awake after
         // SLS's own Harmony instance exists (detection in CheckModCompat runs earlier).
         internal static void ApplyConditionalPatches(Harmony harmony) {
+            if (IsExpandWorldDataEnabled) { ExpandWorldDataBiomes.ApplyPatches(harmony); }
             if (IsJewelcraftingEnabled && JewelcraftingBossHudPostfix != null) {
                 harmony.Patch(JewelcraftingBossHudPostfix,
                     prefix: new HarmonyMethod(AccessTools.Method(typeof(Compatibility), nameof(SkipJewelcraftingBossHud))));

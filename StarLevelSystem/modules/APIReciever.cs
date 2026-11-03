@@ -364,6 +364,18 @@ namespace StarLevelSystem.modules
         }
 
         // The enemy hud changes a UI mod turns off, by its plugin GUID. See EnemyHudChanges.
+        public static bool RegisterBiome(string name, Heightmap.Biome biome, Heightmap.Biome settingsFrom) {
+            return BiomeRegistry.RegisterBiome(name, biome, settingsFrom);
+        }
+
+        public static bool TryGetBiomeByName(string name, out Heightmap.Biome biome) {
+            return BiomeRegistry.TryGetByName(name, out biome);
+        }
+
+        public static string GetBiomeName(Heightmap.Biome biome) {
+            return BiomeRegistry.DisplayName(biome);
+        }
+
         public static bool SetEnemyHudChangesDisabled(string sourceId, int changes) {
             return EnemyHudChanges.Set(sourceId, changes);
         }

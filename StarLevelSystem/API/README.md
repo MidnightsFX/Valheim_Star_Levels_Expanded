@@ -267,6 +267,22 @@ A mod that does not copy this API can call the same methods on
 
 ---
 
+## Custom biomes
+
+Star Level System finds biomes through `Enum.GetValues(typeof(Heightmap.Biome))`, which Expand World Data extends with its own. A
+mod that adds biomes another way can register them, so admins can name them in config files. All of this needs
+`SupportsCustomBiomes`: an older Star Level System returns `false`, `false` and `null`.
+
+```csharp
+// settingsFrom is the biome whose settings it uses when it has no entry of its own. An admin's BiomeFallbacks entry beats it.
+StarLevelSystem.API.RegisterBiome("emberwood", (Heightmap.Biome)(1 << 20), Heightmap.Biome.AshLands);
+
+// A biome's value can differ between worlds, so look it up by name rather than keeping a number.
+if (StarLevelSystem.API.TryGetBiomeByName("testgrove", out Heightmap.Biome biome)) {
+	string shown = StarLevelSystem.API.GetBiomeName(biome);
+}
+```
+
 ## Location Resets
 
 Star Level System can restore looted locations, dungeons, ore, pickables and vegetation on a

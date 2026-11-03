@@ -148,7 +148,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 NemesisBossPin pin = new NemesisBossPin() {
                     Id = pinId,
                     Position = pos,
-                    Biome = Heightmap.FindBiome(pos),
+                    Biome = BiomeLookup.AtPosition(pos),
                     Name = zdo.GetString(SLS_NAME, "")
                 };
                 ActiveRemoteBosses[pinId] = pin;
@@ -258,7 +258,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 // Yield periodically to avoid stalling the main thread while we force-load zones.
                 if (tries % 5 == 0) { yield return new WaitForSeconds(0.1f); }
 
-                Vector3 candidate = SelectWorldPoint(range, tries, biome);
+                if (TrySelectGridPoint(biome, range, out Vector3 candidate) == false) {
+                    candidate = SelectWorldPoint(range, tries, biome);
+                }
 
                 // Force the target zone to generate so ground data is available server-side.
                 Vector2s zoneId = ZoneSystem.GetZone(candidate);
@@ -282,10 +284,42 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         private static Tuple<float, float> GetBiomeRadiusRange(Heightmap.Biome biome) {
             var ranges = NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.BiomeRadiusRanges;
-            if (ranges != null && ranges.TryGetValue(biome, out BiomeSpawnRadius r)) {
+            if (BiomeRegistry.TryGetEntry(ranges, biome, out BiomeSpawnRadius r)) {
                 return new Tuple<float, float>(r.Min, r.Max);
             }
-            return new Tuple<float, float>(500f, WorldGenerator.waterEdge);
+            return new Tuple<float, float>(500f, WorldSize.TotalRadius);
+        }
+
+        // Through a delegate: Expand World Size patches this to its own grid, and a method this small can be inlined into
+        // its caller, past the patch.
+        private static readonly Func<float, float> MapToWorld = AltBiomeWorldData.MapSpaceToWorldSpace;
+
+        // How many grid points to try against a configured radius range before leaving it to the ring.
+        private const int GridPointAttempts = 16;
+
+        // A custom biome can be anywhere, and the default bands in metres mean nothing in a larger world, so a random point
+        // on the ring usually misses and each miss force-loads a far zone. World generation already recorded where each
+        // biome is, so this picks from that. TryGetValue because vanilla only lists biomes it knew when the world was made,
+        // and an empty or missing list has to fall through to the ring rather than stop the scout.
+        private static bool TrySelectGridPoint(Heightmap.Biome biome, Tuple<float, float> range, out Vector3 point) {
+            point = Vector3.zero;
+            if (BiomeRegistry.IsCustom(biome) == false && WorldSize.IsResized == false) { return false; }
+            AltBiomeWorldData grid = WorldGenerator.instance?.m_world?.m_biomeData;
+            if (grid == null || grid.IsReady == false || grid.Biomes.TryGetValue(biome, out BiomeTypeInfo info) == false) { return false; }
+            List<BiomePointCoordinate> points = BiomeRegistry.TerrainOf(biome) != Heightmap.Biome.Ocean && info.AllPointsAboveSeaLevel.Count > 0 ? info.AllPointsAboveSeaLevel : info.AllPoints;
+            if (points.Count == 0) { return false; }
+
+            // An admin's range is honoured where its metres still mean what they were written for.
+            bool useRange = WorldSize.IsResized == false && BiomeRegistry.TryGetEntry(NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.BiomeRadiusRanges, biome, out _);
+            for (int attempt = 0; attempt < GridPointAttempts; attempt++) {
+                BiomePointCoordinate picked = points[UnityEngine.Random.Range(0, points.Count)];
+                Vector3 candidate = new Vector3(MapToWorld(picked.x), 0f, MapToWorld(picked.y));
+                float distance = new Vector2(candidate.x, candidate.z).magnitude;
+                if (useRange && (distance < range.Item1 || distance > range.Item2)) { continue; }
+                point = candidate;
+                return true;
+            }
+            return false;
         }
 
         // Mirrors EpicLoot BountyLocationEarlyCache.SelectWorldPoint: Ashlands/DeepNorth are banded to the
@@ -311,7 +345,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Combines EpicLoot's biome/water/base/ward checks with SLS's FindFloor object-overlap and lava checks.
         private static bool IsSpawnLocationValid(Vector3 location, Heightmap.Biome targetBiome, out Vector3 groundPoint) {
             groundPoint = location;
-            ZoneSystem.instance.GetGroundData(ref location, out var normal, out var foundBiome, out var biomeArea, out var hmap);
+            BiomeLookup.GroundData(ref location, out var normal, out var foundBiome, out var biomeArea, out var hmap);
 
             if (hmap == null || foundBiome == Heightmap.Biome.None || foundBiome != targetBiome) { return false; }
 
@@ -326,11 +360,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
             // Below/near water level (allow shallow ocean spawns only for the Ocean biome).
             float waterLevel = ZoneSystem.instance.m_waterLevel;
-            if (foundBiome != Heightmap.Biome.Ocean && waterLevel > location.y + 2f) { return false; }
+            if (BiomeRegistry.TerrainOf(foundBiome) != Heightmap.Biome.Ocean && waterLevel > location.y + 2f) { return false; }
             if (location.y < 27f) { return false; }
 
             // Avoid lava in the Ashlands.
-            if (foundBiome == Heightmap.Biome.AshLands && hmap.IsLava(location)) { return false; }
+            if (BiomeRegistry.HasLava(foundBiome) && hmap.IsLava(location)) { return false; }
 
             // Avoid player bases and warded areas.
             if ((bool)EffectArea.IsPointInsideArea(location, EffectArea.Type.PlayerBase)) { return false; }
@@ -350,7 +384,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         internal static void SpawnMinibossGroup(NemesisMiniboss boss, Vector3 point, Heightmap.Biome biome, int extraLevelBonus, string pinId) {
             if (boss == null) { return; }
             List<ExtendedCharacterDrop> biomeLoot = null;
-            NemesisSystemData.SLE_Nemesis_Settings.NemesisBossLootTables?.TryGetValue(biome, out biomeLoot);
+            BiomeRegistry.TryGetEntry(NemesisSystemData.SLE_Nemesis_Settings.NemesisBossLootTables, biome, out biomeLoot);
             Quaternion rot = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
             Logger.LogInfo($"[NemesisRemote] SpawnMinibossGroup at {point} biome={biome} boss='{boss.BossSpawn?.Prefab}' minions={boss.Minions?.Count ?? 0} biomeLoot={(biomeLoot?.Count ?? 0)}");
 

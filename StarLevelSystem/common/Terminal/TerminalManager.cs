@@ -29,6 +29,7 @@ namespace StarLevelSystem.common
             initialized = true;
 
             RegisterMetaCommands();
+            RegisterBiomeCommands();
             RegisterLocationCommands();
             RegisterZoneCommands();
             RegisterNemesisCommands();

@@ -13,6 +13,9 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         // Grid resolution for island detection (world units per sample)
         private const float GridResolution = 100f;
+        // The most samples per axis. Vanilla's world is 200; past this a huge world is sampled more coarsely instead of
+        // allocating and walking a grid that grows with the square of its size.
+        private const int MaxGridDimension = 1000;
         private const string ZoneLayer = "SLS-ZoneLevels";
         private static Color defaultColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
 
@@ -34,7 +37,8 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Logger.LogDebug("Server is headless, skipping zone minimap generation.");
             }
             ZoneScaleSystemData.ZoneLoadResult loadResult = ZoneScaleSystemData.LoadZoneData();
-            if (loadResult == ZoneScaleSystemData.ZoneLoadResult.Loaded) {
+            bool wrongSize = loadResult == ZoneScaleSystemData.ZoneLoadResult.Loaded && ZoneScaleSystemData.LoadedForAnotherWorldSize;
+            if (loadResult == ZoneScaleSystemData.ZoneLoadResult.Loaded && wrongSize == false) {
                 Logger.LogInfo($"Zone data loaded from file. {ZoneScaleSystemData.Zones.Count} zones available.");
                 ZoneScaleSystemData.zonesBuilt = true;
                 ZoneScaleSystemData.StartDecayCoroutine();
@@ -46,7 +50,13 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (loadResult == ZoneScaleSystemData.ZoneLoadResult.Unreadable) {
                 ZoneScaleSystemData.PreserveUnreadableZoneData();
             }
-            Logger.LogInfo("No zone data found, building zone map from world...");
+            if (wrongSize) {
+                // A file loads as it is, so without this the world's new land would never get zones.
+                ZoneScaleSystemData.HoldLoadedZonesForRebuild();
+                Logger.LogInfo("Zone data was built for a different world size, building zone map from world and keeping its kills and levels...");
+            } else {
+                Logger.LogInfo("No zone data found, building zone map from world...");
+            }
             ZoneScaleSystemData.buildingZones = true;
             buildCoroutine = TaskRunner.Run().StartCoroutine(BuildZoneMap());
         }
@@ -61,18 +71,19 @@ namespace StarLevelSystem.modules.LevelSystem {
                 yield break;
             }
 
-            float worldRadius = WorldGenerator.worldSize;
-            int gridDim = Mathf.CeilToInt((worldRadius * 2f) / GridResolution);
+            float worldRadius = WorldSize.Radius;
+            float sampleStep = Mathf.Max(GridResolution, (worldRadius * 2f) / MaxGridDimension);
+            int gridDim = Mathf.CeilToInt((worldRadius * 2f) / sampleStep);
             bool[,] landGrid = new bool[gridDim, gridDim];
 
             // PHASE 1: Sample biomes to build land grid
             int updates = 0;
             for (int gx = 0; gx < gridDim; gx++) {
-                float wx = -worldRadius + gx * GridResolution;
+                float wx = -worldRadius + gx * sampleStep;
                 for (int gz = 0; gz < gridDim; gz++) {
-                    float wz = -worldRadius + gz * GridResolution;
-                    Heightmap.Biome biome = WorldGenerator.instance.GetBiome(new Vector3(wx, 0, wz));
-                    landGrid[gx, gz] = (biome != Heightmap.Biome.Ocean && biome != Heightmap.Biome.None);
+                    float wz = -worldRadius + gz * sampleStep;
+                    Heightmap.Biome biome = BiomeLookup.World(new Vector3(wx, 0, wz));
+                    landGrid[gx, gz] = (BiomeRegistry.TerrainOf(biome) != Heightmap.Biome.Ocean && biome != Heightmap.Biome.None);
                     updates++;
                     if (updates % 5000 == 0) {
                         yield return new WaitForEndOfFrame();
@@ -112,29 +123,32 @@ namespace StarLevelSystem.modules.LevelSystem {
             // A region qualifies only if its bounding box is at least MinZoneSize on both axes;
             // trivial islets are dropped (no zone). Every emitted zone is a cell of one global
             // grid anchored at the world min corner, so any two zones are either identical
-            // (deduped below) or disjoint -> guaranteed non-overlapping.
+            // (deduped below) or disjoint -> guaranteed non-overlapping. The grid stays anchored at vanilla's corner whatever
+            // the world's size, with negative cells past it, so a world that grows keeps its cells' bounds and ids, and with
+            // them its kills and levels (see ZoneScaleSystemData.ZoneIdForBounds).
             float cellSize = ValConfig.MaxZoneSize.Value;
+            float cellOrigin = -WorldGenerator.worldSize;
             var cellZones = new Dictionary<long, ZoneData>();
             foreach (var region in regions) {
                 int minGX = region.Min(r => r.gx);
                 int maxGX = region.Max(r => r.gx);
                 int minGZ = region.Min(r => r.gz);
                 int maxGZ = region.Max(r => r.gz);
-                float regionWidth = (maxGX - minGX + 1) * GridResolution;
-                float regionDepth = (maxGZ - minGZ + 1) * GridResolution;
+                float regionWidth = (maxGX - minGX + 1) * sampleStep;
+                float regionDepth = (maxGZ - minGZ + 1) * sampleStep;
                 if (regionWidth < ValConfig.MinZoneSize.Value || regionDepth < ValConfig.MinZoneSize.Value) {
                     continue; // island too small to scale; skip it entirely
                 }
                 foreach (var (gx, gz) in region) {
                     // Sample center -> global cell index (floored from the world min corner).
-                    float wx = -worldRadius + (gx + 0.5f) * GridResolution;
-                    float wz = -worldRadius + (gz + 0.5f) * GridResolution;
-                    int gcx = Mathf.FloorToInt((wx + worldRadius) / cellSize);
-                    int gcz = Mathf.FloorToInt((wz + worldRadius) / cellSize);
+                    float wx = -worldRadius + (gx + 0.5f) * sampleStep;
+                    float wz = -worldRadius + (gz + 0.5f) * sampleStep;
+                    int gcx = Mathf.FloorToInt((wx - cellOrigin) / cellSize);
+                    int gcz = Mathf.FloorToInt((wz - cellOrigin) / cellSize);
                     long key = ((long)(uint)gcx << 32) | (uint)gcz;
                     if (cellZones.ContainsKey(key)) { continue; }
-                    float cellMinX = -worldRadius + gcx * cellSize;
-                    float cellMinZ = -worldRadius + gcz * cellSize;
+                    float cellMinX = cellOrigin + gcx * cellSize;
+                    float cellMinZ = cellOrigin + gcz * cellSize;
                     cellZones[key] = new ZoneData {
                         // Deterministic id from the cell coords so every peer agrees (see ZoneIdForCell).
                         ZoneId = ZoneScaleSystemData.ZoneIdForCell(gcx, gcz),
@@ -149,6 +163,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // geometry has no decay history, so it adopts whichever clock is configured right now --
             // which is also what makes the SaveZoneData below write a self-consistent file.
             ZoneScaleSystemData.StampNewZones(finalZones);
+            ZoneScaleSystemData.AdoptHeldZoneProgress(finalZones);
             ZoneScaleSystemData.Zones = finalZones;
             ZoneScaleSystemData.BuildZoneIndex();
             ZoneScaleSystemData.zonesBuilt = true;

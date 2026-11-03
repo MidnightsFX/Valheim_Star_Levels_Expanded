@@ -781,9 +781,10 @@ namespace StarLevelSystem.modules.UI {
             bool curveChanged = staged.CurveDiffers(baseline);
             bool bossCurveChanged = staged.BossCurveDiffers(baseline);
             List<int> changedSpans = staged.ChangedTableSpans(baseline);
+            bool bossTablesChanged = TablesEqual(staged.bossTables, baseline.bossTables) == false;
             Dictionary<Heightmap.Biome, int> changedCaps = staged.ChangedBiomeCaps(live);
             bool ringsChanged = LevelRingsMatch(staged.levelRings, baseline.levelRings) == false;
-            if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && changedCaps.Count == 0 && ringsChanged == false) { return; }
+            if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && bossTablesChanged == false && changedCaps.Count == 0 && ringsChanged == false) { return; }
 
             // From the settings as written, not the live copy: the live one has every generator already expanded into the
             // chance tables, and saving it wrote those expansions over the hand-written tables in the file.
@@ -819,16 +820,20 @@ namespace StarLevelSystem.modules.UI {
             if (changedSpans.Count > 0) {
                 if (settings.LevelupChanceTablesBySpan == null) { settings.LevelupChanceTablesBySpan = new Dictionary<int, SortedDictionary<int, float>>(); }
                 foreach (int span in changedSpans) {
-                    SortedDictionary<int, float> table = new SortedDictionary<int, float>();
-                    List<float> values = staged.tables[span];
-                    for (int i = 0; i < values.Count; i++) { table[i + 1] = values[i]; }
-                    settings.LevelupChanceTablesBySpan[span] = table;
+                    settings.LevelupChanceTablesBySpan[span] = KeyedTable(staged.tables[span]);
                 }
+            }
+            if (bossTablesChanged) {
+                // All of them rather than the changed spans, since Reset page removes them. No tables, no key in the file.
+                settings.BossLevelupChanceTablesBySpan = staged.bossTables.Count == 0 ? null
+                    : staged.bossTables.ToDictionary(entry => entry.Key, entry => KeyedTable(entry.Value));
             }
             if (settings.BiomeConfiguration != null) {
                 foreach (KeyValuePair<Heightmap.Biome, int> cap in changedCaps) {
                     if (settings.BiomeConfiguration.TryGetValue(cap.Key, out BiomeSpecificSetting biome) && biome != null) {
                         biome.BiomeMaxLevelOverride = cap.Value;
+                    } else if (BiomeRegistry.IsVanilla(cap.Key) == false) {
+                        settings.BiomeConfiguration[cap.Key] = new BiomeSpecificSetting() { BiomeMaxLevelOverride = cap.Value };
                     }
                 }
             }
@@ -969,6 +974,26 @@ namespace StarLevelSystem.modules.UI {
             return inA == false || va.SequenceEqual(vb);
         }
 
+        private static bool TablesEqual(Dictionary<int, List<float>> a, Dictionary<int, List<float>> b) {
+            return a.Count == b.Count && a.Keys.All(span => TableEqual(a, b, span));
+        }
+
+        private static SortedDictionary<int, float> KeyedTable(List<float> values) {
+            SortedDictionary<int, float> table = new SortedDictionary<int, float>();
+            for (int i = 0; i < values.Count; i++) { table[i + 1] = values[i]; }
+            return table;
+        }
+
+        private static Dictionary<int, List<float>> ValuesBySpan(Dictionary<int, SortedDictionary<int, float>> written) {
+            Dictionary<int, List<float>> tables = new Dictionary<int, List<float>>();
+            if (written != null) {
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in written) {
+                    if (entry.Value != null) { tables[entry.Key] = entry.Value.Values.ToList(); }
+                }
+            }
+            return tables;
+        }
+
         private class StagedNemesisAction {
             // The configured entry, read-only here: its spawns and gates feed the generated description.
             internal NemesisChanceEntry Source;
@@ -1024,6 +1049,8 @@ namespace StarLevelSystem.modules.UI {
 
             // Table style thresholds keyed by span, values in key order, seeded from LevelupChanceTablesBySpan.
             public Dictionary<int, List<float>> tables;
+            // The boss curve's own, seeded from BossLevelupChanceTablesBySpan. See BossTableFor.
+            public Dictionary<int, List<float>> bossTables;
 
             // Biome star caps as they were when this snapshot was taken (or as shipped, after Reset page), and the MaxLevel
             // they sat under. While caps are auto-tuned they are always scaled from these, so moving Max back and forth
@@ -1033,6 +1060,9 @@ namespace StarLevelSystem.modules.UI {
             // Auto-tuning off means the caps are whatever was typed on the page instead, and Max stars leaves them alone.
             public bool biomeCapAuto;
             public Dictionary<Heightmap.Biome, int> biomeCapManual;
+            // Custom biomes with no cap of their own, whose row shows the cap they are under now and writes nothing.
+            public HashSet<Heightmap.Biome> biomeCapUnset = new HashSet<Heightmap.Biome>();
+            public int biomeCapForUnset;
 
             public int maxMajor, maxMinor, maxBossOnCreature, maxBossMods, maxMajorOnBoss, maxMinorOnBoss, prefixLimit;
             public float chanceMajor, chanceMinor, chanceBossOnCreature, chanceBoss, chanceMinorOnBoss, chanceMajorOnBoss;
@@ -1144,12 +1174,8 @@ namespace StarLevelSystem.modules.UI {
                 s.bossCurveOn = (settings?.BossLevelupGenerators?.Count ?? 0) > 0 || (settings?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
                 s.bossGenerator = SeedBossGenerator(settings, s.maxBossLevel, s.generator);
                 s.bossGeneratorInline = settings?.BossLevelupGenerators?.Any(g => g != null) == true;
-                s.tables = new Dictionary<int, List<float>>();
-                if (settings?.LevelupChanceTablesBySpan != null) {
-                    foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in settings.LevelupChanceTablesBySpan) {
-                        if (entry.Value != null) { s.tables[entry.Key] = entry.Value.Values.ToList(); }
-                    }
-                }
+                s.tables = ValuesBySpan(settings?.LevelupChanceTablesBySpan);
+                s.bossTables = ValuesBySpan(settings?.BossLevelupChanceTablesBySpan);
                 s.biomeCapOriginals = new Dictionary<Heightmap.Biome, int>();
                 s.biomeCapBaseMax = s.maxStars;
                 if (settings?.BiomeConfiguration != null) {
@@ -1157,6 +1183,7 @@ namespace StarLevelSystem.modules.UI {
                         if (biome.Value != null && biome.Value.BiomeMaxLevelOverride > 0) { s.biomeCapOriginals[biome.Key] = biome.Value.BiomeMaxLevelOverride; }
                     }
                 }
+                s.AddUncappedCustomBiomes(settings);
                 s.biomeCapManual = new Dictionary<Heightmap.Biome, int>(s.biomeCapOriginals);
                 // As written: the save starts from the authored settings too.
                 s.levelRings = LevelRingsOf(LevelSystemData.AuthoredLevelSettings ?? settings);
@@ -1277,22 +1304,46 @@ namespace StarLevelSystem.modules.UI {
 
             public int BossTableSpan => Mathf.Abs(bossGenerator.MaxLevel - bossGenerator.MinLevel) + 1;
 
+            // The table a Table style boss curve of this span reads, or null. As in LevelGenerator, a span with no table of
+            // its own reads the general one.
+            public List<float> BossTableFor(int span) {
+                if (bossTables.TryGetValue(span, out List<float> own) && own.Count > 0) { return own; }
+                return tables.TryGetValue(span, out List<float> general) ? general : null;
+            }
+
             // Whether what bosses roll from would change: the toggle moved, or the boss curve itself did.
             public bool BossCurveDiffers(StagedConfig other) {
                 if (bossCurveOn != other.bossCurveOn) { return true; }
                 if (bossCurveOn == false) { return false; }
                 if (GeneratorEdited(bossGenerator, other.bossGenerator, other.bossGeneratorInline)) { return true; }
-                return bossGenerator.LevelupCalculationStyle == LevelupCalculationStyle.Table
-                    && TableEqual(tables, other.tables, BossTableSpan) == false;
+                if (bossGenerator.LevelupCalculationStyle != LevelupCalculationStyle.Table) { return false; }
+                List<float> mine = BossTableFor(BossTableSpan), theirs = other.BossTableFor(BossTableSpan);
+                return mine == null || theirs == null ? mine != theirs : mine.SequenceEqual(theirs) == false;
             }
 
             // A biome's star cap: scaled in proportion to the staged Max stars while auto-tuning is on, the typed value
             // when it is off, and 0 for a biome that has no cap at all.
             public int CapFor(Heightmap.Biome biome) {
+                if (biomeCapUnset.Contains(biome)) { return biomeCapForUnset > 0 ? biomeCapForUnset : maxStars; }
                 if (biomeCapOriginals.TryGetValue(biome, out int original) == false) { return 0; }
                 if (biomeCapAuto == false) { return biomeCapManual.TryGetValue(biome, out int manual) ? manual : original; }
                 if (biomeCapBaseMax <= 0 || maxStars == biomeCapBaseMax) { return original; }
                 return Mathf.Max(1, Mathf.RoundToInt(original * (float)maxStars / biomeCapBaseMax));
+            }
+
+            // A custom biome gets a row whether or not it has a cap yet, so an admin can give it one without knowing how it
+            // is keyed in the file. Without one it is under the All entry's cap, or MaxLevel.
+            public void AddUncappedCustomBiomes(CreatureLevelSettings settings) {
+                biomeCapUnset.Clear();
+                biomeCapForUnset = 0;
+                Dictionary<Heightmap.Biome, BiomeSpecificSetting> biomes = settings?.BiomeConfiguration;
+                if (biomes != null && biomes.TryGetValue(Heightmap.Biome.All, out BiomeSpecificSetting all) && all != null) { biomeCapForUnset = all.BiomeMaxLevelOverride; }
+                foreach (Heightmap.Biome custom in BiomeRegistry.CustomBiomes) {
+                    Heightmap.Biome key = BiomeRegistry.ConfigKeyFor(biomes, custom);
+                    if (biomes != null && biomes.TryGetValue(key, out BiomeSpecificSetting own) && own != null && own.BiomeMaxLevelOverride > 0) { continue; }
+                    biomeCapOriginals[key] = biomeCapForUnset > 0 ? biomeCapForUnset : maxStars;
+                    biomeCapUnset.Add(key);
+                }
             }
 
             // Takes the caps auto-tuning is showing as the starting point for typing them by hand, so switching modes
@@ -1315,6 +1366,8 @@ namespace StarLevelSystem.modules.UI {
                     : new SortedDictionary<int, float>(shipped?.DefaultCreatureLevelUpChance ?? LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance);
                 bossCurveOn = (shipped?.BossLevelupGenerators?.Count ?? 0) > 0 || (shipped?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
                 bossGenerator = SeedBossGenerator(shipped, maxBossLevel, generator);
+                // Unlike the general tables below, these only exist for the curve this page is resetting.
+                bossTables = ValuesBySpan(shipped?.BossLevelupChanceTablesBySpan);
                 // Spans the shipped file has no table for keep theirs: the save only ever writes a span, never removes one.
                 if (shipped?.LevelupChanceTablesBySpan != null) {
                     foreach (KeyValuePair<int, SortedDictionary<int, float>> entry in shipped.LevelupChanceTablesBySpan) {
@@ -1334,6 +1387,7 @@ namespace StarLevelSystem.modules.UI {
                     }
                 }
                 biomeCapBaseMax = maxStars;
+                AddUncappedCustomBiomes(live);
                 biomeCapManual = new Dictionary<Heightmap.Biome, int>(biomeCapOriginals);
             }
 
@@ -1342,9 +1396,12 @@ namespace StarLevelSystem.modules.UI {
                 Dictionary<Heightmap.Biome, int> changed = new Dictionary<Heightmap.Biome, int>();
                 if (live?.BiomeConfiguration == null) { return changed; }
                 foreach (Heightmap.Biome biome in biomeCapOriginals.Keys) {
-                    if (live.BiomeConfiguration.TryGetValue(biome, out BiomeSpecificSetting setting) == false || setting == null) { continue; }
+                    if (biomeCapUnset.Contains(biome)) { continue; }
+                    bool hasEntry = live.BiomeConfiguration.TryGetValue(biome, out BiomeSpecificSetting setting) && setting != null;
+                    // Only a cap typed for a custom biome makes a new entry. Auto-tuning scales caps that exist.
+                    if (hasEntry == false && (BiomeRegistry.IsVanilla(biome) || biomeCapAuto)) { continue; }
                     int cap = CapFor(biome);
-                    if (setting.BiomeMaxLevelOverride != cap) { changed[biome] = cap; }
+                    if ((hasEntry ? setting.BiomeMaxLevelOverride : 0) != cap) { changed[biome] = cap; }
                 }
                 return changed;
             }
@@ -1415,7 +1472,7 @@ namespace StarLevelSystem.modules.UI {
                 if (GeneratorsEqual(generator, o.generator) == false) { return false; }
                 if (shippedCurve != null && CurveDiffers(o)) { return false; }
                 if (BossCurveDiffers(o)) { return false; }
-                if (tables.Count != o.tables.Count || tables.Keys.Any(span => TableEqual(tables, o.tables, span) == false)) { return false; }
+                if (TablesEqual(tables, o.tables) == false || TablesEqual(bossTables, o.bossTables) == false) { return false; }
                 foreach (Heightmap.Biome biome in biomeCapOriginals.Keys.Union(o.biomeCapOriginals.Keys)) {
                     if (CapFor(biome) != o.CapFor(biome)) { return false; }
                 }

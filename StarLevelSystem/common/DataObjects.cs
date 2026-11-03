@@ -442,6 +442,12 @@ namespace StarLevelSystem.common
             // LevelSelection.DetermineLevelRollResult (which selects the first level whose threshold <= roll, so
             // thresholds must be strictly decreasing). LevelUpChance is authored as a 0-1 fraction (0.25 == 25%).
             public SortedDictionary<int, float> GetLevelUpDefinition() {
+                return GetLevelUpDefinition(null);
+            }
+
+            // preferredTables is what a Table style generator reads before the settings-wide LevelupChanceTablesBySpan:
+            // the boss curve passes BossLevelupChanceTablesBySpan. Ignored by every other style.
+            public SortedDictionary<int, float> GetLevelUpDefinition(Dictionary<int, SortedDictionary<int, float>> preferredTables) {
                 SortedDictionary<int, float> chances = new SortedDictionary<int, float>();
                 int min = MinLevel;
                 int max = MaxLevel;
@@ -499,7 +505,10 @@ namespace StarLevelSystem.common
                         // generator with the same span. LevelUpChance/GaussianOffset are only used by the fallback.
                         int spanCount = span + 1;
                         SortedDictionary<int, float> table = null;
-                        LevelSystemData.SLE_Level_Settings?.LevelupChanceTablesBySpan?.TryGetValue(spanCount, out table);
+                        preferredTables?.TryGetValue(spanCount, out table);
+                        if (table == null || table.Count == 0) {
+                            LevelSystemData.SLE_Level_Settings?.LevelupChanceTablesBySpan?.TryGetValue(spanCount, out table);
+                        }
                         if (table != null) {
                             foreach (KeyValuePair<int, float> kvp in table) {
                                 if (kvp.Key < 1 || kvp.Key > spanCount) { continue; }
@@ -567,6 +576,12 @@ namespace StarLevelSystem.common
             [Description("Controls biome specific configuration, the 'All' biome can be used to set the default for everything.")]
             public Dictionary<Heightmap.Biome, BiomeSpecificSetting> BiomeConfiguration { get; set; }
 
+            [Description("Which biome's settings a custom biome uses when it has no entry of its own, by the custom biome's name. Applies to every SLS config file. None means no fallback, even with UseTerrainAsBiomeFallback.")]
+            public Dictionary<string, Heightmap.Biome> BiomeFallbacks { get; set; }
+
+            [Description("Custom biomes not listed in BiomeFallbacks use the settings of the biome their Expand World terrain is built from.")]
+            public bool UseTerrainAsBiomeFallback { get; set; }
+
             [Description("Creature specific configuration.")]
             public Dictionary<string, CreatureSpecificSetting> CreatureConfiguration { get; set; }
 
@@ -612,6 +627,10 @@ namespace StarLevelSystem.common
             [Description("Levelup chance tables for the 'Table' LevelupCalculationStyle, keyed by span (MaxLevel - MinLevel + 1). Inside a table, key 1 is the generator's MinLevel, key 2 is MinLevel + 1, and so on; each value is the % chance to roll past that level, so values must decrease.")]
             [DefaultValue(null)]
             public Dictionary<int, SortedDictionary<int, float>> LevelupChanceTablesBySpan { get; set; }
+
+            [Description("Levelup chance tables only the boss curve reads, keyed by span like LevelupChanceTablesBySpan. A Table style generator in BossLevelupGenerators or BossLevelupGeneratorRefs looks here first and falls back to LevelupChanceTablesBySpan when its span has no entry here, so bosses can have their own chances at the same length as any other curve.")]
+            [DefaultValue(null)]
+            public Dictionary<int, SortedDictionary<int, float>> BossLevelupChanceTablesBySpan { get; set; }
 
             // Runtime only, never serialized: the NightMultiplier of the generators that built
             // DefaultCreatureLevelUpChance (1 when there are none). Set by LevelSystemData.ApplyLevelupGenerators,
@@ -1525,7 +1544,7 @@ namespace StarLevelSystem.common
                 raid.m_startMessage = Localization.instance.Localize(StartMessage);
                 raid.m_endMessage = Localization.instance.Localize(EndMessage);
                 raid.m_forceEnvironment = ForceEnvironment.ToString();
-                raid.m_biome = Heightmap.FindBiome(position);
+                raid.m_biome = BiomeLookup.AtPosition(position);
                 raid.m_forceMusic = VanillaMusicName(ForceMusic);
                 raid.m_random = true;
                 raid.m_time = 0; // This is used to track event times
@@ -2377,6 +2396,8 @@ namespace StarLevelSystem.common
 
         public class ZoneSystemSaveData {
             public List<ZoneData> Zones { get; set; } = new List<ZoneData>();
+            // The world radius this map covers, when it is not vanilla's. Omitted while 0, which is every vanilla world.
+            public float BuildRadius { get; set; }
             public string WorldName { get; set; }
             // Which world this geometry and these levels belong to. The name above cannot answer that on
             // its own (see ValConfig.CurrentWorldStateKey) and was all that used to stand between two

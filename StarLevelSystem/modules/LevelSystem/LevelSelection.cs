@@ -367,24 +367,26 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (ValConfig.EnableTreeScaling.Value == false) { return 1; }
             Vector3 p = go.transform.position;
             float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
-            int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.TreeMaxLevel.Value));
-            if (level < 1) { level = 1; }
-            return level;
+            return LevelForDistance(distance_from_center, ValConfig.TreeMaxLevel.Value);
         }
 
         public static int DeterministicDetermineRockLevel(Vector3 pos) {
             if (ValConfig.EnableRockLevels.Value == false) { return 1; }
             float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
-            int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.RockMaxLevel.Value));
-            if (level < 1) { level = 1; }
-            return level;
+            return LevelForDistance(distance_from_center, ValConfig.RockMaxLevel.Value);
         }
 
         public static int DetermineisticDetermineObjectLevel(Vector3 pos) {
             float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
-            int level = Mathf.RoundToInt(distance_from_center / (WorldGenerator.worldSize / ValConfig.DestructibleMaxLevel.Value));
+            return LevelForDistance(distance_from_center, ValConfig.DestructibleMaxLevel.Value);
+        }
+
+        // Objects reach their maximum level at the edge of the land. In a world resized by another mod the distance can run
+        // well past that edge, so it also holds to the maximum there. A vanilla-sized world keeps what it has always done.
+        private static int LevelForDistance(float distance, int maxLevel) {
+            int level = Mathf.RoundToInt(distance / (WorldSize.Radius / maxLevel));
             if (level < 1) { level = 1; }
-            return level;
+            return WorldSize.IsResized && level > maxLevel ? maxLevel : level;
         }
 
         internal static void SetCharacterLevelControl(Character chara, int fallbackLevel) {
@@ -416,7 +418,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // Determine creature max level from biome
             Vector3 p = creature.transform.position;
             creature_name = Utils.GetPrefabName(creature.gameObject);
-            Heightmap.Biome biome = Heightmap.FindBiome(p);
+            Heightmap.Biome biome = ValConfig.DomeBiomeSetsCreatureLevels.Value ? BiomeLookup.AtPosition(p) : BiomeLookup.World(p);
             creature_biome = biome;
             biome_settings = null;
             creature_settings = null;
@@ -430,7 +432,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                     biome_settings = allBiomeConfig;
                 }
                 //Logger.LogDebug($"Biome all config checked");
-                bool biome_setting_check = settings.BiomeConfiguration.TryGetValue(biome, out var biomeConfig);
+                bool biome_setting_check = BiomeRegistry.TryGetEntry(settings.BiomeConfiguration, biome, out var biomeConfig);
                 if (biome_setting_check && biome_all_setting_check) {
                     if (ReferenceEquals(mergedBiomeSettingsSource, settings) == false) {
                         MergedBiomeSettings.Clear();

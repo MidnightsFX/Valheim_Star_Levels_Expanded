@@ -205,7 +205,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         internal static void UpdatePlayerRecentBiomes() {
             // Add the players current biome
-            NemesisSystem.PlayerRecentBiomes.Add(Heightmap.FindBiome(Player.m_localPlayer.transform.position));
+            NemesisSystem.PlayerRecentBiomes.Add(BiomeLookup.AtPosition(Player.m_localPlayer.transform.position));
 
             // Trim the players current biome history length
             if (NemesisSystem.PlayerRecentBiomes.Count > NemesisSystemData.SLE_Nemesis_Settings.ScoreSystem.RecentBiomeHistoryLength) {

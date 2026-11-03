@@ -39,15 +39,15 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         // As above, also reporting the generators' NightMultiplier (see NightMultiplierOf). One pass, so a missing
-        // reference is only warned about once.
-        internal static SortedDictionary<int, float> BuildLevelupChance(List<LevelGenerator> inline, List<string> refs, out float nightMultiplier) {
+        // reference is only warned about once. preferredTables goes to each generator; see GetLevelUpDefinition.
+        internal static SortedDictionary<int, float> BuildLevelupChance(List<LevelGenerator> inline, List<string> refs, out float nightMultiplier, Dictionary<int, SortedDictionary<int, float>> preferredTables = null) {
             nightMultiplier = 1f;
             if (!HasGenerators(inline, refs)) { return null; }
             List<LevelGenerator> gens = Resolve(inline, refs);
             if (gens.Count == 0) { return null; }
             SortedDictionary<int, float> chances = new SortedDictionary<int, float>();
             foreach (LevelGenerator gen in gens) {
-                chances.MergeSortedDictionary(gen.GetLevelUpDefinition());
+                chances.MergeSortedDictionary(gen.GetLevelUpDefinition(preferredTables));
             }
             nightMultiplier = NightMultiplierOf(gens);
             return chances;

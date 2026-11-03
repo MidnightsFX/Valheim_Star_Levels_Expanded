@@ -1,3 +1,15 @@
+**1.32.0**
+ ---
+ ```
+- Biomes added by other mods can now be used in all of the biome related spots
+	- Adds an optional way for a custom biome to use another biome's settings when it has none of its own.
+	- Creature setup no longer stops when a biome lookup fails inside another mod
+	- Creature levels follow local biomes such as Biome Generator's domes
+	- Worlds resized by Expand World Size now get zones, object levels and Nemesis placement across the whole area
+	- The panel and console commands now list custom biomes.
+- Bosses can now have their own Table style level-up chances, separate from every other curve, with their own box on the panel.
+```
+
 **1.31.1**
  ---
  ```

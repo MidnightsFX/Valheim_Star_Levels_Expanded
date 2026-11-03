@@ -27,6 +27,7 @@ namespace StarLevelSystem.common {
             // The ProtectionRule shorthand converter has to be in place before anything parses. It is the
             // only reason `PlayerBuiltPiece: Block` still works alongside the expanded mapping form.
             YamlFormat.AddTypeConverter(new ProtectionRuleYamlConverter());
+            YamlFormat.AddTypeConverter(new BiomeYamlConverter());
             // Enums whose zero member is not a harmless fallback for a misspelled value. Faction's is Players, which
             // put raid and nemesis creatures on the player's side; TrainingDummy is the "keep the creature's own
             // faction" value those spawns already default to. LevelupCalculationStyle's is Gaussian; Linear is what an
@@ -170,6 +171,20 @@ namespace StarLevelSystem.common {
 #       BiomeMaxLevelOverride: 4        # star cap inside this biome (bosses use MaxBossLevel)
 #       CreatureSpawnsDisabled: [ Troll ]
 #
+# --- Custom biomes ---
+# Biomes added by other mods, such as Expand World Data, work anywhere a biome
+# does, in every config file. Use the biome's name. Its number works too, but
+# Expand World Data can change that when its own file is reordered. A custom
+# biome with no entry uses the 'All' entry alone, unless told where else to look:
+#
+#   BiomeFallbacks:
+#     testgrove: BlackForest            # uses Black Forest's settings in every file
+#     ashforest: None                   # never borrows from another biome
+#   UseTerrainAsBiomeFallback: true     # others use the biome their terrain is built from
+#
+# A name that is not a biome in this world does nothing and is reported once when
+# the world starts. The sls-biomes command lists the biomes and where settings come from.
+#
 # --- CreatureConfiguration ---
 # Per-prefab overrides; these beat the biome values for that creature. Prefab
 # names must match exactly (find them with VNEI or the Jotunn docs).
@@ -251,10 +266,18 @@ namespace StarLevelSystem.common {
 # uses the Exponential curve (from its LevelUpChance) and logs one warning.
 # Raid and nemesis generators using Table read their tables from this file too.
 #
+# BossLevelupChanceTablesBySpan is the same thing for boss curves only. A Table
+# generator in BossLevelupGenerators or BossLevelupGeneratorRefs looks there first
+# and falls back to LevelupChanceTablesBySpan for a span with no entry, so bosses
+# can have their own chances at the same length as any other curve.
+#
 #   LevelupChanceTablesBySpan:
 #     4: { 1: 30, 2: 15,   3: 5,      4: 0.01 }
 #     5: { 1: 30, 2: 16,   3: 6.8333, 4: 2.5,  5: 0.01 }
 #     6: { 1: 30, 2: 17.5, 3: 8.5,    4: 3.0,  5: 1.0, 6: 0.01 }
+#
+#   BossLevelupChanceTablesBySpan:
+#     4: { 1: 60, 2: 35, 3: 10, 4: 0.01 }
 #
 #   CustomLevelupGenerators:
 #     late_game:
@@ -264,7 +287,7 @@ namespace StarLevelSystem.common {
 #
 # The tables shipped in the default file are examples; no default generator
 # uses them. The quick configure panel can also edit the table for its default
-# generator.
+# generator, and the boss curve's own table.
 #
 # --- Boss-conditional levelup chances ---
 # ConditionalCreatureLevelupChance switches biome curves as world bosses fall:
@@ -439,7 +462,7 @@ namespace StarLevelSystem.common {
 #         PerlevelPower: 0.01        # affixes these are fractions of the hit
 #       UnallowedCreatures: [ Deer, Hare, Chicken, Hen ]
 #       AllowedCreatures: []         # non-empty = ONLY these creatures
-#       AllowedBiomes: []            # non-empty = ONLY these biomes
+#       AllowedBiomes: []            # non-empty = ONLY these biomes (custom biome names work, see LevelSettings.yaml)
 #
 # Power semantics: effective power = BasePower + PerlevelPower * level. For
 # damage affixes (Fire, Frost, ElementalChaos, ...) that is a fraction of the
@@ -657,7 +680,7 @@ namespace StarLevelSystem.common {
 #     CheckIntervalMinutes: 30       # placement cycle
 #     MaxSpawnsPerInterval: 3
 #     MaxConcurrentTotal: 10
-#     TargetPerBiome: { Meadows: 1, Plains: 2 }
+#     TargetPerBiome: { Meadows: 1, Plains: 2 }    # custom biome names work, see LevelSettings.yaml
 #     MaxConcurrentPerBiome: { Meadows: 2 }
 #     BossCandidatesByBiome:         # archetypes used when the pool is empty
 #       Plains:
@@ -763,6 +786,7 @@ namespace StarLevelSystem.common {
 #   BiomeRates:
 #     Meadows: 0.5        # everything in the Meadows returns twice as fast
 #     Mistlands: 2.0      # ...and half as fast out in the Mistlands
+#     testgrove: 0.5      # custom biome names work too, see LevelSettings.yaml
 #   DistanceBands:
 #   - Inner: 0            # metres from spawn (or from world centre - see
 #     Outer: 3000         # DistanceBonusIsFromStarterTemple in the BepInEx config)

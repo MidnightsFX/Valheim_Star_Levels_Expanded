@@ -1,5 +1,6 @@
 using MonoMod.Utils;
 using StarLevelSystem.common;
+using StarLevelSystem.modules;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -929,6 +930,13 @@ namespace StarLevelSystem.Data
             return ActiveCreatureModifiers.MajorModifiers[name];
         }
 
+        // Filled per real biome from the allow lists, so a change in what those lists mean for a custom biome has to clear them.
+        internal static void ClearBiomeProbabilityCaches() {
+            biomeMajorProbabilityList.Clear();
+            biomeMinorProbabilityList.Clear();
+            biomeBossProbabilityList.Clear();
+        }
+
         public static List<ProbabilityEntry> LazyCacheCreatureModifierSelect(string creature, Heightmap.Biome biome, ModifierType type = ModifierType.Major) {
             //Logger.LogDebug($"Getting modifier probability list for {creature} of type {type}");
             // Check type cache first
@@ -984,7 +992,7 @@ namespace StarLevelSystem.Data
                 if (!entry.Value.Enabled) { continue; }
                 // Skip if in the deny list
                 if (entry.Value.UnallowedCreatures != null && entry.Value.UnallowedCreatures.Contains(creature)) { continue; }
-                if (entry.Value.AllowedBiomes != null && !entry.Value.AllowedBiomes.Contains(biome)) { continue; }
+                if (entry.Value.AllowedBiomes != null && !BiomeRegistry.ListHasBiome(entry.Value.AllowedBiomes, biome)) { continue; }
 
                 // Add if in the allow list, skip if allow list defined and not in there
                 // Logger.LogDebug($"Checking Allowed creatures {entry.Key}");

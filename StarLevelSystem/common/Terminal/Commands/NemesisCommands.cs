@@ -114,18 +114,24 @@ namespace StarLevelSystem.common
 
         private static void NemesisSpawn(SLSCommandArgs args)
         {
-            Heightmap.Biome biome = args.Args.GetEnum(0, Heightmap.Biome.None);
+            string requested = args.Args.GetString(0, null);
+            Heightmap.Biome biome = Heightmap.Biome.None;
+            if (requested != null && modules.BiomeRegistry.TryGetByName(requested, out biome) == false)
+            {
+                args.Output.Error($"'{requested}' is not a biome in this world. sls-biomes lists the ones that are.");
+                return;
+            }
             if (biome == Heightmap.Biome.None)
             {
                 // No biome given: use the one the requesting player is standing in.
-                biome = args.HasCenter ? Heightmap.FindBiome(args.Center) : Heightmap.Biome.Meadows;
+                biome = args.HasCenter ? modules.BiomeLookup.AtPosition(args.Center) : Heightmap.Biome.Meadows;
             }
             if (NemesisRemoteSpawnControl.Manager == null)
             {
                 args.Output.Error("Remote Nemesis spawning is unavailable on this server.");
                 return;
             }
-            args.Output.Info($"Force-spawning a remote Nemesis boss for biome {biome}...");
+            args.Output.Info($"Force-spawning a remote Nemesis boss for biome {modules.BiomeRegistry.IdentifierOf(biome)}...");
             NemesisRemoteSpawnControl.Manager.ForceSpawnForBiome(biome);
         }
 

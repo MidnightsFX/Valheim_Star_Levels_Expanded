@@ -48,13 +48,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         public static DataObjects.NemesisMiniboss RandomlySelectAppropriateMiniboss(Vector3 pos) {
-            Heightmap.Biome targetBiome = Heightmap.FindBiome(pos);
+            Heightmap.Biome targetBiome = BiomeLookup.AtPosition(pos);
             return RandomlySelectAppropriateMiniboss(targetBiome);
         }
 
         public static DataObjects.NemesisMiniboss RandomlySelectAppropriateMiniboss(Heightmap.Biome targetBiome) {
             foreach(DataObjects.NemesisMiniboss miniboss in SLSExtensions.ShuffleList(NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses)) {
-                if (miniboss.Biome != targetBiome) { continue; }
+                if (BiomeRegistry.Matches(miniboss.Biome, targetBiome) == false) { continue; }
 
                 return miniboss;
             }
@@ -65,8 +65,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Shared by the player-death nemesis creation and the remote boss generator.
         public static List<NemesisSpawn> GenerateMinionsForBiome(Heightmap.Biome biome, int minGroups = 1, int maxGroups = 4) {
             List<NemesisSpawn> minions = new List<NemesisSpawn>();
-            if (NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome != null
-                && NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome.TryGetValue(biome, out List<NemesisMinion> biomeMinions)
+            if (BiomeRegistry.TryGetEntry(NemesisSystemData.SLE_Nemesis_Settings.NemesisMinionTemplatesByBiome, biome, out List<NemesisMinion> biomeMinions)
                 && biomeMinions.Count > 0) {
                 int numMinions = UnityEngine.Random.Range(minGroups, maxGroups + 1);
                 while (numMinions > 0) {
@@ -95,8 +94,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
         // Used by the remote spawn system when the AvailableMiniBosses pool has no biome-appropriate entry.
         public static NemesisMiniboss GenerateMinibossForBiome(Heightmap.Biome biome) {
             RemoteNemesisSpawnSettings settings = NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning;
-            if (settings?.BossCandidatesByBiome == null
-                || settings.BossCandidatesByBiome.TryGetValue(biome, out List<NemesisSpawn> candidates) == false
+            if (settings == null
+                || BiomeRegistry.TryGetEntry(settings.BossCandidatesByBiome, biome, out List<NemesisSpawn> candidates) == false
                 || candidates == null || candidates.Count == 0) {
                 return null;
             }

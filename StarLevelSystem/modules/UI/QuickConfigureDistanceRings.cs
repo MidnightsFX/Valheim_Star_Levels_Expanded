@@ -23,7 +23,7 @@ namespace StarLevelSystem.modules.UI {
 
         // Beyond twice the vanilla world radius a ring is off the edge of even an enlarged world.
         private const int MinRingDistance = 1;
-        private const int MaxRingDistance = 20000;
+        private static int MaxRingDistance => Mathf.Max(20000, Mathf.CeilToInt(WorldSize.Radius));
         // Where the first ring goes when there are none, and how far apart the next one is when there is only one.
         private const int DefaultLevelRingStep = 1000;
         // A ring's bonus is added to a chance in %, so past 100 either way it can only pin that chance.

@@ -58,7 +58,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 };
                 mb.KilledPlayerName = Player.m_localPlayer.GetPlayerName();
                 mb.BossCreatedFromKillingPlayer = true;
-                mb.Biome = Heightmap.FindBiome(killer.transform.position);
+                mb.Biome = BiomeLookup.AtPosition(killer.transform.position);
 
                 // Only a subset of biomes has minion templates seeded. Dying in an unseeded biome
                 // (DeepNorth/Ocean/None) yields no minions rather than throwing.

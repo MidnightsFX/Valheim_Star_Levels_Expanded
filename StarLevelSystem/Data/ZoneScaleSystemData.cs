@@ -63,11 +63,39 @@ namespace StarLevelSystem.Data {
         // Zone identity is derived from grid-cell coordinates so it is stable across independent
         // builds (authority load vs. client rebuild) and network syncs line up. Sequential build
         // order is non-deterministic between peers; cell coordinates are a pure function of world
-        // position + MaxZoneSize. Cell indices are tiny (worldSize 10000 / MaxZoneSize >= 1000 ->
-        // <= ~20 per axis), so this packing never overflows an int.
+        // position + MaxZoneSize. Cell indices are small (a zone is at least 1000m, and a world past vanilla's
+        // adds negative cells at the low edge), so this packing neither overflows an int nor collides.
         private const int ZoneIdStride = 100000;
 
         internal static int ZoneIdForCell(int cellX, int cellZ) => cellX * ZoneIdStride + cellZ;
+
+        // Set by LoadZoneData when the file holds a map built for a smaller or larger world.
+        internal static bool LoadedForAnotherWorldSize { get; private set; }
+
+        // Progress from a map built for another world size, until the map for this one is finished.
+        private static Dictionary<int, ZoneData> heldZoneProgress;
+        private static ZoneDecayClockSource heldZoneClock;
+
+        internal static void HoldLoadedZonesForRebuild() {
+            heldZoneProgress = new Dictionary<int, ZoneData>(Zones.Count);
+            foreach (var zone in Zones) { heldZoneProgress[zone.ZoneId] = zone; }
+            heldZoneClock = stampedClock;
+            Zones = new List<ZoneData>();
+            BuildZoneIndex();
+        }
+
+        // Ids come from the cell, and the cell grid does not move with the world's size, so an id is the same land. Decay
+        // stamps only carry over in the clock the fresh ones were just given; StampNewZones has left the rest current.
+        internal static void AdoptHeldZoneProgress(List<ZoneData> built) {
+            if (heldZoneProgress == null) { return; }
+            foreach (var zone in built) {
+                if (heldZoneProgress.TryGetValue(zone.ZoneId, out ZoneData held) == false) { continue; }
+                zone.ZoneLevel = held.ZoneLevel;
+                zone.TotalKills = held.TotalKills;
+                if (heldZoneClock == stampedClock) { zone.LastDecayTimestamp = held.LastDecayTimestamp; }
+            }
+            heldZoneProgress = null;
+        }
 
         // Recovers the cell coordinates from a zone's min corner (MinX = -worldSize + cellX * cellSize)
         // and packs them into the same id used at build time. Used to normalize ids loaded from disk.
@@ -129,6 +157,7 @@ namespace StarLevelSystem.Data {
             Zones = new List<ZoneData>();
             zoneIndex = new Dictionary<long, List<ZoneData>>();
             zoneById = new Dictionary<int, ZoneData>();
+            heldZoneProgress = null;
             pendingLevelUpdates.Clear();
             lastZone = null;
             zonesBuilt = false;
@@ -371,7 +400,8 @@ namespace StarLevelSystem.Data {
                     // What the stamps in this file ARE. Writing the configured clock here instead
                     // would mislabel a file saved between a config change and the re-base tick, and
                     // the next load would trust the label over the stamps.
-                    DecayClock = stampedClock.ToString()
+                    DecayClock = stampedClock.ToString(),
+                    BuildRadius = WorldSize.IsResized ? WorldSize.Radius : 0f
                 };
                 File.WriteAllText(ValConfig.zoneDataSavedDataPath, DataObjects.yamlSerializer.Serialize(saveData));
                 return true;
@@ -404,6 +434,7 @@ namespace StarLevelSystem.Data {
                 if (loaded?.Zones == null || loaded.Zones.Count == 0) { return ZoneLoadResult.NoData; }
                 if (!BelongsToCurrentWorld(loaded)) { return ZoneLoadResult.NoData; }
                 Zones = loaded.Zones;
+                LoadedForAnotherWorldSize = (loaded.BuildRadius > 0f ? loaded.BuildRadius : WorldGenerator.worldSize) != WorldSize.Radius;
                 // Normalize persisted ids to the deterministic cell-based scheme so authority ids
                 // match what clients derive from a fresh build (ignores any stale build-order id).
                 foreach (var z in Zones) { z.ZoneId = ZoneIdForBounds(z.MinX, z.MinZ); }

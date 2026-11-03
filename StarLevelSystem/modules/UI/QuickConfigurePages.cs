@@ -116,6 +116,9 @@ namespace StarLevelSystem.modules.UI {
         // The Exponential values shown in the threshold box when the span has no table yet. They are a suggestion, so
         // tabbing through the box without changing them is not an edit.
         private static string tablePrefillText;
+        private static InputField bossTableThresholdField;
+        private static Text bossTableStatusText;
+        private static string bossTablePrefillText;
         private static Text trollExampleText;
         private static Text elderExampleText;
         private static Text multiplayerExampleText;
@@ -156,6 +159,9 @@ namespace StarLevelSystem.modules.UI {
             tableThresholdField = null;
             tableStatusText = null;
             tablePrefillText = null;
+            bossTableThresholdField = null;
+            bossTableStatusText = null;
+            bossTablePrefillText = null;
         }
 
         private static void ClearStatsReferences() {
@@ -323,6 +329,8 @@ namespace StarLevelSystem.modules.UI {
             // The notes under the caps are usually empty, so the block is measured from the bottom of the page rather
             // than parked under a full-height chart. Everything the caps do not need goes to the charts and the column.
             const float NotesH = 38f;
+            // Four lines, which the longest translation of a boss table status with its note takes.
+            const float TableStatusH = 62f;
             float chartW = PageW - ChartX;
 
             List<Heightmap.Biome> cappedBiomes = staged.biomeCapOriginals.Keys
@@ -348,7 +356,7 @@ namespace StarLevelSystem.modules.UI {
             shownBossMaxStars = staged.maxBossLevel;
 
             GameObject chanceRow = null, gaussianRow = null, tableRow = null, tableStatusRow = null;
-            GameObject bossChanceRow = null, bossGaussianRow = null;
+            GameObject bossChanceRow = null, bossGaussianRow = null, bossTableRow = null, bossTableStatusRow = null;
             List<GameObject> bossRows = new List<GameObject>();
 
             void ShowStyleRows() {
@@ -366,6 +374,8 @@ namespace StarLevelSystem.modules.UI {
                     LevelupCalculationStyle style = staged.bossGenerator.LevelupCalculationStyle;
                     bossChanceRow.SetActive(style != LevelupCalculationStyle.Table);
                     bossGaussianRow.SetActive(style == LevelupCalculationStyle.Gaussian);
+                    bossTableRow.SetActive(style == LevelupCalculationStyle.Table);
+                    bossTableStatusRow.SetActive(style == LevelupCalculationStyle.Table);
                 }
                 // One tall chart while bosses follow the creature curve, two half-height ones once they have their own.
                 distributionChart.SetRect(ChartX, chartTop, chartW, separate ? chartHalfH : chartFullH);
@@ -404,7 +414,7 @@ namespace StarLevelSystem.modules.UI {
             tableRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddTextFieldRow(t, lw, LabelWidth, SliderWidth + ValueWidth + 10f, "$sls_cfg_dist_table_thresholds", "", CommitTableThresholds, "30, 15, 5, 0.01"),
                 Tip("LevelupChanceTablesBySpan", "$sls_cfg_tip_table_thresholds")));
             tableThresholdField = tableRow.GetComponentInChildren<InputField>();
-            tableStatusRow = ScrollRow(left, lw, 50f, t => ConfigUI.AddTextRow(t, lw, 50f, "", 12, GUIManager.Instance.ValheimBeige));
+            tableStatusRow = ScrollRow(left, lw, TableStatusH, t => ConfigUI.AddTextRow(t, lw, TableStatusH, "", 12, GUIManager.Instance.ValheimBeige));
             tableStatusText = tableStatusRow.GetComponentInChildren<Text>();
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_night_multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => {
                 if (v != staged.generator.NightMultiplier) { staged.shippedCurve = null; }
@@ -419,6 +429,7 @@ namespace StarLevelSystem.modules.UI {
             bossMaxStarsSlider = bossMaxRow.GetComponentInChildren<Slider>();
             ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelWidth + 120f, "$sls_cfg_dist_boss_own_curve", staged.bossCurveOn, on => {
                 staged.bossCurveOn = on;
+                RefreshTableRows(true);
                 ShowBossRows();
             }), YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.BossLevelupGenerators))));
 
@@ -428,8 +439,9 @@ namespace StarLevelSystem.modules.UI {
             bossRows.Add(bossMinRow);
             bossRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelWidth, 150f, "$sls_cfg_dist_boss_curve_style", CalcStyleOptions, (int)staged.bossGenerator.LevelupCalculationStyle, i => {
                 staged.bossGenerator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
+                RefreshTableRows(true);
                 ShowBossRows();
-            }), Tip("LevelupCalculationStyle", "$sls_cfg_tip_boss_curve_style"))));
+            }), Tip("LevelupCalculationStyle", "$sls_cfg_tip_boss_curve_style_own"))));
             bossChanceRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_boss_levelup_chance", 0f, 1f, staged.bossGenerator.LevelUpChance, false, v => {
                 staged.bossGenerator.LevelUpChance = v;
                 RefreshDistribution();
@@ -440,6 +452,13 @@ namespace StarLevelSystem.modules.UI {
                 RefreshDistribution();
             }), Tip("GaussianOffset", "$sls_cfg_tip_boss_gaussian_offset")));
             bossRows.Add(bossGaussianRow);
+            bossTableRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddTextFieldRow(t, lw, LabelWidth, SliderWidth + ValueWidth + 10f, "$sls_cfg_dist_boss_table_thresholds", "", CommitBossTableThresholds, "30, 15, 5, 0.01"),
+                Tip("BossLevelupChanceTablesBySpan", "$sls_cfg_tip_boss_table_thresholds")));
+            bossTableThresholdField = bossTableRow.GetComponentInChildren<InputField>();
+            bossRows.Add(bossTableRow);
+            bossTableStatusRow = ScrollRow(left, lw, TableStatusH, t => ConfigUI.AddTextRow(t, lw, TableStatusH, "", 12, GUIManager.Instance.ValheimBeige));
+            bossTableStatusText = bossTableStatusRow.GetComponentInChildren<Text>();
+            bossRows.Add(bossTableStatusRow);
             bossRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_boss_night_multiplier", 0f, 5f, staged.bossGenerator.NightMultiplier, false, v => staged.bossGenerator.NightMultiplier = v),
                 Tip("NightMultiplier", "$sls_cfg_tip_boss_night_multiplier"))));
 
@@ -542,6 +561,7 @@ namespace StarLevelSystem.modules.UI {
                 bossMaxStarsSlider.value = minStars;
             }
             staged.bossGenerator.MaxLevel = staged.maxBossLevel + 1;
+            RefreshTableRows(true);
             RefreshDistribution();
         }
 
@@ -554,6 +574,7 @@ namespace StarLevelSystem.modules.UI {
                 staged.bossGenerator.MinLevel = maxStars + 1;
                 if (bossMinStarsSlider != null) { bossMinStarsSlider.value = maxStars; }
             }
+            RefreshTableRows(true);
             RefreshDistribution();
             UpdateExampleMath();
         }
@@ -562,7 +583,9 @@ namespace StarLevelSystem.modules.UI {
         // hand-written table that no generator describes; after Reset page, the shipped one.
         private static SortedDictionary<int, float> ShownCreatureCurve() {
             if (staged.shippedCurve != null) { return staged.shippedCurve; }
-            return staged.CurveDiffers(baseline) ? StagedCurveTable(staged.generator, staged.TableSpan) : LiveDefaultTable();
+            if (staged.CurveDiffers(baseline) == false) { return LiveDefaultTable(); }
+            staged.tables.TryGetValue(staged.TableSpan, out List<float> values);
+            return StagedCurveTable(staged.generator, staged.TableSpan, values);
         }
 
         private static void RefreshDistribution() {
@@ -574,7 +597,7 @@ namespace StarLevelSystem.modules.UI {
 
             if (bossChart != null && staged.bossCurveOn) {
                 SortedDictionary<int, float> bossTable = staged.BossCurveDiffers(baseline)
-                    ? StagedCurveTable(staged.bossGenerator, staged.BossTableSpan)
+                    ? StagedCurveTable(staged.bossGenerator, staged.BossTableSpan, staged.BossTableFor(staged.BossTableSpan))
                     : LiveBossTable();
                 bossChart.SetData(ToStarSeries(LevelSelection.ComputeLevelDistribution(bossTable, staged.maxBossLevel + 1)));
             }
@@ -658,6 +681,7 @@ namespace StarLevelSystem.modules.UI {
             if (staged == null || staged.biomeCapAuto) { return; }
             if (int.TryParse(text, out int cap)) {
                 staged.biomeCapManual[biome] = Mathf.Clamp(cap, 1, 200);
+                staged.biomeCapUnset.Remove(biome);
             }
             // Redrawn either way, so an unreadable or clamped entry snaps back to the cap in force.
             RefreshDistribution();
@@ -673,14 +697,14 @@ namespace StarLevelSystem.modules.UI {
             return boss != null && boss.Count > 0 ? boss : LiveDefaultTable();
         }
 
-        // The staged generator expanded to a threshold table. Table style is expanded here from the STAGED tables, since
-        // LevelGenerator reads the live settings, with the same Exponential fallback the runtime uses when a span has none.
-        private static SortedDictionary<int, float> StagedCurveTable(LevelGenerator g, int span) {
+        // The staged generator expanded to a threshold table. Table style is expanded here from the STAGED table it reads,
+        // since LevelGenerator reads the live settings, with the same Exponential fallback the runtime uses when it has none.
+        private static SortedDictionary<int, float> StagedCurveTable(LevelGenerator g, int span, List<float> values) {
             if (g.LevelupCalculationStyle != LevelupCalculationStyle.Table) { return g.GetLevelUpDefinition(); }
 
             int lowest = Mathf.Min(g.MinLevel, g.MaxLevel);
             if (span < 2) { return new SortedDictionary<int, float> { { lowest, 0f } }; }
-            if (staged.tables.TryGetValue(span, out List<float> values) && values.Count > 0) {
+            if (values != null && values.Count > 0) {
                 SortedDictionary<int, float> table = new SortedDictionary<int, float>();
                 for (int i = 0; i < values.Count && i < span; i++) { table[lowest + i] = values[i]; }
                 return table;
@@ -701,41 +725,51 @@ namespace StarLevelSystem.modules.UI {
             return string.Join(", ", values.Select(v => v.ToString("0.####", CultureInfo.InvariantCulture)).ToArray());
         }
 
-        // Shows the staged table for the generator's current span and whether it will work. rewriteField is false after a
-        // rejected entry, so the typing stays in the box to be corrected.
+        // Shows the staged tables for both curves' current spans and whether they will work. rewriteField is false after a
+        // rejected entry, so the typing stays in the box to be corrected. Always both boxes, since a boss curve with no
+        // table of its own shows the general one, which the creature box can change.
         private static void RefreshTableRows(bool rewriteField) {
-            if (staged == null || tableThresholdField == null || tableStatusText == null) { return; }
-            LevelGenerator g = staged.generator;
-            int span = staged.TableSpan;
-            int minStars = staged.MinStars;
+            if (staged == null) { return; }
+            staged.tables.TryGetValue(staged.TableSpan, out List<float> creature);
+            RefreshCurveTableRows(staged.generator, creature, false, tableThresholdField, tableStatusText, ref tablePrefillText, rewriteField);
+            List<float> boss = staged.BossTableFor(staged.BossTableSpan);
+            bool inherited = boss != null && staged.tables.TryGetValue(staged.BossTableSpan, out List<float> general) && boss == general;
+            RefreshCurveTableRows(staged.bossGenerator, boss, inherited, bossTableThresholdField, bossTableStatusText, ref bossTablePrefillText, rewriteField);
+        }
+
+        // inherited: values belong to the general tables, so they are shown as a suggestion and passing over them is no edit.
+        private static void RefreshCurveTableRows(LevelGenerator g, List<float> values, bool inherited, InputField field, Text status, ref string prefill, bool rewriteField) {
+            if (field == null || status == null) { return; }
+            int span = Mathf.Abs(g.MaxLevel - g.MinLevel) + 1;
+            int minStars = Mathf.Max(0, Mathf.Min(g.MinLevel, g.MaxLevel) - 1);
             int maxStars = Mathf.Max(0, Mathf.Max(g.MinLevel, g.MaxLevel) - 1);
-            staged.tables.TryGetValue(span, out List<float> values);
             bool hasTable = values != null && values.Count > 0;
 
             if (rewriteField) {
                 if (hasTable) {
-                    tablePrefillText = null;
-                    tableThresholdField.SetTextWithoutNotify(FormatThresholds(values));
+                    prefill = inherited ? FormatThresholds(values) : null;
+                    field.SetTextWithoutNotify(FormatThresholds(values));
                 } else {
-                    tablePrefillText = span >= 2 ? FormatThresholds(ExponentialFallback(g).GetLevelUpDefinition().Values) : "";
-                    tableThresholdField.SetTextWithoutNotify(tablePrefillText);
+                    prefill = span >= 2 ? FormatThresholds(ExponentialFallback(g).GetLevelUpDefinition().Values) : "";
+                    field.SetTextWithoutNotify(prefill);
                 }
             }
 
             if (span < 2) {
-                SetTableStatus(ConfigUI.L("$sls_cfg_table_single_level"), false);
+                SetTableStatus(status, ConfigUI.L("$sls_cfg_table_single_level"), false);
             } else if (hasTable == false) {
-                SetTableStatus(L("$sls_cfg_table_none", span), false);
+                SetTableStatus(status, L("$sls_cfg_table_none", span), false);
             } else if (IsStrictlyDecreasing(values) == false) {
-                SetTableStatus(ConfigUI.L("$sls_cfg_table_not_decreasing"), false);
+                SetTableStatus(status, ConfigUI.L("$sls_cfg_table_not_decreasing"), false);
             } else {
-                SetTableStatus(L("$sls_cfg_table_ok", minStars, maxStars), true);
+                string ok = L("$sls_cfg_table_ok", minStars, maxStars);
+                SetTableStatus(status, inherited ? ok + " " + ConfigUI.L("$sls_cfg_table_boss_inherited") : ok, true);
             }
         }
 
-        private static void SetTableStatus(string message, bool ok) {
-            tableStatusText.text = message;
-            tableStatusText.color = ok ? GUIManager.Instance.ValheimBeige : GUIManager.Instance.ValheimOrange;
+        private static void SetTableStatus(Text status, string message, bool ok) {
+            status.text = message;
+            status.color = ok ? GUIManager.Instance.ValheimBeige : GUIManager.Instance.ValheimOrange;
         }
 
         private static bool IsStrictlyDecreasing(List<float> values) {
@@ -745,38 +779,45 @@ namespace StarLevelSystem.modules.UI {
             return true;
         }
 
-        // Parses "30, 15, 5, 0.01" into the table for that many levels. The entry count sets the span, so Max stars moves
-        // to cover exactly that many levels from Min stars.
-        private static void CommitTableThresholds(string text) {
-            if (staged == null) { return; }
+        // Parses "30, 15, 5, 0.01" into target's table for that many levels and stages it. The entry count sets the span, so
+        // the caller moves its curve's max stars to cover exactly that many levels from its min stars. Null when there is
+        // nothing to move: the box holds the untouched suggestion, could not be read, or repeats the table in use.
+        private static List<float> StageTableThresholds(string text, string prefill, int currentSpan, Text status, Dictionary<int, List<float>> target) {
             // onEndEdit also fires when the box merely loses focus; suggested values passed over untouched are not a table.
-            if (tablePrefillText != null && text == tablePrefillText) { return; }
-            if (string.IsNullOrWhiteSpace(text)) { RefreshTableRows(true); return; }
+            if (prefill != null && text == prefill) { return null; }
+            if (string.IsNullOrWhiteSpace(text)) { RefreshTableRows(true); return null; }
 
             List<float> values = new List<float>();
             foreach (string token in text.Split(',')) {
                 string trimmed = token.Trim();
                 if (float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) == false) {
-                    SetTableStatus(L("$sls_cfg_table_unreadable", trimmed), false);
-                    return;
+                    SetTableStatus(status, L("$sls_cfg_table_unreadable", trimmed), false);
+                    return null;
                 }
                 values.Add(value);
             }
             if (values.Count < 2) {
-                SetTableStatus(ConfigUI.L("$sls_cfg_table_too_few"), false);
-                return;
+                SetTableStatus(status, ConfigUI.L("$sls_cfg_table_too_few"), false);
+                return null;
             }
 
-            bool known = staged.tables.TryGetValue(values.Count, out List<float> existing) && existing.Count == values.Count
+            bool known = target.TryGetValue(values.Count, out List<float> existing) && existing.Count == values.Count
                 && existing.Zip(values, (a, b) => Mathf.Abs(a - b) < 0.0001f).All(same => same);
             // The same table read back from the box (which rounds to 4 places) for the span already in use changes nothing.
-            if (known && values.Count == staged.TableSpan) {
+            if (known && values.Count == currentSpan) {
                 RefreshTableRows(true);
-                return;
+                return null;
             }
             if (known == false) {
-                staged.tables[values.Count] = values;
+                target[values.Count] = values;
             }
+            return values;
+        }
+
+        private static void CommitTableThresholds(string text) {
+            if (staged == null) { return; }
+            List<float> values = StageTableThresholds(text, tablePrefillText, staged.TableSpan, tableStatusText, staged.tables);
+            if (values == null) { return; }
 
             int minStars = staged.MinStars;
             staged.generator.MinLevel = minStars + 1;
@@ -786,6 +827,24 @@ namespace StarLevelSystem.modules.UI {
             } else {
                 staged.maxStars = wantedMax;
                 staged.generator.MaxLevel = wantedMax + 1;
+            }
+            RefreshTableRows(true);
+            RefreshDistribution();
+        }
+
+        private static void CommitBossTableThresholds(string text) {
+            if (staged == null) { return; }
+            List<float> values = StageTableThresholds(text, bossTablePrefillText, staged.BossTableSpan, bossTableStatusText, staged.bossTables);
+            if (values == null) { return; }
+
+            int minStars = staged.BossMinStars;
+            staged.bossGenerator.MinLevel = minStars + 1;
+            int wantedMax = Mathf.Min(200, minStars + values.Count - 1);
+            if (bossMaxStarsSlider != null && (int)bossMaxStarsSlider.value != wantedMax) {
+                bossMaxStarsSlider.value = wantedMax;   // its listener stores the range and refreshes the rows and chart
+            } else {
+                staged.maxBossLevel = wantedMax;
+                staged.bossGenerator.MaxLevel = wantedMax + 1;
             }
             RefreshTableRows(true);
             RefreshDistribution();
@@ -1313,9 +1372,14 @@ namespace StarLevelSystem.modules.UI {
             return key != null && BossKeyNames.TryGetValue(key, out string token) ? LocalizedOr(token, key) : key;
         }
 
-        // Vanilla's own name for the biome, as the map shows it.
+        // The biome's name as the map shows it. A name in a config file that no mod has made into a biome says so, since
+        // whatever is set for it does nothing.
         private static string BiomeName(Heightmap.Biome biome) {
-            return LocalizedOr("$biome_" + biome.ToString().ToLowerInvariant(), biome.ToString());
+            if (BiomeRegistry.IsVanilla(biome)) {
+                return LocalizedOr("$biome_" + biome.ToString().ToLowerInvariant(), biome.ToString());
+            }
+            string name = BiomeRegistry.DisplayName(biome);
+            return BiomeRegistry.Resolve(biome, out _) ? name : L("$sls_cfg_biome_not_loaded", name);
         }
 
         // "army_eikthyr" -> "Army Eikthyr", "gjall_ambush" -> "Gjall Ambush".

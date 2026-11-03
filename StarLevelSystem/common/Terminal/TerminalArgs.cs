@@ -66,7 +66,7 @@ namespace StarLevelSystem.common
             "Meadows", "BlackForest", "Swamp", "Mountain", "Plains", "Mistlands", "AshLands", "DeepNorth", "Ocean"
         };
 
-        internal static List<string> Biomes(string[] input) => biomeNames;
+        internal static List<string> Biomes(string[] input) => biomeNames.Concat(modules.BiomeRegistry.CustomBiomeNames).ToList();
 
         internal static List<string> RadiusPresets(string[] input)
         {

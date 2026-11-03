@@ -187,9 +187,7 @@ namespace StarLevelSystem.modules.LocationReset {
                 { "zoneZ", (int)zone.y },
                 { "centerX", zoneCenter.x },
                 { "centerZ", zoneCenter.z },
-                { "biome", WorldGenerator.instance != null
-                    ? WorldGenerator.instance.GetBiome(zoneCenter).ToString()
-                    : Heightmap.Biome.None.ToString() },
+                { "biome", BiomeRegistry.IdentifierOf(BiomeLookup.World(zoneCenter)) },
                 { "generated", ZoneSystem.instance != null && ZoneSystem.instance.IsZoneGenerated(zone) },
                 { "loaded", ZoneSystem.instance != null && ZoneSystem.instance.IsZoneLoaded(zone) },
                 { "rateMultiplier", RateFor(zone) },

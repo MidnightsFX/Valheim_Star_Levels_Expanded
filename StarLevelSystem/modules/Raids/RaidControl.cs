@@ -953,7 +953,9 @@ namespace StarLevelSystem.modules.Raids
             Logger.LogRaid($"Player {playerPlatformID} has {baseValue} base area(s) within {NearBaseRadius}m.");
             //Logger.LogDebug("Biome check ");
             if (WorldGenerator.instance == null) return playerAvailableRaids;
-            Heightmap.Biome biome = WorldGenerator.instance.GetBiome(position);
+            // The world's biome, not a dome's: a raid spawns well outside a dome the player is standing in, where every
+            // spawn point would then fail the biome check in CheckSpawnPoint.
+            Heightmap.Biome biome = BiomeLookup.World(position);
 
             foreach (RaidDefinition raid in RaidsData.SLE_Raid_Settings.Raids) {
                 //Logger.LogDebug($"Starting check for {raid.Name}");
@@ -962,7 +964,7 @@ namespace StarLevelSystem.modules.Raids
 
                 // Biome Check
                 //Logger.LogDebug($"Checking for Raid biome requirements");
-                if (raid.Activation.Biomes != null && raid.Activation.Biomes.Contains(biome) == false) {
+                if (raid.Activation.Biomes != null && BiomeRegistry.ListHasBiome(raid.Activation.Biomes, biome) == false) {
                     Logger.LogRaid($"Player is not in a target biome, skipping selection of Raid: {raid.Name}");
                     continue;
                 }
@@ -1292,7 +1294,7 @@ namespace StarLevelSystem.modules.Raids
         // Grounds point and judges it, lifting it 1m clear of the ground unless the spot itself is unusable. The base is
         // asked last, so a spot reports a base only when it would otherwise do.
         private static SpawnBlock CheckSpawnPoint(ref Vector3 point, Heightmap.Biome targetBiome) {
-            ZoneSystem.instance.GetGroundData(ref point, out var normal, out var foundBiome, out var biomeArea, out var hmap);
+            BiomeLookup.GroundData(ref point, out var normal, out var foundBiome, out var biomeArea, out var hmap);
 
             // Prevent spawns that are in the wrong biome if we are targeting a biome
             if (targetBiome != Heightmap.Biome.None) {
@@ -1324,7 +1326,7 @@ namespace StarLevelSystem.modules.Raids
             }
 
             // Prevent spawning in Lava
-            if (foundBiome == Heightmap.Biome.AshLands && hmap.GetVegetationMask(point) > 0.45f) {
+            if (BiomeRegistry.HasLava(foundBiome) && (foundBiome == Heightmap.Biome.AshLands ? hmap.GetVegetationMask(point) > 0.45f : hmap.IsLava(point))) {
                 Logger.LogRaid($"Spawn location is in lava, skipping. | {point}");
                 return SpawnBlock.Ground;
             }

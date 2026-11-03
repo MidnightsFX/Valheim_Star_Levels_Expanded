@@ -53,9 +53,7 @@ namespace StarLevelSystem.modules.LocationReset {
             ZoneGeo geo = new ZoneGeo();
             // GetBiome reads world generation directly, so this works for a chunk that was never
             // loaded -- which is the whole population the sweep walks.
-            geo.Biome = WorldGenerator.instance != null
-                ? WorldGenerator.instance.GetBiome(center)
-                : Heightmap.Biome.None;
+            geo.Biome = BiomeLookup.World(center);
             // Radial distance is on the (x, z) plane. Vector2.Distance on two Vector3s would silently
             // use altitude as the second axis.
             Vector3 origin = DistanceScaleSystem.center;
@@ -97,7 +95,7 @@ namespace StarLevelSystem.modules.LocationReset {
             // Exact key lookup, then the Biome.All fallback. Heightmap.Biome is a [Flags] enum, but
             // the rest of the mod treats All as a plain fallback key rather than matching bitwise, and
             // GetBiome always returns a single biome, so exact lookup is correct here too.
-            if (cfg.BiomeRates.TryGetValue(biome, out float rate)) { return rate; }
+            if (BiomeRegistry.TryGetEntry(cfg.BiomeRates, biome, out float rate)) { return rate; }
             if (cfg.BiomeRates.TryGetValue(Heightmap.Biome.All, out float all)) { return all; }
             return 1f;
         }
@@ -132,12 +130,13 @@ namespace StarLevelSystem.modules.LocationReset {
             float biomeRate = BiomeRate(geo.Biome, cfg);
             float bandRate = BandRate(geo.Distance, cfg, out LocationResetBand band);
 
-            if (biomeRate <= 0f) { return $"{geo.Biome}, excluded by BiomeRates"; }
-            if (bandRate <= 0f) { return $"{geo.Biome}, {DescribeBand(band)} excluded by DistanceBands"; }
+            string biomeName = BiomeRegistry.IdentifierOf(geo.Biome);
+            if (biomeRate <= 0f) { return $"{biomeName}, excluded by BiomeRates"; }
+            if (bandRate <= 0f) { return $"{biomeName}, {DescribeBand(band)} excluded by DistanceBands"; }
 
             float combined = biomeRate * bandRate;
-            if (band == null) { return $"{geo.Biome}, rate x{combined:0.##}"; }
-            return $"{geo.Biome}, {DescribeBand(band)} rate x{combined:0.##}";
+            if (band == null) { return $"{biomeName}, rate x{combined:0.##}"; }
+            return $"{biomeName}, {DescribeBand(band)} rate x{combined:0.##}";
         }
 
         private static string DescribeBand(LocationResetBand band) {

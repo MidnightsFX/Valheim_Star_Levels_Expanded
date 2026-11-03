@@ -197,9 +197,7 @@ namespace StarLevelSystem.modules.LocationReset {
             report.Zone = zone;
             report.Center = ZoneSystem.GetZonePos(zone);
             // GetBiome reads world generation directly, so this works for a zone that was never loaded.
-            report.Biome = WorldGenerator.instance != null
-                ? WorldGenerator.instance.GetBiome(report.Center)
-                : Heightmap.Biome.None;
+            report.Biome = BiomeLookup.World(report.Center);
             report.Forced = forced;
             report.Verbose = ValConfig.EnableDebugLocationResetDetails.Value;
             return report;

@@ -579,7 +579,7 @@ namespace StarLevelSystem.modules.LocationReset {
         private static bool AnyRateActive(LocationResetConfiguration cfg) {
             if (cfg.BiomeRates != null) {
                 foreach (KeyValuePair<Heightmap.Biome, float> kvp in cfg.BiomeRates) {
-                    if (Mathf.Approximately(kvp.Value, 1f) == false) { return true; }
+                    if (BiomeRegistry.Resolve(kvp.Key, out _) && Mathf.Approximately(kvp.Value, 1f) == false) { return true; }
                 }
             }
             if (cfg.DistanceBands != null) {

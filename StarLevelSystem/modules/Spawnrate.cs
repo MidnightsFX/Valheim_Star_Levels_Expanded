@@ -1,12 +1,8 @@
-﻿using Jotunn.Managers;
-using StarLevelSystem.common;
+﻿using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.NemesisSystem;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 

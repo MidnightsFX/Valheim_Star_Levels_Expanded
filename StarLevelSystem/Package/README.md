@@ -114,6 +114,41 @@ to 26 and the distance modifier is being reduced by 50%
     distanceScaleModifier: 0.5
 ```
 
+#### Custom biomes and larger worlds
+Biomes added by other mods work anywhere a biome does, in every config file. With Expand World Data, use the biome's name
+from `expand_biomes.yaml`, the `biome` field rather than its display name:
+```
+BiomeConfiguration:
+  testgrove:
+    biomeMaxLevelOverride: 12
+```
+Its number works too, but Expand World Data hands numbers out by the order of its file, so reordering that file changes them.
+
+A custom biome with no entry of its own uses the `All` entry and nothing else, so raids and Nemesis rules that list biomes
+skip it, and it has no summons or boss tiers. To have it use another biome's settings in every config file, add to
+`LevelSettings.yaml`:
+```
+BiomeFallbacks:
+  testgrove: BlackForest
+  ashforest: None
+UseTerrainAsBiomeFallback: true
+```
+`BiomeFallbacks` names a biome's source, and `None` keeps a biome on its own settings. `UseTerrainAsBiomeFallback` gives every
+other custom biome the biome its Expand World terrain is built from.
+
+A name that is not a biome in this world does nothing, stays in the file, and is reported once when the world starts. The
+`sls-biomes` console command lists every biome and where its settings come from; `sls-biomes here` also shows the biome at your
+position, both as the game reports it and as the world generated it.
+
+Mods that make a local biome, such as Biome Generator, change what the game reports inside it, and creature levels follow that.
+Turn off `DomeBiomeSetsCreatureLevels` to always use the biome the world generated.
+
+Worlds resized by Expand World Size get zones across all of their land, object levels that reach their maximum at the edge of the
+land, and remote Nemesis bosses placed where their biome really is. Zone kills and levels carry over when a world grows.
+
+Bosses and pins already stored keep the biome number they were created with, so reordering `expand_biomes.yaml` can move those
+to a different biome.
+
 #### Creature Configuration
 Creature specific configuration allows you to override what is set in the biome definition for a creature, which allows more
 fine-grained control of how a specific creature should be modified.
@@ -256,7 +291,8 @@ BossLevelupGenerators:
 
 A boss curve outranks the default, conditional and biome chances wherever that boss stands, while a `CreatureConfiguration`
 entry naming the boss still wins over it. `MaxBossLevel` caps bosses either way. The Level Distribution page of the quick
-configure panel turns this on and off with its **Own curve for bosses** toggle and charts both curves side by side.
+configure panel turns this on and off with its **Own curve for bosses** toggle and charts both curves side by side. A boss curve
+in the Table style edits its own table in the **Boss thresholds** box.
 
 ##### Table style
 `LevelupChanceTablesBySpan` is keyed by how many levels a generator covers (`MaxLevel - MinLevel + 1`), not by the levels themselves.
@@ -272,6 +308,19 @@ CustomLevelupGenerators:
   - MinLevel: 3                     # levels 3-6 are 4 levels, so this uses table 4:
     MaxLevel: 6                     # 30% chance to roll past level 3, 15% past 4, 5% past 5
     LevelupCalculationStyle: Table
+```
+
+`BossLevelupChanceTablesBySpan` is the same thing for boss curves only. A `Table` generator in `BossLevelupGenerators` or
+`BossLevelupGeneratorRefs` looks there first and falls back to `LevelupChanceTablesBySpan` for a span with no entry, so bosses can
+have their own chances at the same length as any other curve:
+
+```
+BossLevelupChanceTablesBySpan:
+  4: { 1: 60, 2: 35, 3: 10, 4: 0.01 }
+BossLevelupGenerators:
+- MinLevel: 1                       # levels 1-4 are 4 levels, so this uses the boss table 4:
+  MaxLevel: 4
+  LevelupCalculationStyle: Table
 ```
 
 If there is no table for a generator's span it uses the `Exponential` curve instead, and a warning is logged once. Tables that are

@@ -164,6 +164,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
         public static ConfigEntry<string> DistanceRingColorOptions;
         public static ConfigEntry<bool> ControlSpawnerLevels;
+        public static ConfigEntry<bool> DomeBiomeSetsCreatureLevels;
         public static ConfigEntry<bool> ForceControlAllSpawns;
         public static ConfigEntry<bool> ControlBossSpawns;
         public static ConfigEntry<bool> ControlAbilitySpawnedCreatures;
@@ -579,6 +580,7 @@ namespace StarLevelSystem.common {
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Creatures gain more damage when players are grouped up.");
             
             ControlSpawnerLevels = BindServerConfig("LevelSystem", "ControlSpawnerLevels", true, "Overrides spawner levels to be controlled by SLS (this impacts all naturally spawning creatures)");
+            DomeBiomeSetsCreatureLevels = BindServerConfig("LevelSystem", "DomeBiomeSetsCreatureLevels", true, "When enabled, creature levels follow the biome the game reports at the creature, which includes a local biome made by a mod such as Biome Generator. When disabled, creature levels always use the biome the world generated there.");
             ControlAbilitySpawnedCreatures = BindServerConfig("LevelSystem", "ControlAbilitySpawnedCreatures", true, "Forces creatures spawned from abilities to be controlled by SLS. This primarily impacts things such as the roots from Elder.");
             ControlBossSpawns = BindServerConfig("LevelSystem", "ControlBossSpawns", true, "Forces boss creatures to be controlled by SLS. Bosses will not get star levels if this is disabled.");
             ForceControlAllSpawns = BindServerConfig("LevelSystem", "ForceControlAllSpawns", false, "Forces all creatures to be controlled by SLS, this includes creatures spawned from player abilities and items. This will override creature levels, other mods must use the API to ensure their spawned creature levels are set.");

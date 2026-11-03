@@ -77,7 +77,7 @@ namespace StarLevelSystem.modules.UI {
                 biomesByCreature[name] = biomes | spawn.m_biome;
             }
             IEnumerable<string> groups = biomesByCreature.GroupBy(kv => kv.Value, kv => kv.Key)
-                .Select(group => L("$sls_cfg_night_group", JoinWithAnd(group.ToList()), JoinWithAnd(BiomeListOrder.Where(b => (group.Key & b) != 0).Select(BiomeName).ToList())));
+                .Select(group => L("$sls_cfg_night_group", JoinWithAnd(group.ToList()), JoinWithAnd(BiomeListOrder.Concat(BiomeRegistry.CustomBiomes).Where(b => (group.Key & b) != 0).Select(BiomeName).ToList())));
             return string.Join("; ", groups.ToArray()) + ".";
         }
 

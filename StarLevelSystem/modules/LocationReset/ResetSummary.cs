@@ -149,7 +149,7 @@ namespace StarLevelSystem.modules.LocationReset {
             return new Dictionary<string, object>() {
                 { "zoneX", report.Zone.x },
                 { "zoneZ", report.Zone.y },
-                { "biome", report.Biome.ToString() },
+                { "biome", BiomeRegistry.IdentifierOf(report.Biome) },
                 { "location", report.LocationName ?? "" },
                 { "outcome", report.LocationResult.ToString() },
                 { "skipReason", report.SkipReason ?? "" },

@@ -32,6 +32,7 @@ namespace StarLevelSystem.common
             RegisterBiomeCommands();
             RegisterLocationCommands();
             RegisterZoneCommands();
+            RegisterRegionCommands();
             RegisterNemesisCommands();
             RegisterRaidCommands();
             RegisterModifierCommands();
@@ -153,6 +154,15 @@ namespace StarLevelSystem.common
                 // coroutine keeps using the same sink and flushes again as it goes.
                 output.Flush();
             }
+        }
+
+        // Asks the server to run one of its commands, for what a remote admin does somewhere other than the console. The server
+        // makes its own admin check when this arrives, as it does for a typed one.
+        internal static void RunOnServer(string commandName)
+        {
+            ZRpc server = ZNet.instance?.GetServerRPC();
+            if (server == null) { return; }
+            TerminalNetwork.SendRequest(server, BuildRequest(commandName, new string[0]));
         }
 
         private static ZPackage BuildRequest(string name, string[] args)

@@ -3,6 +3,7 @@ using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.LevelSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,37 +12,32 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.modules.UI.QuickConfigPrefabs;
 
 namespace StarLevelSystem.modules.UI {
     // A paged editor over the settings most worlds want to change. Opened from the shared Mod Config launcher, or once
     // on the main menu as the first-time setup, which adds a welcome page in front. Every page can be saved, and the X
-    // closes from anywhere. This file is the shell (opening, navigation, saving, staged state); the pages themselves are
-    // built in QuickConfigurePages.cs.
+    // closes from anywhere. This file is the shell (opening, navigation, saving, staged state). The layout is in the prefabs
+    // under StarLevelUnity/Assets/Custom/QuickConfig; the code that joins each page to the staged values is in
+    // QuickConfigurePages.cs and the files beside it, and QuickConfigurePrefabs.cs is what they use to do it.
     internal static partial class QuickConfigureTool {
-
-        // --- layout constants ---
-        private const float PanelW = 900f;
-        private const float PanelH = 690f;
-        private const float Margin = 26f;
-        private const float ContentTop = 64f;
-        private const float PageW = PanelW - 2 * Margin;
-        private const float PageH = PanelH - ContentTop - 84f;   // leaves the status line and the nav bar below
-        private const float RowHeight = ConfigUI.RowHeight;
-        private const float SubRowHeight = ConfigUI.SubRowHeight;
-        private const float RowGap = ConfigUI.RowGap;
-        private const float NavButtonW = 170f;
-        private const float ResetButtonW = 150f;
 
         private const string LauncherEntry = "Star Level System";
 
         private struct PageDef {
             internal string Title;
+            // The page's layout. Build joins what is in it to the staged values, and adds what depends on the data.
+            internal string Prefab;
             internal Action<Transform> Build;
             internal Action OnShow;
             // Puts the page's staged values back to the shipped defaults. Null for a page with nothing to reset.
             internal Action Reset;
             // Drops the references Build keeps to the page's widgets, so the page can be built again on its own.
             internal Action ClearRefs;
+            // Only among the pages navigation goes through with advanced options on. See VisiblePages.
+            internal bool Advanced;
+            // Has widgets for values the simple page sets, so it is built again before it is next shown after they change.
+            internal bool FollowsSimplePage;
         }
 
         // --- runtime state ---
@@ -50,6 +46,7 @@ namespace StarLevelSystem.modules.UI {
         private static GameObject confirmOverlay;
         private static List<PageDef> pages;
         private static GameObject[] pageRoots;
+        private static Transform pageHost;
         private static int currentPage;
         private static bool tutorialMode;
         private static Text titleText;
@@ -68,6 +65,7 @@ namespace StarLevelSystem.modules.UI {
         internal static void Init() {
             DistanceExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("distance_rings");
             ZoneExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("region_zones");
+            RegionExample = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Sprite>("region_fill");
 
             // The corner button, the main-menu hook and the pause-menu patch all used to live here. They
             // now belong to the shared launcher in common/ConfigUI, so several mods share one button
@@ -187,77 +185,51 @@ namespace StarLevelSystem.modules.UI {
             // A full-screen dimmer under the panel, so clicks cannot fall through to the menu behind it. It also owns the
             // input block and, on the main menu, hides the menu itself (see MainMenuGuard); both are released when it is
             // destroyed, whatever route that takes.
-            overlay = ConfigUI.NewUI("SLSQuickConfigure", GUIManager.CustomGUIFront.transform, typeof(Image));
-            StretchToParent(overlay);
-            overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.45f);
+            overlay = Spawn("SLS_QC_Panel", GUIManager.CustomGUIFront.transform);
             overlay.AddComponent<ConfigUI.ConfigUIInputGuard>().Hold();
             overlay.AddComponent<MainMenuGuard>();
             overlay.AddComponent<EscapeCloser>();
+            panel = Find(overlay.transform, "Woodpanel");
 
-            panel = GUIManager.Instance.CreateWoodpanel(
-                parent: overlay.transform,
-                anchorMin: new Vector2(0.5f, 0.5f),
-                anchorMax: new Vector2(0.5f, 0.5f),
-                position: new Vector2(0f, 0f),
-                width: PanelW,
-                height: PanelH,
-                draggable: true);
-
-            titleText = ConfigUI.AddText(
-                parent: panel.transform,
-                x: Margin + 40f,
-                y: 18f,
-                w: PageW - 80f,
-                h: RowHeight,
-                text: "",
-                fontSize: 22,
-                anchor: TextAnchor.MiddleCenter,
-                color: GUIManager.Instance.ValheimYellow);
-            WithTip(ConfigUI.AddCloseX(panel.transform, PanelW, RequestClose),
-                Tip("$sls_cfg_tip_close_title", "$sls_cfg_tip_close"));
+            // Found before the pages go in: a page can use the same names, and Find looks through everything under the panel.
+            Transform shell = panel.transform;
+            titleText = Get<Text>(shell, "Title");
+            statusText = Get<Text>(shell, "Status");
+            pageHost = Find(shell, "Pages").transform;
+            WithTip(BindButton(shell, "Close", RequestClose), Tip("$sls_cfg_tip_close_title", "$sls_cfg_tip_close"));
+            backBtn = WithTip(BindButton(shell, "Back", () => ShowPage(VisiblePageFrom(-1))), Tip("$sls_cfg_tip_back_title", "$sls_cfg_tip_back"));
+            resetBtn = WithTip(BindButton(shell, "ResetPage", ShowResetConfirm), Tip("$sls_cfg_button_reset_page", "$sls_cfg_tip_reset_page"));
+            WithTip(BindButton(shell, "Save", OnSaveClicked), Tip("$sls_cfg_button_save", "$sls_cfg_tip_save"));
+            nextBtn = WithTip(BindButton(shell, "Next", () => ShowPage(VisiblePageFrom(1))), Tip("$sls_cfg_tip_next_title", "$sls_cfg_tip_next"));
+            nextCaption = nextBtn.GetComponentInChildren<Text>();
+            finishBtn = WithTip(BindButton(shell, "Finish", OnFinishClicked), Tip("$sls_cfg_button_finish", "$sls_cfg_tip_finish"));
 
             pages = BuildPageList(tutorialMode);
             pageRoots = new GameObject[pages.Count];
             for (int i = 0; i < pages.Count; i++) {
-                pageRoots[i] = ConfigUI.NewRect("Page" + i, panel.transform, Margin, ContentTop, PageW, PageH);
-                pages[i].Build(pageRoots[i].transform);
+                pageRoots[i] = Spawn(pages[i].Prefab, pageHost);
+                pages[i].Build?.Invoke(pageRoots[i].transform);
             }
-
-            statusText = ConfigUI.AddText(panel.transform, Margin, PanelH - 80f, PageW, 22f, "", 13, TextAnchor.MiddleCenter);
-
-            float navY = PanelH - 56f;
-            backBtn = WithTip(ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "$sls_cfg_button_back", () => ShowPage(currentPage - 1)),
-                Tip("$sls_cfg_tip_back_title", "$sls_cfg_tip_back"));
-            // Between Back and Save rather than beside Next, so it is never where the eye expects to move on.
-            resetBtn = WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f - ResetButtonW - 16f, navY, ResetButtonW, "$sls_cfg_button_reset_page", ShowResetConfirm),
-                Tip("$sls_cfg_button_reset_page", "$sls_cfg_tip_reset_page"));
-            WithTip(ConfigUI.AddButton(panel.transform, (PanelW - NavButtonW) * 0.5f, navY, NavButtonW, "$sls_cfg_button_save", OnSaveClicked),
-                Tip("$sls_cfg_button_save", "$sls_cfg_tip_save"));
-            nextBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "$sls_cfg_button_next", () => ShowPage(currentPage + 1)),
-                Tip("$sls_cfg_tip_next_title", "$sls_cfg_tip_next"));
-            nextCaption = nextBtn.GetComponentInChildren<Text>();
-            finishBtn = WithTip(ConfigUI.AddButton(panel.transform, PanelW - Margin - NavButtonW, navY, NavButtonW, "$sls_cfg_button_finish", OnFinishClicked),
-                Tip("$sls_cfg_button_finish", "$sls_cfg_tip_finish"));
         }
 
         // Titles are localized once, here, because they are read by the title bar and by status messages alike.
         private static List<PageDef> BuildPageList(bool tutorial) {
             List<PageDef> list = new List<PageDef>();
             if (tutorial) {
-                list.Add(new PageDef { Title = L("$sls_cfg_page_welcome"), Build = BuildWelcomePage });
+                list.Add(new PageDef { Title = L("$sls_cfg_page_welcome"), Prefab = "SLS_QC_Page_Welcome" });
             }
-            list.Add(new PageDef { Title = L("$sls_cfg_page_level_progression"), Build = BuildScalingPage, Reset = ResetScalingPage });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_level_distribution"), Build = BuildDistributionPage, OnShow = RefreshDistribution, Reset = ResetDistributionPage, ClearRefs = ClearDistributionReferences });
-            // After the distribution: the preview adds each ring to the curve set there, so it re-reads it on show.
-            list.Add(new PageDef { Title = L("$sls_cfg_page_distance_rings"), Build = BuildDistanceRingsPage, OnShow = RefreshDistanceRings, Reset = ResetDistanceRingsPage, ClearRefs = ClearDistanceRingReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_simple"), Prefab = "SLS_QC_Page_Simple", Build = BuildSimplePage, OnShow = RefreshSimplePage, Reset = ResetSimplePage, ClearRefs = ClearSimpleReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_level_distribution"), Prefab = "SLS_QC_Page_Distribution", Build = BuildDistributionPage, OnShow = RefreshDistribution, Reset = ResetDistributionPage, ClearRefs = ClearDistributionReferences, Advanced = true, FollowsSimplePage = true });
+            // After the distribution: the chart works everything through the curve set there, so it re-reads it on show.
+            list.Add(new PageDef { Title = L("$sls_cfg_page_level_scaling"), Prefab = "SLS_QC_Page_LevelScaling", Build = BuildLevelScalingPage, OnShow = RefreshLevelScaling, Reset = ResetLevelScalingPage, ClearRefs = ClearLevelScalingReferences, Advanced = true, FollowsSimplePage = true });
             // After the level pages: the estimate is worked at the Max stars they set, so it re-reads it on show.
-            list.Add(new PageDef { Title = L("$sls_cfg_page_loot"), Build = BuildLootPage, OnShow = RefreshLootEstimates, Reset = ResetLootPage, ClearRefs = ClearLootPageReferences });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_health_damage"), Build = BuildStatsPage, OnShow = UpdateExampleMath, Reset = ResetStatsPage, ClearRefs = ClearStatsReferences });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_modifiers"), Build = BuildModifiersPage, Reset = ResetModifiersPage });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_raids"), Build = BuildRaidsPage, Reset = ResetRaidsPage, ClearRefs = ClearRaidPageReferences });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_night_spawns"), Build = BuildNightSpawnsPage, Reset = ResetNightSpawnsPage });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_nemesis"), Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions, Reset = ResetNemesisPage, ClearRefs = ClearNemesisReferences });
-            list.Add(new PageDef { Title = L("$sls_cfg_page_location_reset"), Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews, Reset = ResetLocationResetPage, ClearRefs = ClearLocationResetReferences });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_loot"), Prefab = "SLS_QC_Page_Loot", Build = BuildLootPage, OnShow = RefreshLootEstimates, Reset = ResetLootPage, ClearRefs = ClearLootPageReferences, Advanced = true });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_health_damage"), Prefab = "SLS_QC_Page_Stats", Build = BuildStatsPage, OnShow = UpdateExampleMath, Reset = ResetStatsPage, ClearRefs = ClearStatsReferences, Advanced = true, FollowsSimplePage = true });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_modifiers"), Prefab = "SLS_QC_Page_Modifiers", Build = BuildModifiersPage, Reset = ResetModifiersPage, Advanced = true });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_raids"), Prefab = "SLS_QC_Page_Raids", Build = BuildRaidsPage, Reset = ResetRaidsPage, ClearRefs = ClearRaidPageReferences, Advanced = true });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_night_spawns"), Prefab = "SLS_QC_Page_NightSpawns", Build = BuildNightSpawnsPage, Reset = ResetNightSpawnsPage, Advanced = true });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_nemesis"), Prefab = "SLS_QC_Page_Nemesis", Build = BuildNemesisPage, OnShow = RefreshNemesisDescriptions, Reset = ResetNemesisPage, ClearRefs = ClearNemesisReferences, Advanced = true });
+            list.Add(new PageDef { Title = L("$sls_cfg_page_location_reset"), Prefab = "SLS_QC_Page_LocationReset", Build = BuildLocationResetPage, OnShow = RefreshLocationResetViews, Reset = ResetLocationResetPage, ClearRefs = ClearLocationResetReferences, Advanced = true });
             return list;
         }
 
@@ -274,10 +246,10 @@ namespace StarLevelSystem.modules.UI {
             UnityEngine.Object.Destroy(old);
 
             pages[index].ClearRefs?.Invoke();
-            GameObject root = ConfigUI.NewRect("Page" + index, panel.transform, Margin, ContentTop, PageW, PageH);
+            GameObject root = Spawn(pages[index].Prefab, pageHost);
             root.transform.SetSiblingIndex(sibling);
             pageRoots[index] = root;
-            pages[index].Build(root.transform);
+            pages[index].Build?.Invoke(root.transform);
             root.SetActive(index == currentPage);
             if (index == currentPage) { pages[index].OnShow?.Invoke(); }
         }
@@ -323,19 +295,37 @@ namespace StarLevelSystem.modules.UI {
         private static void ShowPage(int page) {
             if (pageRoots == null) { return; }
             currentPage = Mathf.Clamp(page, 0, pageRoots.Length - 1);
+            RebuildPagesFollowingSimplePage();
             for (int i = 0; i < pageRoots.Length; i++) {
                 pageRoots[i].SetActive(i == currentPage);
             }
-            titleText.text = L("$sls_cfg_panel_title", pages[currentPage].Title, currentPage + 1, pageRoots.Length);
+            List<int> visible = VisiblePages();
+            int position = visible.IndexOf(currentPage);
+            titleText.text = L("$sls_cfg_panel_title", pages[currentPage].Title, position + 1, visible.Count);
 
-            backBtn.SetActive(currentPage > 0);
+            backBtn.SetActive(position > 0);
             resetBtn.SetActive(pages[currentPage].Reset != null);
-            bool last = currentPage == pageRoots.Length - 1;
+            bool last = position == visible.Count - 1;
             nextBtn.SetActive(!last);
             finishBtn.SetActive(last);
             nextCaption.text = ConfigUI.L(tutorialMode && currentPage == 0 ? "$sls_cfg_button_get_started" : "$sls_cfg_button_next");
             SetStatus("", true);
             pages[currentPage].OnShow?.Invoke();
+        }
+
+        // The pages navigation goes through, which is all of them only with advanced options on. The rest are still built:
+        // what was edited on them before they were hidden stays staged, and a save still writes it.
+        private static List<int> VisiblePages() {
+            List<int> visible = new List<int>();
+            for (int i = 0; i < pages.Count; i++) {
+                if (pages[i].Advanced == false || ValConfig.ShowAdvancedQuickConfigurePages.Value) { visible.Add(i); }
+            }
+            return visible;
+        }
+
+        private static int VisiblePageFrom(int step) {
+            List<int> visible = VisiblePages();
+            return visible[Mathf.Clamp(visible.IndexOf(currentPage) + step, 0, visible.Count - 1)];
         }
 
         private static void SetStatus(string message, bool ok) {
@@ -421,62 +411,34 @@ namespace StarLevelSystem.modules.UI {
             panel = null;
             pages = null;
             pageRoots = null;
+            pageHost = null;
             tutorialMode = false;
             textFocusedLastFrame = false;
+            simplePageChanged = false;
             ClearPageReferences();
         }
 
         private static void ShowDiscardConfirm() {
             CloseConfirm();
-            const float W = 470f;
-            const float H = 190f;
-            const float ButtonW = 136f;
-
-            confirmOverlay = ConfigUI.NewUI("SLSQuickConfigureConfirm", GUIManager.CustomGUIFront.transform, typeof(Image));
-            StretchToParent(confirmOverlay);
-            confirmOverlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.35f);
-
-            GameObject box = GUIManager.Instance.CreateWoodpanel(
-                parent: confirmOverlay.transform,
-                anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f),
-                position: new Vector2(0f, 0f), width: W, height: H, draggable: false);
-
-            ConfigUI.AddText(box.transform, 0f, 16f, W, 30f, "$sls_cfg_discard_title", 20, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimYellow);
-            ConfigUI.AddText(box.transform, 20f, 54f, W - 40f, 50f, "$sls_cfg_discard_body", 14, TextAnchor.MiddleCenter);
-
-            float y = H - 64f;
-            float gap = (W - 3 * ButtonW) / 4f;
-            ConfigUI.AddButton(box.transform, gap, y, ButtonW, "$sls_cfg_button_keep_editing", CloseConfirm, 36f);
-            ConfigUI.AddButton(box.transform, 2 * gap + ButtonW, y, ButtonW, "$sls_cfg_button_discard", ClosePanel, 36f);
-            ConfigUI.AddButton(box.transform, 3 * gap + 2 * ButtonW, y, ButtonW, "$sls_cfg_button_save_close", () => {
+            confirmOverlay = Spawn("SLS_QC_ConfirmDiscard", GUIManager.CustomGUIFront.transform);
+            Transform box = confirmOverlay.transform;
+            BindButton(box, "KeepEditing", CloseConfirm);
+            BindButton(box, "Discard", ClosePanel);
+            BindButton(box, "SaveClose", () => {
                 CloseConfirm();
                 OnFinishClicked();
-            }, 36f);
+            });
         }
 
         // A two-button prompt in the same place as the discard one: back out, or go ahead. Escape backs out.
         private static void ShowConfirm(string title, string body, string confirmLabel, UnityEngine.Events.UnityAction onConfirm) {
             CloseConfirm();
-            const float W = 470f;
-            const float H = 190f;
-            const float ButtonW = 160f;
-
-            confirmOverlay = ConfigUI.NewUI("SLSQuickConfigureConfirm", GUIManager.CustomGUIFront.transform, typeof(Image));
-            StretchToParent(confirmOverlay);
-            confirmOverlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.35f);
-
-            GameObject box = GUIManager.Instance.CreateWoodpanel(
-                parent: confirmOverlay.transform,
-                anchorMin: new Vector2(0.5f, 0.5f), anchorMax: new Vector2(0.5f, 0.5f),
-                position: new Vector2(0f, 0f), width: W, height: H, draggable: false);
-
-            ConfigUI.AddText(box.transform, 0f, 16f, W, 30f, title, 20, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimYellow);
-            ConfigUI.AddText(box.transform, 20f, 54f, W - 40f, 50f, body, 14, TextAnchor.MiddleCenter);
-
-            float y = H - 64f;
-            float gap = (W - 2 * ButtonW) / 3f;
-            ConfigUI.AddButton(box.transform, gap, y, ButtonW, "$sls_cfg_button_keep_editing", CloseConfirm, 36f);
-            ConfigUI.AddButton(box.transform, 2 * gap + ButtonW, y, ButtonW, confirmLabel, onConfirm, 36f);
+            confirmOverlay = Spawn("SLS_QC_Confirm", GUIManager.CustomGUIFront.transform);
+            Transform box = confirmOverlay.transform;
+            SetText(box, "Title", title);
+            SetText(box, "Body", body);
+            BindButton(box, "KeepEditing", CloseConfirm);
+            BindButton(box, "Confirm", onConfirm).GetComponentInChildren<Text>().text = ConfigUI.L(confirmLabel);
         }
 
         private static void CloseConfirm() {
@@ -590,12 +552,40 @@ namespace StarLevelSystem.modules.UI {
                     return false;
                 }
 
-                ValConfig.EnableDistanceLevelScalingBonus.Value = staged.enableDistance;
+                // Only when flipped: it reads off whenever the YAML switch is off, and an unrelated save would otherwise turn this
+                // entry off underneath an admin who left it on.
+                if (staged.enableDistance != baseline.enableDistance) {
+                    ValConfig.EnableDistanceLevelScalingBonus.Value = staged.enableDistance;
+                }
                 ValConfig.EnableMapRingsForDistanceBonus.Value = staged.enableDistanceOverlay;
                 ValConfig.EnableZoneScalingBonus.Value = staged.enableZone;
                 ValConfig.EnableZoneMapOverlay.Value = staged.enableZoneOverlay;
                 ValConfig.ShowNoMapRingLevel.Value = staged.showNoMapRing;
                 ValConfig.ShowNoMapZoneLevel.Value = staged.showNoMapZone;
+                ValConfig.MapRingsAboveFog.Value = staged.ringsAboveFog;
+                ValConfig.DistanceBonusIsFromStarterTemple.Value = staged.ringsFromTemple;
+                ValConfig.DistanceRingColorOptions.Value = staged.ringColors;
+                ValConfig.ZoneOverlayAboveFog.Value = staged.zonesAboveFog;
+                ValConfig.ZoneLevelBonusPerLevel.Value = staged.zoneBonusPerLevel;
+                ValConfig.ZoneKillsPerLevelUp.Value = staged.zoneKillsPerLevel;
+                ValConfig.ZoneDecayLevelsPerHour.Value = staged.zoneDecayPerHour;
+                ValConfig.ZoneDecayClock.Value = staged.zoneDecayClock;
+                ValConfig.MaxZoneSize.Value = staged.zoneMaxSize;
+                ValConfig.MinZoneSize.Value = staged.zoneMinSize;
+                ValConfig.ZoneOverlayColorOptions.Value = staged.zoneColors;
+                ValConfig.ZoneOverlayColorTransparency.Value = staged.zoneOpacity;
+                ValConfig.KillReportFlushIntervalSeconds.Value = staged.killReportInterval;
+                ValConfig.EnableRegionScalingBonus.Value = staged.enableRegion;
+                ValConfig.EnableRegionMapOverlay.Value = staged.enableRegionOverlay;
+                ValConfig.RegionOverlayAboveFog.Value = staged.regionsAboveFog;
+                ValConfig.ShowNoMapRegionLevel.Value = staged.showNoMapRegion;
+                ValConfig.RegionLevelBonusPerLevel.Value = staged.regionBonusPerLevel;
+                ValConfig.RegionKillsPerLevelUp.Value = staged.regionKillsPerLevel;
+                ValConfig.RegionDecayLevelsPerHour.Value = staged.regionDecayPerHour;
+                ValConfig.RegionTargetSize.Value = staged.regionTargetSize;
+                ValConfig.RegionMinSize.Value = staged.regionMinSize;
+                ValConfig.RegionMountainMinSize.Value = staged.regionMountainMinSize;
+                ValConfig.RegionOverlayOpacity.Value = staged.regionOpacity;
 
                 ValConfig.EnemyHealthMultiplier.Value = staged.creatureHpPerLevel;
                 ValConfig.EnemyDamageLevelMultiplier.Value = staged.creatureDmgPerLevel;
@@ -613,6 +603,8 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.MultiplayerEnemyDamageModifier.Value = staged.mpDamageMod;
                 ValConfig.MultiplayerScalingRequiredPlayersNearby.Value = staged.mpRequiredPlayers;
 
+                ValConfig.EnableColorization.Value = staged.enableColorization;
+                ValConfig.EnableCreatureModifiers.Value = staged.enableModifiers;
                 ValConfig.MaxMajorModifiersPerCreature.Value = staged.maxMajor;
                 ValConfig.MaxMinorModifiersPerCreature.Value = staged.maxMinor;
                 ValConfig.ChanceMajorModifier.Value = staged.chanceMajor;
@@ -673,6 +665,7 @@ namespace StarLevelSystem.modules.UI {
                 // The ConfigEntry writes above are local-only until Jotunn is told to push them, on a host
                 // as much as on a remote admin. After the YAML, so peers get both halves of the save together.
                 PushConfigChanges();
+                RebuildMapsWithNewSizes();
             } catch (Exception e) {
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
                 message = L("$sls_cfg_status_save_failed", e.Message);
@@ -773,6 +766,18 @@ namespace StarLevelSystem.modules.UI {
             pendingYaml.Add(new PendingYaml { File = file, Yaml = yaml, Label = label });
         }
 
+        // After the push, so the server holds the new sizes by the time it is asked to cut with them. Both reset their levels,
+        // which the rows say. From the main menu there is no map to cut: the sizes go to the next one built.
+        private static void RebuildMapsWithNewSizes() {
+            if (ZNet.instance == null) { return; }
+            if (staged.enableZone && (staged.zoneMaxSize != baseline.zoneMaxSize || staged.zoneMinSize != baseline.zoneMinSize)) {
+                if (ZNet.instance.IsServer()) { ZoneScaleSystem.RebuildZones(); } else { TerminalManager.RunOnServer("sls-zone-rebuild"); }
+            }
+            if (staged.enableRegion && (staged.regionTargetSize != baseline.regionTargetSize || staged.regionMinSize != baseline.regionMinSize || staged.regionMountainMinSize != baseline.regionMountainMinSize)) {
+                if (ZNet.instance.IsServer()) { RegionScaleSystem.RebuildRegions(out _); } else { TerminalManager.RunOnServer("sls-region-rebuild"); }
+            }
+        }
+
         private static void SaveLevelSettings(List<string> failures, List<string> warnings) {
             CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
             if (live == null) { return; }
@@ -784,15 +789,20 @@ namespace StarLevelSystem.modules.UI {
             bool bossTablesChanged = TablesEqual(staged.bossTables, baseline.bossTables) == false;
             Dictionary<Heightmap.Biome, int> changedCaps = staged.ChangedBiomeCaps(live);
             bool ringsChanged = LevelRingsMatch(staged.levelRings, baseline.levelRings) == false;
-            if (conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && bossTablesChanged == false && changedCaps.Count == 0 && ringsChanged == false) { return; }
+            bool allBiomeChanged = staged.AllBiomeMatches(baseline) == false;
+            bool biomeStrengthsChanged = BiomeStrengthsMatch(staged.biomeStrengths, baseline.biomeStrengths) == false;
+            bool distanceYamlTurnedOn = staged.enableDistance && baseline.distanceYamlOn == false;
+            if (biomeStrengthsChanged == false && distanceYamlTurnedOn == false && conditionalChanged == false && curveChanged == false && bossCurveChanged == false && changedSpans.Count == 0 && bossTablesChanged == false && changedCaps.Count == 0 && ringsChanged == false && allBiomeChanged == false) { return; }
 
             // From the settings as written, not the live copy: the live one has every generator already expanded into the
             // chance tables, and saving it wrote those expansions over the hand-written tables in the file.
             CreatureLevelSettings settings = CopyForEdit(YamlConfigManager.LevelSettings, LevelSystemData.AuthoredLevelSettings ?? live);
             settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
-            if (curveChanged && staged.shippedCurve != null) {
-                // Reset page put the curve back to the shipped hand-written table, which no generator describes.
-                settings.DefaultCreatureLevelUpChance = new SortedDictionary<int, float>(staged.shippedCurve);
+            if (distanceYamlTurnedOn) { settings.EnableDistanceLevelBonus = true; }
+            if (biomeStrengthsChanged) { WriteBiomeStrengths(settings); }
+            if (curveChanged && staged.tableCurve != null) {
+                // Reset page or a difficulty set the curve as a table, which no generator describes.
+                settings.DefaultCreatureLevelUpChance = new SortedDictionary<int, float>(staged.tableCurve);
                 settings.DefaultLevelupGenerators = null;
                 settings.DefaultLevelupGeneratorRefs = null;
             } else if (curveChanged) {
@@ -837,7 +847,61 @@ namespace StarLevelSystem.modules.UI {
                     }
                 }
             }
+            if (allBiomeChanged) { WriteAllBiomeSettings(settings); }
             SaveYaml(YamlConfigManager.LevelSettings, settings, "$sls_cfg_label_level_settings", failures, warnings);
+        }
+
+        // Only the ones that differ from when the panel opened, so an entry an admin never touched stays out of the file.
+        private static void WriteBiomeStrengths(CreatureLevelSettings settings) {
+            if (settings.BiomeConfiguration == null) { settings.BiomeConfiguration = new Dictionary<Heightmap.Biome, BiomeSpecificSetting>(); }
+            foreach (KeyValuePair<Heightmap.Biome, float> strength in staged.biomeStrengths) {
+                baseline.biomeStrengths.TryGetValue(strength.Key, out float was);
+                if (strength.Value == was) { continue; }
+                Heightmap.Biome key = BiomeRegistry.ConfigKeyFor(settings.BiomeConfiguration, strength.Key);
+                if (settings.BiomeConfiguration.TryGetValue(key, out BiomeSpecificSetting biome) == false || biome == null) {
+                    biome = new BiomeSpecificSetting();
+                    settings.BiomeConfiguration[key] = biome;
+                }
+                biome.DistanceScaleModifier = strength.Value;
+            }
+        }
+
+        // Every biome a world has, with what it stores. The All biome has its own row on the page.
+        private static Dictionary<Heightmap.Biome, float> BiomeStrengthsOf(CreatureLevelSettings settings) {
+            Dictionary<Heightmap.Biome, float> strengths = new Dictionary<Heightmap.Biome, float>();
+            Heightmap.Biome[] vanilla = { Heightmap.Biome.Meadows, Heightmap.Biome.BlackForest, Heightmap.Biome.Swamp, Heightmap.Biome.Mountain, Heightmap.Biome.Plains, Heightmap.Biome.Mistlands, Heightmap.Biome.AshLands, Heightmap.Biome.DeepNorth };
+            foreach (Heightmap.Biome biome in vanilla.Concat(BiomeRegistry.CustomBiomes)) { strengths[biome] = 1f; }
+            if (settings?.BiomeConfiguration != null) {
+                foreach (KeyValuePair<Heightmap.Biome, BiomeSpecificSetting> biome in settings.BiomeConfiguration) {
+                    if (biome.Key == Heightmap.Biome.All || biome.Key == Heightmap.Biome.None || biome.Value == null) { continue; }
+                    strengths[biome.Key] = biome.Value.DistanceScaleModifier;
+                }
+            }
+            return strengths;
+        }
+
+        private static bool BiomeStrengthsMatch(Dictionary<Heightmap.Biome, float> a, Dictionary<Heightmap.Biome, float> b) {
+            if (a == null || b == null) { return a == b; }
+            return a.Count == b.Count && a.All(entry => b.TryGetValue(entry.Key, out float other) && other == entry.Value);
+        }
+
+        // What a difficulty keeps on the All biome. Every other biome inherits these unless it sets its own.
+        private static void WriteAllBiomeSettings(CreatureLevelSettings settings) {
+            if (settings.BiomeConfiguration == null) { settings.BiomeConfiguration = new Dictionary<Heightmap.Biome, BiomeSpecificSetting>(); }
+            if (settings.BiomeConfiguration.TryGetValue(Heightmap.Biome.All, out BiomeSpecificSetting all) == false || all == null) {
+                all = new BiomeSpecificSetting();
+                settings.BiomeConfiguration[Heightmap.Biome.All] = all;
+            }
+            all.SpawnRateModifier = staged.allSpawnRate;
+            all.DistanceScaleModifier = staged.allDistanceScale;
+            if (all.NightSettings != null || staged.allNightLevelScale != 1f) {
+                if (all.NightSettings == null) { all.NightSettings = new BiomeNightSettings(); }
+                all.NightSettings.NightLevelUpChanceScaler = staged.allNightLevelScale;
+            }
+            if (all.CreatureBaseValueModifiers != null || staged.allBaseDamage != 1f) {
+                if (all.CreatureBaseValueModifiers == null) { all.CreatureBaseValueModifiers = new Dictionary<CreatureBaseAttribute, float>(); }
+                all.CreatureBaseValueModifiers[CreatureBaseAttribute.BaseDamage] = staged.allBaseDamage;
+            }
         }
 
         // Modifier enable/disable is only written when a toggle actually changed, so touching the sliders alone never
@@ -1014,6 +1078,20 @@ namespace StarLevelSystem.modules.UI {
             public bool showNoMapRing, showNoMapZone;
             public bool enableConditional;
 
+            // The Level Scaling page's settings past those switches.
+            public bool distanceYamlOn;
+            public bool ringsAboveFog, ringsFromTemple;
+            public string ringColors;
+            // What each biome stores, keyed as the file does. 1 is a biome with no strength of its own, which takes the All biome's.
+            public Dictionary<Heightmap.Biome, float> biomeStrengths;
+            public bool zonesAboveFog;
+            public float zoneBonusPerLevel, zoneDecayPerHour, zoneMaxSize, zoneMinSize, zoneOpacity, killReportInterval;
+            public int zoneKillsPerLevel;
+            public string zoneDecayClock, zoneColors;
+            public bool enableRegion, enableRegionOverlay, regionsAboveFog, showNoMapRegion;
+            public float regionBonusPerLevel, regionDecayPerHour, regionTargetSize, regionMinSize, regionMountainMinSize, regionOpacity;
+            public int regionKillsPerLevel;
+
             public float creatureHpPerLevel, creatureDmgPerLevel, bossHpPerLevel, bossDmgPerLevel;
             public int maxBossLevel;
 
@@ -1032,10 +1110,10 @@ namespace StarLevelSystem.modules.UI {
             // Whether generator came from an inline DefaultLevelupGenerators entry. When it did not, the world rolls a
             // hand-written table (or generators referenced by name) and generator is only a seed. See GeneratorEdited.
             public bool generatorInline;
-            // Set by Reset page when the shipped curve is a hand-written table: the page then shows and saves that table,
-            // and generator is only the seed shaped after it. Any edit to the curve clears it, handing the curve back to
-            // generator. Never set by a snapshot.
-            public SortedDictionary<int, float> shippedCurve;
+            // Set by a difficulty, and by Reset page when the shipped curve is a hand-written table: the pages then show and
+            // save that table, and generator is only the seed shaped after it. Any edit to the curve clears it, handing the
+            // curve back to generator. Never set by a snapshot.
+            public SortedDictionary<int, float> tableCurve;
 
             // The distance rings, nearest first. See QuickConfigureDistanceRings.cs.
             public List<StagedLevelRing> levelRings;
@@ -1064,6 +1142,10 @@ namespace StarLevelSystem.modules.UI {
             public HashSet<Heightmap.Biome> biomeCapUnset = new HashSet<Heightmap.Biome>();
             public int biomeCapForUnset;
 
+            // What a difficulty keeps on the All biome. See DifficultyPreset.
+            public float allSpawnRate, allNightLevelScale, allDistanceScale, allBaseDamage;
+
+            public bool enableColorization, enableModifiers;
             public int maxMajor, maxMinor, maxBossOnCreature, maxBossMods, maxMajorOnBoss, maxMinorOnBoss, prefixLimit;
             public float chanceMajor, chanceMinor, chanceBossOnCreature, chanceBoss, chanceMinorOnBoss, chanceMajorOnBoss;
             public bool limitToStarLevel, enableBossMods, minorFirst;
@@ -1124,6 +1206,30 @@ namespace StarLevelSystem.modules.UI {
                     enableZoneOverlay = ValConfig.EnableZoneMapOverlay.Value,
                     showNoMapRing = ValConfig.ShowNoMapRingLevel.Value,
                     showNoMapZone = ValConfig.ShowNoMapZoneLevel.Value,
+                    ringsAboveFog = ValConfig.MapRingsAboveFog.Value,
+                    ringsFromTemple = ValConfig.DistanceBonusIsFromStarterTemple.Value,
+                    ringColors = ValConfig.DistanceRingColorOptions.Value,
+                    zonesAboveFog = ValConfig.ZoneOverlayAboveFog.Value,
+                    zoneBonusPerLevel = ValConfig.ZoneLevelBonusPerLevel.Value,
+                    zoneKillsPerLevel = ValConfig.ZoneKillsPerLevelUp.Value,
+                    zoneDecayPerHour = ValConfig.ZoneDecayLevelsPerHour.Value,
+                    zoneDecayClock = ValConfig.ZoneDecayClock.Value,
+                    zoneMaxSize = ValConfig.MaxZoneSize.Value,
+                    zoneMinSize = ValConfig.MinZoneSize.Value,
+                    zoneColors = ValConfig.ZoneOverlayColorOptions.Value,
+                    zoneOpacity = ValConfig.ZoneOverlayColorTransparency.Value,
+                    killReportInterval = ValConfig.KillReportFlushIntervalSeconds.Value,
+                    enableRegion = ValConfig.EnableRegionScalingBonus.Value,
+                    enableRegionOverlay = ValConfig.EnableRegionMapOverlay.Value,
+                    regionsAboveFog = ValConfig.RegionOverlayAboveFog.Value,
+                    showNoMapRegion = ValConfig.ShowNoMapRegionLevel.Value,
+                    regionBonusPerLevel = ValConfig.RegionLevelBonusPerLevel.Value,
+                    regionKillsPerLevel = ValConfig.RegionKillsPerLevelUp.Value,
+                    regionDecayPerHour = ValConfig.RegionDecayLevelsPerHour.Value,
+                    regionTargetSize = ValConfig.RegionTargetSize.Value,
+                    regionMinSize = ValConfig.RegionMinSize.Value,
+                    regionMountainMinSize = ValConfig.RegionMountainMinSize.Value,
+                    regionOpacity = ValConfig.RegionOverlayOpacity.Value,
 
                     creatureHpPerLevel = ValConfig.EnemyHealthMultiplier.Value,
                     creatureDmgPerLevel = ValConfig.EnemyDamageLevelMultiplier.Value,
@@ -1141,6 +1247,8 @@ namespace StarLevelSystem.modules.UI {
                     mpDamageMod = ValConfig.MultiplayerEnemyDamageModifier.Value,
                     mpRequiredPlayers = ValConfig.MultiplayerScalingRequiredPlayersNearby.Value,
 
+                    enableColorization = ValConfig.EnableColorization.Value,
+                    enableModifiers = ValConfig.EnableCreatureModifiers.Value,
                     maxMajor = ValConfig.MaxMajorModifiersPerCreature.Value,
                     maxMinor = ValConfig.MaxMinorModifiersPerCreature.Value,
                     chanceMajor = ValConfig.ChanceMajorModifier.Value,
@@ -1169,6 +1277,9 @@ namespace StarLevelSystem.modules.UI {
 
                 CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
+                // The roll needs both switches. The page offers one, which reads on only when both are.
+                s.distanceYamlOn = settings == null || settings.EnableDistanceLevelBonus;
+                s.enableDistance = s.enableDistance && s.distanceYamlOn;
                 s.generator = SeedGenerator(settings, s.maxStars);
                 s.generatorInline = settings?.DefaultLevelupGenerators?.Any(g => g != null) == true;
                 s.bossCurveOn = (settings?.BossLevelupGenerators?.Count ?? 0) > 0 || (settings?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
@@ -1185,8 +1296,18 @@ namespace StarLevelSystem.modules.UI {
                 }
                 s.AddUncappedCustomBiomes(settings);
                 s.biomeCapManual = new Dictionary<Heightmap.Biome, int>(s.biomeCapOriginals);
+                BiomeSpecificSetting allBiome = null;
+                settings?.BiomeConfiguration?.TryGetValue(Heightmap.Biome.All, out allBiome);
+                s.allSpawnRate = allBiome?.SpawnRateModifier ?? 1f;
+                s.allNightLevelScale = allBiome?.NightSettings?.NightLevelUpChanceScaler ?? 1f;
+                s.allDistanceScale = allBiome?.DistanceScaleModifier ?? 1f;
+                float allBaseDamage = 1f;
+                allBiome?.CreatureBaseValueModifiers?.TryGetValue(CreatureBaseAttribute.BaseDamage, out allBaseDamage);
+                s.allBaseDamage = allBaseDamage;
                 // As written: the save starts from the authored settings too.
                 s.levelRings = LevelRingsOf(LevelSystemData.AuthoredLevelSettings ?? settings);
+                // As written too: in the live copy every biome with no strength of its own already holds the All biome's.
+                s.biomeStrengths = BiomeStrengthsOf(LevelSystemData.AuthoredLevelSettings ?? settings);
 
                 if (!Enum.TryParse(ValConfig.ModifierIconDisplayStyle.Value, out ModifierDisplayStyle ds)) {
                     ds = ModifierDisplayStyle.Stars;
@@ -1267,7 +1388,7 @@ namespace StarLevelSystem.modules.UI {
             // is shaped after the hand-written default table, starting where it starts with its first chance, so the
             // sliders open close to what the world already rolls. Two snapshots of the same config seed identically,
             // which is what lets an untouched page compare equal and never be written.
-            private static LevelGenerator SeedGenerator(CreatureLevelSettings settings, int maxStars) {
+            public static LevelGenerator SeedGenerator(CreatureLevelSettings settings, int maxStars) {
                 LevelGenerator src = settings?.DefaultLevelupGenerators?.FirstOrDefault(g => g != null);
                 if (src != null) { return CloneGenerator(src); }
 
@@ -1291,7 +1412,7 @@ namespace StarLevelSystem.modules.UI {
 
             // The boss curve the page starts from: the one already configured for bosses, or the creature curve reshaped
             // to the boss star range, which is the closest thing to "what bosses do today" this can offer.
-            private static LevelGenerator SeedBossGenerator(CreatureLevelSettings settings, int maxBossStars, LevelGenerator creature) {
+            public static LevelGenerator SeedBossGenerator(CreatureLevelSettings settings, int maxBossStars, LevelGenerator creature) {
                 LevelGenerator src = settings?.BossLevelupGenerators?.FirstOrDefault(g => g != null);
                 if (src != null) { return CloneGenerator(src); }
                 LevelGenerator seeded = CloneGenerator(creature);
@@ -1362,7 +1483,7 @@ namespace StarLevelSystem.modules.UI {
                 generator = SeedGenerator(shipped, maxStars);
                 // A shipped inline generator is an ordinary curve; a shipped table has to be saved as that table.
                 bool shippedInline = shipped?.DefaultLevelupGenerators?.Any(g => g != null) == true;
-                shippedCurve = shippedInline ? null
+                tableCurve = shippedInline ? null
                     : new SortedDictionary<int, float>(shipped?.DefaultCreatureLevelUpChance ?? LevelSystemData.DefaultConfiguration.DefaultCreatureLevelUpChance);
                 bossCurveOn = (shipped?.BossLevelupGenerators?.Count ?? 0) > 0 || (shipped?.BossLevelupGeneratorRefs?.Count ?? 0) > 0;
                 bossGenerator = SeedBossGenerator(shipped, maxBossLevel, generator);
@@ -1407,10 +1528,10 @@ namespace StarLevelSystem.modules.UI {
             }
 
             // Whether the curve the page shows is no longer the one the world rolls from: the generator was changed, or it
-            // is Table style and the table it reads was. After Reset page it is the shipped table, measured against the
+            // is Table style and the table it reads was. A table set by Reset page or a difficulty is measured against the
             // file itself rather than the snapshot, so a save that wrote it stops counting it as a change.
             public bool CurveDiffers(StagedConfig other) {
-                if (shippedCurve != null) { return FileCurveIs(shippedCurve) == false; }
+                if (tableCurve != null) { return FileCurveIs(tableCurve) == false; }
                 if (GeneratorEdited(generator, other.generator, other.generatorInline)) { return true; }
                 return generator.LevelupCalculationStyle == LevelupCalculationStyle.Table && TableEqual(tables, other.tables, TableSpan) == false;
             }
@@ -1421,6 +1542,11 @@ namespace StarLevelSystem.modules.UI {
                     if (TableEqual(tables, other.tables, span) == false) { spans.Add(span); }
                 }
                 return spans;
+            }
+
+            public bool AllBiomeMatches(StagedConfig o) {
+                return allSpawnRate == o.allSpawnRate && allNightLevelScale == o.allNightLevelScale
+                    && allDistanceScale == o.allDistanceScale && allBaseDamage == o.allBaseDamage;
             }
 
             public bool NemesisMatches(StagedConfig o) {
@@ -1451,12 +1577,22 @@ namespace StarLevelSystem.modules.UI {
                     && enableZone == o.enableZone && enableZoneOverlay == o.enableZoneOverlay
                     && showNoMapRing == o.showNoMapRing && showNoMapZone == o.showNoMapZone
                     && enableConditional == o.enableConditional
+                    && ringsAboveFog == o.ringsAboveFog && ringsFromTemple == o.ringsFromTemple && ringColors == o.ringColors
+                    && zonesAboveFog == o.zonesAboveFog && zoneBonusPerLevel == o.zoneBonusPerLevel && zoneKillsPerLevel == o.zoneKillsPerLevel
+                    && zoneDecayPerHour == o.zoneDecayPerHour && zoneDecayClock == o.zoneDecayClock && zoneMaxSize == o.zoneMaxSize
+                    && zoneMinSize == o.zoneMinSize && zoneColors == o.zoneColors && zoneOpacity == o.zoneOpacity && killReportInterval == o.killReportInterval
+                    && enableRegion == o.enableRegion && enableRegionOverlay == o.enableRegionOverlay && regionsAboveFog == o.regionsAboveFog
+                    && showNoMapRegion == o.showNoMapRegion && regionBonusPerLevel == o.regionBonusPerLevel && regionKillsPerLevel == o.regionKillsPerLevel
+                    && regionDecayPerHour == o.regionDecayPerHour && regionTargetSize == o.regionTargetSize && regionMinSize == o.regionMinSize
+                    && regionMountainMinSize == o.regionMountainMinSize && regionOpacity == o.regionOpacity
+                    && BiomeStrengthsMatch(biomeStrengths, o.biomeStrengths)
                     && creatureHpPerLevel == o.creatureHpPerLevel && creatureDmgPerLevel == o.creatureDmgPerLevel
                     && bossHpPerLevel == o.bossHpPerLevel && bossDmgPerLevel == o.bossDmgPerLevel
                     && scaleSizePerStar == o.scaleSizePerStar && sizePerStar == o.sizePerStar && maxCreatureScale == o.maxCreatureScale
                     && maxStars == o.maxStars && maxBossLevel == o.maxBossLevel
                     && mpHealth == o.mpHealth && mpDamage == o.mpDamage
                     && mpHealthMod == o.mpHealthMod && mpDamageMod == o.mpDamageMod && mpRequiredPlayers == o.mpRequiredPlayers
+                    && enableColorization == o.enableColorization && enableModifiers == o.enableModifiers
                     && maxMajor == o.maxMajor && maxMinor == o.maxMinor && maxBossMods == o.maxBossMods && maxMajorOnBoss == o.maxMajorOnBoss 
                     && maxMinorOnBoss == o.maxMinorOnBoss && maxBossOnCreature == o.maxBossOnCreature && prefixLimit == o.prefixLimit
                     && chanceMajor == o.chanceMajor && chanceMinor == o.chanceMinor && chanceBoss == o.chanceBoss
@@ -1470,7 +1606,8 @@ namespace StarLevelSystem.modules.UI {
                 if (scalars == false) { return false; }
 
                 if (GeneratorsEqual(generator, o.generator) == false) { return false; }
-                if (shippedCurve != null && CurveDiffers(o)) { return false; }
+                if (tableCurve != null && CurveDiffers(o)) { return false; }
+                if (AllBiomeMatches(o) == false) { return false; }
                 if (BossCurveDiffers(o)) { return false; }
                 if (TablesEqual(tables, o.tables) == false || TablesEqual(bossTables, o.bossTables) == false) { return false; }
                 foreach (Heightmap.Biome biome in biomeCapOriginals.Keys.Union(o.biomeCapOriginals.Keys)) {

@@ -1,4 +1,3 @@
-using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.LevelSystem;
@@ -9,14 +8,11 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.modules.UI.QuickConfigPrefabs;
 
 namespace StarLevelSystem.modules.UI {
-    // The Distance Rings page of the quick configure panel: the level system's rings (DistanceLevelBonus in
-    // LevelSettings.yaml), the ones drawn on the map. Rings can be added, removed and moved, and each one's bonus edited.
-    //
-    // The right half works a ring through the creature curve from the Level Distribution page, beside the same curve with
-    // no ring, so a bonus can be judged by the stars it produces. It adds the ring the way the roll does
-    // (LevelSelection.ApplyLevelupBonus) rather than approximating it.
+    // The level system's rings on the Level Scaling page (DistanceLevelBonus in LevelSettings.yaml), the ones drawn on the
+    // map. Rings can be added, removed and moved, and each one's bonus edited. The page's chart shows what they do.
     //
     // The add/remove helpers at the bottom are shared with the Loot page's rings.
     internal static partial class QuickConfigureTool {
@@ -29,38 +25,15 @@ namespace StarLevelSystem.modules.UI {
         // A ring's bonus is added to a chance in %, so past 100 either way it can only pin that chance.
         private const float MaxLevelRingBonus = 100f;
 
-        private const float LevelRingPickX = 4f;
-        private const float LevelRingDistanceX = 34f;
-        private const float LevelRingDistanceW = 80f;
-        private const float LevelRingBonusX = 122f;
-        private const float LevelRingBonusW = 250f;
-
-        private static Text levelRingWarningText;
-        private static Text levelRingSummaryText;
-        private static LevelDistributionChart levelRingCenterChart;
-        private static LevelDistributionChart levelRingChart;
         // The scroll content the ring rows live in, rebuilt whenever a ring is added, removed or moves past another.
         private static Transform levelRingContent;
-        private static float levelRingContentW;
         private static readonly List<GameObject> levelRingRows = new List<GameObject>();
-        private static readonly List<LevelRingPicker> levelRingPickers = new List<LevelRingPicker>();
-        // The ring shown on the right. Kept by reference, so it follows the ring when a new distance re-sorts the list.
+        // The ring the chart shows. Kept by reference, so it follows the ring when a new distance re-sorts the list.
         private static StagedLevelRing shownLevelRing;
 
-        private class LevelRingPicker {
-            internal StagedLevelRing Ring;
-            internal Toggle Toggle;
-        }
-
         private static void ClearDistanceRingReferences() {
-            levelRingWarningText = null;
-            levelRingSummaryText = null;
-            levelRingCenterChart = null;
-            levelRingChart = null;
             levelRingContent = null;
-            levelRingContentW = 0f;
             levelRingRows.Clear();
-            levelRingPickers.Clear();
             shownLevelRing = null;
         }
 
@@ -118,98 +91,40 @@ namespace StarLevelSystem.modules.UI {
         //  Page
         // ------------------------------------------------------------------------------------------------
 
-        private static void BuildDistanceRingsPage(Transform parent) {
-            const float IntroH = 44f;
-            const float LeftW = 440f;
-            const float RightX = 458f;
-            const float CaptionH = 34f;
-            const float SummaryH = 54f;
-            float rightW = PageW - RightX;
-
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, IntroH, "$sls_cfg_rings_intro", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
-            ConfigUI.PositionRow(intro, 0f, 0f);
-            levelRingWarningText = ConfigUI.AddText(parent, 0f, IntroH, PageW, 20f, "", 13, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimOrange);
-            float colY = IntroH + 24f;
-
-            // Left - the rings.
-            ConfigUI.CreateScroll(parent, 0f, colY, LeftW, PageH - colY, out Transform content, out float cw);
-            levelRingContent = content;
-            levelRingContentW = cw;
-            BuildLevelRingRows();
-
-            // Right - no ring, then the ring ticked on the left.
-            GameObject caption = ConfigUI.AddTextRow(parent, rightW, CaptionH, "$sls_cfg_rings_caption", 12, GUIManager.Instance.ValheimBeige);
-            ConfigUI.PositionRow(caption, RightX, colY);
-            float chartTop = colY + CaptionH + 4f;
-            float chartH = (PageH - chartTop - SummaryH - 14f) * 0.5f;
-            levelRingCenterChart = new LevelDistributionChart(parent, RightX, chartTop, rightW, chartH);
-            levelRingChart = new LevelDistributionChart(parent, RightX, chartTop + chartH + 8f, rightW, chartH);
-            levelRingSummaryText = ConfigUI.AddText(parent, RightX, chartTop + 2 * chartH + 14f, rightW, SummaryH, "", 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-
-            RefreshDistanceRings();
-        }
-
-        // The list: a help line, a header and a row per ring (or a note when there are none), and the Add button.
+        // The list: a row per ring under the header, or the note when there are none. The rows are built again; the header,
+        // the note, the help line above them and the Add button below them are the page's own.
         private static void BuildLevelRingRows() {
             foreach (GameObject row in levelRingRows) { DiscardRow(row); }
             levelRingRows.Clear();
-            levelRingPickers.Clear();
             if (levelRingContent == null || staged?.levelRings == null) { return; }
 
             Transform content = levelRingContent;
-            float w = levelRingContentW;
             List<StagedLevelRing> rings = staged.levelRings;
             if (shownLevelRing == null || rings.Contains(shownLevelRing) == false) { shownLevelRing = rings.FirstOrDefault(); }
 
-            levelRingRows.Add(ScrollRow(content, w, 50f, t => ConfigUI.AddTextRow(t, w, 50f, "$sls_cfg_rings_help", 12, GUIManager.Instance.ValheimBeige)));
-            if (rings.Count == 0) {
-                levelRingRows.Add(ScrollRow(content, w, 40f, t => ConfigUI.AddTextRow(t, w, 40f, "$sls_cfg_rings_none", 12, GUIManager.Instance.ValheimOrange)));
-            } else {
-                levelRingRows.Add(AddLevelRingHeaderRow(content, w));
-                foreach (StagedLevelRing ring in rings) { levelRingRows.Add(AddLevelRingRow(content, w, ring)); }
-            }
-            levelRingRows.Add(AddRingButtonRow(content, w, AddLevelRing, Tip("$sls_cfg_button_add_ring", "$sls_cfg_tip_add_ring")));
+            ShowRingsListState();
+            foreach (StagedLevelRing ring in rings) { levelRingRows.Add(AddLevelRingRow(content, ring)); }
         }
 
-        private static GameObject AddLevelRingHeaderRow(Transform content, float width) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 22f);
-            Color color = GUIManager.Instance.ValheimYellow;
-            ConfigUI.AddText(row.transform, 0f, 0f, LevelRingDistanceX, 22f, "$sls_cfg_rings_col_show", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, LevelRingDistanceX, 0f, LevelRingDistanceW, 22f, "$sls_cfg_rings_col_from", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, LevelRingBonusX, 0f, LevelRingBonusW, 22f, "$sls_cfg_rings_col_bonus", 11, TextAnchor.MiddleLeft, color);
-            return row;
-        }
-
-        private static GameObject AddLevelRingRow(Transform content, float width, StagedLevelRing ring) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 32f);
-
-            Toggle pick = ConfigUI.AddToggle(row.transform, LevelRingPickX, 3f, 22f, ring == shownLevelRing, _ => ShowLevelRing(ring));
-            WithTip(pick.gameObject, Tip("$sls_cfg_rings_col_show", "$sls_cfg_tip_ring_show"));
-            levelRingPickers.Add(new LevelRingPicker { Ring = ring, Toggle = pick });
+        private static GameObject AddLevelRingRow(Transform content, StagedLevelRing ring) {
+            GameObject row = SpawnRingRow("SLS_QC_Row_LevelRing", content);
 
             InputField distance = null;
-            distance = ConfigUI.AddTextField(row.transform, LevelRingDistanceX, 0f, LevelRingDistanceW, ring.Distance.ToString(CultureInfo.InvariantCulture),
-                text => CommitLevelRingDistance(ring, distance, text), InputField.ContentType.IntegerNumber);
+            distance = BindField(row.transform, "Distance", ring.Distance.ToString(CultureInfo.InvariantCulture),
+                text => CommitLevelRingDistance(ring, distance, text));
             WithTip(distance.gameObject, Tip("$sls_cfg_tip_distance_title", L("$sls_cfg_tip_level_ring_distance", MinRingDistance, MaxRingDistance)));
 
             InputField bonus = null;
-            bonus = ConfigUI.AddTextField(row.transform, LevelRingBonusX, 0f, LevelRingBonusW, FormatRingBonus(ring.Bonus),
-                text => CommitLevelRingBonus(ring, bonus, text), InputField.ContentType.Standard, "15, 5, 1");
+            bonus = BindField(row.transform, "Bonus", FormatRingBonus(ring.Bonus),
+                text => CommitLevelRingBonus(ring, bonus, text));
             WithTip(bonus.gameObject, Tip("DistanceLevelBonus", "$sls_cfg_tip_level_ring_bonus"));
 
-            AddRingRemoveButton(row.transform, width, () => {
+            BindRingRemoveButton(row.transform, () => {
                 staged.levelRings.Remove(ring);
                 BuildLevelRingRows();
-                RefreshDistanceRings();
+                RefreshLevelScaling();
             });
             return row;
-        }
-
-        private static void ShowLevelRing(StagedLevelRing ring) {
-            shownLevelRing = ring;
-            // Clicking the ticked box would untick it; it stays ticked, since something is always shown.
-            foreach (LevelRingPicker picker in levelRingPickers) { picker.Toggle.SetIsOnWithoutNotify(picker.Ring == ring); }
-            RefreshLevelRingCharts();
         }
 
         private static void CommitLevelRingDistance(StagedLevelRing ring, InputField field, string text) {
@@ -220,7 +135,7 @@ namespace StarLevelSystem.modules.UI {
             ring.Distance = distance;
             // Only when it passed another ring: rebuilding under a box that was just clicked into would take the click.
             if (SortByDistance(staged.levelRings, r => r.Distance)) { BuildLevelRingRows(); }
-            RefreshDistanceRings();
+            RefreshLevelScaling();
         }
 
         // An unreadable entry leaves the ring as it was and says why, rather than keeping text that is not what is staged.
@@ -233,7 +148,7 @@ namespace StarLevelSystem.modules.UI {
                 ring.Bonus = parsed;
             }
             field.SetTextWithoutNotify(FormatRingBonus(ring.Bonus));
-            RefreshDistanceRings();
+            RefreshLevelScaling();
         }
 
         private static void AddLevelRing() {
@@ -251,7 +166,7 @@ namespace StarLevelSystem.modules.UI {
             rings.Add(added);
             shownLevelRing = added;
             BuildLevelRingRows();
-            RefreshDistanceRings();
+            RefreshLevelScaling();
         }
 
         // "15, 5, 1" when the bonus runs from level 1 with no gap, which is how every shipped ring is written; level:value
@@ -304,68 +219,6 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
         //  Preview
         // ------------------------------------------------------------------------------------------------
-
-        private static void RefreshDistanceRings() {
-            if (staged == null || levelRingWarningText == null) { return; }
-            CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
-            if (staged.enableDistance == false) {
-                levelRingWarningText.text = ConfigUI.L("$sls_cfg_rings_off");
-            } else if (live != null && live.EnableDistanceLevelBonus == false) {
-                levelRingWarningText.text = ConfigUI.L("$sls_cfg_rings_yaml_off");
-            } else {
-                levelRingWarningText.text = "";
-            }
-            RefreshLevelRingCharts();
-        }
-
-        // Worked on the creature curve the Level Distribution page shows, capped at its Max stars, before biome caps,
-        // night and zone bonuses. The bonus is weighted the way a biome with no distance scale of its own weights it.
-        private static void RefreshLevelRingCharts() {
-            if (staged == null || baseline == null || levelRingCenterChart == null || levelRingChart == null) { return; }
-            List<StagedLevelRing> rings = staged.levelRings;
-            int maxLevel = staged.maxStars + 1;
-            SortedDictionary<int, float> curve = ShownCreatureCurve();
-            float strength = DefaultDistanceStrength();
-
-            SortedDictionary<int, float> center = LevelSelection.ComputeLevelDistribution(curve, maxLevel);
-            levelRingCenterChart.SetTitle(rings.Count > 0 ? L("$sls_cfg_rings_chart_inside", rings[0].Distance) : ConfigUI.L("$sls_cfg_rings_chart_everywhere"));
-            levelRingCenterChart.SetData(ToStarSeries(center));
-
-            StagedLevelRing ring = shownLevelRing != null && rings.Contains(shownLevelRing) ? shownLevelRing : null;
-            levelRingChart.SetVisible(ring != null);
-            if (ring == null) {
-                levelRingSummaryText.text = ConfigUI.L("$sls_cfg_rings_summary_none");
-                return;
-            }
-            SortedDictionary<int, float> withRing = LevelSelection.ComputeLevelDistribution(LevelSelection.ApplyLevelupBonus(curve, ring.Bonus, strength), maxLevel);
-            levelRingChart.SetTitle(L("$sls_cfg_rings_chart_past", ring.Distance));
-            levelRingChart.SetData(ToStarSeries(withRing));
-
-            string summary = L("$sls_cfg_rings_summary", ring.Distance, FormatShare(ShareWithStars(withRing, 1)), AverageStars(withRing).ToString("0.0"),
-                FormatShare(ShareWithStars(center, 1)), AverageStars(center).ToString("0.0"));
-            levelRingSummaryText.text = summary + " " + DescribeDistanceStrength(strength);
-        }
-
-        // The distance scale a biome with none of its own gets: the All biome's, which is merged into every biome.
-        private static float DefaultDistanceStrength() {
-            Dictionary<Heightmap.Biome, BiomeSpecificSetting> biomes = LevelSystemData.SLE_Level_Settings?.BiomeConfiguration;
-            if (biomes != null && biomes.TryGetValue(Heightmap.Biome.All, out BiomeSpecificSetting all) && all != null) { return all.DistanceScaleModifier; }
-            return 1f;
-        }
-
-        // Which strength the chart is worked at, and the biomes that use another, grouped by it.
-        private static string DescribeDistanceStrength(float strength) {
-            string text = Mathf.Approximately(strength, 1f) ? "" : L("$sls_cfg_rings_strength", FormatRingValue(strength));
-            Dictionary<Heightmap.Biome, BiomeSpecificSetting> biomes = LevelSystemData.SLE_Level_Settings?.BiomeConfiguration;
-            if (biomes == null) { return text; }
-            List<string> others = biomes
-                .Where(b => b.Key != Heightmap.Biome.All && b.Value != null && b.Value.DistanceScaleModifier != 1f && Mathf.Approximately(b.Value.DistanceScaleModifier, strength) == false)
-                .GroupBy(b => b.Value.DistanceScaleModifier)
-                .Select(g => $"{string.Join(", ", g.Select(b => BiomeName(b.Key)).ToArray())} x{FormatRingValue(g.Key)}")
-                .ToList();
-            if (others.Count == 0) { return text; }
-            return (text.Length > 0 ? text + " " : "") + $"{string.Join("; ", others.ToArray())}.";
-        }
 
         // Keys are levels, so level 1 and below is no stars.
         private static float ShareWithStars(SortedDictionary<int, float> distribution, int stars) {
@@ -420,14 +273,16 @@ namespace StarLevelSystem.modules.UI {
             return true;
         }
 
-        private static GameObject AddRingButtonRow(Transform content, float width, UnityEngine.Events.UnityAction onClick, string tooltip) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 36f);
-            WithTip(ConfigUI.AddButton(row.transform, 4f, 4f, 130f, "$sls_cfg_button_add_ring", onClick, 28f), tooltip);
+        // A ring's row, ahead of the marker its page keeps for them among the rows that stay.
+        private static GameObject SpawnRingRow(string prefab, Transform content) {
+            Transform marker = Find(content, "RingRows").transform;
+            GameObject row = Spawn(prefab, content);
+            row.transform.SetSiblingIndex(marker.GetSiblingIndex());
             return row;
         }
 
-        private static void AddRingRemoveButton(Transform row, float width, UnityEngine.Events.UnityAction onClick) {
-            WithTip(ConfigUI.AddButton(row, width - 30f, 1f, 26f, "x", onClick, 26f),
+        private static void BindRingRemoveButton(Transform row, UnityEngine.Events.UnityAction onClick) {
+            WithTip(BindButton(row, "Remove", onClick),
                 Tip("$sls_cfg_tip_remove_ring_title", "$sls_cfg_tip_remove_ring"));
         }
 

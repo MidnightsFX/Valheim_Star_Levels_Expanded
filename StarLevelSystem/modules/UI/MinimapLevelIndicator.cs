@@ -39,7 +39,7 @@ namespace StarLevelSystem.modules.UI {
                         outline: true,
                         outlineColor: Color.black,
                         width: 200f,
-                        height: 44f,
+                        height: 62f,
                         addContentSizeFitter: false);
                     indicatorText = textObj.GetComponent<Text>();
                     // Pin the text box's bottom-right corner to the minimap's bottom-right corner.
@@ -58,6 +58,7 @@ namespace StarLevelSystem.modules.UI {
             public static void Postfix() {
                 // Reveal self-masked below-fog overlays over newly explored terrain (throttled inside).
                 MinimapOverlayFog.MaybeRefreshForExploration();
+                RegionScaleSystem.MaybeReveal();
                 if (indicatorText == null) { return; }
                 if (Time.time < nextRefresh) { return; }
                 nextRefresh = Time.time + RefreshInterval;
@@ -73,12 +74,15 @@ namespace StarLevelSystem.modules.UI {
             }
 
             Vector3 pos = player.transform.position;
-            List<string> lines = new List<string>(2);
+            List<string> lines = new List<string>(3);
             if (ValConfig.EnableDistanceLevelScalingBonus.Value) {
                 lines.Add(RingLine(pos));
             }
             if (ValConfig.EnableZoneScalingBonus.Value) {
                 lines.Add(ZoneLine(pos));
+            }
+            if (ValConfig.EnableRegionScalingBonus.Value) {
+                lines.Add(RegionLine(pos));
             }
 
             if (lines.Count == 0) {
@@ -90,7 +94,7 @@ namespace StarLevelSystem.modules.UI {
             if (!indicatorText.gameObject.activeSelf) { indicatorText.gameObject.SetActive(true); }
         }
 
-        // The two readout lines. Shared with NoMapLevelIndicator, which draws the same values in the hud's
+        // The readout lines. Shared with NoMapLevelIndicator, which draws the same values in the hud's
         // top right corner when there is no minimap to sit next to, so both render identical wording.
         internal static string RingLine(Vector3 pos) {
             return $"Ring {DistanceScaleSystem.GetCurrentRingLevel(pos)}";
@@ -99,6 +103,11 @@ namespace StarLevelSystem.modules.UI {
         internal static string ZoneLine(Vector3 pos) {
             ZoneData zone = ZoneScaleSystemData.GetZoneForPosition(pos);
             return $"Zone {(zone != null ? zone.ZoneLevel : 0)}";
+        }
+
+        internal static string RegionLine(Vector3 pos) {
+            RegionData region = RegionScaleSystemData.GetRegionForPosition(pos);
+            return $"Region {(region != null ? region.Level : 0)}";
         }
 
         // SettingChanged handler for the client toggle: hide immediately when disabled; the refresh

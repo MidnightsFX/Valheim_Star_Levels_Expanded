@@ -5,9 +5,11 @@ namespace StarLevelSystem.common
         private static void RegisterZoneCommands()
         {
             _ = new SLSCommand("sls-zone-rebuild",
-                "Clears existing zones and regenerates the zone map from the world, then redraws the minimap overlay. Resets zone kill counts and levels.",
+                "Clears existing zones and regenerates the zone map from the world with the current size settings, for everyone, then redraws the minimap overlay. Resets zone kill counts and levels.",
                 ZoneRebuild, CommandArea.Zone,
                 isCheat: false,
+                serverAuthoritative: true,
+                requiresAdmin: true,
                 aliases: "SLS-rebuild-zones");
         }
 

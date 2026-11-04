@@ -198,6 +198,7 @@ namespace StarLevelSystem.common {
 #       CreaturePerLevelValueModifiers: # added per level above 1 (0.05 = +5%/level)
 #         SizePerLevel: 0.05
 #       MaxSizeScale: 3                 # never more than 3x its normal size (replaces MaximumCreatureScale)
+#       RideableSizeFixes: false        # a creature with a saddle keeps the game's or its mod's own riding when scaled
 #       RequiredModifiers: { Fire: Major }
 #
 # --- Boss per-level health and damage ---
@@ -210,7 +211,8 @@ namespace StarLevelSystem.common {
 # Extra levelup chance by distance (metres) from the world center or starter
 # temple (see DistanceBonusIsFromStarterTemple in the main .cfg). Each band's
 # table is ADDED to the base chances once a spawn is past that distance;
-# EnableDistanceLevelBonus turns the whole system on/off.
+# EnableDistanceLevelBonus and EnableDistanceLevelScalingBonus in the main .cfg
+# both have to be on for these to count, and the second ships off.
 #
 #   DistanceLevelBonus:
 #     1250: { 1: 25, 2: 15 }

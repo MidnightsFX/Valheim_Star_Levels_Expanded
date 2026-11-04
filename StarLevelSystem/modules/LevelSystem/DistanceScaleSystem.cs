@@ -19,6 +19,9 @@ namespace StarLevelSystem.modules.LevelSystem {
         // The ring overlay's line pixels; see MinimapLineArt for how redraws and reveals stay cheap.
         private static readonly MinimapLineArt ringArt = new MinimapLineArt("SLS-LevelBonus");
 
+        // A ring on the map promises levels, so it only shows while distance scaling is adding them.
+        internal static bool RingsWanted => ValConfig.EnableDistanceLevelScalingBonus.Value && ValConfig.EnableMapRingsForDistanceBonus.Value;
+
         public static void DelayedMinimapSetup() {
             // Don't try to draw while in the main menu, on a loading screen, or while leaving a world
             // (no live world/minimap); the rings are drawn from OnVanillaMapDataLoaded once ready.
@@ -121,7 +124,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // previously kept center at (0,0,0) while the server used the temple position - so
             // client-owned rolls disagreed with server-owned ones.
             SetRingCenter();
-            if (ValConfig.EnableMapRingsForDistanceBonus.Value == false) { return; }
+            if (RingsWanted == false) { return; }
             Logger.LogDebug("Creating Level Bonus Rings on Map");
             if (buildingMapRings == false) {
                 buildingMapRings = true;
@@ -197,12 +200,13 @@ namespace StarLevelSystem.modules.LevelSystem {
         // SettingChanged handler for MapRingsAboveFog: redraw so the rings are re-masked above/below
         // the fog as configured (see MinimapLineArt.Commit).
         public static void UpdateMapRingFogSettingOnChange(object s, EventArgs e) {
-            if (!ValConfig.EnableMapRingsForDistanceBonus.Value) { return; }
+            if (!RingsWanted) { return; }
             DelayedMinimapSetup();
         }
 
+        // For both of what RingsWanted reads.
         public static void UpdateMapRingEnableSettingOnChange(object s, EventArgs e) {
-            if (ValConfig.EnableMapRingsForDistanceBonus.Value) {
+            if (RingsWanted) {
                 DelayedMinimapSetup();
             } else if (ringAvailable && MinimapOverlayFog.CanDrawOverlays()) {
                 // Hide the existing overlay, but only touch the minimap manager when in a live world
@@ -288,7 +292,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 // Minimap.OnDestroy while we were yielded. The fog setting is read here rather than at
                 // the start, so a toggle that lands mid-build (and is dropped by the buildingMapRings
                 // guard) is still honoured.
-                if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
+                if (!MinimapOverlayFog.CanDrawOverlays() || !RingsWanted) { yield break; }
                 if (!ringArt.Commit(ValConfig.MapRingsAboveFog.Value)) { yield break; }
                 Logger.LogDebug("Finished Creating Level Bonus Rings on Minimap");
                 ringAvailable = true;

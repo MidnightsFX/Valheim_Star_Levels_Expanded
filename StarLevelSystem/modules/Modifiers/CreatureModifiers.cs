@@ -260,6 +260,11 @@ namespace StarLevelSystem.modules.Modifiers {
                 creatureModifiers.Add(NoMods, ModifierType.Minor);
                 return creatureModifiers;
             }
+            // Switched off: nothing is rolled, and a modifier a config entry asks for by name is left out with the rest.
+            if (ValConfig.EnableCreatureModifiers.Value == false) {
+                creatureModifiers.Add(NoMods, ModifierType.Minor);
+                return creatureModifiers;
+            }
             // A final boss aspect never splits: every copy would add a death explosion to the fight.
             if (BossPhases.IsAspect(character)) {
                 notAllowedModifiers = notAllowedModifiers != null ? new List<string>(notAllowedModifiers) : new List<string>();

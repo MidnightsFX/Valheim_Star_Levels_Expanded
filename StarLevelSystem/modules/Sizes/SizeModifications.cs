@@ -15,11 +15,14 @@ namespace StarLevelSystem.modules.Sizes {
 
         private static readonly Dictionary<string, Vector3> SizeEstimateCache = new Dictionary<string, Vector3>();
 
-        // Set while a config/YAML reload is resizing every loaded creature. SetSizeModification normally
-        // short-circuits on the persisted SLS_SIZE, which would otherwise re-apply the stale size and make
+        // Set while a config/YAML reload resizes one loaded creature (CreatureSetupQueue.RunSetup). SetSizeModification
+        // normally short-circuits on the persisted SLS_SIZE, which would otherwise re-apply the stale size and make
         // a changed Size/SizePerLevel appear to do nothing until the creature respawns.
         // Mirrors HealthModifications.ForceUpdateHealth.
         internal static bool ForceUpdateSize = false;
+
+        // SoulEater's growth has no stat of its own: it is this much per death in SLS_SOULEATER, on top of the rest.
+        private const float SoulEaterGrowthPerDeath = 0.01f;
 
         // The scale multiplier for a creature, before it is applied to the prefab's reference scale.
         // Clamped so a negative SizePerLevel shrinks creatures toward MinimumCreatureScale instead of
@@ -61,7 +64,7 @@ namespace StarLevelSystem.modules.Sizes {
         // SLS_SIZE holds the size SLS chose (reference scale x its multiplier) and never the world's Combat size factor,
         // which is multiplied in wherever a size is put on a transform. The cap and every stored size stay in SLS's own
         // terms that way, and a world whose modifier changes resizes its creatures on their next load.
-        internal static void SetSizeModification(GameObject obj, ZNetView zview, CharacterCacheEntry characterCache, bool update = false, float bonus = 0f) {
+        internal static void SetSizeModification(GameObject obj, ZNetView zview, CharacterCacheEntry characterCache, bool update = false) {
             Vector3 size = zview.m_zdo.GetVec3(SLS_SIZE, Vector3.zero);
 
             // Size setting exists and we are not updating it
@@ -90,15 +93,17 @@ namespace StarLevelSystem.modules.Sizes {
             }
 
             // Set or update the size
-            float scale = DetermineScaleMultiplier(characterCache, bonus);
+            float scale = DetermineScaleMultiplier(characterCache, SoulEaterGrowthPerDeath * zview.m_zdo.GetInt(SLS_SOULEATER, 0));
             Vector3 creatureScale = (GetSizeReferenceForObject(obj.name) * scale);
             Vector3 shownScale = creatureScale * WorldRates.CreatureSizeFactor(obj.transform.position);
             if (obj.transform.localScale != shownScale) {
                 obj.transform.localScale = shownScale;
-                UpdateRidingCreaturesForSizeScaling(obj);
                 //Logger.LogDebug($"Setting size of {obj.name} using ref {cdetails.RefCreatureName} to {creatureScale}");
                 TaskRunner.RequestPhysicsSync();
             }
+            // Outside the change check, like the stored size above: a settings change can turn a mount's fixes on or off at
+            // the size it already is.
+            UpdateRidingCreaturesForSizeScaling(obj);
             // Only the owner persists the size. A non-owner still applies it to its own instance above, but its write
             // would race the owner's (a SoulEater bonus, say) through vanilla's highest-revision-wins ZDO sync.
             if (zview.IsOwner()) { zview.m_zdo.Set(SLS_SIZE, creatureScale); }
@@ -187,36 +192,7 @@ namespace StarLevelSystem.modules.Sizes {
         // Also run when a creature is tamed or saddled (MountScalingPatches): one sized while still wild would otherwise
         // never get the tame collider fit until its size next changed.
         internal static void UpdateRidingCreaturesForSizeScaling(GameObject creature) {
-            if (ValConfig.EnableRidableCreatureSizeFixes.Value == false) { return; }
-            MountScaling.ApplySaddleScaling(creature);
-            // Handle tame specific collider scaling
-            Tameable tame = creature.GetComponent<Tameable>();
-            if (tame != null && tame.IsTamed()) {
-                string name = Utils.GetPrefabName(creature.gameObject);
-                if (name == "Lox") {
-                    UpdateLoxCollider(creature.gameObject);
-                }
-                if (name == "Asksvin") {
-                    UpdateAskavinCollider(creature.gameObject);
-                }
-            }
-        }
-
-        private static void UpdateLoxCollider(GameObject go) {
-            CapsuleCollider loxCC = go.GetComponent<CapsuleCollider>();
-            if (loxCC == null) { return; }
-            // The multiplier actually on the transform, so the collider matches the visual scale (cap and bonuses included).
-            float size_set = CurrentScaleMultiplier(go);
-            float levelChange = (size_set - 1) * 0.1555f;
-            //float levelChange = cDetails.Level * 0.016f;  // 3.31 -lvl 20 (size 3), 3.15 -lvl 10 (size 2) or 0.016f per level at default sizing
-            loxCC.height = Mathf.Max(0.1f, 3f + levelChange);
-            loxCC.radius = 0.5f; //1.22?
-        }
-
-        private static void UpdateAskavinCollider(GameObject go) {
-            CapsuleCollider askCC = go.GetComponent<CapsuleCollider>();
-            if (askCC == null) { return; }
-            askCC.radius = 0.842f;
+            MountScaling.FitToSize(creature);
         }
 
         // Re-runs the real setup pipeline over every live creature so the new scale settings take effect
@@ -235,10 +211,11 @@ namespace StarLevelSystem.modules.Sizes {
             ResizeLiveCreatures();
         }
 
-        // Through LevelSystemData's single pass: one save can change several size settings and the level settings at
-        // once, and overlapping passes clear the shared ForceUpdateSize flag under each other.
+        // Through LevelSystemData's single pass: one save can change several size settings and the level settings at once.
         private static void ResizeLiveCreatures() {
             Logger.LogInfo($"Updating size scale: {ValConfig.PerLevelScaleBonus.Value} (minimum {ValConfig.MinimumCreatureScale.Value}, maximum {ValConfig.MaximumCreatureScale.Value})");
+            // A cache entry holds its own copy of PerLevelScaleBonus, so the pass would size from the old value.
+            CompositeLazyCache.FlushCache();
             LevelSystemData.RestartCreatureAttributeUpdate();
         }
     }

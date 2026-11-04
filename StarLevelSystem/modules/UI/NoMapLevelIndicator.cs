@@ -42,7 +42,7 @@ namespace StarLevelSystem.modules.UI {
                         outline: true,
                         outlineColor: Color.black,
                         width: 200f,
-                        height: 44f,
+                        height: 62f,
                         addContentSizeFitter: false);
                     indicatorText = textObj.GetComponent<Text>();
                     // Pin the text box's top-right corner to the hud's top-right corner.
@@ -76,12 +76,15 @@ namespace StarLevelSystem.modules.UI {
             }
 
             Vector3 pos = player.transform.position;
-            List<string> lines = new List<string>(2);
+            List<string> lines = new List<string>(3);
             if (ValConfig.ShowNoMapRingLevel.Value && ValConfig.EnableDistanceLevelScalingBonus.Value) {
                 lines.Add(MinimapLevelIndicator.RingLine(pos));
             }
             if (ValConfig.ShowNoMapZoneLevel.Value && ValConfig.EnableZoneScalingBonus.Value) {
                 lines.Add(MinimapLevelIndicator.ZoneLine(pos));
+            }
+            if (ValConfig.ShowNoMapRegionLevel.Value && ValConfig.EnableRegionScalingBonus.Value) {
+                lines.Add(MinimapLevelIndicator.RegionLine(pos));
             }
 
             if (lines.Count == 0) {
@@ -101,7 +104,7 @@ namespace StarLevelSystem.modules.UI {
         // off, otherwise let the next refresh repopulate it.
         public static void OnShowIndicatorChanged(object s, EventArgs e) {
             if (indicatorText == null) { return; }
-            if (!ValConfig.ShowNoMapRingLevel.Value && !ValConfig.ShowNoMapZoneLevel.Value) {
+            if (!ValConfig.ShowNoMapRingLevel.Value && !ValConfig.ShowNoMapZoneLevel.Value && !ValConfig.ShowNoMapRegionLevel.Value) {
                 indicatorText.gameObject.SetActive(false);
             } else {
                 nextRefresh = 0f;

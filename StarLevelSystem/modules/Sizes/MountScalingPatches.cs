@@ -1,5 +1,6 @@
 using HarmonyLib;
 using StarLevelSystem.common;
+using UnityEngine;
 
 namespace StarLevelSystem.modules.Sizes {
     // Hooks for MountScaling, which holds the logic. Gated on EnableRidableCreatureSizeFixes.
@@ -47,6 +48,15 @@ namespace StarLevelSystem.modules.Sizes {
             private static void Postfix(Player __instance, Sadle __state) {
                 if (__state == null) { return; }
                 MountScaling.PlaceBesideMount(__instance, __state);
+            }
+        }
+
+        // Every frame, but only a look ray that stops on a creature gets past the first compare.
+        [HarmonyPatch(typeof(Player), nameof(Player.FindHoverObject))]
+        public static class OfferSaddleOnBigMountBody {
+            private static void Postfix(Player __instance, ref GameObject hover, ref Character hoverCreature) {
+                if (hoverCreature == null || ValConfig.EnableRidableCreatureSizeFixes.Value == false) { return; }
+                MountScaling.AimAtSaddle(__instance, ref hover, hoverCreature);
             }
         }
 

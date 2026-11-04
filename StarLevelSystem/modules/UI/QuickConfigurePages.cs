@@ -10,10 +10,11 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.modules.UI.QuickConfigPrefabs;
 
 namespace StarLevelSystem.modules.UI {
-    // The pages of the quick configure panel. Each Build* method lays its widgets out inside a PageW x PageH page root
-    // and binds them to the static `staged` config; the shell in QuickConfigureTool.cs owns navigation and saving.
+    // The pages of the quick configure panel. Each Build* method joins what its page's prefab holds to the static `staged`
+    // config and adds what depends on the data; the shell in QuickConfigureTool.cs owns navigation and saving.
     internal static partial class QuickConfigureTool {
 
         // Sample creatures for the stat examples | TODO: allow selecting different creature examples?
@@ -24,16 +25,6 @@ namespace StarLevelSystem.modules.UI {
 
         private static readonly string[] CalcStyleOptions = Enum.GetNames(typeof(LevelupCalculationStyle));
         private static readonly string[] DisplayStyleOptions = Enum.GetNames(typeof(ModifierDisplayStyle));
-
-        private static readonly string[] WelcomeBullets = {
-            "$sls_cfg_welcome_bullet_levels",
-            "$sls_cfg_welcome_bullet_scaling",
-            "$sls_cfg_welcome_bullet_modifiers",
-            "$sls_cfg_welcome_bullet_raids",
-            "$sls_cfg_welcome_bullet_nemesis",
-            "$sls_cfg_welcome_bullet_loot",
-            "$sls_cfg_welcome_bullet_resets",
-        };
 
         // Brief, player-facing descriptions for each modifier (see Package/README.md), keyed by ModifierNames. Tokens.
         private static readonly Dictionary<string, string> ModifierDescriptions = new Dictionary<string, string>() {
@@ -96,6 +87,7 @@ namespace StarLevelSystem.modules.UI {
 
         private static Sprite DistanceExample;
         private static Sprite ZoneExample;
+        private static Sprite RegionExample;
 
         // --- page widgets that are updated after they are built ---
         private static Slider minStarsSlider;
@@ -138,8 +130,9 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private static void ClearPageReferences() {
+            ClearSimpleReferences();
             ClearDistributionReferences();
-            ClearDistanceRingReferences();
+            ClearLevelScalingReferences();
             ClearStatsReferences();
             ClearNemesisReferences();
             ClearRaidPageReferences();
@@ -176,72 +169,8 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // ------------------------------------------------------------------------------------------------
-        //  Welcome (first-time setup only)
-        // ------------------------------------------------------------------------------------------------
-
-        private static void BuildWelcomePage(Transform parent) {
-            const float TextX = 30f;
-            float w = PageW - 2 * TextX;
-            string bullets = string.Join("\n", WelcomeBullets.Select(token => "•  " + ConfigUI.L(token)).ToArray());
-
-            List<GameObject> rows = new List<GameObject> {
-                ConfigUI.AddTextRow(parent, w, 40f, "$sls_cfg_welcome_title", 22, GUIManager.Instance.ValheimYellow, TextAnchor.MiddleCenter),
-                ConfigUI.AddTextRow(parent, w, 44f, "$sls_cfg_welcome_intro", 16, GUIManager.Instance.ValheimBeige),
-                ConfigUI.AddTextRow(parent, w, 240f, bullets, 15, GUIManager.Instance.ValheimBeige),
-                ConfigUI.AddDividerRow(parent, w),
-                ConfigUI.AddTextRow(parent, w, 44f, "$sls_cfg_welcome_skip", 16, GUIManager.Instance.ValheimOrange),
-                ConfigUI.AddTextRow(parent, w, 44f, "$sls_cfg_welcome_later", 14, GUIManager.Instance.ValheimBeige),
-                ConfigUI.AddTextRow(parent, w, 44f, "$sls_cfg_welcome_server", 14, GUIManager.Instance.ValheimBeige),
-            };
-            ConfigUI.LayoutColumn(rows, TextX, 6f, 8f);
-        }
-
-        // ------------------------------------------------------------------------------------------------
         //  Level progression systems
         // ------------------------------------------------------------------------------------------------
-
-        private static void BuildScalingPage(Transform parent) {
-            const float ColWidth = 760f;   // left config column + gap + image(300)
-            const float ImgW = 300f;
-            const float ImgH = 168f;
-
-            // Build each row as its own container, collect them in order, then space the column out in one pass.
-            List<GameObject> column = new List<GameObject> {
-                ConfigUI.AddTextRow(parent, ColWidth, 40f, "$sls_cfg_scaling_intro", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter),
-                WithTip(AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
-                    DistanceExample,
-                    "$sls_cfg_distance_scale_header",
-                    "$sls_cfg_distance_scale_desc",
-                    staged.enableDistance,
-                    v => staged.enableDistance = v,
-                    "$sls_cfg_distance_overlay_toggle",
-                    staged.enableDistanceOverlay,
-                    v => staged.enableDistanceOverlay = v,
-                    "$sls_cfg_nomap_ring_toggle",
-                    staged.showNoMapRing,
-                    v => staged.showNoMapRing = v), Tip(ValConfig.EnableDistanceLevelScalingBonus)),
-                ConfigUI.AddDividerRow(parent, ColWidth),
-                WithTip(AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
-                    ZoneExample,
-                    "$sls_cfg_zone_scale_header",
-                    "$sls_cfg_zone_scale_desc",
-                    staged.enableZone,
-                    v => staged.enableZone = v,
-                    "$sls_cfg_zone_overlay_toggle",
-                    staged.enableZoneOverlay,
-                    v => staged.enableZoneOverlay = v,
-                    "$sls_cfg_nomap_zone_toggle",
-                    staged.showNoMapZone,
-                    v => staged.showNoMapZone = v), Tip(ValConfig.EnableZoneScalingBonus)),
-                ConfigUI.AddDividerRow(parent, ColWidth),
-                WithTip(ConfigUI.AddToggleRow(parent, ColWidth, 360f, "$sls_cfg_conditional_scale_header", staged.enableConditional, v => staged.enableConditional = v, true), YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.EnableConditionalCreatureLevelupChance))),
-                ConfigUI.AddTextRow(parent, ColWidth, 34f, "$sls_cfg_conditional_scale_desc", 13, GUIManager.Instance.ValheimBeige),
-                ConfigUI.AddTextRow(parent, ColWidth, 20f, "$sls_cfg_conditional_scale_note", 13, GUIManager.Instance.ValheimOrange),
-            };
-            // Center the column within the page root so it isn't left-biased.
-            float colOffsetX = Mathf.Max(0f, (PageW - ColWidth) * 0.5f);
-            ConfigUI.LayoutColumn(column, colOffsetX, 2f);
-        }
 
         private static void ResetScalingPage() {
             staged.enableDistance = DefaultOf(ValConfig.EnableDistanceLevelScalingBonus);
@@ -250,64 +179,11 @@ namespace StarLevelSystem.modules.UI {
             staged.enableZone = DefaultOf(ValConfig.EnableZoneScalingBonus);
             staged.enableZoneOverlay = DefaultOf(ValConfig.EnableZoneMapOverlay);
             staged.showNoMapZone = DefaultOf(ValConfig.ShowNoMapZoneLevel);
+            staged.enableRegion = DefaultOf(ValConfig.EnableRegionScalingBonus);
+            staged.enableRegionOverlay = DefaultOf(ValConfig.EnableRegionMapOverlay);
+            staged.showNoMapRegion = DefaultOf(ValConfig.ShowNoMapRegionLevel);
             CreatureLevelSettings shipped = ShippedDefaults(YamlConfigManager.LevelSettings);
             staged.enableConditional = shipped != null && shipped.EnableConditionalCreatureLevelupChance;
-        }
-
-        // One scaling system: a main toggle with a description and an example image, over one or two indented sub
-        // toggles (the map overlay, and the client-side no-map readout). With both sub toggles the block is exactly
-        // as tall as the example image, so the row does not grow - but it sizes itself to whichever is taller, so a
-        // longer description or a bigger font cannot spill into the divider below.
-        private static GameObject AddScalingFeatureRow(Transform parent, float colWidth, float imgW, float imgH, Sprite sprite, string mainLabel, string description, bool mainValue, Action<bool> onMain, string subLabel, bool subValue, Action<bool> onSub, string sub2Label = null, bool sub2Value = false, Action<bool> onSub2 = null) {
-            const float SubIndent = 24f;
-            const float MainToggleSize = 26f;
-            const float SubToggleSize = 22f;
-            const float ToggleGap = 8f;   // gap between a toggle and the title to its right
-            const float DescH = 72f;      // up to ~4 wrapped lines; the row is tall so the description has room
-            float leftColW = colWidth - imgW;   // configuration area to the left of the example image
-            bool hasSub2 = sub2Label != null;
-            float blockH = RowHeight + 2f + DescH + 4f + SubRowHeight + (hasSub2 ? 4f + SubRowHeight : 0f);
-            float rowH = Mathf.Max(imgH, blockH);
-            GameObject row = ConfigUI.NewRow(parent, colWidth, rowH);
-
-            // Example image on the right, centered against the configuration block to its left
-            GameObject go = ConfigUI.NewUI("Image", row.transform, typeof(Image));
-            RectTransform rt = (RectTransform)go.transform;
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(imgW, imgH);
-            rt.anchoredPosition = new Vector2(colWidth - imgW, -(rowH - imgH) * 0.5f);
-            Image img = go.GetComponent<Image>();
-            img.sprite = sprite;
-            img.preserveAspect = true;   // 256x171 letterboxes inside the box
-            img.raycastTarget = false;
-
-            // Vertically center the (main toggle + description + sub toggles) block in the row
-            float topY = Mathf.Max(0f, (rowH - blockH) * 0.5f);
-
-            // Main toggle, directly to the left of its title
-            ConfigUI.AddToggle(row.transform, 0f, topY + 3f, MainToggleSize, mainValue, onMain);
-            float mainLabelX = MainToggleSize + ToggleGap;
-            ConfigUI.AddText(row.transform, mainLabelX, topY, leftColW - mainLabelX - 12f, RowHeight, mainLabel, 18, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-
-            // Description directly under the main label (full left column up to the image)
-            float descY = topY + RowHeight + 2f;
-            ConfigUI.AddText(row.transform, 0f, descY, leftColW - 12f, DescH, description, 14, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-
-            // Sub toggle (smaller, indented, below the description), directly to the left of its title
-            float subY = descY + DescH + 4f;
-            ConfigUI.AddToggle(row.transform, SubIndent, subY + 2f, SubToggleSize, subValue, onSub);
-            float subLabelX = SubIndent + SubToggleSize + ToggleGap;
-            ConfigUI.AddText(row.transform, subLabelX, subY, leftColW - subLabelX - 12f, SubRowHeight, subLabel, 14, TextAnchor.MiddleLeft);
-
-            if (hasSub2) {
-                float sub2Y = subY + SubRowHeight + 4f;
-                ConfigUI.AddToggle(row.transform, SubIndent, sub2Y + 2f, SubToggleSize, sub2Value, onSub2);
-                ConfigUI.AddText(row.transform, subLabelX, sub2Y, leftColW - subLabelX - 12f, SubRowHeight, sub2Label, 14, TextAnchor.MiddleLeft);
-            }
-
-            return row;
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -315,40 +191,32 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static void BuildDistributionPage(Transform parent) {
-            const float LeftColWidth = 400f;
-            const float LabelWidth = 150f, SliderWidth = 150f, ValueWidth = 60f;
             const float ChartX = 420f;
             const float ColTop = 46f;
             // Biome caps: a cell per capped biome, either auto-tuned from Max stars or typed in by hand.
             const float CellW = 169f;
-            const float CapLabelW = 104f;
-            const float CapFieldW = 48f;
             const float CapHeaderH = 26f;
             const float CapRowH = 30f;
             const int PerRow = 5;
             // The notes under the caps are usually empty, so the block is measured from the bottom of the page rather
             // than parked under a full-height chart. Everything the caps do not need goes to the charts and the column.
             const float NotesH = 38f;
-            // Four lines, which the longest translation of a boss table status with its note takes.
-            const float TableStatusH = 62f;
-            float chartW = PageW - ChartX;
+            float chartW = PageSize(parent).x - ChartX;
 
             List<Heightmap.Biome> cappedBiomes = staged.biomeCapOriginals.Keys
                 .OrderBy(b => staged.biomeCapOriginals[b]).ThenBy(b => (int)b).ToList();
             int capRows = Mathf.Max(1, Mathf.CeilToInt(cappedBiomes.Count / (float)PerRow));
-            float capsY = PageH - NotesH - CapHeaderH - capRows * CapRowH;
+            float capsY = PageSize(parent).y - NotesH - CapHeaderH - capRows * CapRowH;
             float chartTop = ColTop + 40f;
             float chartFullH = capsY - 10f - chartTop;
             float chartHalfH = (chartFullH - 8f) * 0.5f;
-
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, 40f, "$sls_cfg_distribution_intro", 14, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
-            ConfigUI.PositionRow(intro, 0f, 0f);
 
             // The caps and their notes run the full width of the page, so the settings column stops above them. It still
             // outgrows that once bosses have a section of their own, so it scrolls. Rows that only apply to some curve
             // styles - or only while bosses are configured separately - are switched off rather than laid out again: a
             // vertical layout group skips inactive children, so the space they took collapses.
-            ConfigUI.CreateScroll(parent, 0f, ColTop, LeftColWidth, capsY - ColTop - 6f, out Transform left, out float lw);
+            SetDistributionColumnHeight(Find(parent, "Settings"), capsY - ColTop - 6f);
+            ConfigUI.PositionRow(Find(parent, "CapsBar"), 0f, capsY);
 
             shownMinStars = staged.MinStars;
             shownMaxStars = staged.maxStars;
@@ -385,130 +253,133 @@ namespace StarLevelSystem.modules.UI {
                 RefreshDistribution();
             }
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_dist_header_range"));
-            GameObject minRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_min_stars", 0f, 200f, staged.MinStars, true, v => OnMinStarsChanged((int)v)),
-                Tip("MinLevel", "$sls_cfg_tip_min_stars")));
-            minStarsSlider = minRow.GetComponentInChildren<Slider>();
-            GameObject maxRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_max_stars", 1f, 200f, staged.maxStars, true, v => OnMaxStarsChanged((int)v)),
-                Tip(ValConfig.MaxLevel)));
-            maxStarsSlider = maxRow.GetComponentInChildren<Slider>();
+            GameObject minRow = WithTip(BindSliderRow(parent, "MinStars", staged.MinStars, v => OnMinStarsChanged((int)v)),
+                Tip("MinLevel", "$sls_cfg_tip_min_stars"));
+            minStarsSlider = Get<Slider>(minRow.transform, "Slider");
+            GameObject maxRow = WithTip(BindSliderRow(parent, "MaxStars", staged.maxStars, v => OnMaxStarsChanged((int)v)),
+                Tip(ValConfig.MaxLevel));
+            maxStarsSlider = Get<Slider>(maxRow.transform, "Slider");
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_dist_header_curve"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelWidth, 150f, "$sls_cfg_dist_curve_style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
+            WithTip(BindEnumRow(parent, "CurveStyle", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
-                staged.shippedCurve = null;
+                staged.tableCurve = null;
                 ShowStyleRows();
                 RefreshTableRows(true);
                 RefreshDistribution();
-            }), Tip("LevelupCalculationStyle", "$sls_cfg_tip_curve_style")));
-            chanceRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_levelup_chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
-                if (v != staged.generator.LevelUpChance) { staged.shippedCurve = null; }
+            }), Tip("LevelupCalculationStyle", "$sls_cfg_tip_curve_style"));
+            chanceRow = WithTip(BindSliderRow(parent, "LevelupChance", staged.generator.LevelUpChance, v => {
+                if (v != staged.generator.LevelUpChance) { staged.tableCurve = null; }
                 staged.generator.LevelUpChance = v;
                 RefreshDistribution();
-            }), Tip("LevelUpChance", "$sls_cfg_tip_levelup_chance")));
-            gaussianRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_gaussian_offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
-                if (v != staged.generator.GaussianOffset) { staged.shippedCurve = null; }
+            }), Tip("LevelUpChance", "$sls_cfg_tip_levelup_chance"));
+            gaussianRow = WithTip(BindSliderRow(parent, "GaussianOffset", staged.generator.GaussianOffset, v => {
+                if (v != staged.generator.GaussianOffset) { staged.tableCurve = null; }
                 staged.generator.GaussianOffset = v;
                 RefreshDistribution();
-            }), Tip("GaussianOffset", "$sls_cfg_tip_gaussian_offset")));
-            tableRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddTextFieldRow(t, lw, LabelWidth, SliderWidth + ValueWidth + 10f, "$sls_cfg_dist_table_thresholds", "", CommitTableThresholds, "30, 15, 5, 0.01"),
-                Tip("LevelupChanceTablesBySpan", "$sls_cfg_tip_table_thresholds")));
-            tableThresholdField = tableRow.GetComponentInChildren<InputField>();
-            tableStatusRow = ScrollRow(left, lw, TableStatusH, t => ConfigUI.AddTextRow(t, lw, TableStatusH, "", 12, GUIManager.Instance.ValheimBeige));
-            tableStatusText = tableStatusRow.GetComponentInChildren<Text>();
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_night_multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => {
-                if (v != staged.generator.NightMultiplier) { staged.shippedCurve = null; }
+            }), Tip("GaussianOffset", "$sls_cfg_tip_gaussian_offset"));
+            tableRow = WithTip(BindFieldRow(parent, "TableThresholds", "", CommitTableThresholds),
+                Tip("LevelupChanceTablesBySpan", "$sls_cfg_tip_table_thresholds"));
+            tableThresholdField = Get<InputField>(tableRow.transform, "Field");
+            tableStatusText = Get<Text>(parent, "TableStatus");
+            tableStatusRow = tableStatusText.gameObject;
+            WithTip(BindSliderRow(parent, "NightMultiplier", staged.generator.NightMultiplier, v => {
+                if (v != staged.generator.NightMultiplier) { staged.tableCurve = null; }
                 staged.generator.NightMultiplier = v;
                 RefreshDistribution();
-            }), Tip("NightMultiplier", "$sls_cfg_tip_night_multiplier")));
+            }), Tip("NightMultiplier", "$sls_cfg_tip_night_multiplier"));
 
-            // Bosses. The star cap applies whether or not they have a curve of their own, so it sits outside the toggle.
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_dist_bosses"));
-            GameObject bossMaxRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_max_boss_stars", 1f, 200f, staged.maxBossLevel, true, v => OnBossMaxStarsChanged((int)v)),
-                Tip(ValConfig.MaxBossLevel)));
-            bossMaxStarsSlider = bossMaxRow.GetComponentInChildren<Slider>();
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelWidth + 120f, "$sls_cfg_dist_boss_own_curve", staged.bossCurveOn, on => {
+            GameObject bossMaxRow = WithTip(BindSliderRow(parent, "MaxBossStars", staged.maxBossLevel, v => OnBossMaxStarsChanged((int)v)),
+                Tip(ValConfig.MaxBossLevel));
+            bossMaxStarsSlider = Get<Slider>(bossMaxRow.transform, "Slider");
+            WithTip(BindToggleRow(parent, "BossOwnCurve", staged.bossCurveOn, on => {
                 staged.bossCurveOn = on;
                 RefreshTableRows(true);
                 ShowBossRows();
-            }), YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.BossLevelupGenerators))));
+            }), YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.BossLevelupGenerators)));
 
-            GameObject bossMinRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_boss_min_stars", 0f, 200f, staged.BossMinStars, true, v => OnBossMinStarsChanged((int)v)),
-                Tip("MinLevel", "$sls_cfg_tip_boss_min_stars")));
-            bossMinStarsSlider = bossMinRow.GetComponentInChildren<Slider>();
+            GameObject bossMinRow = WithTip(BindSliderRow(parent, "BossMinStars", staged.BossMinStars, v => OnBossMinStarsChanged((int)v)),
+                Tip("MinLevel", "$sls_cfg_tip_boss_min_stars"));
+            bossMinStarsSlider = Get<Slider>(bossMinRow.transform, "Slider");
             bossRows.Add(bossMinRow);
-            bossRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelWidth, 150f, "$sls_cfg_dist_boss_curve_style", CalcStyleOptions, (int)staged.bossGenerator.LevelupCalculationStyle, i => {
+            bossRows.Add(WithTip(BindEnumRow(parent, "BossCurveStyle", CalcStyleOptions, (int)staged.bossGenerator.LevelupCalculationStyle, i => {
                 staged.bossGenerator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
                 RefreshTableRows(true);
                 ShowBossRows();
-            }), Tip("LevelupCalculationStyle", "$sls_cfg_tip_boss_curve_style_own"))));
-            bossChanceRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_boss_levelup_chance", 0f, 1f, staged.bossGenerator.LevelUpChance, false, v => {
+            }), Tip("LevelupCalculationStyle", "$sls_cfg_tip_boss_curve_style_own")));
+            bossChanceRow = WithTip(BindSliderRow(parent, "BossLevelupChance", staged.bossGenerator.LevelUpChance, v => {
                 staged.bossGenerator.LevelUpChance = v;
                 RefreshDistribution();
-            }), Tip("LevelUpChance", "$sls_cfg_tip_boss_levelup_chance")));
+            }), Tip("LevelUpChance", "$sls_cfg_tip_boss_levelup_chance"));
             bossRows.Add(bossChanceRow);
-            bossGaussianRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_boss_gaussian_offset", -1f, 1f, staged.bossGenerator.GaussianOffset, false, v => {
+            bossGaussianRow = WithTip(BindSliderRow(parent, "BossGaussianOffset", staged.bossGenerator.GaussianOffset, v => {
                 staged.bossGenerator.GaussianOffset = v;
                 RefreshDistribution();
-            }), Tip("GaussianOffset", "$sls_cfg_tip_boss_gaussian_offset")));
+            }), Tip("GaussianOffset", "$sls_cfg_tip_boss_gaussian_offset"));
             bossRows.Add(bossGaussianRow);
-            bossTableRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddTextFieldRow(t, lw, LabelWidth, SliderWidth + ValueWidth + 10f, "$sls_cfg_dist_boss_table_thresholds", "", CommitBossTableThresholds, "30, 15, 5, 0.01"),
-                Tip("BossLevelupChanceTablesBySpan", "$sls_cfg_tip_boss_table_thresholds")));
-            bossTableThresholdField = bossTableRow.GetComponentInChildren<InputField>();
+            bossTableRow = WithTip(BindFieldRow(parent, "BossTableThresholds", "", CommitBossTableThresholds),
+                Tip("BossLevelupChanceTablesBySpan", "$sls_cfg_tip_boss_table_thresholds"));
+            bossTableThresholdField = Get<InputField>(bossTableRow.transform, "Field");
             bossRows.Add(bossTableRow);
-            bossTableStatusRow = ScrollRow(left, lw, TableStatusH, t => ConfigUI.AddTextRow(t, lw, TableStatusH, "", 12, GUIManager.Instance.ValheimBeige));
-            bossTableStatusText = bossTableStatusRow.GetComponentInChildren<Text>();
+            bossTableStatusText = Get<Text>(parent, "BossTableStatus");
+            bossTableStatusRow = bossTableStatusText.gameObject;
             bossRows.Add(bossTableStatusRow);
-            bossRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_boss_night_multiplier", 0f, 5f, staged.bossGenerator.NightMultiplier, false, v => staged.bossGenerator.NightMultiplier = v),
-                Tip("NightMultiplier", "$sls_cfg_tip_boss_night_multiplier"))));
+            bossRows.Add(WithTip(BindSliderRow(parent, "BossNightMultiplier", staged.bossGenerator.NightMultiplier, v => staged.bossGenerator.NightMultiplier = v),
+                Tip("NightMultiplier", "$sls_cfg_tip_boss_night_multiplier")));
 
-            // Size, last in the column. Size per star does nothing while growth is off, so its row goes with the toggle.
+            // Size per star does nothing while growth is off, so its row goes with the toggle.
             GameObject sizePerStarRow = null;
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_dist_header_size"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelWidth + 120f, "$sls_cfg_dist_grow_per_star", staged.scaleSizePerStar, on => {
+            WithTip(BindToggleRow(parent, "GrowPerStar", staged.scaleSizePerStar, on => {
                 staged.scaleSizePerStar = on;
                 sizePerStarRow.SetActive(on);
-            }), Tip(ValConfig.EnableCreatureScalingPerLevel)));
-            sizePerStarRow = ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_size_per_star", -0.5f, 2f, staged.sizePerStar, false, v => staged.sizePerStar = v),
-                Tip(ValConfig.PerLevelScaleBonus)));
+            }), Tip(ValConfig.EnableCreatureScalingPerLevel));
+            sizePerStarRow = WithTip(BindSliderRow(parent, "SizePerStar", staged.sizePerStar, v => staged.sizePerStar = v),
+                Tip(ValConfig.PerLevelScaleBonus));
             sizePerStarRow.SetActive(staged.scaleSizePerStar);
             // The slider stops at 20x; a larger cap set in the .cfg widens it rather than being clamped on save.
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dist_max_size", 1f, Mathf.Max(20f, staged.maxCreatureScale), staged.maxCreatureScale, false, v => staged.maxCreatureScale = v),
-                Tip(ValConfig.MaximumCreatureScale)));
+            WithTip(BindSliderRow(parent, "MaxSize", staged.maxCreatureScale, v => staged.maxCreatureScale = v, max: Mathf.Max(20f, staged.maxCreatureScale)),
+                Tip(ValConfig.MaximumCreatureScale));
 
             RefreshTableRows(true);
             ShowStyleRows();
 
-            GameObject caption = ConfigUI.AddTextRow(parent, chartW, 36f, "$sls_cfg_distribution_caption", 13, GUIManager.Instance.ValheimBeige, TextAnchor.MiddleCenter);
-            ConfigUI.PositionRow(caption, ChartX, ColTop);
             distributionChart = new LevelDistributionChart(parent, ChartX, chartTop, chartW, chartFullH);
             bossChart = new LevelDistributionChart(parent, ChartX, chartTop + chartHalfH + 8f, chartW, chartHalfH);
             bossChart.SetTitle(ConfigUI.L("$sls_cfg_dist_bosses"));
 
-            ConfigUI.AddText(parent, 0f, capsY, 170f, 24f, "$sls_cfg_distribution_caps_header", 15, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            ConfigUI.AddToggle(parent, 176f, capsY + 1f, 22f, staged.biomeCapAuto, OnBiomeCapAutoChanged);
-            WithTip(ConfigUI.AddText(parent, 204f, capsY, 300f, 24f, "$sls_cfg_distribution_caps_auto", 13, TextAnchor.MiddleLeft).gameObject,
-                Tip(ValConfig.AutoTuneBiomeStarCaps));
+            BindToggle(parent, "CapsAuto", staged.biomeCapAuto, OnBiomeCapAutoChanged);
+            WithTip(Find(parent, "CapsAutoLabel"), Tip(ValConfig.AutoTuneBiomeStarCaps));
 
             int cell = 0;
             foreach (Heightmap.Biome capped in cappedBiomes) {
                 Heightmap.Biome biome = capped;   // capture per iteration
-                float cellX = (cell % PerRow) * CellW;
-                float cellY = capsY + CapHeaderH + (cell / PerRow) * CapRowH;
-                ConfigUI.AddText(parent, cellX, cellY, CapLabelW, 28f, BiomeName(biome), 13, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimBeige);
-                InputField field = ConfigUI.AddTextField(parent, cellX + CapLabelW + 2f, cellY, CapFieldW, staged.CapFor(biome).ToString(),
-                    text => CommitBiomeCap(biome, text), InputField.ContentType.IntegerNumber);
+                Transform capCell = Spawn("SLS_QC_Row_BiomeCap", parent).transform;
+                ConfigUI.PositionRow(capCell.gameObject, (cell % PerRow) * CellW, capsY + CapHeaderH + (cell / PerRow) * CapRowH);
+                SetText(capCell, "Label", BiomeName(biome));
+                InputField field = BindField(capCell, "Field", staged.CapFor(biome).ToString(), text => CommitBiomeCap(biome, text));
                 WithTip(field.gameObject, YamlTip(typeof(BiomeSpecificSetting), nameof(BiomeSpecificSetting.BiomeMaxLevelOverride))
                     + "\n" + ConfigUI.L("$sls_cfg_tip_biome_cap_manual"));
                 biomeCapFields.Add(new BiomeCapField { Biome = biome, Field = field, TextColor = field.textComponent != null ? field.textComponent.color : Color.white });
                 cell++;
             }
 
-            float belowCaps = capsY + CapHeaderH + capRows * CapRowH + 4f;
-            distributionNotesText = ConfigUI.AddText(parent, 0f, belowCaps, PageW, PageH - belowCaps, "", 13, TextAnchor.UpperLeft, GUIManager.Instance.ValheimOrange);
+            distributionNotesText = Get<Text>(parent, "Notes");
 
             // Lays the charts out for the current mode and draws everything.
             ShowBossRows();
+        }
+
+        // How tall the settings column is depends on how many rows of biome caps sit under it. Each part of the scroll view
+        // follows, with the sizes the prefab gives them at any height: the bar and its sliding area stop 8 short of each end.
+        private static void SetDistributionColumnHeight(GameObject column, float h) {
+            Transform canvas = column.transform.Find("Canvas");
+            Transform view = canvas.Find("Scroll View");
+            Transform bar = view.Find("Scrollbar Vertical");
+            foreach (Transform part in new[] { column.transform, canvas, view, view.Find("Viewport") }) {
+                ((RectTransform)part).SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
+            }
+            foreach (Transform part in new[] { bar, bar.Find("Sliding Area") }) {
+                ((RectTransform)part).SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h - 16f);
+            }
         }
 
         private static void ResetDistributionPage() {
@@ -526,7 +397,7 @@ namespace StarLevelSystem.modules.UI {
             shownMinStars = minStars;
             // Max stars pulling Min down sets the generator before it moves this slider. Only a Min picked here is a
             // change to the curve itself.
-            if (staged.generator.MinLevel != minStars + 1) { staged.shippedCurve = null; }
+            if (staged.generator.MinLevel != minStars + 1) { staged.tableCurve = null; }
             staged.generator.MinLevel = minStars + 1;
             if (minStars > staged.maxStars && maxStarsSlider != null) {
                 maxStarsSlider.value = minStars;   // its listener moves maxStars up to match
@@ -580,9 +451,9 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // The creature curve the page shows. Until it is changed that is what the world rolls today, which may be a
-        // hand-written table that no generator describes; after Reset page, the shipped one.
+        // hand-written table that no generator describes; after Reset page or a difficulty, the table they set.
         private static SortedDictionary<int, float> ShownCreatureCurve() {
-            if (staged.shippedCurve != null) { return staged.shippedCurve; }
+            if (staged.tableCurve != null) { return staged.tableCurve; }
             if (staged.CurveDiffers(baseline) == false) { return LiveDefaultTable(); }
             staged.tables.TryGetValue(staged.TableSpan, out List<float> values);
             return StagedCurveTable(staged.generator, staged.TableSpan, values);
@@ -855,44 +726,20 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static void BuildStatsPage(Transform parent) {
-            const float LeftColWidth = 430f;
-            const float LabelWidth = 190f;
-            const float SliderWidth = 150f;
-            const float ValueWidth = 60f;
-            const float RightColumnX = 450f;
-            const float StartY = 2f;
-            float rightColWidth = PageW - RightColumnX;
-
-            List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_stats_header_per_level"),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_creature_hp", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.EnemyHealthMultiplier)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_creature_dmg", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.EnemyDamageLevelMultiplier)),
-                ConfigUI.AddDividerRow(parent, LeftColWidth),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_boss_hp", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyHealthMultiplier)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_boss_dmg", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyDamageMultiplier)),
-                ConfigUI.AddSpacerRow(parent, LeftColWidth, 4f),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_stats_header_multiplayer"),
-                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "$sls_cfg_stats_mp_hp_toggle", staged.mpHealth, v => { staged.mpHealth = v; UpdateExampleMath(); }), Tip(ValConfig.EnableMultiplayerEnemyHealthScaling)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_mp_hp", 0f, 0.99f, staged.mpHealthMod, false, v => { staged.mpHealthMod = v; UpdateExampleMath(); }), Tip(ValConfig.MultiplayerEnemyHealthModifier)),
-                WithTip(ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "$sls_cfg_stats_mp_dmg_toggle", staged.mpDamage, v => { staged.mpDamage = v; UpdateExampleMath(); }), Tip(ValConfig.EnableMultiplayerEnemyDamageScaling)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_mp_dmg", 0f, 2f, staged.mpDamageMod, false, v => { staged.mpDamageMod = v; UpdateExampleMath(); }), Tip(ValConfig.MultiplayerEnemyDamageModifier)),
-                WithTip(ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_stats_mp_players", 1f, 20f, staged.mpRequiredPlayers, true, v => { staged.mpRequiredPlayers = (int)v; UpdateExampleMath(); }), Tip(ValConfig.MultiplayerScalingRequiredPlayersNearby)),
-            };
-            ConfigUI.LayoutColumn(left, 0f, StartY);
+            WithTip(BindSliderRow(parent, "CreatureHp", staged.creatureHpPerLevel, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.EnemyHealthMultiplier));
+            WithTip(BindSliderRow(parent, "CreatureDmg", staged.creatureDmgPerLevel, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.EnemyDamageLevelMultiplier));
+            WithTip(BindSliderRow(parent, "BossHp", staged.bossHpPerLevel, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyHealthMultiplier));
+            WithTip(BindSliderRow(parent, "BossDmg", staged.bossDmgPerLevel, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }), Tip(ValConfig.BossEnemyDamageMultiplier));
+            WithTip(BindToggleRow(parent, "MpHpToggle", staged.mpHealth, v => { staged.mpHealth = v; UpdateExampleMath(); }), Tip(ValConfig.EnableMultiplayerEnemyHealthScaling));
+            WithTip(BindSliderRow(parent, "MpHp", staged.mpHealthMod, v => { staged.mpHealthMod = v; UpdateExampleMath(); }), Tip(ValConfig.MultiplayerEnemyHealthModifier));
+            WithTip(BindToggleRow(parent, "MpDmgToggle", staged.mpDamage, v => { staged.mpDamage = v; UpdateExampleMath(); }), Tip(ValConfig.EnableMultiplayerEnemyDamageScaling));
+            WithTip(BindSliderRow(parent, "MpDmg", staged.mpDamageMod, v => { staged.mpDamageMod = v; UpdateExampleMath(); }), Tip(ValConfig.MultiplayerEnemyDamageModifier));
+            WithTip(BindSliderRow(parent, "MpPlayers", staged.mpRequiredPlayers, v => { staged.mpRequiredPlayers = (int)v; UpdateExampleMath(); }), Tip(ValConfig.MultiplayerScalingRequiredPlayersNearby));
 
             // Right column - worked examples. The Troll uses Max stars from the distribution page, The Elder the boss cap.
-            const float CardH = 112f;
-            GameObject header = ConfigUI.AddHeaderRow(parent, rightColWidth, "$sls_cfg_stats_header_examples");
-            ConfigUI.PositionRow(header, RightColumnX, StartY);
-            float y = StartY + RowHeight + RowGap;
-            trollExampleText = AddExampleCard(parent, RightColumnX, y, rightColWidth, CardH, "TrophyForestTroll");
-            y += CardH + 8f;
-            elderExampleText = AddExampleCard(parent, RightColumnX, y, rightColWidth, CardH, "TrophyTheElder");
-            y += CardH + 8f;
-            GameObject mpHeader = ConfigUI.AddHeaderRow(parent, rightColWidth, "$sls_cfg_stats_header_group");
-            ConfigUI.PositionRow(mpHeader, RightColumnX, y);
-            y += RowHeight + RowGap;
-            multiplayerExampleText = ConfigUI.AddText(parent, RightColumnX, y, rightColWidth, PageH - y, "", 14, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            trollExampleText = BindExampleCard(parent, "TrollCard", "TrophyForestTroll");
+            elderExampleText = BindExampleCard(parent, "ElderCard", "TrophyTheElder");
+            multiplayerExampleText = Get<Text>(parent, "GroupExample");
 
             UpdateExampleMath();
         }
@@ -909,24 +756,13 @@ namespace StarLevelSystem.modules.UI {
             staged.mpRequiredPlayers = DefaultOf(ValConfig.MultiplayerScalingRequiredPlayersNearby);
         }
 
-        private static Text AddExampleCard(Transform parent, float x, float y, float w, float h, string trophyPrefab) {
-            const float IconSize = 64f;
-            const float TextX = IconSize + 12f;
-            GameObject card = ConfigUI.NewRect("ExampleCard", parent, x, y, w, h);
-
+        private static Text BindExampleCard(Transform parent, string name, string trophyPrefab) {
+            Transform card = Find(parent, name).transform;
             Sprite icon = LoadItemIcon(trophyPrefab);
-            if (icon != null) {
-                GameObject iconGO = ConfigUI.NewUI("Icon", card.transform, typeof(Image));
-                RectTransform rt = (RectTransform)iconGO.transform;
-                rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 1f);
-                rt.sizeDelta = new Vector2(IconSize, IconSize);
-                rt.anchoredPosition = new Vector2(0f, -8f);
-                Image img = iconGO.GetComponent<Image>();
-                img.sprite = icon;
-                img.preserveAspect = true;
-                img.raycastTarget = false;
-            }
-            return ConfigUI.AddText(card.transform, TextX, 0f, w - TextX, h, "", 14, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            Image image = Get<Image>(card, "Icon");
+            image.sprite = icon;
+            image.gameObject.SetActive(icon != null);
+            return Get<Text>(card, "Body");
         }
 
         // ObjectDB exists on the main menu too (FejdStartup copies it in), so this works before a world is loaded. Jotunn's
@@ -951,10 +787,10 @@ namespace StarLevelSystem.modules.UI {
         private static void UpdateExampleMath() {
             if (staged == null) { return; }
             if (trollExampleText != null) {
-                trollExampleText.text = FormatCreatureExample(TrollName(), TrollHp, TrollDmg, staged.maxStars, staged.creatureHpPerLevel, staged.creatureDmgPerLevel);
+                trollExampleText.text = FormatCreatureExample(TrollName(), TrollHp, TrollDmg * staged.allBaseDamage, staged.maxStars, staged.creatureHpPerLevel, staged.creatureDmgPerLevel);
             }
             if (elderExampleText != null) {
-                elderExampleText.text = FormatCreatureExample(L("$sls_cfg_stats_example_boss", LocalizedOr("$enemy_gdking", "The Elder")), TheElderHP, TheElderDmg, staged.maxBossLevel, staged.bossHpPerLevel, staged.bossDmgPerLevel);
+                elderExampleText.text = FormatCreatureExample(L("$sls_cfg_stats_example_boss", LocalizedOr("$enemy_gdking", "The Elder")), TheElderHP, TheElderDmg * staged.allBaseDamage, staged.maxBossLevel, staged.bossHpPerLevel, staged.bossDmgPerLevel);
             }
             if (multiplayerExampleText != null) {
                 multiplayerExampleText.text = FormatMultiplayerExample();
@@ -991,7 +827,7 @@ namespace StarLevelSystem.modules.UI {
             taken = Mathf.Max(taken, 0.01f);
             int stars = Mathf.Max(0, staged.maxStars);
             float trollHp = TrollHp * (1f + staged.creatureHpPerLevel * stars);
-            float trollDmg = TrollDmg * (1f + staged.creatureDmgPerLevel * stars);
+            float trollDmg = TrollDmg * staged.allBaseDamage * (1f + staged.creatureDmgPerLevel * stars);
             return L("$sls_cfg_stats_mp_group", players, taken.ToString("0.00"), (1f / taken).ToString("0.0"), dealt.ToString("0.00")) + "\n" +
                    L("$sls_cfg_stats_mp_troll", Stars(stars), TrollName(), (trollHp / taken).ToString("0"), (trollDmg * dealt).ToString("0")) +
                    (valheimPlus ? "\n" + ConfigUI.L("$sls_cfg_stats_mp_valheim_plus") : "");
@@ -1002,58 +838,31 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static void BuildModifiersPage(Transform parent) {
-            // Left column holds all of the numeric/toggle config; sliders are kept narrow so their value
-            // boxes don't run into the scroll view on the right.
-            const float LeftColWidth = 430f;
-            const float LeftLabelWidth = 200f, LeftSliderWidth = 120f, LeftValueWidth = 56f;
-            const float ToggleLabelWidth = 300f;
-            const float StartY = 4f;
-            ConfigUI.CreateScroll(parent, 0f, StartY, LeftColWidth, PageH - StartY - 8f, out Transform leftContent, out float leftContentW);
-
-            List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(leftContent, leftContentW, "$sls_cfg_mods_header_creature"),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_major", 0f, Mathf.Max(6f, staged.maxMajor), staged.maxMajor, true, v => staged.maxMajor = (int)v), Tip(ValConfig.MaxMajorModifiersPerCreature)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_minor", 0f, Mathf.Max(6f, staged.maxMinor), staged.maxMinor, true, v => staged.maxMinor = (int)v), Tip(ValConfig.MaxMinorModifiersPerCreature)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_boss", 0f, Mathf.Max(6f, staged.maxBossOnCreature), staged.maxBossOnCreature, true, v => staged.maxBossOnCreature = (int)v), Tip(ValConfig.MaxBossModifiersPerCreature)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_chance_major", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v), Tip(ValConfig.ChanceMajorModifier)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_chance_minor", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v), Tip(ValConfig.ChanceMinorModifier)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_chance_boss", 0f, 1f, staged.chanceBossOnCreature, false, v => staged.chanceBossOnCreature = v), Tip(ValConfig.ChanceOfBossModifierOnCreature)),
-                WithTip(ConfigUI.AddToggleRow(leftContent, leftContentW, ToggleLabelWidth, "$sls_cfg_mods_limit_to_stars", staged.limitToStarLevel, v => staged.limitToStarLevel = v), Tip(ValConfig.LimitCreatureModifiersToCreatureStarLevel)),
-                ConfigUI.AddHeaderRow(leftContent, leftContentW, "$sls_cfg_mods_header_boss"),
-                WithTip(ConfigUI.AddToggleRow(leftContent, leftContentW, ToggleLabelWidth, "$sls_cfg_mods_bosses_can_have", staged.enableBossMods, v => staged.enableBossMods = v), Tip(ValConfig.EnableBossModifiers)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_boss", 0f, Mathf.Max(6f, staged.maxBossMods), staged.maxBossMods, true, v => staged.maxBossMods = (int)v), Tip(ValConfig.MaxBossModifiersPerBoss)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_chance_boss", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v), Tip(ValConfig.ChanceOfBossModifier)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_major", 0f, Mathf.Max(6f, staged.maxMajorOnBoss), staged.maxMajorOnBoss, true, v => staged.maxMajorOnBoss = (int)v), Tip(ValConfig.MaxMajorModifiersPerBoss)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_chance_major", 0f, 1f, staged.chanceMajorOnBoss, false, v => staged.chanceMajorOnBoss = v), Tip(ValConfig.ChanceOfMajorModifierOnBoss)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_minor", 0f, Mathf.Max(6f, staged.maxMinorOnBoss), staged.maxMinorOnBoss, true, v => staged.maxMinorOnBoss = (int)v), Tip(ValConfig.MaxMinorModifiersPerBoss)),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_chance_minor", 0f, 1f, staged.chanceMinorOnBoss, false, v => staged.chanceMinorOnBoss = v), Tip(ValConfig.ChanceOfMinorModifierOnBoss)),
-                ConfigUI.AddHeaderRow(leftContent, leftContentW, "$sls_cfg_mods_header_display"),
-                WithTip(ConfigUI.AddSliderRow(leftContent, leftContentW, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_mods_max_prefixes", 0f, Mathf.Max(6f, staged.prefixLimit), staged.prefixLimit, true, v => staged.prefixLimit = (int)v), Tip(ValConfig.LimitCreatureModifierPrefixes)),
-                WithTip(ConfigUI.AddToggleRow(leftContent, leftContentW, ToggleLabelWidth, "$sls_cfg_mods_minor_first", staged.minorFirst, v => staged.minorFirst = v), Tip(ValConfig.MinorModifiersFirstInName)),
-                WithTip(ConfigUI.AddEnumCycleRow(leftContent, leftContentW, LeftLabelWidth, 150f, "$sls_cfg_mods_icon_style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i), Tip(ValConfig.ModifierIconDisplayStyle)),
-            };
-            // All left-side rows share this scroll view. Its VerticalLayoutGroup positions
-            // the rows, so provide their sizes instead of using LayoutColumn.
-            foreach (GameObject row in left) {
-                RectTransform rt = (RectTransform)row.transform;
-                LayoutElement layout = row.AddComponent<LayoutElement>();
-                layout.minHeight = rt.sizeDelta.y;
-                layout.preferredHeight = rt.sizeDelta.y;
-                layout.minWidth = leftContentW;
-                layout.preferredWidth = leftContentW;
-            }
+            WithTip(BindSliderRow(parent, "CreatureMaxMajor", staged.maxMajor, v => staged.maxMajor = (int)v, max: Mathf.Max(6f, staged.maxMajor)), Tip(ValConfig.MaxMajorModifiersPerCreature));
+            WithTip(BindSliderRow(parent, "CreatureMaxMinor", staged.maxMinor, v => staged.maxMinor = (int)v, max: Mathf.Max(6f, staged.maxMinor)), Tip(ValConfig.MaxMinorModifiersPerCreature));
+            WithTip(BindSliderRow(parent, "CreatureMaxBoss", staged.maxBossOnCreature, v => staged.maxBossOnCreature = (int)v, max: Mathf.Max(6f, staged.maxBossOnCreature)), Tip(ValConfig.MaxBossModifiersPerCreature));
+            WithTip(BindSliderRow(parent, "CreatureChanceMajor", staged.chanceMajor, v => staged.chanceMajor = v), Tip(ValConfig.ChanceMajorModifier));
+            WithTip(BindSliderRow(parent, "CreatureChanceMinor", staged.chanceMinor, v => staged.chanceMinor = v), Tip(ValConfig.ChanceMinorModifier));
+            WithTip(BindSliderRow(parent, "CreatureChanceBoss", staged.chanceBossOnCreature, v => staged.chanceBossOnCreature = v), Tip(ValConfig.ChanceOfBossModifierOnCreature));
+            WithTip(BindToggleRow(parent, "LimitToStars", staged.limitToStarLevel, v => staged.limitToStarLevel = v), Tip(ValConfig.LimitCreatureModifiersToCreatureStarLevel));
+            WithTip(BindToggleRow(parent, "BossesCanHave", staged.enableBossMods, v => staged.enableBossMods = v), Tip(ValConfig.EnableBossModifiers));
+            WithTip(BindSliderRow(parent, "BossMaxBoss", staged.maxBossMods, v => staged.maxBossMods = (int)v, max: Mathf.Max(6f, staged.maxBossMods)), Tip(ValConfig.MaxBossModifiersPerBoss));
+            WithTip(BindSliderRow(parent, "BossChanceBoss", staged.chanceBoss, v => staged.chanceBoss = v), Tip(ValConfig.ChanceOfBossModifier));
+            WithTip(BindSliderRow(parent, "BossMaxMajor", staged.maxMajorOnBoss, v => staged.maxMajorOnBoss = (int)v, max: Mathf.Max(6f, staged.maxMajorOnBoss)), Tip(ValConfig.MaxMajorModifiersPerBoss));
+            WithTip(BindSliderRow(parent, "BossChanceMajor", staged.chanceMajorOnBoss, v => staged.chanceMajorOnBoss = v), Tip(ValConfig.ChanceOfMajorModifierOnBoss));
+            WithTip(BindSliderRow(parent, "BossMaxMinor", staged.maxMinorOnBoss, v => staged.maxMinorOnBoss = (int)v, max: Mathf.Max(6f, staged.maxMinorOnBoss)), Tip(ValConfig.MaxMinorModifiersPerBoss));
+            WithTip(BindSliderRow(parent, "BossChanceMinor", staged.chanceMinorOnBoss, v => staged.chanceMinorOnBoss = v), Tip(ValConfig.ChanceOfMinorModifierOnBoss));
+            WithTip(BindSliderRow(parent, "MaxPrefixes", staged.prefixLimit, v => staged.prefixLimit = (int)v, max: Mathf.Max(6f, staged.prefixLimit)), Tip(ValConfig.LimitCreatureModifierPrefixes));
+            WithTip(BindToggleRow(parent, "MinorFirst", staged.minorFirst, v => staged.minorFirst = v), Tip(ValConfig.MinorModifiersFirstInName));
+            WithTip(BindEnumRow(parent, "IconStyle", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i), Tip(ValConfig.ModifierIconDisplayStyle));
 
             // Right side - scrollable list of every modifier defined in Modifiers.yaml, grouped by category,
             // each with an enable/disable toggle and a brief description.
-            const float ScrollX = 446f;
-            const float ScrollW = 400f;
-            float scrollH = PageH - StartY - RowHeight - 8f;
-            ConfigUI.AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "$sls_cfg_mods_list_header", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            ConfigUI.CreateScroll(parent, ScrollX, StartY + RowHeight, ScrollW, scrollH, out Transform content, out float contentW);
+            Transform content = ScrollContent(parent, "ModifierList");
             if (content != null) {
-                AddModifierCategory(content, contentW, "$sls_cfg_mods_header_boss", ModifierType.Boss, staged.modifierSource?.BossModifiers);
-                AddModifierCategory(content, contentW, "$sls_cfg_mods_header_major", ModifierType.Major, staged.modifierSource?.MajorModifiers);
-                AddModifierCategory(content, contentW, "$sls_cfg_mods_header_minor", ModifierType.Minor, staged.modifierSource?.MinorModifiers);
+                AddModifierCategory(content, "$sls_cfg_mods_header_boss", ModifierType.Boss, staged.modifierSource?.BossModifiers);
+                AddModifierCategory(content, "$sls_cfg_mods_header_major", ModifierType.Major, staged.modifierSource?.MajorModifiers);
+                AddModifierCategory(content, "$sls_cfg_mods_header_minor", ModifierType.Minor, staged.modifierSource?.MinorModifiers);
             }
         }
 
@@ -1094,10 +903,9 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // Adds a category header followed by one toggle row per modifier defined in that category.
-        private static void AddModifierCategory(Transform content, float width, string label, ModifierType type, Dictionary<string, CreatureModifierConfiguration> dict) {
+        private static void AddModifierCategory(Transform content, string label, ModifierType type, Dictionary<string, CreatureModifierConfiguration> dict) {
             if (dict == null || dict.Count == 0) { return; }
-            GameObject header = ConfigUI.NewLayoutRow(content, width, 30f);
-            ConfigUI.AddText(header.transform, 2f, 4f, width - 4f, 24f, label, 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            SetText(Spawn("SLS_QC_Row_ModifierHeader", content).transform, "Label", label);
             HashSet<string> enabled = staged.modifierOn[type];
             foreach (string name in dict.Keys.OrderBy(n => n)) {
                 string modName = name;   // capture for the closure
@@ -1109,7 +917,7 @@ namespace StarLevelSystem.modules.UI {
                 if (inGame.Length > 0 && string.Equals(inGame, rowLabel, StringComparison.OrdinalIgnoreCase) == false) {
                     rowLabel += $"  {MutedColorTag}({inGame})</color>";
                 }
-                AddToggleEntry(content, width, 48f, rowLabel, desc, enabled.Contains(modName), on => {
+                AddToggleEntry(content, rowLabel, desc, enabled.Contains(modName), on => {
                     if (on) { staged.modifierOn[type].Add(modName); }
                     else { staged.modifierOn[type].Remove(modName); }
                 });
@@ -1117,12 +925,11 @@ namespace StarLevelSystem.modules.UI {
         }
 
         // A single list line inside a scroll view: enable toggle on the left, name and a brief description to its right.
-        private static void AddToggleEntry(Transform content, float width, float height, string name, string description, bool enabled, Action<bool> onChange) {
-            const float TextX = 32f;
-            GameObject row = ConfigUI.NewLayoutRow(content, width, height);
-            ConfigUI.AddToggle(row.transform, 2f, 3f, 22f, enabled, onChange);
-            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX - 4f, 20f, name, 14, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-            ConfigUI.AddText(row.transform, TextX, 20f, width - TextX - 4f, height - 22f, description, 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+        private static void AddToggleEntry(Transform content, string name, string description, bool enabled, Action<bool> onChange) {
+            Transform row = Spawn("SLS_QC_Row_ModifierEntry", content).transform;
+            BindToggle(row, "Toggle", enabled, onChange);
+            SetText(row, "Name", name);
+            SetText(row, "Description", description);
         }
 
         // "ResistPierce" -> "Resist Pierce", "BossSummoner" -> "Boss Summoner".
@@ -1149,42 +956,26 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static void BuildNemesisPage(Transform parent) {
-            const float IntroH = 92f;
-            const float LeftW = 392f;
-            const float RightX = 408f;
-            const float LabelW = 180f, SliderW = 120f, ValueW = 60f;
-            float rightW = PageW - RightX;
+            nemesisWarningText = Get<Text>(parent, "Warning");
 
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, IntroH, "$sls_cfg_nemesis_intro", 14, GUIManager.Instance.ValheimBeige);
-            ConfigUI.PositionRow(intro, 0f, 0f);
-            nemesisWarningText = ConfigUI.AddText(parent, 0f, IntroH, PageW, 20f, "", 13, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimOrange);
-            float scrollY = IntroH + 24f;
-            float scrollH = PageH - scrollY;
-
-            // Left - core settings and the score system, in a scroll view since together they outgrow the page.
-            ConfigUI.CreateScroll(parent, 0f, scrollY, LeftW, scrollH, out Transform left, out float lw);
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_nem_header_settings"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_nem_enable", staged.enableNemesis, v => staged.enableNemesis = v), Tip(ValConfig.EnableNemesisSystem)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_nem_remote", staged.enableNemesisRemote, v => staged.enableNemesisRemote = v), Tip("EnableNemesisRemoteSpawning", "$sls_cfg_tip_nem_remote")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_cooldown", Mathf.Min(0f, staged.nemCooldown), Mathf.Max(120f, staged.nemCooldown), staged.nemCooldown, false, v => staged.nemCooldown = v), Tip("NemesisActionCooldownSeconds", "$sls_cfg_tip_nem_cooldown")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_influence", Mathf.Min(0f, staged.nemInfluence), Mathf.Max(1000f, staged.nemInfluence), staged.nemInfluence, false, v => staged.nemInfluence = v), Tip("NemesisInfluenceRadius", "$sls_cfg_tip_nem_influence")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_min_spawn", Mathf.Min(0f, staged.nemMinSpawn), Mathf.Max(500f, staged.nemMinSpawn), staged.nemMinSpawn, false, v => staged.nemMinSpawn = v), Tip("NemesisMinSpawnDistance", "$sls_cfg_tip_nem_min_spawn")));
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_nem_header_score"));
-            ScrollRow(left, lw, 96f, t => ConfigUI.AddTextRow(t, lw, 96f, "$sls_cfg_nemesis_score_help", 12, GUIManager.Instance.ValheimBeige));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_neutral_score", Mathf.Min(0f, staged.neutralScore), Mathf.Max(20000f, staged.neutralScore), staged.neutralScore, IsWhole(staged.neutralScore), v => { staged.neutralScore = v; RefreshNemesisDescriptions(); }), Tip("NeutralScore", "$sls_cfg_tip_nem_neutral_score")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_min_score", Mathf.Min(0f, staged.minScore), Mathf.Max(20000f, staged.minScore), staged.minScore, IsWhole(staged.minScore), v => { staged.minScore = v; RefreshNemesisDescriptions(); }), Tip("MinScore", "$sls_cfg_tip_nem_min_score")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_max_score", Mathf.Min(0f, staged.maxScore), Mathf.Max(20000f, staged.maxScore), staged.maxScore, IsWhole(staged.maxScore), v => { staged.maxScore = v; RefreshNemesisDescriptions(); }), Tip("MaxScore", "$sls_cfg_tip_nem_max_score")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_decay", Mathf.Min(0f, staged.decayPerUpdate), Mathf.Max(2000f, staged.decayPerUpdate), staged.decayPerUpdate, IsWhole(staged.decayPerUpdate), v => staged.decayPerUpdate = v), Tip("DecayPerUpdate", "$sls_cfg_tip_nem_decay")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_interval", Mathf.Min(1f, staged.scoreInterval), Mathf.Max(120f, staged.scoreInterval), staged.scoreInterval, IsWhole(staged.scoreInterval), v => staged.scoreInterval = v), Tip("ScoreIntervalSeconds", "$sls_cfg_tip_nem_interval")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_boss_kill", Mathf.Min(0f, staged.bossKillBonus), Mathf.Max(5000f, staged.bossKillBonus), staged.bossKillBonus, IsWhole(staged.bossKillBonus), v => staged.bossKillBonus = v), Tip("BossKillBonus", "$sls_cfg_tip_nem_boss_kill")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_nem_death", Mathf.Min(0f, staged.deathReduction), Mathf.Max(5000f, staged.deathReduction), staged.deathReduction, IsWhole(staged.deathReduction), v => staged.deathReduction = v), Tip("DeathScoreReduction", "$sls_cfg_tip_nem_death")));
+            // Left - core settings and the score system.
+            WithTip(BindToggleRow(parent, "Enable", staged.enableNemesis, v => staged.enableNemesis = v), Tip(ValConfig.EnableNemesisSystem));
+            WithTip(BindToggleRow(parent, "Remote", staged.enableNemesisRemote, v => staged.enableNemesisRemote = v), Tip("EnableNemesisRemoteSpawning", "$sls_cfg_tip_nem_remote"));
+            WithTip(BindSliderRow(parent, "Cooldown", staged.nemCooldown, v => staged.nemCooldown = v, Mathf.Min(0f, staged.nemCooldown), Mathf.Max(120f, staged.nemCooldown)), Tip("NemesisActionCooldownSeconds", "$sls_cfg_tip_nem_cooldown"));
+            WithTip(BindSliderRow(parent, "Influence", staged.nemInfluence, v => staged.nemInfluence = v, Mathf.Min(0f, staged.nemInfluence), Mathf.Max(1000f, staged.nemInfluence)), Tip("NemesisInfluenceRadius", "$sls_cfg_tip_nem_influence"));
+            WithTip(BindSliderRow(parent, "MinSpawn", staged.nemMinSpawn, v => staged.nemMinSpawn = v, Mathf.Min(0f, staged.nemMinSpawn), Mathf.Max(500f, staged.nemMinSpawn)), Tip("NemesisMinSpawnDistance", "$sls_cfg_tip_nem_min_spawn"));
+            WithTip(BindSliderRow(parent, "NeutralScore", staged.neutralScore, v => { staged.neutralScore = v; RefreshNemesisDescriptions(); }, Mathf.Min(0f, staged.neutralScore), Mathf.Max(20000f, staged.neutralScore), IsWhole(staged.neutralScore)), Tip("NeutralScore", "$sls_cfg_tip_nem_neutral_score"));
+            WithTip(BindSliderRow(parent, "MinScore", staged.minScore, v => { staged.minScore = v; RefreshNemesisDescriptions(); }, Mathf.Min(0f, staged.minScore), Mathf.Max(20000f, staged.minScore), IsWhole(staged.minScore)), Tip("MinScore", "$sls_cfg_tip_nem_min_score"));
+            WithTip(BindSliderRow(parent, "MaxScore", staged.maxScore, v => { staged.maxScore = v; RefreshNemesisDescriptions(); }, Mathf.Min(0f, staged.maxScore), Mathf.Max(20000f, staged.maxScore), IsWhole(staged.maxScore)), Tip("MaxScore", "$sls_cfg_tip_nem_max_score"));
+            WithTip(BindSliderRow(parent, "Decay", staged.decayPerUpdate, v => staged.decayPerUpdate = v, Mathf.Min(0f, staged.decayPerUpdate), Mathf.Max(2000f, staged.decayPerUpdate), IsWhole(staged.decayPerUpdate)), Tip("DecayPerUpdate", "$sls_cfg_tip_nem_decay"));
+            WithTip(BindSliderRow(parent, "Interval", staged.scoreInterval, v => staged.scoreInterval = v, Mathf.Min(1f, staged.scoreInterval), Mathf.Max(120f, staged.scoreInterval), IsWhole(staged.scoreInterval)), Tip("ScoreIntervalSeconds", "$sls_cfg_tip_nem_interval"));
+            WithTip(BindSliderRow(parent, "BossKill", staged.bossKillBonus, v => staged.bossKillBonus = v, Mathf.Min(0f, staged.bossKillBonus), Mathf.Max(5000f, staged.bossKillBonus), IsWhole(staged.bossKillBonus)), Tip("BossKillBonus", "$sls_cfg_tip_nem_boss_kill"));
+            WithTip(BindSliderRow(parent, "Death", staged.deathReduction, v => staged.deathReduction = v, Mathf.Min(0f, staged.deathReduction), Mathf.Max(5000f, staged.deathReduction), IsWhole(staged.deathReduction)), Tip("DeathScoreReduction", "$sls_cfg_tip_nem_death"));
 
             // Right - every configured action, in the order they are checked.
-            ConfigUI.CreateScroll(parent, RightX, scrollY, rightW, scrollH, out Transform right, out float rw);
-            ScrollRow(right, rw, RowHeight, t => ConfigUI.AddHeaderRow(t, rw, "$sls_cfg_nem_header_actions"));
-            ScrollRow(right, rw, 50f, t => ConfigUI.AddTextRow(t, rw, 50f, "$sls_cfg_nemesis_actions_help", 12, GUIManager.Instance.ValheimBeige));
+            Transform right = ScrollContent(parent, "Actions");
             foreach (KeyValuePair<string, StagedNemesisAction> action in staged.nemesisActions) {
-                AddNemesisActionEntry(right, rw, action.Key, action.Value);
+                AddNemesisActionEntry(right, action.Key, action.Value);
             }
 
             RefreshNemesisDescriptions();
@@ -1219,35 +1010,19 @@ namespace StarLevelSystem.modules.UI {
             }
         }
 
-        // Rows inside a scroll view must size themselves through a LayoutElement (see ConfigUI.NewLayoutRow). This hosts
-        // an ordinary positioned row inside one, where it self-positions at (0,0).
-        private static GameObject ScrollRow(Transform content, float width, float height, Action<Transform> build) {
-            GameObject holder = ConfigUI.NewLayoutRow(content, width, height);
-            build(holder.transform);
-            return holder;
-        }
+        private static void AddNemesisActionEntry(Transform content, string name, StagedNemesisAction action) {
+            Transform entry = Spawn("SLS_QC_Row_NemesisAction", content).transform;
 
-        private static void AddNemesisActionEntry(Transform content, float width, string name, StagedNemesisAction action) {
-            const float TextX = 30f;
-            const float TagW = 110f;
-            const float SliderTop = 76f;
-            const float LabelW = 120f, SliderW = 170f, ValueW = 60f;
-            GameObject entry = ConfigUI.NewLayoutRow(content, width, SliderTop + 3 * RowHeight + 10f);
+            BindToggle(entry, "Toggle", action.Enabled, on => { action.Enabled = on; RefreshNemesisDescriptions(); });
+            SetText(entry, "Name", Prettify(name));
+            Text tag = Get<Text>(entry, "Tag");
+            Text description = Get<Text>(entry, "Description");
 
-            ConfigUI.AddToggle(entry.transform, 2f, 1f, 22f, action.Enabled, on => { action.Enabled = on; RefreshNemesisDescriptions(); });
-            ConfigUI.AddText(entry.transform, TextX, 0f, width - TextX - TagW - 8f, 24f, Prettify(name), 15, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-            Text tag = ConfigUI.AddText(entry.transform, width - TagW - 4f, 0f, TagW, 24f, "", 13, TextAnchor.MiddleRight);
-            Text description = ConfigUI.AddText(entry.transform, TextX, 26f, width - TextX - 4f, SliderTop - 28f, "", 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-
-            float rowW = width - TextX;
-            GameObject chance = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "$sls_cfg_nem_chance", 0f, 1f, action.Chance, false, v => { action.Chance = v; RefreshNemesisDescriptions(); }), Tip("Chance", "$sls_cfg_tip_nem_chance"));
-            ConfigUI.PositionRow(chance, TextX, SliderTop);
+            WithTip(BindSliderRow(entry, "Chance", action.Chance, v => { action.Chance = v; RefreshNemesisDescriptions(); }), Tip("Chance", "$sls_cfg_tip_nem_chance"));
             // Same range as the score sliders, widened if the file already holds something outside it, so building the page
             // never clamps a configured value.
-            GameObject threshold = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "$sls_cfg_nem_threshold", Mathf.Min(0f, action.Threshold), Mathf.Max(20000f, action.Threshold), action.Threshold, IsWhole(action.Threshold), v => { action.Threshold = v; RefreshNemesisDescriptions(); }), Tip("ScoreThreshold", "$sls_cfg_tip_nem_threshold"));
-            ConfigUI.PositionRow(threshold, TextX, SliderTop + RowHeight);
-            GameObject level = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "$sls_cfg_nem_level_bonus", Mathf.Min(-10, action.LevelBonus), Mathf.Max(10, action.LevelBonus), action.LevelBonus, true, v => { action.LevelBonus = (int)v; RefreshNemesisDescriptions(); }), Tip("LevelBonus", "$sls_cfg_tip_nem_level_bonus"));
-            ConfigUI.PositionRow(level, TextX, SliderTop + 2 * RowHeight);
+            WithTip(BindSliderRow(entry, "Threshold", action.Threshold, v => { action.Threshold = v; RefreshNemesisDescriptions(); }, Mathf.Min(0f, action.Threshold), Mathf.Max(20000f, action.Threshold), IsWhole(action.Threshold)), Tip("ScoreThreshold", "$sls_cfg_tip_nem_threshold"));
+            WithTip(BindSliderRow(entry, "LevelBonus", action.LevelBonus, v => { action.LevelBonus = (int)v; RefreshNemesisDescriptions(); }, Mathf.Min(-10, action.LevelBonus), Mathf.Max(10, action.LevelBonus)), Tip("LevelBonus", "$sls_cfg_tip_nem_level_bonus"));
 
             nemesisActionViews.Add(new NemesisActionView { Action = action, Tag = tag, Description = description });
         }

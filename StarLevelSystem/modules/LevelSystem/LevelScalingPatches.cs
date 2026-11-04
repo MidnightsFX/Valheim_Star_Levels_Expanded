@@ -25,6 +25,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             [HarmonyPrefix]
             static void FlushZoneData() {
                 ZoneScaleSystemData.FlushPendingSave();
+                RegionScaleSystemData.Ledger.FlushIfDirty();
                 LocationReset.LocationResetState.FlushPendingSave();
                 // Raid cooldowns are stamped in the world's net time, which is written by this same save.
                 // Flushing here keeps the two in step, so a crash between raid checks cannot leave the
@@ -46,6 +47,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         internal static void OnWorldUnload() {
             MinimapOverlayFog.WorldUnloading = true;
             ZoneScaleSystem.ResetForWorldChange();
+            RegionScaleSystem.ResetForWorldChange();
             DistanceScaleSystem.ResetForWorldChange();
             LocationReset.LocationResetControl.OnWorldUnload();
             // Nemesis pin registry is static; without this, pin entries from world A leak into
@@ -93,6 +95,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             static void InitZonesOnServer() {
                 if (ZNet.instance != null && ZNet.instance.IsDedicated()) {
                     ZoneScaleSystem.Initialize();
+                    RegionScaleSystem.Initialize();
                 }
             }
         }

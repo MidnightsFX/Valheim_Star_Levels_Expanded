@@ -44,6 +44,8 @@ namespace StarLevelSystem.common {
         internal static String raidsServerSavedData => PerWorldStatePath(ServerRaidSavedData);
         internal const string ZoneDataFileName = "ZoneData.yaml";
         internal static String zoneDataSavedDataPath => PerWorldStatePath(ZoneDataFileName);
+        internal const string RegionDataFileName = "RegionData.yaml";
+        internal static String regionDataSavedDataPath => PerWorldStatePath(RegionDataFileName);
         internal const string NemesisRemoteStateFileName = "NemesisRemoteState.yaml";
         internal static String nemesisRemoteStateFilePath => PerWorldStatePath(NemesisRemoteStateFileName);
         // Per-zone reset stamps + prefab census. World state rather than config: binary, never watched,
@@ -151,6 +153,9 @@ namespace StarLevelSystem.common {
         internal static CustomRPC ClientPlaceNemesisSpawnerRPC;
         internal static CustomRPC ZoneKillReportRPC;
         internal static CustomRPC ZoneLevelSyncRPC;
+        internal static CustomRPC ZoneGeometryRPC;
+        internal static CustomRPC RegionMapRPC;
+        internal static CustomRPC RegionLevelRPC;
         internal static CustomRPC DestroyViaOwnerRPC;
 
         public static ConfigEntry<bool> EnableDebugMode;
@@ -234,6 +239,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<int> RockMaxLevel;
         public static ConfigEntry<int> DestructibleMaxLevel;
 
+        public static ConfigEntry<bool> EnableCreatureModifiers;
         public static ConfigEntry<int> MaxMajorModifiersPerCreature;
         public static ConfigEntry<int> MaxMinorModifiersPerCreature;
         public static ConfigEntry<bool> LimitCreatureModifiersToCreatureStarLevel;
@@ -333,9 +339,21 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> ShowNoMapRingLevel;
         public static ConfigEntry<bool> ShowNoMapZoneLevel;
         public static ConfigEntry<float> ZoneOverlayColorTransparency;
+        public static ConfigEntry<bool> EnableRegionScalingBonus;
+        public static ConfigEntry<bool> EnableRegionMapOverlay;
+        public static ConfigEntry<bool> RegionOverlayAboveFog;
+        public static ConfigEntry<float> RegionTargetSize;
+        public static ConfigEntry<float> RegionMinSize;
+        public static ConfigEntry<float> RegionMountainMinSize;
+        public static ConfigEntry<float> RegionLevelBonusPerLevel;
+        public static ConfigEntry<int> RegionKillsPerLevelUp;
+        public static ConfigEntry<float> RegionDecayLevelsPerHour;
+        public static ConfigEntry<float> RegionOverlayOpacity;
+        public static ConfigEntry<bool> ShowNoMapRegionLevel;
         public static ConfigEntry<bool> ShowQuickConfigureButton;
         public static ConfigEntry<FirstRunMode> FirstTimeSetup;
         public static ConfigEntry<bool> AutoTuneBiomeStarCaps;
+        public static ConfigEntry<bool> ShowAdvancedQuickConfigurePages;
         public static ConfigEntry<bool> ShowNovaIndicator;
 
         // The first-time setup's line in the shared per-user first-run record (common/ConfigUI). Never change the key
@@ -418,6 +436,11 @@ namespace StarLevelSystem.common {
             // Owner peers report batched creature deaths to the server; server pushes zone level changes back.
             ZoneKillReportRPC = NetworkManager.Instance.AddRPC("SLS_ZoneKillReportRPC", OnServerReceiveZoneKills, NOOPReceive);
             ZoneLevelSyncRPC = NetworkManager.Instance.AddRPC("SLS_ZoneLevelSyncRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveZoneLevels);
+            // Clients cut their own zones for the overlay, and this is what makes them come out the same as the server's.
+            ZoneGeometryRPC = NetworkManager.Instance.AddRPC("SLS_ZoneGeometryRPC", OnServerReceiveConfigs, ZoneScaleSystemData.OnClientReceiveGeometry);
+            // The server's region map, and its level changes after that.
+            RegionMapRPC = NetworkManager.Instance.AddRPC("SLS_RegionMapRPC", OnServerReceiveConfigs, RegionScaleSystemData.OnClientReceiveMap);
+            RegionLevelRPC = NetworkManager.Instance.AddRPC("SLS_RegionLevelRPC", OnServerReceiveConfigs, RegionScaleSystemData.OnClientReceiveLevels);
             // Client -> server: delete objects the client does not own. Server -> owning client: the same request,
             // forwarded. Lets SLS delete a creature without a client ever claiming it; see OwnerRoutedDestroy.
             DestroyViaOwnerRPC = NetworkManager.Instance.AddRPC("SLS_DestroyViaOwnerRPC", modules.OwnerRoutedDestroy.OnServerReceive, modules.OwnerRoutedDestroy.OnClientReceive);
@@ -425,8 +448,12 @@ namespace StarLevelSystem.common {
             SynchronizationManager.Instance.AddInitialSynchronization(ClientSendPlayerPrivateKeysRPC, SendRequestForPrivateKeys);
             // Joining clients receive the current set of active remote-boss map pins.
             SynchronizationManager.Instance.AddInitialSynchronization(AddNemesisBossPinRPC, SendNemesisBossPins);
+            // Ahead of the levels, which are only good for the map this describes.
+            SynchronizationManager.Instance.AddInitialSynchronization(ZoneGeometryRPC, ZoneScaleSystemData.SerializeGeometryForSync);
             // Give joining clients the current (non-default) zone levels for their overlay / level bonuses.
             SynchronizationManager.Instance.AddInitialSynchronization(ZoneLevelSyncRPC, ZoneScaleSystemData.SerializeLeveledZonesForSync);
+            // The map carries its levels, so a joining client has it before it can own a creature to roll.
+            SynchronizationManager.Instance.AddInitialSynchronization(RegionMapRPC, RegionScaleSystemData.SerializeMapForSync);
         }
 
         private void CreateConfigValues(ConfigFile Config) {
@@ -484,6 +511,11 @@ namespace StarLevelSystem.common {
                 null,
                 new ConfigurationManagerAttributes { }));
             ShowNoMapZoneLevel.SettingChanged += NoMapLevelIndicator.OnShowIndicatorChanged;
+            ShowNoMapRegionLevel = Config.Bind("Client config", "ShowNoMapRegionLevel", true,
+                new ConfigDescription("Show the current region level in the top right corner while playing without a map. Hidden when region scaling is disabled, and when a map is available (the minimap readout covers that case).",
+                null,
+                new ConfigurationManagerAttributes { }));
+            ShowNoMapRegionLevel.SettingChanged += NoMapLevelIndicator.OnShowIndicatorChanged;
             ShowQuickConfigureButton = Config.Bind("Client config", "ShowQuickConfigureButton", true,
                 new ConfigDescription("Show the StarLevelSystem quick configuration button on the main menu and (for hosts/admins) the pause menu.",
                 null,
@@ -497,6 +529,10 @@ namespace StarLevelSystem.common {
                 new ConfigDescription("On the quick configure panel's Level Distribution page, scale each biome's star cap with the Max stars slider. Turn this off to type each biome's cap in yourself on that page.",
                 null,
                 new ConfigurationManagerAttributes { }));
+            ShowAdvancedQuickConfigurePages = Config.Bind("Client config", "ShowAdvancedQuickConfigurePages", false,
+                new ConfigDescription("Show every page of the quick configure panel. Off leaves only its Simple Setup page.",
+                null,
+                new ConfigurationManagerAttributes { }));
             ShowNovaIndicator = Config.Bind("Client config", "ShowNovaIndicator", false,
                 new ConfigDescription("Draw a circle on the ground where a creature's death nova is about to burst, filling in until it does. Only affects what you see.",
                 null,
@@ -504,7 +540,7 @@ namespace StarLevelSystem.common {
             MigrateFirstTimeSetup();
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have. A biome's BiomeMaxLevelOverride (LevelSettings.yaml) sets its own cap in place of this one, an active boss-conditional tier can raise the cap but never lowers it, and bosses use MaxBossLevel.", false, 1, 200);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", DifficultyPreset.DefaultMaxLevel, "The Maximum number of stars that a creature can have. A biome's BiomeMaxLevelOverride (LevelSettings.yaml) sets its own cap in place of this one, an active boss-conditional tier can raise the cap but never lowers it, and bosses use MaxBossLevel.", false, 1, 200);
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
             MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The Maximum number of stars that a boss creature can have. Applies wherever the boss stands: biome caps and conditional tiers do not change it, a CreatureMaxLevelOverride naming the boss does.", false, 1, 200);
             MaxBossLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
@@ -513,9 +549,10 @@ namespace StarLevelSystem.common {
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
             EnableCreatureScalingPerLevel.SettingChanged += SizeModifications.SizeSettingChanged;
 
-            EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
-            EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
+            EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", false, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
+            EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are. Only drawn while distance scaling is enabled.");
             EnableMapRingsForDistanceBonus.SettingChanged += DistanceScaleSystem.UpdateMapRingEnableSettingOnChange;
+            EnableDistanceLevelScalingBonus.SettingChanged += DistanceScaleSystem.UpdateMapRingEnableSettingOnChange;
             MapRingsAboveFog = BindServerConfig("LevelSystem", "MapRingsAboveFog", false, "When enabled, distance map rings draw above the map fog so they are visible even in unexplored areas. When disabled, rings sit below the fog and only appear once an area has been explored.");
             MapRingsAboveFog.SettingChanged += DistanceScaleSystem.UpdateMapRingFogSettingOnChange;
             DistanceBonusIsFromStarterTemple = BindServerConfig("LevelSystem", "DistanceBonusIsFromStarterTemple", false, "When enabled the distance bonus is calculated from the starter temple instead of world center, typically this makes little difference. But can help ensure your starting area is more correctly calculated.");
@@ -533,6 +570,7 @@ namespace StarLevelSystem.common {
             MaximumCreatureScale.SettingChanged += SizeModifications.SizeSettingChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             EnableColorization = BindServerConfig("LevelSystem", "EnableColorization", true, "Enables this mods colorization of creatures based on their star level.");
+            EnableColorization.SettingChanged += Colorization.EnableColorizationChanged;
             EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x.", false, 0f, 5f);
             EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
             BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
@@ -543,7 +581,8 @@ namespace StarLevelSystem.common {
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
-            EnableRidableCreatureSizeFixes = BindServerConfig("LevelSystem", "EnableRidableCreatureSizeFixes", true, "Keeps scaled rideable creatures usable: saddle reach that grows with the mount, dismounting onto the ground beside a big mount, steeper slopes for big mounts, more camera zoom while riding one, and collider fixes for tamed Lox and Asksvin.");
+            EnableRidableCreatureSizeFixes = BindServerConfig("LevelSystem", "EnableRidableCreatureSizeFixes", true, "Keeps scaled rideable creatures usable, any creature with a saddle including those from other mods: full speed at any size, saddle reach that grows with the mount, using the saddle by aiming at a big mount's upper body, dismounting onto the ground beside it, more camera zoom while riding one, and feet that stay on the ground. RideableSizeFixes in a creature's LevelSettings.yaml entry turns these off for that creature.");
+            EnableRidableCreatureSizeFixes.SettingChanged += SizeModifications.SizeSettingChanged;
             MultipliedNightSpawnsRemovedDuringDay = BindServerConfig("LevelSystem", "MultipliedNightSpawnsRemovedDuringDay", true, "When true, night spawns will be flagged to despawn during the day, which will result in them running away and despawning. This can be disabled if desired.");
 
             EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
@@ -642,23 +681,41 @@ namespace StarLevelSystem.common {
             ClientLocationResetCooldownSeconds = BindServerConfig("LocationReset", "ClientLocationResetCooldownSeconds", 30f, "Minimum seconds between reset or registration requests from any one client. Read-only queries are not affected. 0 disables the cooldown.", true, 0f, 3600f);
             LocationResetSweepBudgetMs = BindServerConfig("LocationReset", "LocationResetSweepBudgetMs", 4f, "Milliseconds of server frame time the reset sweep may consume per frame. This is the main throughput throttle: raise it to restore the world faster, lower it if the server is under strain. 0 uses the value from LocationResetSettings.yaml.", false, 0f, 33f);
 
-            EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", true, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
+            EnableZoneScalingBonus = BindServerConfig("ZoneScaling", "EnableZoneScalingBonus", false, "Divides the world into island-based zones. Zones gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them.");
             ZoneLevelBonusPerLevel = BindServerConfig("ZoneScaling", "ZoneLevelBonusPerLevel", 1.0f, "How much each zone level above 1 multiplies the level-up chances of creatures spawning in that zone. The multiplier is 1 + (zone level - 1) x this value: 1.0 doubles the chances at zone level 2 and triples them at zone level 3. 0 turns the zone bonus off.", false, 0f, 10f);
             ZoneKillsPerLevelUp = BindServerConfig("ZoneScaling", "ZoneKillsPerLevelUp", 100, "Number of creature deaths in a zone required to raise that zone's level by 1.", false, 1, 10000);
             ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours. Whether that hour is wall-clock time or time actually spent in the world is set by ZoneDecayClock.", false, 0f, 50f);
             ZoneDecayClock = BindServerConfig("ZoneScaling", "ZoneDecayClock", ZoneDecayClockSource.RealTime.ToString(), "Which clock zone level decay is measured against. RealTime is the wall clock, so zones keep decaying while nobody is playing and a world left alone overnight comes back several levels lower. GameTime is the world's own time, which only advances while the world is actually being played, so nothing decays while you are logged out or while a dedicated server sits empty. Switching between them re-bases every zone's decay timer within 15 minutes; zone levels themselves are never lost by the switch.", new AcceptableValueList<string>(ZoneDecayClockSource.RealTime.ToString(), ZoneDecayClockSource.GameTime.ToString()));
             ZoneDecayClock.SettingChanged += ZoneScaleSystemData.OnDecayClockChanged;
-            EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
+            EnableZoneScalingBonus.SettingChanged += ZoneScaleSystem.OnZoneScalingToggled;
+            EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level. Only drawn while zone scaling is enabled.");
+            EnableZoneMapOverlay.SettingChanged += ZoneScaleSystem.OnZoneOverlayToggled;
             ZoneOverlayAboveFog = BindServerConfig("ZoneScaling", "ZoneOverlayAboveFog", false, "When enabled, zone boundaries draw above the map fog so they are visible even in unexplored areas. When disabled, boundaries sit below the fog and only appear once an area has been explored.");
             ZoneOverlayAboveFog.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayFogOnChange;
-            MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 500f, 10000f);
-            MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 1000f, 10000f);
+            MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (sls-zone-rebuild), which resets their levels.", false, 500f, 10000f);
+            MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (sls-zone-rebuild), which resets their levels.", false, 1000f, 10000f);
             KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters.", true);
             ZoneOverlayColorOptions = BindServerConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
             ZoneOverlayColorOptions.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
             ZoneOverlayColorTransparency = BindServerConfig("ZoneScaling", "ZoneOverlayColorTransparency", 0.5f, "Transparency value of the color used for zone boundaries.", true, 0f, 1f);
             ZoneOverlayColorTransparency.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
 
+            EnableRegionScalingBonus = BindServerConfig("RegionScaling", "EnableRegionScalingBonus", false, "Cuts the land into regions along its shorelines, with mountains as their own sections. Regions gain levels from creature kills and apply bonus level-up chances to creatures that spawn inside them, on top of any zone bonus.");
+            EnableRegionScalingBonus.SettingChanged += RegionScaleSystem.OnEnabledChanged;
+            EnableRegionMapOverlay = BindServerConfig("RegionScaling", "EnableRegionMapOverlay", true, "Fills each region on the map with a low-opacity colour showing its level. Only drawn while region scaling is enabled.");
+            EnableRegionMapOverlay.SettingChanged += RegionScaleSystem.OnOverlaySettingChanged;
+            RegionOverlayAboveFog = BindServerConfig("RegionScaling", "RegionOverlayAboveFog", false, "Show the regions over unexplored parts of the map too.");
+            RegionOverlayAboveFog.SettingChanged += RegionScaleSystem.OnOverlaySettingChanged;
+            RegionTargetSize = BindServerConfig("RegionScaling", "RegionTargetSize", 1500f, "The size regions try to average, in meters, as the side of a square of the same area. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 500f, 6000f);
+            RegionMinSize = BindServerConfig("RegionScaling", "RegionMinSize", 750f, "Land is not cut into sections smaller than this, in meters, as the side of a square of the same area. Land that can't be divided without going under it stays one larger section. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 200f, 6000f);
+            RegionMountainMinSize = BindServerConfig("RegionScaling", "RegionMountainMinSize", 500f, "Mountains at least this big, in meters, as the side of a square of the same area, become sections of their own. Smaller ones stay part of the land around them. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 200f, 6000f);
+            RegionLevelBonusPerLevel = BindServerConfig("RegionScaling", "RegionLevelBonusPerLevel", 1.0f, "Multiplier added per region level to the chance of each star: 1 + (level - 1) x this. At 1, a level 3 region triples the chances.", false, 0f, 10f);
+            RegionKillsPerLevelUp = BindServerConfig("RegionScaling", "RegionKillsPerLevelUp", 100, "Creature kills in a region needed for it to gain a level.", false, 1, 10000);
+            RegionDecayLevelsPerHour = BindServerConfig("RegionScaling", "RegionDecayLevelsPerHour", 0.25f, "Levels a region loses per hour, on the clock ZoneDecayClock selects. 0 turns decay off.", false, 0f, 50f);
+            RegionOverlayOpacity = BindServerConfig("RegionScaling", "RegionOverlayOpacity", 0.15f, "How strongly the region fill shows on the map, from invisible (0) to solid (1). Its colours are ZoneOverlayColorOptions.", false, 0f, 1f);
+            RegionOverlayOpacity.SettingChanged += RegionScaleSystem.OnColorSettingChanged;
+
+            EnableCreatureModifiers = BindServerConfig("Modifiers", "EnableCreatureModifiers", true, "Creatures and bosses can spawn with modifiers. When off, new creatures roll none at all, whatever the settings below say; creatures already in the world keep theirs.");
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.", false, 0);
             MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.", false, 0);
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
@@ -909,7 +966,7 @@ namespace StarLevelSystem.common {
         internal static IEnumerator OnServerReceiveZoneKills(long sender, ZPackage package) {
             if (ZNet.instance == null || !ZNet.instance.IsServer()) { yield break; }
             if (DataObjects.TryDeserialize(package.ReadString(), "zone kill report", out List<SerializableVector3> deaths) == false) { yield break; }
-            ZoneScaleSystemData.ApplyDeaths(deaths);
+            ZoneScaleSystem.ApplyKillBatch(deaths);
             yield return null;
         }
 

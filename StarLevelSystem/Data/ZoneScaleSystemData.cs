@@ -35,30 +35,22 @@ namespace StarLevelSystem.Data {
         // its zone geometry. Applied once BuildZoneIndex runs.
         private static readonly Dictionary<int, int> pendingLevelUpdates = new Dictionary<int, int>();
 
-        // flush data signal
-        private static bool zonesDirty = false;
         internal static bool zonesBuilt = false;
         internal static bool buildingZones = false;
-        private static bool decayRunning = false;
         internal static bool overlayAvailable = false;
-        // How often the decay coroutine polls. Decay magnitude is time-based, so this only
-        // controls check frequency, not the effective rate (see ZoneDecayLevelsPerHour).
-        private const float DecayTickIntervalSeconds = 900f; // 15 minutes
         internal static int overlayUpdates = 0;
-        // Handle for the running decay loop so it can be stopped on world unload (TaskRunner is
-        // DontDestroyOnLoad, so a running loop would otherwise leak across worlds).
-        private static Coroutine decayCoroutine = null;
 
-        // The clock the in-memory LastDecayTimestamp values are expressed in. NOT the same thing as
-        // the configured clock: the two differ between a config change and the re-base that follows
-        // it, and writing the configured value into the save file while the stamps are still in the
-        // other clock is exactly what would make the next load trust them and floor every zone.
-        private static ZoneDecayClockSource stampedClock = ZoneDecayClockSource.RealTime;
-        // Wall-clock stamps are unix seconds (>1e9 since 2001); net time counts seconds the world has
-        // actually been played and would need ~32 years of continuous play to reach that. A stamp's
-        // magnitude therefore identifies the clock that wrote it on its own, which is what lets a
-        // hand-edited, missing or stale DecayClock marker be caught instead of taken at face value.
-        private const double WallClockFloor = 1000000000d;
+        // Kills, decay and the decay clock, which regions have too.
+        internal static readonly KillDecayLedger<ZoneData> Ledger = new KillDecayLedger<ZoneData>(
+            "Zone",
+            () => Zones,
+            () => ValConfig.ZoneKillsPerLevelUp.Value,
+            () => ValConfig.ZoneDecayLevelsPerHour.Value,
+            changed => {
+                BroadcastZoneLevels(changed);
+                ZoneScaleSystem.DrawMinimapOverlay();
+            },
+            SaveZoneData);
 
         // Zone identity is derived from grid-cell coordinates so it is stable across independent
         // builds (authority load vs. client rebuild) and network syncs line up. Sequential build
@@ -69,17 +61,36 @@ namespace StarLevelSystem.Data {
 
         internal static int ZoneIdForCell(int cellX, int cellZ) => cellX * ZoneIdStride + cellZ;
 
+        // What the current map is cut with. A map's sizes only change when it is rebuilt, which resets its levels, so these are
+        // not simply the settings: a server's come from its file until a rebuild, and a client's come from the server, so a
+        // setting changed since the server's map was cut can't give the client different zones with different ids.
+        internal static float BuildCellSize { get; private set; }
+        internal static float BuildMinSize { get; private set; }
+        internal static int MapGeneration { get; private set; }
+        private static bool sizesFromServer;
+
+        internal static void UseConfiguredSizes(bool newGeneration) {
+            BuildCellSize = ValConfig.MaxZoneSize.Value;
+            BuildMinSize = ValConfig.MinZoneSize.Value;
+            if (newGeneration) { MapGeneration++; }
+        }
+
+        // A client that has heard from the server keeps what it was told.
+        internal static void UseConfiguredSizesUnlessToldOtherwise() {
+            if (sizesFromServer == false) { UseConfiguredSizes(false); }
+        }
+
         // Set by LoadZoneData when the file holds a map built for a smaller or larger world.
         internal static bool LoadedForAnotherWorldSize { get; private set; }
 
         // Progress from a map built for another world size, until the map for this one is finished.
         private static Dictionary<int, ZoneData> heldZoneProgress;
-        private static ZoneDecayClockSource heldZoneClock;
+        private static string heldZoneClock;
 
         internal static void HoldLoadedZonesForRebuild() {
             heldZoneProgress = new Dictionary<int, ZoneData>(Zones.Count);
             foreach (var zone in Zones) { heldZoneProgress[zone.ZoneId] = zone; }
-            heldZoneClock = stampedClock;
+            heldZoneClock = Ledger.StampedClockName;
             Zones = new List<ZoneData>();
             BuildZoneIndex();
         }
@@ -92,15 +103,14 @@ namespace StarLevelSystem.Data {
                 if (heldZoneProgress.TryGetValue(zone.ZoneId, out ZoneData held) == false) { continue; }
                 zone.ZoneLevel = held.ZoneLevel;
                 zone.TotalKills = held.TotalKills;
-                if (heldZoneClock == stampedClock) { zone.LastDecayTimestamp = held.LastDecayTimestamp; }
+                if (heldZoneClock == Ledger.StampedClockName) { zone.LastDecayTimestamp = held.LastDecayTimestamp; }
             }
             heldZoneProgress = null;
         }
 
         // Recovers the cell coordinates from a zone's min corner (MinX = -worldSize + cellX * cellSize)
         // and packs them into the same id used at build time. Used to normalize ids loaded from disk.
-        internal static int ZoneIdForBounds(float minX, float minZ) {
-            float cellSize = ValConfig.MaxZoneSize.Value;
+        internal static int ZoneIdForBounds(float minX, float minZ, float cellSize) {
             int cellX = Mathf.RoundToInt((minX + WorldGenerator.worldSize) / cellSize);
             int cellZ = Mathf.RoundToInt((minZ + WorldGenerator.worldSize) / cellSize);
             return ZoneIdForCell(cellX, cellZ);
@@ -111,29 +121,10 @@ namespace StarLevelSystem.Data {
         // computed by threshold crossing so a batch that jumps past an exact multiple still levels up.
         internal static void ApplyDeaths(List<SerializableVector3> deaths) {
             if (!zonesBuilt) { return; }
-            // StampNow dereferences ZNet in GameTime mode. Both callers already run with a live ZNet,
+            // Stamping a level-up dereferences ZNet in GameTime mode. Both callers already run with a live ZNet,
             // but this is the one entrypoint where that is not visible from here.
             if (ZNet.instance == null) { return; }
-            int threshold = ValConfig.ZoneKillsPerLevelUp.Value;
-            HashSet<ZoneData> leveledZones = new HashSet<ZoneData>();
-            foreach (var pos in deaths) {
-                ZoneData zone = ZoneScaleSystemData.GetZoneForPosition(pos);
-                if (zone == null) { continue; }
-                int oldKills = zone.TotalKills;
-                zone.TotalKills = oldKills + 1;
-                if (threshold > 0) {
-                    int levelsGained = (zone.TotalKills / threshold) - (oldKills / threshold);
-                    if (levelsGained > 0) {
-                        zone.ZoneLevel += levelsGained;
-                        // Restart the decay countdown: a kill-driven level-up is recent activity, so
-                        // decay should measure inactivity from here (otherwise a stale build-time
-                        // timestamp would let the next decay pass instantly undo the level-up).
-                        zone.LastDecayTimestamp = StampNow();
-                        leveledZones.Add(zone);
-                    }
-                }
-            }
-            if (deaths.Count > 0) { ZoneScaleSystemData.zonesDirty = true; }
+            HashSet<ZoneData> leveledZones = Ledger.ApplyKills(deaths.Select(death => GetZoneForPosition(death)).Where(zone => zone != null));
             if (leveledZones.Count > 0) {
                 Logger.LogDebug($"{leveledZones.Count} zone(s) leveled up from a batch of {deaths.Count} kills.");
                 ZoneScaleSystemData.BroadcastZoneLevels(leveledZones);
@@ -142,18 +133,14 @@ namespace StarLevelSystem.Data {
         }
 
         internal static void StartDecayCoroutine() {
-            if (decayRunning) { return; }
-            // Decay and persistence are authority-only; clients receive level changes via sync.
-            if (ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
-            decayRunning = true;
-            decayCoroutine = TaskRunner.Run().StartCoroutine(DecayZoneLevels());
+            Ledger.Start();
         }
 
         // Tears down all in-memory zone state and stops the decay loop so a world/server switch
         // starts clean. Flushes any unsaved authority changes first (no-op off the server).
         internal static void ResetState() {
             FlushPendingSave();
-            if (decayCoroutine != null) { TaskRunner.Run().StopCoroutine(decayCoroutine); decayCoroutine = null; }
+            Ledger.Reset();
             Zones = new List<ZoneData>();
             zoneIndex = new Dictionary<long, List<ZoneData>>();
             zoneById = new Dictionary<int, ZoneData>();
@@ -163,156 +150,22 @@ namespace StarLevelSystem.Data {
             zonesBuilt = false;
             buildingZones = false;
             overlayAvailable = false;
-            decayRunning = false;
-            zonesDirty = false;
-            stampedClock = ZoneDecayClockSource.RealTime;
+            BuildCellSize = 0f;
+            BuildMinSize = 0f;
+            MapGeneration = 0;
+            sizesFromServer = false;
         }
-
-        // Configured clock, resolved defensively. AcceptableValueList constrains the local file, but
-        // this value also arrives over the config sync from another peer's build, so an unrecognised
-        // string falls back to the legacy wall clock rather than throwing.
-        private static ZoneDecayClockSource ConfiguredClock() {
-            return ValConfig.ZoneDecayClock.Value == ZoneDecayClockSource.GameTime.ToString()
-                ? ZoneDecayClockSource.GameTime : ZoneDecayClockSource.RealTime;
-        }
-
-        // ZNet.GetTimeSeconds is the world's net time: real seconds, but only counted while the world
-        // is being played (ZNet.UpdateNetTime returns early on a server with no players), and
-        // persisted with the world save. So an hour of it is an hour somebody was actually online for.
-        //
-        // Deliberately no null-ZNet fallback: every caller runs with a live ZNet, and a silent 0 here
-        // would collide with the "no usable stamp" sentinel the decay loop keys on.
-        private static double ClockNow(ZoneDecayClockSource clock) {
-            return clock == ZoneDecayClockSource.GameTime
-                ? ZNet.instance.GetTimeSeconds()
-                : DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        }
-
-        // Stamps are always written in whatever clock the rest of the set is already in. The decay
-        // loop is the only place that changes clocks, and it re-bases every zone at once when it does.
-        internal static double StampNow() { return ClockNow(stampedClock); }
 
         // Fresh geometry carries no history, so it simply adopts whatever clock is configured now.
         internal static void StampNewZones(List<ZoneData> zones) {
-            stampedClock = ConfiguredClock();
-            double now = ClockNow(stampedClock);
-            foreach (var zone in zones) { zone.LastDecayTimestamp = now; }
+            Ledger.StampNew(zones);
         }
 
-        // What the stamps actually are, preferring observed magnitude over the persisted marker so a
-        // hand-edited, missing or stale DecayClock cannot be trusted blindly. Any single stamped zone
-        // is evidence: within a session every stamp shares a clock, and the only window where they
-        // are mixed is between a config change and the re-base, where either answer re-bases anyway.
-        private static ZoneDecayClockSource DetectStampedClock() {
-            foreach (var zone in Zones) {
-                if (zone.LastDecayTimestamp <= 0d) { continue; } // never stamped, carries no evidence
-                return zone.LastDecayTimestamp >= WallClockFloor
-                    ? ZoneDecayClockSource.RealTime : ZoneDecayClockSource.GameTime;
-            }
-            return stampedClock; // nothing stamped yet - trust the marker
-        }
-
-        // Keeps the in-memory decay stamps and the configured clock in the same units, re-basing every
-        // zone when they diverge. Returns true when it re-based, in which case the caller must skip
-        // decay for this pass.
-        //
-        // This is the whole safety net for the two clocks being numerically incompatible: wall stamps
-        // are ~1.7e9 and net-time stamps ~1e3-1e6, so measuring across an unhandled switch either
-        // floors every zone to level 1 (game -> real) or freezes decay forever (real -> game). Zone
-        // levels are never touched here; only the countdown restarts.
-        private static bool EnsureClockMode() {
-            ZoneDecayClockSource configured = ConfiguredClock();
-            ZoneDecayClockSource actual = DetectStampedClock();
-            if (actual == configured) { stampedClock = configured; return false; }
-            stampedClock = configured;
-            double now = ClockNow(configured);
-            foreach (var zone in Zones) { zone.LastDecayTimestamp = now; }
-            zonesDirty = true;
-            Logger.LogInfo($"Zone decay clock changed ({actual} -> {configured}). Re-based {Zones.Count} zone decay timers to {now:F0}; zone levels are unchanged.");
-            return true;
-        }
-
-        // The decay loop re-bases on its own next tick, so this only makes it happen now rather than
-        // up to DecayTickIntervalSeconds later. Off the authority there is nothing to re-base: clients
-        // hold levels only and never read their stamps. Guarded on zonesBuilt because Jotunn's
-        // SynchronizationManager restores every synced entry to its local value from a ZNet.OnDestroy
-        // prefix on world unload, raising SettingChanged after zone state has already been torn down.
+        // Guarded on zonesBuilt because Jotunn's SynchronizationManager restores every synced entry to its local value from a
+        // ZNet.OnDestroy prefix on world unload, raising SettingChanged after zone state has already been torn down.
         internal static void OnDecayClockChanged(object sender, EventArgs e) {
-            if (!zonesBuilt || ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
-            if (EnsureClockMode()) { PersistZones(); }
-        }
-
-        private static IEnumerator DecayZoneLevels() {
-            while (true) {
-                yield return new WaitForSeconds(DecayTickIntervalSeconds);
-                // TaskRunner is DontDestroyOnLoad, so this loop can outlive a teardown path that
-                // missed ResetState. ClockNow dereferences ZNet in GameTime mode.
-                if (ZNet.instance == null) { continue; }
-                if (!zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) {
-                    if (zonesDirty) { PersistZones(); }
-                    continue;
-                }
-                // Re-base before measuring anything: a pass that spanned a clock change would either
-                // wipe every zone or stop decaying entirely. Persist straight away so a crash before
-                // the next tick cannot leave the file's marker disagreeing with its stamps.
-                if (EnsureClockMode()) { PersistZones(); continue; }
-
-                double now = ClockNow(stampedClock);
-                float decayRate = ValConfig.ZoneDecayLevelsPerHour.Value; // zone levels lost per hour of the configured clock
-                if (decayRate <= 0f) {
-                    // Decay disabled: keep each zone's decay clock current so toggling it back on
-                    // doesn't cause a sudden catch-up drop. Persisted rather than in-memory only, or
-                    // a restart reinstates that drop from the stale stamps still on disk.
-                    foreach (var zone in ZoneScaleSystemData.Zones) { zone.LastDecayTimestamp = now; }
-                    PersistZones();
-                    continue;
-                }
-                List<ZoneData> changedZones = new List<ZoneData>();
-                bool clockRewound = false;
-                foreach (var zone in ZoneScaleSystemData.Zones) {
-                    if (zone.ZoneLevel <= 1) { continue; }
-                    // No usable stamp (OmitDefaults drops the field when it is 0, and files written
-                    // before it existed have none). Measuring elapsed time from the epoch would floor
-                    // the zone on the first tick, so adopt now and persist the correction.
-                    if (zone.LastDecayTimestamp <= 0) {
-                        zone.LastDecayTimestamp = now;
-                        zonesDirty = true;
-                        continue;
-                    }
-                    double elapsed = now - zone.LastDecayTimestamp;
-                    if (elapsed < 0d) {
-                        // Clock ran backwards: a world restored from a backup (net time lives in the
-                        // world save), a hand-edited stamp, or a system clock correction. Pull the
-                        // stamp back to now so the zone is not frozen forever; its level is untouched.
-                        // Safe to clamp rather than skip because EnsureClockMode already ran, so this
-                        // cannot be a units mismatch.
-                        zone.LastDecayTimestamp = now;
-                        clockRewound = true;
-                        continue;
-                    }
-                    double levelsToDecay = (elapsed / 3600.0) * decayRate;
-                    if (levelsToDecay >= 1.0) {
-                        int decayAmount = (int)levelsToDecay;
-                        zone.ZoneLevel = Mathf.Max(1, zone.ZoneLevel - decayAmount);
-                        // Advance the clock only by the time we actually consumed so the sub-level
-                        // remainder carries over to the next pass.
-                        zone.LastDecayTimestamp += (decayAmount / decayRate) * 3600.0;
-                        changedZones.Add(zone);
-                    }
-                }
-                if (clockRewound) {
-                    Logger.LogWarning("Some zone decay stamps were ahead of the current clock and were re-based to now. No zone levels were changed.");
-                    zonesDirty = true;
-                }
-                if (changedZones.Count > 0) {
-                    Logger.LogDebug("Zone levels decayed.");
-                    zonesDirty = true;
-                    ZoneScaleSystemData.BroadcastZoneLevels(changedZones);
-                    ZoneScaleSystem.DrawMinimapOverlay();
-                }
-                // Flush any kill/decay changes accumulated since the last save.
-                if (zonesDirty) { PersistZones(); }
-            }
+            if (zonesBuilt) { Ledger.OnClockSettingChanged(); }
+            RegionScaleSystemData.OnDecayClockChanged();
         }
 
         internal static ZoneData GetZoneForPosition(Vector3 pos) {
@@ -400,8 +253,10 @@ namespace StarLevelSystem.Data {
                     // What the stamps in this file ARE. Writing the configured clock here instead
                     // would mislabel a file saved between a config change and the re-base tick, and
                     // the next load would trust the label over the stamps.
-                    DecayClock = stampedClock.ToString(),
-                    BuildRadius = WorldSize.IsResized ? WorldSize.Radius : 0f
+                    DecayClock = Ledger.StampedClockName,
+                    BuildRadius = WorldSize.IsResized ? WorldSize.Radius : 0f,
+                    BuildMinSize = BuildMinSize,
+                    Generation = MapGeneration,
                 };
                 File.WriteAllText(ValConfig.zoneDataSavedDataPath, DataObjects.yamlSerializer.Serialize(saveData));
                 return true;
@@ -411,17 +266,9 @@ namespace StarLevelSystem.Data {
             }
         }
 
-        // Writes the file and clears the dirty flag only once the write has actually happened, so a save
-        // that was skipped or failed is retried on the next pass instead of being silently dropped.
-        private static void PersistZones() {
-            if (SaveZoneData()) { zonesDirty = false; }
-        }
-
         // Flushes pending zone data to disk if dirty; invoked on world save (see ZoneSavePatches).
         internal static void FlushPendingSave() {
-            if (!zonesDirty) { return; }
-            if (ZNet.instance == null || !ZNet.instance.IsServer()) { return; }
-            PersistZones();
+            Ledger.FlushIfDirty();
         }
 
         internal static ZoneLoadResult LoadZoneData() {
@@ -432,22 +279,22 @@ namespace StarLevelSystem.Data {
                 string yaml = File.ReadAllText(path);
                 ZoneSystemSaveData loaded = DeserializeSaveData(yaml, Path.GetFileName(path));
                 if (loaded?.Zones == null || loaded.Zones.Count == 0) { return ZoneLoadResult.NoData; }
-                if (!BelongsToCurrentWorld(loaded)) { return ZoneLoadResult.NoData; }
+                if (!IsCurrentWorld(loaded.WorldUid, loaded.WorldName, "Zone")) { return ZoneLoadResult.NoData; }
                 Zones = loaded.Zones;
                 LoadedForAnotherWorldSize = (loaded.BuildRadius > 0f ? loaded.BuildRadius : WorldGenerator.worldSize) != WorldSize.Radius;
+                // The sizes this map was cut with, whatever the settings say now. A world grown since keeps them too, or the
+                // rebuild's ids would not line up with the progress it is carrying over.
+                BuildCellSize = Zones[0].MaxX - Zones[0].MinX;
+                BuildMinSize = loaded.BuildMinSize > 0f ? loaded.BuildMinSize : ValConfig.MinZoneSize.Value;
+                MapGeneration = loaded.Generation;
+                if (Mathf.Approximately(BuildCellSize, ValConfig.MaxZoneSize.Value) == false || Mathf.Approximately(BuildMinSize, ValConfig.MinZoneSize.Value) == false) {
+                    Logger.LogWarning("The zone size settings have changed since this map was built. It stays as it is, keeping its levels, until sls-zone-rebuild is run.");
+                }
                 // Normalize persisted ids to the deterministic cell-based scheme so authority ids
                 // match what clients derive from a fresh build (ignores any stale build-order id).
-                foreach (var z in Zones) { z.ZoneId = ZoneIdForBounds(z.MinX, z.MinZ); }
+                foreach (var z in Zones) { z.ZoneId = ZoneIdForBounds(z.MinX, z.MinZ, BuildCellSize); }
                 BuildZoneIndex();
-                // Record the file's clock only. Deliberately no re-base here: on a dedicated server
-                // Initialize runs from a ZoneSystem.Start postfix, and ZoneSystem.Start runs before
-                // ZNet.Start loads the world (it is what populates the location list ServerLoadWorld
-                // immediately consumes), so ZNet.GetTimeSeconds() is still its 2040 initialiser at
-                // this point. Re-basing to that would set the world's decay clock days in the past
-                // and floor every zone on the next tick. EnsureClockMode does it from the decay
-                // coroutine instead, whose first pass is a full tick interval later.
-                stampedClock = loaded.DecayClock == ZoneDecayClockSource.GameTime.ToString()
-                    ? ZoneDecayClockSource.GameTime : ZoneDecayClockSource.RealTime;
+                Ledger.AdoptSavedClock(loaded.DecayClock);
                 return ZoneLoadResult.Loaded;
             } catch (Exception e) {
                 Logger.LogWarning($"Failed to load zone data: {e.Message}");
@@ -460,24 +307,24 @@ namespace StarLevelSystem.Data {
         // just been carried into this world's slot by the migration in ValConfig.PerWorldStatePath.
         // Anything that fails here is another world's file sitting at this world's path, so it is safe
         // to overwrite with a fresh build.
-        private static bool BelongsToCurrentWorld(ZoneSystemSaveData loaded) {
+        internal static bool IsCurrentWorld(long loadedUid, string loadedWorld, string what) {
             long currentUid = ZNet.instance?.GetWorld()?.m_uid ?? 0L;
             string currentWorld = ZNet.instance?.GetWorldName() ?? "";
-            if (loaded.WorldUid != 0L && currentUid != 0L) {
-                if (loaded.WorldUid == currentUid) { return true; }
-                Logger.LogInfo($"Zone data belongs to a different world (id {loaded.WorldUid:x} vs {currentUid:x}), rebuilding.");
+            if (loadedUid != 0L && currentUid != 0L) {
+                if (loadedUid == currentUid) { return true; }
+                Logger.LogInfo($"{what} data belongs to a different world (id {loadedUid:x} vs {currentUid:x}), rebuilding.");
                 return false;
             }
             // Written before world ids were recorded (or read on a world old enough not to have one):
             // the name is the only identity either side can offer. The next save adds the id.
-            if (!string.IsNullOrEmpty(loaded.WorldName)) {
-                if (loaded.WorldName == currentWorld) { return true; }
-                Logger.LogInfo($"Zone data is for a different world ({loaded.WorldName} vs {currentWorld}), rebuilding.");
+            if (!string.IsNullOrEmpty(loadedWorld)) {
+                if (loadedWorld == currentWorld) { return true; }
+                Logger.LogInfo($"{what} data is for a different world ({loadedWorld} vs {currentWorld}), rebuilding.");
                 return false;
             }
             // No world recorded at all. This used to be taken as close enough and loaded, which is
             // exactly how one unidentified file could become every world's starting zone levels.
-            Logger.LogInfo("Zone data names no world of its own, so it cannot be matched to this one; rebuilding.");
+            Logger.LogInfo($"{what} data names no world of its own, so it cannot be matched to this one; rebuilding.");
             return false;
         }
 
@@ -511,6 +358,43 @@ namespace StarLevelSystem.Data {
                 Logger.LogError($"Could not read {Path.GetFileName(path)}; it has been kept as {Path.GetFileName(backup)} and a fresh zone map will be built. Zone levels in that file were NOT loaded.");
             } catch (Exception e) {
                 Logger.LogWarning($"Failed to preserve unreadable zone data: {e.Message}");
+            }
+        }
+
+        // Authority -> clients: what the map is cut with. Null for a joining client while there is no map yet: it hears when
+        // that is done, from BroadcastGeometry.
+        internal static ZPackage SerializeGeometryForSync() {
+            return zonesBuilt ? SerializeGeometry() : null;
+        }
+
+        private static ZPackage SerializeGeometry() {
+            ZPackage pkg = new ZPackage();
+            pkg.Write(BuildCellSize);
+            pkg.Write(BuildMinSize);
+            pkg.Write(MapGeneration);
+            return pkg;
+        }
+
+        internal static void BroadcastGeometry() {
+            if (ZNet.instance == null || !ZNet.instance.IsServer() || ZNet.instance.m_peers == null || ZNet.instance.m_peers.Count == 0) { return; }
+            ValConfig.ZoneGeometryRPC.SendPackage(ZNet.instance.m_peers, SerializeGeometry());
+        }
+
+        // Anything other than what this client built with means its zones are the wrong ones, and it builds them again.
+        internal static IEnumerator OnClientReceiveGeometry(long sender, ZPackage package) {
+            yield return null;
+            if (ZNet.instance == null || ZNet.instance.IsServer()) { yield break; }
+            float cellSize = package.ReadSingle();
+            float minSize = package.ReadSingle();
+            int generation = package.ReadInt();
+            if (cellSize <= 0f || minSize < 0f) { yield break; }
+            bool changed = cellSize != BuildCellSize || minSize != BuildMinSize || generation != MapGeneration;
+            sizesFromServer = true;
+            BuildCellSize = cellSize;
+            BuildMinSize = minSize;
+            MapGeneration = generation;
+            if (changed && (zonesBuilt || buildingZones)) {
+                ZoneScaleSystem.RebuildForServerGeometry();
             }
         }
 

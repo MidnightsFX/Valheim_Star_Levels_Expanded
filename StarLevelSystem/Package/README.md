@@ -12,6 +12,7 @@ Features:
 - Multiple different scaling strategies
     - Scale levels by distance
     - Scale levels by zones
+    - Scale levels by regions, cut from the land along its shorelines
     - Scale levels by bosses killed
 - Nemesis System (personal/group dungeon master)
     - Can modify the world around you to make things easier, harder or provide unique challenges/opportunities
@@ -47,8 +48,7 @@ Below are a few examples of what you might see, and what the mod can do.
 ![HeaderExample](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true)
 
 ## First-time setup
-The first time you reach the main menu, a short setup opens and walks through level scaling, the star range and its spawn chances,
-the distance rings, creature health and damage, modifiers, raids, boss night spawns, the Nemesis system and Location Reset. You can save from any page, or click the X to skip it. Either way
+The first time you reach the main menu, a short setup opens on the Simple Setup page below. You can save from any page, or click the X to skip it. Either way
 it won't open again, in this or any other mod manager profile: whether you have seen it is kept once per user, in
 `ModQuickConfig/FirstRun.cfg` next to your Valheim saves (`%USERPROFILE%\AppData\LocalLow\IronGate\Valheim` on Windows). Set
 `FirstTimeSetup` to `ShowNextLaunch` in the BepInEx config to see it again, or to `Never` to keep it closed in that profile. The same
@@ -61,6 +61,38 @@ Upgrading rather than installing fresh? The setup stays out of your way: a confi
 version first runs means the mod has been configured already, so it is marked done without being shown.
 
 Other mods that share the Mod Config button can have a welcome of their own. They open one at a time, in turn, rather than on top of each other.
+
+### Simple Setup
+The panel's first page covers most worlds with a handful of settings:
+
+- **Max level** - the most stars a creature or boss can have. Biome star caps step up to it, so the last biomes reach it.
+- **Difficulty** - see below.
+- **Enable monster modifiers** - when off, new creatures and bosses get no modifiers. Those already in the world keep theirs.
+- **Enable progressive scaling** - distance, zone, region and conditional scaling, the systems that push levels up as you play. They ship off. Turning this on starts distance and zones, or brings back what you had on, and turning it off stops them all.
+- **Enable color changes** - creatures change color with their star level.
+- **Enable advanced options** - shows every other page: the star range and its spawn chances, level scaling, loot, creature health and damage, modifiers, raids, boss night spawns, the Nemesis system and Location Reset.
+
+Each difficulty sets the values below, worked out from Max level so it means the same thing at any cap: the star chances run
+from the first star to the top one, and health and damage are given at the top star and spread evenly across the stars.
+Changing any of these on another page, or in the config files, shows the difficulty as Custom. Picking a difficulty
+replaces them, but conditional scaling's boss tiers and a biome's own level chances stay as they are, and those can roll past Max level.
+
+| | Vanilla | Easy | Normal | Hard | Brutal |
+| --- | --- | --- | --- | --- | --- |
+| Chance of 1 or more stars | 10% | 4% | 20% | 35% | 50% |
+| Chance of 2 or more stars | 1% | 0.4% | 10% | 22% | 35% |
+| Chance of the top star | 0.01% | 0.004% | 0.03% | 0.5% | 2% |
+| Boss chance of 1 or more stars | 1% | 0.5% | as creatures | 40% | 80% |
+| Health at the top star | x3 | x2.5 | x11 | x6 | x16 |
+| Damage at the top star | x2 | x1.5 | x2 | x3 | x6 |
+| Boss health at the top star | x3 | x2 | x4 | x6 | x11 |
+| Boss damage at the top star | x1.2 | x1.1 | x1.2 | x2 | x3 |
+| Damage before stars | x1 | x1 | x1 | x1.25 | x1.25 |
+| Spawn rate | x1 | x1 | x1.1 | x1.2 | x1.35 |
+| Night star bonus | x1 | x1 | x1.5 | x1.5 | x1.5 |
+| Distance ring strength | x0.5 | x0.25 | x1.5 | x1.5 | x2 |
+
+At a Max level of 2, Vanilla is the base game's own numbers. Normal at a Max level of 10 is what a new install starts on.
 
 ## Features
 
@@ -106,6 +138,12 @@ together. Both it and the global size per star (`PerLevelScaleBonus`) are at the
 panel's Level Distribution page. A creature entry can set its own cap with
 `MaxSizeScale`, which replaces the global one for that creature.
 
+Note on mounts: any creature carrying a saddle stays rideable when it is scaled, including creatures added by other
+mods, with nothing to register. It rides at full speed, its saddle reach grows with it, aiming at its upper body offers
+the saddle (the lower body still pets it), and getting off puts you on the ground beside it. Each mount found is named
+once in the log. `EnableRidableCreatureSizeFixes` turns this off for every creature, and `RideableSizeFixes: false` in a
+creature's entry turns it off for that one, which suits a mod that manages its own mount sizing.
+
 Biome specific configurations can be used to override the default `All` configuration, in this case max level for Ashlands is being set
 to 26 and the distance modifier is being reduced by 50%
 ```
@@ -148,6 +186,34 @@ land, and remote Nemesis bosses placed where their biome really is. Zone kills a
 
 Bosses and pins already stored keep the biome number they were created with, so reordering `expand_biomes.yaml` can move those
 to a different biome.
+
+#### Distance, zone and region scaling
+Three systems can raise level chances on top of the base chances, all off until you turn them on. All of them are on the Level
+Scaling page of the quick configure panel, which comes right after Level Distribution. Its chart shows your chances from that page
+in yellow, then a line for each system that is on (distance blue, zone orange, region green) at the ring or level you pick under
+it, and says in words what they come to together. They stack on a spawn:
+
+```
+chance = (base chance + ring bonus x distance scale) x night x zone x region x world combat rate
+```
+
+| | What it adds | Grows from | Map overlay |
+| --- | --- | --- | --- |
+| Distance | Each ring's bonus, added to the chance | Being further from the center or the starter temple | Rings |
+| Zone | A multiplier: `1 + (level - 1) x ZoneLevelBonusPerLevel` | Kills in a square cell of the map, and it decays over time | Cell outlines |
+| Region | A multiplier: `1 + (level - 1) x RegionLevelBonusPerLevel` | Kills in a region, and it decays over time | A low-opacity fill in the level's color, with a line around it |
+
+An overlay and a level readout only show while their system is on. The overlay settings (`EnableMapRingsForDistanceBonus`,
+`EnableZoneMapOverlay`, `EnableRegionMapOverlay`) are on by default, so turning a system on shows it unless you have turned its
+overlay off. Region levels use the zone settings `ZoneOverlayColorOptions` for their colors and `ZoneDecayClock` for their decay.
+
+Regions are built once, on the server, and stored with the world in `SavedData/RegionData.<world>.yaml`. Clients are sent the map when
+they connect. Each landmass is cut up from seeds spaced along its shoreline, growing inward so its regions come out about
+`RegionTargetSize` across. Land that can't be divided without a piece falling under `RegionMinSize` stays one larger region. Mountains of
+at least `RegionMountainMinSize` become regions of their own, and rocks in the sea too small to matter get none.
+
+Sizes are meters, as the side of a square of the same area. A map keeps the sizes it was cut with until it is cut again, since that
+resets its levels: saving a new size on the panel while in a world does it for you, and so do `sls-zone-rebuild` and `sls-region-rebuild`.
 
 #### Creature Configuration
 Creature specific configuration allows you to override what is set in the biome definition for a creature, which allows more
@@ -227,10 +293,11 @@ distanceLevelBonus:
 
 With the above configuration the region closest to start up to 1250m will only be able to spawn level 1 and 2 creatures. Between 1250m and 5000m creatures can spawn up to level 3, and beyond 5000m creatures can spawn up to level 4.
 
-The Distance Rings page of the quick configure panel (Mod Config button) edits `distanceLevelBonus` without touching YAML:
+The Level Scaling page of the quick configure panel (Mod Config button) edits `distanceLevelBonus` without touching YAML:
 add and remove rings, move them by typing a new distance, and type each ring's bonus as a list (`25, 15, 5` is levels 1, 2
-and 3; a ring that skips a level is shown and typed as `1:25, 3:5`). Beside the list it charts the star chances with no ring
-and past the ring you tick, on the curve from the Level Distribution page, weighted by the `All` biome's distance scale.
+and 3; a ring that skips a level is shown and typed as `1:25, 3:5`). Its chart shows the star chances past the ring you pick, on the
+curve from the Level Distribution page, weighted by the `All` biome's distance scale, which is on that page too along with each
+biome's own.
 
 
 Now, we've walked through a lot of the bonuses to level up chance but lets take a look at the base values too. 
@@ -1061,7 +1128,8 @@ client setting if you prefer plain text).
 - `sls-creature-setstat [group] [stat] [value|reset] [range:64]` - sets one stat on the closest creature, the same value its `LevelSettings.yaml` creature entry would set, and keeps it on that creature through restarts. Groups are `Base` (`BaseHealth`, `BaseDamage`, `AttackSpeed`, `Speed`, `Size`), `PerLevel` (`HealthPerLevel`, `DamagePerLevel`, `SpeedPerLevel`, `AttackSpeedPerLevel`, `SizePerLevel`), `DamageTaken` and `DamageBonus` (one stat per damage type). Modifiers like Big still add on top, size is still held to the size cap, and `reset` puts the configured value back. Leave out the value to see the current ones. eg: `sls-creature-setstat Base Size 2`, `sls-creature-setstat Base BaseHealth 5`, `sls-creature-setstat DamageTaken Fire 0.5`
 - `sls-mod-give [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
 - `sls-loot-dump` - dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
-- `sls-zone-rebuild` - regenerates the zone map from the world and redraws the minimap overlay. Resets zone kill counts and levels
+- `sls-zone-rebuild` - regenerates the zone map from the world with the current size settings, for everyone. Resets zone kill counts and levels
+- `sls-region-rebuild` - cuts the region map again from the world with the current size settings, and sends it to everyone. Resets region kill counts and levels
 - `sls-nemesis-spawn [biome]` - force-scouts and places one remote Nemesis boss
 - `sls-nemesis-cleanup <all|radius>` - removes Nemesis spawns: remote bosses still waiting to appear, Nemesis bosses with their minions, other Nemesis creatures, and their map pins. `all` clears the whole world; a radius clears around you. Tamed creatures are left alone and nothing drops loot. Server authoritative, admin only
 - `sls-nemesis-score [value]` - sets your local Nemesis score
@@ -1077,7 +1145,7 @@ Location Reset commands (server authoritative):
 
 #### Running the server commands from a client
 
-The Location Reset commands, `sls-nemesis-spawn`, `sls-nemesis-cleanup` and `sls-raid-spawn` act on world state only the server owns. A
+The Location Reset commands, `sls-zone-rebuild`, `sls-region-rebuild`, `sls-nemesis-spawn`, `sls-nemesis-cleanup` and `sls-raid-spawn` act on world state only the server owns. A
 dedicated server has no console of its own, so an **admin** can now run them from a connected client:
 the request goes to the server, the server runs it, and its output is streamed back into your console
 as well as being written to the server's log. `sls-loc-reset` and `sls-loc-audit` centre on **your**

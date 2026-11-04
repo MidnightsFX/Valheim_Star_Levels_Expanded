@@ -1,3 +1,14 @@
+**1.33.0**
+---
+ ```
+- New scaling option, Regions!
+	- Regions, Zones and distance scaling are now off by default (does not change existing configs)
+	- The quick config panel has a new Level Scaling page with every distance, zone and region setting
+	- Quick configuration for region, distance and zone scaling now preview how they impact level curves too
+- Lox no longer lose speed with each star on new installs.
+- Improves mounted riding for all creatures and all sizes.
+```
+
 **1.32.0**
  ---
  ```

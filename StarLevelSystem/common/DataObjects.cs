@@ -750,6 +750,10 @@ namespace StarLevelSystem.common
             [DefaultValue(-1f)]
             public float MaxSizeScale { get; set; } = -1f;
 
+            [Description("Whether this creature gets the size fixes for rideable creatures when it carries a saddle: full speed at any size, saddle reach and aiming, dismounting, camera and feet on the ground. False keeps it as the game, or the mod that added it, made it. EnableRidableCreatureSizeFixes turns them off for every creature.")]
+            [DefaultValue(true)]
+            public bool RideableSizeFixes { get; set; } = true;
+
             [Description("Creature specific limit to the number of major modifiers.")]
             [DefaultValue(-1)]
             public int MaxMajorModifiers { get; set; } = -1;
@@ -2367,7 +2371,7 @@ namespace StarLevelSystem.common
         // which silently rebuilt every zone at level 1. Any computed member added here needs
         // [YamlIgnore] (see ExtendedCharacterDrop.GameDrop).
         [Serializable]
-        public class ZoneData {
+        public class ZoneData : ILeveledArea {
             public int ZoneId { get; set; }
             public float MinX { get; set; }
             public float MaxX { get; set; }
@@ -2377,27 +2381,69 @@ namespace StarLevelSystem.common
             public int TotalKills { get; set; } = 0;
             public double LastDecayTimestamp { get; set; } = 0;
 
+            // Explicit, so that YAML never sees them.
+            int ILeveledArea.AreaLevel { get => ZoneLevel; set => ZoneLevel = value; }
+            int ILeveledArea.AreaKills { get => TotalKills; set => TotalKills = value; }
+            double ILeveledArea.AreaDecayStamp { get => LastDecayTimestamp; set => LastDecayTimestamp = value; }
+
             public bool ContainsPosition(Vector3 pos) {
                 // Half-open on the max edges so a point on a shared grid edge resolves to exactly
                 // one zone (the cell to the +X/+Z is the owner), keeping lookups unambiguous.
                 return pos.x >= MinX && pos.x < MaxX && pos.z >= MinZ && pos.z < MaxZ;
             }
 
-            // A multiplier on every level-up threshold, so it must start at the neutral 1 and only grow: the raw
-            // (ZoneLevel - 1) * bonus it used to return dropped below 1 for any bonus under 1, which made creatures in a
-            // levelled zone WEAKER, and jumped from 1 at zone level 1 to the bare bonus at zone level 2.
             internal float GetLevelBonus() {
-                if (ZoneLevel <= 1) { return 1f; }
-                return 1f + (ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
+                return LeveledAreas.BonusFor(ZoneLevel, ValConfig.ZoneLevelBonusPerLevel.Value);
             }
         }
 
 
 
+        // One section of the region map. Persisted to SavedData/RegionData.<world>.yaml through the same strict deserializer as
+        // ZoneData, so the note above that applies here too: no computed members. The interface is implemented explicitly so
+        // that YAML never sees its members.
+        public class RegionData : ILeveledArea {
+            public int Id { get; set; }
+            public bool Mountain { get; set; }
+            // Land only, not the shallows the grid also labels.
+            public int Cells { get; set; }
+            [DefaultValue(1)]
+            public int Level { get; set; } = 1;
+            public int TotalKills { get; set; }
+            public double LastDecayTimestamp { get; set; }
+
+            int ILeveledArea.AreaLevel { get => Level; set => Level = value; }
+            int ILeveledArea.AreaKills { get => TotalKills; set => TotalKills = value; }
+            double ILeveledArea.AreaDecayStamp { get => LastDecayTimestamp; set => LastDecayTimestamp = value; }
+        }
+
+        public class RegionSystemSaveData {
+            public List<RegionData> Regions { get; set; } = new List<RegionData>();
+            // Base64 of the deflated cell grid.
+            public string Grid { get; set; }
+            public int GridDim { get; set; }
+            public float CellSize { get; set; }
+            // The world radius this map covers, in real metres. A different one makes it the wrong map.
+            public float BuildRadius { get; set; }
+            // The settings it was cut with. A difference only warns: cutting it again resets every level.
+            public float BuildTargetSize { get; set; }
+            public float BuildMinSize { get; set; }
+            public float BuildMountainMinSize { get; set; }
+            public string WorldName { get; set; }
+            public long WorldUid { get; set; }
+            // Which clock the stamps are in, as ZoneSystemSaveData.DecayClock.
+            public string DecayClock { get; set; }
+        }
+
         public class ZoneSystemSaveData {
             public List<ZoneData> Zones { get; set; } = new List<ZoneData>();
             // The world radius this map covers, when it is not vanilla's. Omitted while 0, which is every vanilla world.
             public float BuildRadius { get; set; }
+            // MinZoneSize when the map was cut. Omitted while 0, which is every file from before this: those use the setting. The
+            // cell size needs no such thing, since the zones themselves show it.
+            public float BuildMinSize { get; set; }
+            // Goes up with each rebuild, for clients to know that the server's map has changed. Omitted while 0.
+            public int Generation { get; set; }
             public string WorldName { get; set; }
             // Which world this geometry and these levels belong to. The name above cannot answer that on
             // its own (see ValConfig.CurrentWorldStateKey) and was all that used to stand between two

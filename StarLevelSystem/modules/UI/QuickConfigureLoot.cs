@@ -1,4 +1,3 @@
-using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.Loot;
@@ -9,6 +8,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.modules.UI.QuickConfigPrefabs;
 
 namespace StarLevelSystem.modules.UI {
     // The Loot page of the quick configure panel: how much more a creature drops for every star it has, the same for
@@ -27,8 +27,6 @@ namespace StarLevelSystem.modules.UI {
 
         private static readonly string[] LootStyleOptions = Enum.GetNames(typeof(LootFactorType));
 
-        // Loot per star is unbounded in the config, but a slider needs an end; 4 is the ConfigEntry's own ceiling.
-        private const float MaxPerLevelLootScale = 4f;
         private const float MaxObjectLootScale = 4f;
         private const float MaxRingBonus = 5f;
 
@@ -38,13 +36,12 @@ namespace StarLevelSystem.modules.UI {
         // Rows that only apply to one loot style. Hidden rather than laid out again: the column is a scroll view, so a
         // vertical layout group collapses the space an inactive child took.
         private static readonly List<GameObject> lootChanceRampRows = new List<GameObject>();
-        // The ring help, header and rows, hidden together while distance loot is off.
+        // The ring help, header, rows and Add button, hidden together while distance loot is off.
         private static readonly List<GameObject> lootRingRows = new List<GameObject>();
-        // The part of lootRingRows that is built again whenever a ring is added, removed or moves past another. It is
-        // the end of the column's scroll content, so rebuilding it in place keeps the column where it was scrolled to.
+        // The part of lootRingRows that is built again whenever a ring is added, removed or moves past another. It stays
+        // beside the rows that are not rebuilt, so rebuilding it in place keeps the column where it was scrolled to.
         private static readonly List<GameObject> lootRingSection = new List<GameObject>();
         private static Transform lootRingContent;
-        private static float lootRingContentW;
         // The drop table the estimate is worked on, and what it came from, resolved once when the page is built.
         private static List<LootSampleDrop> lootSample;
         private static bool lootSampleIsLive;
@@ -57,7 +54,6 @@ namespace StarLevelSystem.modules.UI {
             lootRingRows.Clear();
             lootRingSection.Clear();
             lootRingContent = null;
-            lootRingContentW = 0f;
             lootSample = null;
             lootSampleIsLive = false;
         }
@@ -183,89 +179,63 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static void BuildLootPage(Transform parent) {
-            const float IntroH = 44f;
-            const float LeftW = 430f;
-            const float RightX = 446f;
-            const float LabelW = 200f, SliderW = 130f, ValueW = 56f;
-            const float ToggleLabelW = 300f;
-            float rightW = PageW - RightX;
             StagedLoot lt = staged.loot;
-
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, IntroH, "$sls_cfg_loot_intro", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
-            ConfigUI.PositionRow(intro, 0f, 0f);
-            float colY = IntroH + 6f;
-            float colH = PageH - colY;
 
             ResolveLootSample();
 
             // Left - everything that scales loot with a level, then the distance rings that add to it.
-            ConfigUI.CreateScroll(parent, 0f, colY, LeftW, colH, out Transform left, out float lw);
-
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_loot_header_creature"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddEnumCycleRow(t, lw, LabelW, 150f, "$sls_cfg_loot_style", LootStyleOptions, (int)lt.style, i => {
+            WithTip(BindEnumRow(parent, "LootStyle", LootStyleOptions, (int)lt.style, i => {
                 lt.style = (LootFactorType)i;
                 RefreshLootEstimates();
-            }), Tip(ValConfig.LootDropCalculationType)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_per_star", 0f, MaxPerLevelLootScale, lt.perLevelScale, false, v => {
+            }), Tip(ValConfig.LootDropCalculationType));
+            WithTip(BindSliderRow(parent, "PerStar", lt.perLevelScale, v => {
                 lt.perLevelScale = v;
                 RefreshLootEstimates();
-            }), Tip(ValConfig.PerLevelLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_chance_per_level", 0f, 1f, lt.perLevelChanceScale, false, v => {
+            }), Tip(ValConfig.PerLevelLootScale));
+            WithTip(BindSliderRow(parent, "ChancePerLevel", lt.perLevelChanceScale, v => {
                 lt.perLevelChanceScale = v;
                 RefreshLootEstimates();
-            }), Tip(ValConfig.PerLevelLootChanceScale)));
-            lootChanceRampRows.Add(ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_base_chance", 0f, 1f, lt.chanceBase, false, v => {
+            }), Tip(ValConfig.PerLevelLootChanceScale));
+            lootChanceRampRows.Add(WithTip(BindSliderRow(parent, "BaseChance", lt.chanceBase, v => {
                 lt.chanceBase = v;
                 RefreshLootEstimates();
-            }), Tip(ValConfig.ChanceBaseChancePerLevel))));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "$sls_cfg_loot_scale_all", lt.scaleAllLoot, v => {
+            }), Tip(ValConfig.ChanceBaseChancePerLevel)));
+            WithTip(BindToggleRow(parent, "ScaleAll", lt.scaleAllLoot, v => {
                 lt.scaleAllLoot = v;
                 RefreshLootEstimates();
-            }), Tip(ValConfig.ScaleAllLootByLevel)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "$sls_cfg_loot_egg_stacks", lt.eggStacks, v => lt.eggStacks = v), Tip(ValConfig.LootEggsDropIncreaseStacks)));
-            lootStyleNote = ScrollRow(left, lw, 60f, t => ConfigUI.AddTextRow(t, lw, 60f, "", 12, GUIManager.Instance.ValheimBeige)).GetComponentInChildren<Text>();
+            }), Tip(ValConfig.ScaleAllLootByLevel));
+            WithTip(BindToggleRow(parent, "EggStacks", lt.eggStacks, v => lt.eggStacks = v), Tip(ValConfig.LootEggsDropIncreaseStacks));
+            lootStyleNote = Get<Text>(parent, "StyleNote");
 
             // World objects carry their own per-level scale and their own shape: each is `1 + scale * level` applied to
             // the object's vanilla drop table, not the creature multiplier above.
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_loot_header_objects"));
-            ScrollRow(left, lw, 34f, t => ConfigUI.AddTextRow(t, lw, 34f, "$sls_cfg_loot_objects_help", 12, GUIManager.Instance.ValheimBeige));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_tree", 0f, Mathf.Max(MaxObjectLootScale, lt.treeScale), lt.treeScale, false, v => lt.treeScale = v), Tip(ValConfig.PerLevelTreeLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_rock", 0f, Mathf.Max(MaxObjectLootScale, lt.rockScale), lt.rockScale, false, v => lt.rockScale = v), Tip(ValConfig.PerLevelMineRockLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_destructible", 0f, Mathf.Max(MaxObjectLootScale, lt.destructibleScale), lt.destructibleScale, false, v => lt.destructibleScale = v), Tip(ValConfig.PerLevelDestructibleLootScale)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_loot_bird", 0f, Mathf.Max(MaxObjectLootScale, lt.birdScale), lt.birdScale, false, v => lt.birdScale = v), Tip(ValConfig.PerLevelBirdLootScale)));
+            WithTip(BindSliderRow(parent, "TreeScale", lt.treeScale, v => lt.treeScale = v, max: Mathf.Max(MaxObjectLootScale, lt.treeScale)), Tip(ValConfig.PerLevelTreeLootScale));
+            WithTip(BindSliderRow(parent, "RockScale", lt.rockScale, v => lt.rockScale = v, max: Mathf.Max(MaxObjectLootScale, lt.rockScale)), Tip(ValConfig.PerLevelMineRockLootScale));
+            WithTip(BindSliderRow(parent, "DestructibleScale", lt.destructibleScale, v => lt.destructibleScale = v, max: Mathf.Max(MaxObjectLootScale, lt.destructibleScale)), Tip(ValConfig.PerLevelDestructibleLootScale));
+            WithTip(BindSliderRow(parent, "BirdScale", lt.birdScale, v => lt.birdScale = v, max: Mathf.Max(MaxObjectLootScale, lt.birdScale)), Tip(ValConfig.PerLevelBirdLootScale));
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_loot_header_distance"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, ToggleLabelW, "$sls_cfg_loot_distance_toggle", lt.distanceBonus, v => {
+            WithTip(BindToggleRow(parent, "DistanceBonus", lt.distanceBonus, v => {
                 lt.distanceBonus = v;
                 RefreshLootEstimates();
-            }), YamlTip(typeof(LootSettings), nameof(LootSettings.EnableDistanceLootModifier), "$sls_cfg_tip_loot_distance")));
-            lootRingRows.Add(ScrollRow(left, lw, 46f, t => ConfigUI.AddTextRow(t, lw, 46f, "$sls_cfg_loot_rings_help", 12, GUIManager.Instance.ValheimBeige)));
-            // Last in the column, so it can be rebuilt in place. See lootRingSection.
-            lootRingContent = left;
-            lootRingContentW = lw;
+            }), YamlTip(typeof(LootSettings), nameof(LootSettings.EnableDistanceLootModifier), "$sls_cfg_tip_loot_distance"));
+            lootRingRows.Add(Find(parent, "RingsHelp"));
+            lootRingRows.Add(Find(parent, "AddRingRow"));
+            WithTip(BindButton(parent, "AddRing", AddLootRing), Tip("$sls_cfg_button_add_ring", "$sls_cfg_tip_add_loot_ring"));
+            // Rebuilt in place. See lootRingSection.
+            lootRingContent = ScrollContent(parent, "Settings");
             BuildLootRingSection();
 
             // Right - the estimate.
-            GameObject header = ConfigUI.AddHeaderRow(parent, rightW, "$sls_cfg_loot_header_estimate");
-            ConfigUI.PositionRow(header, RightX, colY);
-            float estimateY = colY + RowHeight + RowGap;
-            lootWarningText = ConfigUI.AddText(parent, RightX, estimateY, rightW, 40f, "", 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimOrange);
-            estimateY += 44f;
-            lootTable = BuildLootTable(parent, RightX, estimateY, rightW, PageH - estimateY);
+            lootWarningText = Get<Text>(parent, "Warning");
+            lootTable = BuildLootTable(parent);
             WithTip(lootTable.Root, Tip("$sls_cfg_loot_header_estimate", "$sls_cfg_tip_loot_estimate"));
 
             RefreshLootEstimates();
         }
 
-        private const float RingDistanceX = 4f;
-        private const float RingDistanceW = 80f;
-        private const float RingMinX = 96f;
-        private const float RingMaxX = 158f;
-        private const float RingChanceX = 220f;
-        private const float RingFieldW = 56f;
-
-        // The rings' part of the column: a header and a row per ring, or a note when there are none, then the Add button.
-        // Built again from the staged rings whenever their number or order changes.
+        // The rings' part of the column: a row per ring under the header, or the note when there are none. The rows are built
+        // again from the staged rings whenever their number or order changes; the header, the note and the Add button are the
+        // page's own.
         private static void BuildLootRingSection() {
             foreach (GameObject row in lootRingSection) {
                 lootRingRows.Remove(row);
@@ -275,42 +245,33 @@ namespace StarLevelSystem.modules.UI {
             if (lootRingContent == null || staged?.loot == null) { return; }
 
             Transform content = lootRingContent;
-            float w = lootRingContentW;
             List<StagedLootRing> rings = staged.loot.rings;
-            if (rings.Count == 0) {
-                lootRingSection.Add(ScrollRow(content, w, 40f, t => ConfigUI.AddTextRow(t, w, 40f, "$sls_cfg_loot_no_rings", 12, GUIManager.Instance.ValheimOrange)));
-            } else {
-                lootRingSection.Add(AddLootRingHeaderRow(content, w));
-                foreach (StagedLootRing ring in rings) { lootRingSection.Add(AddLootRingRow(content, w, ring)); }
-            }
-            lootRingSection.Add(AddRingButtonRow(content, w, AddLootRing, Tip("$sls_cfg_button_add_ring", "$sls_cfg_tip_add_loot_ring")));
+            // Whichever of the note and the header applies comes and goes with lootRingRows; the other stays hidden.
+            GameObject none = Find(content, "RingsNone");
+            GameObject header = Find(content, "RingsHeader");
+            lootRingRows.Remove(none);
+            lootRingRows.Remove(header);
+            none.SetActive(false);
+            header.SetActive(false);
+            lootRingRows.Add(rings.Count == 0 ? none : header);
+            foreach (StagedLootRing ring in rings) { lootRingSection.Add(AddLootRingRow(content, ring)); }
             lootRingRows.AddRange(lootRingSection);
         }
 
-        private static GameObject AddLootRingHeaderRow(Transform content, float width) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 22f);
-            Color color = GUIManager.Instance.ValheimYellow;
-            ConfigUI.AddText(row.transform, RingDistanceX, 0f, RingDistanceW, 22f, "$sls_cfg_loot_col_within", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, RingMinX, 0f, RingFieldW, 22f, "$sls_cfg_loot_col_min", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, RingMaxX, 0f, RingFieldW, 22f, "$sls_cfg_loot_col_max", 11, TextAnchor.MiddleLeft, color);
-            ConfigUI.AddText(row.transform, RingChanceX, 0f, RingFieldW + 10f, 22f, "$sls_cfg_loot_col_chance", 11, TextAnchor.MiddleLeft, color);
-            return row;
-        }
-
-        private static GameObject AddLootRingRow(Transform content, float width, StagedLootRing ring) {
-            GameObject row = ConfigUI.NewLayoutRow(content, width, 32f);
+        private static GameObject AddLootRingRow(Transform content, StagedLootRing ring) {
+            GameObject row = SpawnRingRow("SLS_QC_Row_LootRing", content);
             InputField distance = null;
-            distance = ConfigUI.AddTextField(row.transform, RingDistanceX, 0f, RingDistanceW, ring.Distance.ToString(CultureInfo.InvariantCulture),
-                text => CommitLootRingDistance(ring, distance, text), InputField.ContentType.IntegerNumber);
+            distance = BindField(row.transform, "Distance", ring.Distance.ToString(CultureInfo.InvariantCulture),
+                text => CommitLootRingDistance(ring, distance, text));
             WithTip(distance.gameObject, Tip("$sls_cfg_tip_distance_title", L("$sls_cfg_tip_loot_ring_distance", MinRingDistance, MaxRingDistance)));
 
-            AddLootRingField(row.transform, RingMinX, ring.MinBonus, v => ring.MinBonus = v,
+            BindLootRingField(row.transform, "Min", ring.MinBonus, v => ring.MinBonus = v,
                 YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MinAmountScaleFactorBonus), "$sls_cfg_tip_loot_ring_min"));
-            AddLootRingField(row.transform, RingMaxX, ring.MaxBonus, v => ring.MaxBonus = v,
+            BindLootRingField(row.transform, "Max", ring.MaxBonus, v => ring.MaxBonus = v,
                 YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.MaxAmountScaleFactorBonus), "$sls_cfg_tip_loot_ring_max"));
-            AddLootRingField(row.transform, RingChanceX, ring.ChanceBonus, v => ring.ChanceBonus = v,
+            BindLootRingField(row.transform, "Chance", ring.ChanceBonus, v => ring.ChanceBonus = v,
                 YamlTip(typeof(DistanceLootModifier), nameof(DistanceLootModifier.ChanceScaleFactorBonus), "$sls_cfg_tip_loot_ring_chance"));
-            AddRingRemoveButton(row.transform, width, () => {
+            BindRingRemoveButton(row.transform, () => {
                 staged.loot.rings.Remove(ring);
                 BuildLootRingSection();
                 RefreshLootEstimates();
@@ -354,9 +315,9 @@ namespace StarLevelSystem.modules.UI {
             staged.loot.ResetToShipped(ShippedDefaults(YamlConfigManager.LootSettingsFile));
         }
 
-        private static void AddLootRingField(Transform parent, float x, float value, Action<float> onCommit, string tooltip) {
+        private static void BindLootRingField(Transform row, string name, float value, Action<float> onCommit, string tooltip) {
             InputField field = null;
-            field = ConfigUI.AddTextField(parent, x, 0f, RingFieldW, FormatLootBonus(value), text => {
+            field = BindField(row, name, FormatLootBonus(value), text => {
                 float committed = value;
                 if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)) {
                     committed = Mathf.Clamp(parsed, 0f, MaxRingBonus);
@@ -365,7 +326,7 @@ namespace StarLevelSystem.modules.UI {
                 onCommit(committed);
                 field.SetTextWithoutNotify(FormatLootBonus(committed));
                 RefreshLootEstimates();
-            }, InputField.ContentType.DecimalNumber);
+            });
             WithTip(field.gameObject, tooltip);
         }
 
@@ -447,85 +408,47 @@ namespace StarLevelSystem.modules.UI {
             internal Text Footer;
         }
 
-        private const float LootTableLabelW = 140f;
-        private const float LootTableCellPad = 6f;
-        private const float LootTableHeaderH = 36f;
-        private const float LootTableMultiplierRowH = 24f;
-        private const float LootTableDropRowH = 36f;
         private const int LootTableAmountRow = 0;
         private const int LootTableChanceRow = 1;
         private const int LootTableFirstDropRow = 2;
 
-        private static readonly Color LootTableHeaderShade = new Color(0f, 0f, 0f, 0.45f);
-        private static readonly Color LootTableStripeShade = new Color(0f, 0f, 0f, 0.2f);
-        private static readonly Color LootTableRuleColor = new Color(0.6f, 0.5f, 0.35f, 0.6f);
+        private static LootTableView BuildLootTable(Transform page) {
+            GameObject root = Find(page, "LootEstimate");
+            LootTableView view = new LootTableView { Root = root, Width = ((RectTransform)root.transform).sizeDelta.x };
+            view.Header = LootTableCells(Find(root.transform, "TableHeader").transform);
+            view.Rows.Add(LootTableCells(Find(root.transform, "TableAmount").transform));
+            view.Rows.Add(LootTableCells(Find(root.transform, "TableChance").transform));
 
-        private static LootTableView BuildLootTable(Transform parent, float x, float y, float w, float h) {
-            LootTableView view = new LootTableView { Root = ConfigUI.NewRect("LootEstimate", parent, x, y, w, h), Width = w };
-            Transform t = view.Root.transform;
-            Color beige = GUIManager.Instance.ValheimBeige;
-            float rowY = 0f;
-
-            AddLootTableShade(t, rowY, w, LootTableHeaderH, LootTableHeaderShade);
-            view.Header = AddLootTableRow(t, rowY, LootTableHeaderH, 13, GUIManager.Instance.ValheimYellow);
-            rowY += LootTableHeaderH;
-
-            string[] multiplierLabels = { "$sls_cfg_loot_row_amount", "$sls_cfg_loot_row_chance" };
-            for (int i = 0; i < multiplierLabels.Length; i++) {
-                if (i % 2 == 1) { AddLootTableShade(t, rowY, w, LootTableMultiplierRowH, LootTableStripeShade); }
-                Text[] row = AddLootTableRow(t, rowY, LootTableMultiplierRowH, 12, beige);
-                row[0].text = ConfigUI.L(multiplierLabels[i]);
-                view.Rows.Add(row);
-                rowY += LootTableMultiplierRowH;
-            }
-
-            // A rule between the multipliers and what they produce.
-            AddLootTableShade(t, rowY + 3f, w, 2f, LootTableRuleColor);
-            rowY += 8f;
-
+            Transform drops = Find(root.transform, "TableDrops").transform;
             view.Drops = lootSample.Take(MaxEstimatedDrops).ToList();
+            float rowY = 0f;
             for (int i = 0; i < view.Drops.Count; i++) {
-                if (i % 2 == 1) { AddLootTableShade(t, rowY, w, LootTableDropRowH, LootTableStripeShade); }
-                Text[] row = AddLootTableRow(t, rowY, LootTableDropRowH, 13, beige);
-                row[0].text = view.Drops[i].Name;
-                row[0].color = GUIManager.Instance.ValheimOrange;
-                view.Rows.Add(row);
-                rowY += LootTableDropRowH;
+                GameObject row = Spawn("SLS_QC_Row_LootDrop", drops);
+                ConfigUI.PositionRow(row, 0f, rowY);
+                Find(row.transform, "Shade").SetActive(i % 2 == 1);
+                Text[] cells = LootTableCells(row.transform);
+                cells[0].text = view.Drops[i].Name;
+                view.Rows.Add(cells);
+                rowY += ((RectTransform)row.transform).sizeDelta.y;
             }
 
-            rowY += 6f;
-            view.Footer = ConfigUI.AddText(t, 0f, rowY, w, Mathf.Max(0f, h - rowY), "", 12, TextAnchor.UpperLeft, beige);
+            // Under the rows, in what they leave of the table.
+            view.Footer = Get<Text>(drops, "Footer");
+            RectTransform footer = view.Footer.rectTransform;
+            footer.anchoredPosition -= new Vector2(0f, rowY);
+            footer.sizeDelta = new Vector2(footer.sizeDelta.x, Mathf.Max(0f, footer.sizeDelta.y - rowY));
             return view;
         }
 
-        // The label cell and the three value cells of one row. RefreshLootTable lays the value cells out for however many
-        // columns it needs, so they start with no width.
-        private static Text[] AddLootTableRow(Transform table, float y, float h, int fontSize, Color color) {
-            Text[] cells = new Text[4];
-            cells[0] = ConfigUI.AddText(table, LootTableCellPad, y, LootTableLabelW - LootTableCellPad, h, "", fontSize, TextAnchor.MiddleLeft, color);
-            for (int c = 1; c < cells.Length; c++) {
-                cells[c] = ConfigUI.AddText(table, 0f, y, 0f, h, "", fontSize, TextAnchor.MiddleCenter, color);
-            }
-            // A long item name, or an Exponential amount in the millions, shrinks to fit its cell rather than wrapping
-            // out of the bottom of the row.
-            foreach (Text cell in cells) {
-                cell.resizeTextForBestFit = true;
-                cell.resizeTextMinSize = 9;
-                cell.resizeTextMaxSize = fontSize;
-            }
-            return cells;
+        // The label cell and the three value cells of one row.
+        private static Text[] LootTableCells(Transform row) {
+            return new[] { Get<Text>(row, "Label"), Get<Text>(row, "Value1"), Get<Text>(row, "Value2"), Get<Text>(row, "Value3") };
         }
 
-        // Row shading and the rule. Added ahead of the row's cells, so it draws behind them.
-        private static void AddLootTableShade(Transform table, float y, float w, float h, Color color) {
-            GameObject shade = ConfigUI.NewRect("Shade", table, 0f, y, w, h);
-            Image image = shade.AddComponent<Image>();
-            image.color = color;
-            image.raycastTarget = false;
-        }
-
+        // The value cells share what the label column leaves, from where the first of them starts.
         private static void LayoutLootTableColumns(LootTableView view, int columns) {
-            float cellW = (view.Width - LootTableLabelW) / columns;
+            float startX = view.Header[1].rectTransform.anchoredPosition.x;
+            float cellW = (view.Width - startX) / columns;
             foreach (Text[] row in new[] { view.Header }.Concat(view.Rows)) {
                 for (int c = 1; c < row.Length; c++) {
                     Text cell = row[c];
@@ -533,7 +456,7 @@ namespace StarLevelSystem.modules.UI {
                     cell.gameObject.SetActive(shown);
                     if (shown == false) { continue; }
                     RectTransform rt = cell.rectTransform;
-                    rt.anchoredPosition = new Vector2(LootTableLabelW + (c - 1) * cellW, rt.anchoredPosition.y);
+                    rt.anchoredPosition = new Vector2(startX + (c - 1) * cellW, rt.anchoredPosition.y);
                     rt.sizeDelta = new Vector2(cellW, rt.sizeDelta.y);
                 }
             }

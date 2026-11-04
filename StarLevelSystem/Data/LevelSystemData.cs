@@ -5,9 +5,7 @@ using StarLevelSystem.modules;
 using StarLevelSystem.modules.AnimationAndSpeed;
 using StarLevelSystem.modules.CreatureSetup;
 using StarLevelSystem.modules.Damage;
-using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
-using StarLevelSystem.modules.Sizes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -58,33 +56,8 @@ namespace StarLevelSystem.Data
                     }
                 },
             },
-            DefaultCreatureLevelUpChance = new SortedDictionary<int, float>() {
-                { 1, 20f },
-                { 2, 10f },
-                { 3, 5f },
-                { 4, 2f },
-                { 5, 1f },
-                { 6, 0.5f },
-                { 7, 0.25f },
-                { 8, 0.125f },
-                { 9, 0.0625f },
-                { 10, 0.0312f },
-                { 11, 0.0156f },
-                { 12, 0.0078f },
-                { 13, 0.0039f },
-                { 14, 0.0019f },
-                { 15, 0.0015f },
-                { 16, 0.0010f },
-                { 17, 0.0009f },
-                { 18, 0.0008f },
-                { 19, 0.0007f },
-                { 20, 0.0006f },
-                { 21, 0.0005f },
-                { 22, 0.0004f },
-                { 23, 0.0003f },
-                { 24, 0.0002f },
-                { 25, 0.0001f },
-            },
+            // Normal at the default max level, so a new install reads as that difficulty on the panel's first page.
+            DefaultCreatureLevelUpChance = DifficultyPreset.Normal.CreatureCurve(DifficultyPreset.DefaultMaxLevel),
             BiomeConfiguration = new Dictionary<Heightmap.Biome, DataObjects.BiomeSpecificSetting>()
             {
                 { Heightmap.Biome.All, new DataObjects.BiomeSpecificSetting()
@@ -101,44 +74,44 @@ namespace StarLevelSystem.Data
                 },
                 { Heightmap.Biome.Meadows, new DataObjects.BiomeSpecificSetting()
                     {
-                        BiomeMaxLevelOverride = 4,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.Meadows, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.BlackForest, new DataObjects.BiomeSpecificSetting()
                     {
-                        BiomeMaxLevelOverride = 6,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.BlackForest, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.Swamp, new DataObjects.BiomeSpecificSetting()
                     {
-                        BiomeMaxLevelOverride = 10,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.Swamp, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.Mountain, new DataObjects.BiomeSpecificSetting()
                     {
-                        BiomeMaxLevelOverride = 14,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.Mountain, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.Plains, new DataObjects.BiomeSpecificSetting()
                     {
-                        BiomeMaxLevelOverride = 18,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.Plains, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.Mistlands, new DataObjects.BiomeSpecificSetting()
                     {
-                        BiomeMaxLevelOverride = 22,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.Mistlands, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.AshLands, new DataObjects.BiomeSpecificSetting()
                     {
                         DistanceScaleModifier = 0.5f,
-                        BiomeMaxLevelOverride = 26,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.AshLands, DifficultyPreset.DefaultMaxLevel),
                     }
                 },
                 { Heightmap.Biome.DeepNorth, new DataObjects.BiomeSpecificSetting()
                     {
                         DistanceScaleModifier = 0.5f,
-                        BiomeMaxLevelOverride = 26,
+                        BiomeMaxLevelOverride = DifficultyPreset.BiomeCap(Heightmap.Biome.DeepNorth, DifficultyPreset.DefaultMaxLevel),
                     }
                 }
             },
@@ -165,13 +138,6 @@ namespace StarLevelSystem.Data
                             {1, 100 },
                             {2, 100 },
                             {3, 0 },
-                        }
-                    }
-                },
-                { "Lox", new DataObjects.CreatureSpecificSetting()
-                    {
-                        CreaturePerLevelValueModifiers = new Dictionary<DataObjects.CreaturePerLevelAttribute, float>() {
-                            { DataObjects.CreaturePerLevelAttribute.SpeedPerLevel, -0.01f },
                         }
                     }
                 },
@@ -700,8 +666,7 @@ namespace StarLevelSystem.Data
         // budgeted per frame. Harmless at startup, where the scene is empty.
         // Character.GetAllCharacters() is the live registry - Resources.FindObjectsOfTypeAll also
         // walked every loaded asset (including prefabs) synchronously on each reload.
-        // Only one pass runs at a time: two overlapping passes share the ForceUpdateHealth/Size
-        // flags, and whichever finished first cleared them mid-run for the other.
+        // Only one pass runs at a time: a new one covers every creature the old one had left.
         internal static void RestartCreatureAttributeUpdate() {
             var runner = TaskRunner.Run();
             if (runningAttributeUpdate != null) {
@@ -810,10 +775,6 @@ namespace StarLevelSystem.Data
         internal static IEnumerator UpdateCreatureAttributes(List<Character> characters) {
             int i = 0;
             WaitForSeconds sleep = new WaitForSeconds(0.1f);
-            HealthModifications.ForceUpdateHealth = true;
-            // Without this, SetSizeModification short-circuits on the persisted SLS_SIZE and a changed
-            // Size/SizePerLevel would not apply to already-spawned creatures.
-            SizeModifications.ForceUpdateSize = true;
             try {
                 foreach (var character in characters) {
                     if (i >= ValConfig.NumberOfCacheUpdatesPerFrame.Value) {
@@ -821,14 +782,13 @@ namespace StarLevelSystem.Data
                         i = 0;
                     }
                     if (character == null || character.m_nview == null || character.m_nview.IsValid() == false) { continue; }
+                    // Without this, SetSizeModification short-circuits on the persisted SLS_SIZE and a changed
+                    // Size/SizePerLevel would not apply to already-spawned creatures.
+                    CreatureSetupQueue.MarkForRefresh(character);
                     CreatureSetupControl.CreatureSetup(character, delay: 0);
                     i++;
                 }
             } finally {
-                // Also runs when a newer config apply stops this coroutine mid-pass (iterator
-                // disposal executes finally blocks), so the force flags can't be left stuck on.
-                HealthModifications.ForceUpdateHealth = false;
-                SizeModifications.ForceUpdateSize = false;
                 runningAttributeUpdate = null;
             }
         }

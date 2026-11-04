@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
+using static StarLevelSystem.modules.UI.QuickConfigPrefabs;
 
 namespace StarLevelSystem.modules.UI {
     // The Night Spawns page of the quick configure panel: one switch per boss for the creatures that start roaming at night
@@ -20,13 +22,8 @@ namespace StarLevelSystem.modules.UI {
 
         private static void BuildNightSpawnsPage(Transform parent) {
             const float ColWidth = 660f;
-            const float EntryH = 56f;   // the name, and room for two lines of creatures under it
-            const float StartY = 4f;
-
-            GameObject header = ConfigUI.AddHeaderRow(parent, PageW, "$sls_cfg_page_night_spawns", TextAnchor.MiddleCenter);
-            ConfigUI.PositionRow(header, 0f, StartY);
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, 40f, "$sls_cfg_night_spawns_intro", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
-            ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
+            // Under the page's own heading and intro.
+            const float StartY = 92f;
 
             List<GameObject> rows = new List<GameObject>();
             foreach (string bossKey in LevelSystemData.VanillaBossKeyOrder) {
@@ -34,22 +31,21 @@ namespace StarLevelSystem.modules.UI {
                 if (setting == null || staged.nightSpawnsOn.TryGetValue(bossKey, out bool on) == false) { continue; }
                 string key = bossKey;   // capture for the closure
                 string description = DescribeNightSpawns(key, out bool hasSpawns);
-                rows.Add(WithTip(AddNightSpawnRow(parent, ColWidth, EntryH, BossKeyName(key), description, on, hasSpawns, v => staged.nightSpawnsOn[key] = v), Tip(setting)));
+                rows.Add(WithTip(AddNightSpawnRow(parent, BossKeyName(key), description, on, hasSpawns, v => staged.nightSpawnsOn[key] = v), Tip(setting)));
             }
-            ConfigUI.LayoutColumn(rows, (PageW - ColWidth) * 0.5f, StartY + RowHeight + RowGap + 40f + 10f);
+            ConfigUI.LayoutColumn(rows, (PageSize(parent).x - ColWidth) * 0.5f, StartY);
         }
 
         // A boss's switch, with the creatures it lets out at night under its name. A boss with none is greyed out and its
         // switch locked: there is nothing for it to turn off, and its setting keeps whatever value it had.
-        private static GameObject AddNightSpawnRow(Transform parent, float width, float height, string label, string description, bool value, bool hasSpawns, Action<bool> onChange) {
-            const float ToggleSize = 26f;
-            const float TextX = ToggleSize + 10f;
-            const float LabelH = 24f;
-            GameObject row = ConfigUI.NewRow(parent, width, height);
-            ConfigUI.AddToggle(row.transform, 0f, 1f, ToggleSize, value, onChange);
-            ConfigUI.AddText(row.transform, TextX, 0f, width - TextX, LabelH, label, 16, TextAnchor.MiddleLeft, hasSpawns ? GUIManager.Instance.ValheimOrange : InactiveColor);
-            ConfigUI.AddText(row.transform, TextX, LabelH, width - TextX, height - LabelH, description, 13, TextAnchor.UpperLeft, hasSpawns ? GUIManager.Instance.ValheimBeige : InactiveColor);
+        private static GameObject AddNightSpawnRow(Transform parent, string label, string description, bool value, bool hasSpawns, Action<bool> onChange) {
+            GameObject row = Spawn("SLS_QC_Row_NightSpawn", parent);
+            BindToggle(row.transform, "Toggle", value, onChange);
+            Text name = SetText(row.transform, "Name", label);
+            Text creatures = SetText(row.transform, "Creatures", description);
             if (hasSpawns == false) {
+                name.color = InactiveColor;
+                creatures.color = InactiveColor;
                 // Locks the switch and fades it with the text. Raycasts still land, so the row keeps its tooltip.
                 CanvasGroup group = row.AddComponent<CanvasGroup>();
                 group.interactable = false;

@@ -68,6 +68,8 @@ namespace StarLevelSystem
             PrefabManager.OnPrefabsRegistered += PrefabLookup.ResetWarnings;
             PrefabManager.OnPrefabsRegistered += SwimAnimationModifications.ApplyToPrefabs;
             PrefabManager.OnPrefabsRegistered += LootSystemData.AttachPrefabsWhenReady;
+            // Ahead of the rings and zones: overlays are composed in the order they are made, and the fill should sit under the lines.
+            MinimapManager.OnVanillaMapDataLoaded += RegionScaleSystem.Initialize;
             MinimapManager.OnVanillaMapDataLoaded += DistanceScaleSystem.DelayedMinimapSetup;
             MinimapManager.OnVanillaMapDataLoaded += ZoneScaleSystem.Initialize;
             MinimapManager.OnVanillaMapDataLoaded += NemesisMinimap.OnMapReady;

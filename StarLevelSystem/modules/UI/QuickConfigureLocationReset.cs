@@ -1,4 +1,3 @@
-using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System;
@@ -7,6 +6,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using static StarLevelSystem.common.DataObjects;
+using static StarLevelSystem.modules.UI.QuickConfigPrefabs;
 
 namespace StarLevelSystem.modules.UI {
     // The Location Reset page of the quick configure panel: the master switch, the Defaults most servers tune, biome
@@ -181,67 +181,47 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
 
         private static void BuildLocationResetPage(Transform parent) {
-            const float IntroH = 60f;
-            const float LeftW = 392f;
-            const float RightX = 408f;
-            const float LabelW = 180f, SliderW = 120f, ValueW = 60f;
-            float rightW = PageW - RightX;
             StagedLocationReset lr = staged.locationReset;
 
-            GameObject intro = ConfigUI.AddTextRow(parent, PageW, IntroH, "$sls_cfg_locreset_about", 13, GUIManager.Instance.ValheimBeige);
-            ConfigUI.PositionRow(intro, 0f, 0f);
-            locationResetWarningText = ConfigUI.AddText(parent, 0f, IntroH, PageW, 20f, "", 13, TextAnchor.MiddleCenter, GUIManager.Instance.ValheimOrange);
-            float scrollY = IntroH + 24f;
-            float scrollH = PageH - scrollY;
+            locationResetWarningText = Get<Text>(parent, "Warning");
 
             // Left - the switch, Defaults and throughput, then biome rates.
-            ConfigUI.CreateScroll(parent, 0f, scrollY, LeftW, scrollH, out Transform left, out float lw);
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_page_location_reset"));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_enable", lr.Enabled, on => {
+            WithTip(BindToggleRow(parent, "Enable", lr.Enabled, on => {
                 lr.masterSwitch = on;
                 lr.yamlEnabled = on;
                 RefreshLocationResetViews();
-            }), Tip(ValConfig.EnableLocationReset)));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_first_visit", lr.stampOnFirstSight, on => lr.stampOnFirstSight = on), Tip("StampOnFirstSight", "$sls_cfg_tip_locreset_first_visit")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_default_hours",
-                Mathf.Min(MinResetHours, lr.defaultResetHours), Mathf.Max(MaxResetHours, lr.defaultResetHours), lr.defaultResetHours, IsWhole(lr.defaultResetHours), v => {
-                    lr.defaultResetHours = v;
-                    RefreshLocationResetViews();
-                }), Tip("Defaults.ResetHours", "$sls_cfg_tip_locreset_default_hours")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_default_terrain", lr.defaultResetTerrain, on => {
+            }), Tip(ValConfig.EnableLocationReset));
+            WithTip(BindToggleRow(parent, "FirstVisit", lr.stampOnFirstSight, on => lr.stampOnFirstSight = on), Tip("StampOnFirstSight", "$sls_cfg_tip_locreset_first_visit"));
+            WithTip(BindSliderRow(parent, "DefaultHours", lr.defaultResetHours, v => {
+                lr.defaultResetHours = v;
+                RefreshLocationResetViews();
+            }, Mathf.Min(MinResetHours, lr.defaultResetHours), Mathf.Max(MaxResetHours, lr.defaultResetHours), IsWhole(lr.defaultResetHours)), Tip("Defaults.ResetHours", "$sls_cfg_tip_locreset_default_hours"));
+            WithTip(BindToggleRow(parent, "DefaultTerrain", lr.defaultResetTerrain, on => {
                 lr.defaultResetTerrain = on;
                 RefreshLocationResetViews();
-            }), Tip("Defaults.ResetTerrain", "$sls_cfg_tip_locreset_default_terrain")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_safe_radius",
-                0f, Mathf.Max(1024f, lr.playerSafeRadius), lr.playerSafeRadius, true, v => lr.playerSafeRadius = v), Tip("PlayerSafeRadius", "$sls_cfg_tip_locreset_safe_radius")));
+            }), Tip("Defaults.ResetTerrain", "$sls_cfg_tip_locreset_default_terrain"));
+            WithTip(BindSliderRow(parent, "SafeRadius", lr.playerSafeRadius, v => lr.playerSafeRadius = v, max: Mathf.Max(1024f, lr.playerSafeRadius)), Tip("PlayerSafeRadius", "$sls_cfg_tip_locreset_safe_radius"));
             // The protection scan reaches a chunk and its 8 neighbours, so LocationResetData clamps this to 32-96m.
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_protection_radius",
-                LocationResetData.MinProtectionRadius, LocationResetData.MaxProtectionRadius, lr.protectionRadius, true, v => lr.protectionRadius = v), Tip("Defaults.ProtectionRadius", "$sls_cfg_tip_locreset_protection_radius")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_location_radius",
-                0f, Mathf.Max(512f, lr.locationPlayerRadius), lr.locationPlayerRadius, true, v => lr.locationPlayerRadius = v), Tip("LocationPlayerRadius", "$sls_cfg_tip_locreset_location_radius")));
+            WithTip(BindSliderRow(parent, "ProtectionRadius", lr.protectionRadius, v => lr.protectionRadius = v), Tip("Defaults.ProtectionRadius", "$sls_cfg_tip_locreset_protection_radius"));
+            WithTip(BindSliderRow(parent, "LocationRadius", lr.locationPlayerRadius, v => lr.locationPlayerRadius = v, max: Mathf.Max(512f, lr.locationPlayerRadius)), Tip("LocationPlayerRadius", "$sls_cfg_tip_locreset_location_radius"));
             // LocationResetData clamps this to 0-64m.
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_location_buffer",
-                0f, LocationResetData.MaxLocationBuffer, lr.locationBuffer, true, v => lr.locationBuffer = v), Tip("Defaults.LocationBuffer", "$sls_cfg_tip_locreset_location_buffer")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddToggleRow(t, lw, LabelW + 80f, "$sls_cfg_locreset_refill_chests", lr.containerDefaultLoot, on => lr.containerDefaultLoot = on), Tip("InPlaceRefresh.ContainerDefaultLoot", "$sls_cfg_tip_locreset_refill_chests")));
-            ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, "$sls_cfg_locreset_sweep_budget",
-                0f, 33f, lr.sweepBudgetMs, false, v => lr.sweepBudgetMs = v), Tip(ValConfig.LocationResetSweepBudgetMs)));
-            ScrollRow(left, lw, 84f, t => ConfigUI.AddTextRow(t, lw, 84f, "$sls_cfg_locreset_settings_notes", 12, GUIManager.Instance.ValheimBeige));
+            WithTip(BindSliderRow(parent, "LocationBuffer", lr.locationBuffer, v => lr.locationBuffer = v), Tip("Defaults.LocationBuffer", "$sls_cfg_tip_locreset_location_buffer"));
+            WithTip(BindToggleRow(parent, "RefillChests", lr.containerDefaultLoot, on => lr.containerDefaultLoot = on), Tip("InPlaceRefresh.ContainerDefaultLoot", "$sls_cfg_tip_locreset_refill_chests"));
+            WithTip(BindSliderRow(parent, "SweepBudget", lr.sweepBudgetMs, v => lr.sweepBudgetMs = v), Tip(ValConfig.LocationResetSweepBudgetMs));
 
-            ScrollRow(left, lw, RowHeight, t => ConfigUI.AddHeaderRow(t, lw, "$sls_cfg_locreset_header_biome_rates"));
-            ScrollRow(left, lw, 50f, t => ConfigUI.AddTextRow(t, lw, 50f, "$sls_cfg_locreset_biome_help", 12, GUIManager.Instance.ValheimBeige));
+            Transform left = ScrollContent(parent, "LeftScroll");
             foreach (Heightmap.Biome biome in ResetRateRows(lr.biomeRates)) {
                 Heightmap.Biome b = biome;   // capture per iteration
                 float rate = lr.RateFor(b);
-                ScrollRow(left, lw, RowHeight, t => WithTip(ConfigUI.AddSliderRow(t, lw, LabelW, SliderW, ValueW, BiomeName(b),
-                    0f, Mathf.Max(5f, rate), rate, false, v => lr.biomeRates[b] = v), Tip("BiomeRates", "$sls_cfg_tip_locreset_biome_rate")));
+                GameObject row = Spawn("SLS_QC_Row_ResetBiomeRate", left);
+                SetText(row.transform, "Label", BiomeName(b));
+                WithTip(BindSliderRow(row, rate, v => lr.biomeRates[b] = v, max: Mathf.Max(5f, rate)), Tip("BiomeRates", "$sls_cfg_tip_locreset_biome_rate"));
             }
 
             // Right - every reset group in the file, in file order.
-            ConfigUI.CreateScroll(parent, RightX, scrollY, rightW, scrollH, out Transform right, out float rw);
-            ScrollRow(right, rw, RowHeight, t => ConfigUI.AddHeaderRow(t, rw, "$sls_cfg_locreset_header_groups"));
-            ScrollRow(right, rw, 50f, t => ConfigUI.AddTextRow(t, rw, 50f, "$sls_cfg_locreset_groups_help", 12, GUIManager.Instance.ValheimBeige));
+            Transform right = ScrollContent(parent, "RightScroll");
             foreach (KeyValuePair<string, StagedResetGroup> group in lr.groups) {
-                AddResetGroupEntry(right, rw, group.Key, group.Value);
+                AddResetGroupEntry(right, group.Key, group.Value);
             }
 
             RefreshLocationResetViews();
@@ -251,44 +231,37 @@ namespace StarLevelSystem.modules.UI {
             staged.locationReset.ResetToShipped(ShippedDefaults(YamlConfigManager.LocationResetSettings));
         }
 
-        private static void AddResetGroupEntry(Transform content, float width, string name, StagedResetGroup group) {
-            const float TextX = 30f;
-            const float TagW = 60f;
-            const float ControlsTop = 76f;
-            const float LabelW = 120f, SliderW = 170f, ValueW = 60f;
+        private static void AddResetGroupEntry(Transform content, string name, StagedResetGroup group) {
             StagedLocationReset lr = staged.locationReset;
-            GameObject entry = ConfigUI.NewLayoutRow(content, width, ControlsTop + 2 * RowHeight + 8f);
+            GameObject entry = Spawn("SLS_QC_Row_ResetGroup", content);
             ResetGroupView view = new ResetGroupView { Group = group };
 
-            ConfigUI.AddToggle(entry.transform, 2f, 1f, 22f, group.Enabled, on => { group.Enabled = on; RefreshLocationResetViews(); });
-            ConfigUI.AddText(entry.transform, TextX, 0f, width - TextX - TagW - 8f, 24f, Prettify(name), 15, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimOrange);
-            view.Tag = ConfigUI.AddText(entry.transform, width - TagW - 4f, 0f, TagW, 24f, "", 13, TextAnchor.MiddleRight);
-            view.Description = ConfigUI.AddText(entry.transform, TextX, 26f, width - TextX - 4f, ControlsTop - 28f, "", 12, TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            BindToggle(entry.transform, "Enabled", group.Enabled, on => { group.Enabled = on; RefreshLocationResetViews(); });
+            SetText(entry.transform, "Name", Prettify(name));
+            view.Tag = Get<Text>(entry.transform, "Tag");
+            view.Description = Get<Text>(entry.transform, "Description");
 
-            float rowW = width - TextX;
             if (string.IsNullOrWhiteSpace(group.Source.ResetSchedule)) {
+                Find(entry.transform, "Scheduled").SetActive(false);
                 float hours = lr.HoursFor(group);
-                GameObject hoursRow = WithTip(ConfigUI.AddSliderRow(entry.transform, rowW, LabelW, SliderW, ValueW, "$sls_cfg_locreset_group_hours",
-                    Mathf.Min(MinResetHours, hours), Mathf.Max(MaxResetHours, hours), hours, IsWhole(hours), v => {
-                        group.ResetHours = group.Source.ResetHours.HasValue == false && v == lr.defaultResetHours ? (float?)null : v;
-                        RefreshLocationResetViews();
-                    }), Tip("ResetHours", "$sls_cfg_tip_locreset_group_hours"));
-                ConfigUI.PositionRow(hoursRow, TextX, ControlsTop);
-                view.HoursSlider = hoursRow.GetComponentInChildren<Slider>();
-                view.HoursField = hoursRow.GetComponentInChildren<InputField>();
+                GameObject hoursRow = WithTip(BindSliderRow(Find(entry.transform, "Hours"), hours, v => {
+                    group.ResetHours = group.Source.ResetHours.HasValue == false && v == lr.defaultResetHours ? (float?)null : v;
+                    RefreshLocationResetViews();
+                }, Mathf.Min(MinResetHours, hours), Mathf.Max(MaxResetHours, hours), IsWhole(hours)), Tip("ResetHours", "$sls_cfg_tip_locreset_group_hours"));
+                view.HoursSlider = Get<Slider>(hoursRow.transform, "Slider");
+                view.HoursField = Get<InputField>(hoursRow.transform, "Value");
             } else {
                 // A schedule wins over ResetHours at the same level, so an hours slider here would do nothing. Set on the
-                // text directly: the schedule is the admin's own text, and AddText would read a '$' in it as a token.
-                Text scheduled = ConfigUI.AddText(entry.transform, TextX, ControlsTop, rowW, RowHeight, "", 13, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimBeige);
-                scheduled.text = L("$sls_cfg_locreset_group_scheduled", group.Source.ResetSchedule);
+                // text directly: the schedule is the admin's own text, and SetText would read a '$' in it as a token.
+                Find(entry.transform, "Hours").SetActive(false);
+                Get<Text>(entry.transform, "Scheduled").text = L("$sls_cfg_locreset_group_scheduled", group.Source.ResetSchedule);
             }
 
-            GameObject terrainRow = WithTip(ConfigUI.AddToggleRow(entry.transform, rowW, LabelW + 80f, "$sls_cfg_locreset_group_terrain", lr.TerrainFor(group), on => {
+            GameObject terrainRow = WithTip(BindToggleRow(entry.transform, "Terrain", lr.TerrainFor(group), on => {
                 group.ResetTerrain = group.Source.ResetTerrain.HasValue == false && on == lr.defaultResetTerrain ? (bool?)null : on;
                 RefreshLocationResetViews();
             }), Tip("ResetTerrain", "$sls_cfg_tip_locreset_group_terrain"));
-            ConfigUI.PositionRow(terrainRow, TextX, ControlsTop + RowHeight);
-            view.TerrainToggle = terrainRow.GetComponentInChildren<Toggle>();
+            view.TerrainToggle = Get<Toggle>(terrainRow.transform, "Toggle");
 
             resetGroupViews.Add(view);
         }

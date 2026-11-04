@@ -12,7 +12,7 @@ using UnityEngine.UI;
 namespace StarLevelSystem.modules.UI {
     // Hover tooltips for the quick configure panel.
     //
-    // Hand-built rather than vanilla's UITooltip: that one draws through a prefab the game wires up for its own GUI,
+    // A prefab of its own rather than vanilla's UITooltip: that one draws through a prefab the game wires up for its own GUI,
     // and this panel also opens on the main menu. One shared box is moved around and re-filled instead of one per row.
     //
     // The text comes from what already documents each setting: a BepInEx entry's ConfigDescription (the same line an
@@ -145,20 +145,9 @@ namespace StarLevelSystem.modules.UI {
             if (root != null) { return; }
             if (GUIManager.Instance == null || GUIManager.CustomGUIFront == null) { return; }
 
-            root = ConfigUI.NewUI("SLSQuickConfigTooltip", GUIManager.CustomGUIFront.transform, typeof(Image));
+            root = QuickConfigPrefabs.Spawn("SLS_QC_Tooltip", GUIManager.CustomGUIFront.transform);
             rect = (RectTransform)root.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0f, 1f);
-
-            Image background = root.GetComponent<Image>();
-            background.color = new Color(0.06f, 0.05f, 0.04f, 0.96f);
-            // Never a raycast target: a box under the cursor would count as leaving the row it describes, and the two
-            // would flicker against each other.
-            background.raycastTarget = false;
-
-            label = ConfigUI.AddText(root.transform, Padding, Padding, MaxWidth - 2 * Padding, 20f, "", 14,
-                TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
-            label.raycastTarget = false;
+            label = QuickConfigPrefabs.Get<Text>(root.transform, "Label");
 
             root.AddComponent<TooltipFollower>();
             root.SetActive(false);

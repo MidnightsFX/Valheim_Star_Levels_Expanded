@@ -38,6 +38,7 @@ namespace StarLevelSystem.modules
             { "Purple", "#c966ff" },
             { "Pink",   "#ff4dcf" },
             { "Gray",   "#999999" },
+            { "Grey",   "#999999" },
             { "Brown",  "#b37700" },
             { "Black",  "#333333" },
             { "White",  "#f2f2f2" },
@@ -142,6 +143,20 @@ namespace StarLevelSystem.modules
 
         internal static void ApplyColorizationWithoutLevelEffects(GameObject cgo, ColorDef colorization) {
             if (ValConfig.EnableColorization.Value == false) { return; }
+            ApplyColorization(cgo, colorization);
+        }
+
+        // The switch reaches creatures already loaded: without this they keep the tint they have until they next load.
+        internal static void EnableColorizationChanged(object s, EventArgs e) {
+            foreach (Character chara in Character.GetAllCharacters()) {
+                if (chara == null || chara.IsPlayer()) { continue; }
+                CharacterCacheEntry entry = CompositeLazyCache.GetCacheEntry(chara);
+                if (entry == null) { continue; }
+                ApplyColorization(chara.gameObject, ValConfig.EnableColorization.Value ? entry.Colorization : defaultColorization);
+            }
+        }
+
+        private static void ApplyColorization(GameObject cgo, ColorDef colorization) {
             if (colorization == null) { return; }
             LevelSetup genlvlup = colorization.ToLevelEffect();
             // Material assignment changes must occur in a try block- they can quietly crash the game otherwise

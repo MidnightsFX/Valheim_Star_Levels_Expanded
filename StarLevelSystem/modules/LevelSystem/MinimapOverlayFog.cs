@@ -57,6 +57,14 @@ namespace StarLevelSystem.modules.LevelSystem {
                 && SceneManager.GetActiveScene().name == "main";
         }
 
+        // Whether a scaling or overlay setting changing right now can act on a live world. Jotunn raises SettingChanged when it
+        // resets synced values on connect and restores them on shutdown, and neither is a moment to start anything. A client
+        // that gets here before its map is ready is picked up by OnVanillaMapDataLoaded instead, by when the value has arrived.
+        internal static bool CanReactToSettings() {
+            if (WorldUnloading || ZNet.instance == null) { return false; }
+            return ZNet.instance.IsServer() || IsMapDataLoaded();
+        }
+
         // True once the live Minimap has run LoadMapData. Anything added to the map before that is at
         // risk: SetMapData calls ClearPins when the player profile has saved data for this world, which
         // silently drops every non-saved pin added earlier.
@@ -111,8 +119,8 @@ namespace StarLevelSystem.modules.LevelSystem {
             nextFogRefresh = Time.unscaledTime + FogRefreshInterval;
             if (!CanDrawOverlays()) { return; }
 
-            bool ringsBelowFog = ValConfig.EnableMapRingsForDistanceBonus.Value && !ValConfig.MapRingsAboveFog.Value;
-            bool zonesBelowFog = ValConfig.EnableZoneScalingBonus.Value && ValConfig.EnableZoneMapOverlay.Value && !ValConfig.ZoneOverlayAboveFog.Value;
+            bool ringsBelowFog = DistanceScaleSystem.RingsWanted && !ValConfig.MapRingsAboveFog.Value;
+            bool zonesBelowFog = ZoneScaleSystem.ZonesWanted && !ValConfig.ZoneOverlayAboveFog.Value;
             if (!ringsBelowFog && !zonesBelowFog) { return; }
 
             ExplorationChanged = false;
@@ -124,8 +132,25 @@ namespace StarLevelSystem.modules.LevelSystem {
         // so this fires exactly on new exploration -- not while standing in already-explored terrain.
         [HarmonyPatch(typeof(Minimap), nameof(Minimap.Explore), typeof(int), typeof(int))]
         internal static class Minimap_Explore_Patch {
+            private static void Postfix(bool __result, int x, int y) {
+                if (__result == false) { return; }
+                ExplorationChanged = true;
+                RegionScaleSystem.NoteExplored(x, y);
+            }
+        }
+
+        // Another player's map, from a cartography table. It arrives all at once and is not worth tracking pixel by pixel.
+        [HarmonyPatch(typeof(Minimap), nameof(Minimap.AddSharedMapData))]
+        internal static class Minimap_AddSharedMapData_Patch {
             private static void Postfix(bool __result) {
-                if (__result) { ExplorationChanged = true; }
+                if (__result) { RegionScaleSystem.OnSharedExplorationChanged(); }
+            }
+        }
+
+        [HarmonyPatch(typeof(Minimap), nameof(Minimap.ResetSharedMapData))]
+        internal static class Minimap_ResetSharedMapData_Patch {
+            private static void Postfix() {
+                RegionScaleSystem.OnSharedExplorationChanged();
             }
         }
 

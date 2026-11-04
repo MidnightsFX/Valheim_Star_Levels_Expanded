@@ -1,6 +1,8 @@
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.modules.Health;
 using StarLevelSystem.modules.LevelSystem;
+using StarLevelSystem.modules.Sizes;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -15,6 +17,9 @@ namespace StarLevelSystem.modules.CreatureSetup {
         // poll, and if the creature streams back in during that window the new instance gets its own worker; the
         // old one must then not release the new one's entry on its way out (see the finally in ProcessEntry).
         private static readonly Dictionary<ZDOID, Character> InProgress = new Dictionary<ZDOID, Character>(ZDOIDComparer.Instance);
+
+        // Creatures whose next setup replaces the size and health they already carry, see RunSetup.
+        private static readonly HashSet<ZDOID> RefreshRequested = new HashSet<ZDOID>(ZDOIDComparer.Instance);
 
         // How often a worker re-checks a creature it cannot set up yet (no owner, or an owner whose roll has not
         // replicated). A client keeps tens of these loaded at the edge of its area for as long as it stays there,
@@ -48,6 +53,13 @@ namespace StarLevelSystem.modules.CreatureSetup {
         }
 
 
+        // For a changed setting: call before CreatureSetup. A creature already in the queue is refreshed by the worker it has.
+        internal static void MarkForRefresh(Character chara) {
+            if (chara == null || chara.IsPlayer() || chara.m_nview == null || chara.m_nview.IsValid() == false) { return; }
+            ZDOID id = chara.GetZDOID();
+            if (id != ZDOID.None) { RefreshRequested.Add(id); }
+        }
+
         // Whether this instance's setup has yet to finish. A worker left over from an earlier instance of the same
         // creature does not count, as it ends without setting this one up.
         internal static bool IsPending(Character chara) {
@@ -60,6 +72,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
         internal static void RemoveTracking(ZDOID id) {
             if (id == ZDOID.None) { return; }
             InProgress.Remove(id);
+            RefreshRequested.Remove(id);
         }
 
         // Per-creature setup worker. Waits for the requested delay, then waits for a valid ZNetView, for room in this
@@ -131,7 +144,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
                     cce = CompositeLazyCache.GetAndSetLocalCache(chara, levelOverride, requiredModifiers, notAllowedModifiers);
                 }
 
-                success = CreatureSetupControl.RunCharacterSetup(chara, cce);
+                success = RunSetup(chara, id, cce);
                 if (success && awaitedOwner && Logger.IsDebugEnabled) {
                     Logger.LogDebug($"{cce.RefCreatureName} set up after waiting for its owner's pass ({(isOwner ? "rolled here, as the new owner" : "read from the owner's roll")}).");
                 }
@@ -145,7 +158,7 @@ namespace StarLevelSystem.modules.CreatureSetup {
                             if (isRoller) {
                                 CompositeLazyCache.StartZOwnerCreatureRoutines(chara, fallback, spawnMultiply);
                             }
-                            success = CreatureSetupControl.RunCharacterSetup(chara, fallback);
+                            success = RunSetup(chara, id, fallback);
                             if (success) { Logger.LogDebug($"{fallback.RefCreatureName} running delayed setup."); }
                         }
                     }
@@ -164,7 +177,25 @@ namespace StarLevelSystem.modules.CreatureSetup {
                 // entry, though: a new instance of the same creature may have enqueued since this one died.
                 if (id != ZDOID.None && InProgress.TryGetValue(id, out Character tracked) && ReferenceEquals(tracked, chara)) {
                     InProgress.Remove(id);
+                    RefreshRequested.Remove(id);
                 }
+            }
+        }
+
+        // A normal setup keeps the size and health a creature already carries, and one marked for a refresh replaces them.
+        // The flags are up for this one call, which does not yield. A setup can wait frames for the budget above, so flags
+        // held for a whole settings reload were down again before most creatures got here, and those kept their old size.
+        private static bool RunSetup(Character chara, ZDOID id, CharacterCacheEntry cce) {
+            if (RefreshRequested.Contains(id) == false) { return CreatureSetupControl.RunCharacterSetup(chara, cce); }
+            SizeModifications.ForceUpdateSize = true;
+            HealthModifications.ForceUpdateHealth = true;
+            try {
+                bool success = CreatureSetupControl.RunCharacterSetup(chara, cce);
+                if (success) { RefreshRequested.Remove(id); }
+                return success;
+            } finally {
+                SizeModifications.ForceUpdateSize = false;
+                HealthModifications.ForceUpdateHealth = false;
             }
         }
 

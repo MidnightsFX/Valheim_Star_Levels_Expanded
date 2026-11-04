@@ -43,6 +43,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         // Jotunn recreated the overlay) and is cleared once at its first Commit.
         private Texture2D drawnTexture;
         private int stageSize;
+        // Only a first draw or one after Hide turns the overlay on: the player may have unticked it in Jotunn's overlay panel.
+        private bool enableAtCommit = true;
 
         private List<LinePixel> lines = new List<LinePixel>();
         private List<LinePixel> staged = new List<LinePixel>();
@@ -62,6 +64,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (overlay == null || overlayMinimap != minimap || overlay.OverlayTex == null) {
                 overlay = MinimapManager.Instance.GetMapOverlay(layer, ignoreFog: true);
                 overlayMinimap = minimap;
+                enableAtCommit = true;
             }
             return overlay;
         }
@@ -120,7 +123,10 @@ namespace StarLevelSystem.modules.LevelSystem {
                     hidden.Add(i);
                 }
             }
-            target.Enabled = true;
+            if (enableAtCommit) {
+                target.Enabled = true;
+                enableAtCommit = false;
+            }
             tex.Apply();
             drawnTexture = tex;
             return true;
@@ -167,6 +173,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         internal void Hide() {
             MinimapManager.MapOverlay target = GetOverlay();
             if (target != null) { target.Enabled = false; }
+            enableAtCommit = true;
         }
 
         // Leaving a world: Jotunn destroys the overlay with the Minimap, so forget it and the lines.
@@ -175,6 +182,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             overlay = null;
             overlayMinimap = null;
             drawnTexture = null;
+            enableAtCommit = true;
             lines.Clear();
             staged.Clear();
             hidden.Clear();

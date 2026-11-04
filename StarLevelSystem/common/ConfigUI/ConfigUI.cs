@@ -255,10 +255,18 @@ namespace StarLevelSystem.common {
 
         // --- Buttons and toggles ---------------------------------------------------------------------
 
+        // Jotunn gives a button a select sound as well as its click. A mouse press selects the button, so one
+        // click played both, except on a button already selected. Valheim's own GUIButton has only the click.
+        internal static void ClickSoundOnly(GameObject button) {
+            ButtonSfx sounds = button.GetComponent<ButtonSfx>();
+            if (sounds != null) { sounds.m_selectSfxPrefab = null; }
+        }
+
         internal static GameObject AddButton(Transform parent, float x, float y, float w, string text,
             UnityAction onClick, float h = 40f) {
             GameObject go = GUIManager.Instance.CreateButton(L(text), parent,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, -y), w, h);
+            ClickSoundOnly(go);
             RectTransform rt = (RectTransform)go.transform;
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(x, -y);
@@ -467,6 +475,7 @@ namespace StarLevelSystem.common {
             // so showing a translated form here would teach them the wrong word. The label beside it is.
             GameObject go = GUIManager.Instance.CreateButton(options.Length > 0 ? options[idx] : "", row.transform,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(labelW + 6f, -2f), ctrlW, 28f);
+            ClickSoundOnly(go);
             RectTransform rt = (RectTransform)go.transform;
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(labelW + 6f, -2f);

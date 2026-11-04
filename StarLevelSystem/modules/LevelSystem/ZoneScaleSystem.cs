@@ -30,17 +30,27 @@ namespace StarLevelSystem.modules.LevelSystem {
         // The zone overlay's line pixels; see MinimapLineArt for how redraws and reveals stay cheap.
         private static readonly MinimapLineArt zoneArt = new MinimapLineArt(ZoneLayer);
 
+        // A zone outline on the map promises levels, so it only shows while zone scaling is adding them.
+        internal static bool ZonesWanted => ValConfig.EnableZoneScalingBonus.Value && ValConfig.EnableZoneMapOverlay.Value;
+
         public static void Initialize() {
             if (!ValConfig.EnableZoneScalingBonus.Value) { return; }
-            if (ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.buildingZones) { return; }
+            // Built before this client's map was ready, or the system is being turned back on: only the drawing is left to do.
+            if (ZoneScaleSystemData.zonesBuilt) {
+                DrawMinimapOverlay();
+                return;
+            }
+            if (ZoneScaleSystemData.buildingZones) { return; }
             if (ZNet.instance.IsDedicated()) {
                 Logger.LogDebug("Server is headless, skipping zone minimap generation.");
             }
-            ZoneScaleSystemData.ZoneLoadResult loadResult = ZoneScaleSystemData.LoadZoneData();
+            // A client's zones come from the server's sizes, whatever a file of its own from hosting a same-named world says.
+            ZoneScaleSystemData.ZoneLoadResult loadResult = ZNet.instance.IsServer() ? ZoneScaleSystemData.LoadZoneData() : ZoneScaleSystemData.ZoneLoadResult.NoData;
             bool wrongSize = loadResult == ZoneScaleSystemData.ZoneLoadResult.Loaded && ZoneScaleSystemData.LoadedForAnotherWorldSize;
             if (loadResult == ZoneScaleSystemData.ZoneLoadResult.Loaded && wrongSize == false) {
                 Logger.LogInfo($"Zone data loaded from file. {ZoneScaleSystemData.Zones.Count} zones available.");
                 ZoneScaleSystemData.zonesBuilt = true;
+                ZoneScaleSystemData.BroadcastGeometry();
                 ZoneScaleSystemData.StartDecayCoroutine();
                 DrawMinimapOverlay();
                 return;
@@ -56,6 +66,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Logger.LogInfo("Zone data was built for a different world size, building zone map from world and keeping its kills and levels...");
             } else {
                 Logger.LogInfo("No zone data found, building zone map from world...");
+                ZoneScaleSystemData.UseConfiguredSizesUnlessToldOtherwise();
             }
             ZoneScaleSystemData.buildingZones = true;
             buildCoroutine = TaskRunner.Run().StartCoroutine(BuildZoneMap());
@@ -126,7 +137,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // (deduped below) or disjoint -> guaranteed non-overlapping. The grid stays anchored at vanilla's corner whatever
             // the world's size, with negative cells past it, so a world that grows keeps its cells' bounds and ids, and with
             // them its kills and levels (see ZoneScaleSystemData.ZoneIdForBounds).
-            float cellSize = ValConfig.MaxZoneSize.Value;
+            float cellSize = ZoneScaleSystemData.BuildCellSize;
             float cellOrigin = -WorldGenerator.worldSize;
             var cellZones = new Dictionary<long, ZoneData>();
             foreach (var region in regions) {
@@ -136,7 +147,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 int maxGZ = region.Max(r => r.gz);
                 float regionWidth = (maxGX - minGX + 1) * sampleStep;
                 float regionDepth = (maxGZ - minGZ + 1) * sampleStep;
-                if (regionWidth < ValConfig.MinZoneSize.Value || regionDepth < ValConfig.MinZoneSize.Value) {
+                if (regionWidth < ZoneScaleSystemData.BuildMinSize || regionDepth < ZoneScaleSystemData.BuildMinSize) {
                     continue; // island too small to scale; skip it entirely
                 }
                 foreach (var (gx, gz) in region) {
@@ -172,10 +183,12 @@ namespace StarLevelSystem.modules.LevelSystem {
             // No-ops on a client: it keeps the geometry in memory for the overlay and takes levels
             // from the server, so only the authority persists a zone file.
             ZoneScaleSystemData.SaveZoneData();
+            ZoneScaleSystemData.BroadcastGeometry();
             ZoneScaleSystemData.StartDecayCoroutine();
             DrawMinimapOverlay();
         }
 
+        // Runs on the server, and reaches clients from there: they build again when they hear the map has changed.
         internal static void RebuildZones() {
             if (!ValConfig.EnableZoneScalingBonus.Value) {
                 Logger.LogInfo("Zone scaling is disabled (EnableZoneScalingBonus=false); nothing to rebuild.");
@@ -189,7 +202,20 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Logger.LogInfo("Zone map is already building; please wait.");
                 return;
             }
+            ZoneScaleSystemData.UseConfiguredSizes(newGeneration: true);
+            RestartBuild();
+        }
 
+        // On a client: the server's map is not the one this peer has, or is part way through building.
+        internal static void RebuildForServerGeometry() {
+            if (buildCoroutine != null) {
+                TaskRunner.Run().StopCoroutine(buildCoroutine);
+                buildCoroutine = null;
+            }
+            RestartBuild();
+        }
+
+        private static void RestartBuild() {
             // Clear the existing minimap overlay so stale boundaries don't linger during the rebuild.
             if (!ZNet.instance.IsDedicated()) { zoneArt.Clear(); }
 
@@ -227,7 +253,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         // Runs on the creature's owner peer (which may be a client, not the server). We only record
         // the death position and let the batched flush coroutine report it to the server.
         internal static void OnCreatureKilled(Vector3 pos) {
-            if (!ValConfig.EnableZoneScalingBonus.Value) { return; }
+            if (!ValConfig.EnableZoneScalingBonus.Value && !ValConfig.EnableRegionScalingBonus.Value) { return; }
             pendingDeaths.Add(pos);
             StartKillReportFlush();
         }
@@ -236,6 +262,12 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (flushRunning) { return; }
             flushRunning = true;
             flushCoroutine = TaskRunner.Run().StartCoroutine(FlushKillReports());
+        }
+
+        // Authority-only: one batch of reported deaths, counted by whichever of the systems is on.
+        internal static void ApplyKillBatch(List<SerializableVector3> deaths) {
+            if (ValConfig.EnableZoneScalingBonus.Value) { ZoneScaleSystemData.ApplyDeaths(deaths); }
+            if (ValConfig.EnableRegionScalingBonus.Value) { RegionScaleSystemData.ApplyDeaths(deaths); }
         }
 
         // Periodically drains pendingDeaths. The authority (dedicated server or host) applies them
@@ -248,7 +280,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 List<SerializableVector3> batch = new List<SerializableVector3>(pendingDeaths);
                 pendingDeaths.Clear();
                 if (ZNet.instance.IsServer()) {
-                    ZoneScaleSystemData.ApplyDeaths(batch);
+                    ApplyKillBatch(batch);
                 } else {
                     ZNetPeer server = ZNet.instance.GetServerPeer();
                     if (server == null) { continue; }
@@ -257,9 +289,25 @@ namespace StarLevelSystem.modules.LevelSystem {
             }
         }
 
+        // Enabling the system can be the first this peer hears of zones, since it skips all of this at load while they are off.
+        public static void OnZoneScalingToggled(object s, EventArgs e) {
+            if (!MinimapOverlayFog.CanReactToSettings()) { return; }
+            if (ValConfig.EnableZoneScalingBonus.Value) { Initialize(); }
+            OnZoneOverlayToggled(s, e);
+        }
+
+        public static void OnZoneOverlayToggled(object s, EventArgs e) {
+            if (!MinimapOverlayFog.CanReactToSettings()) { return; }
+            if (ZonesWanted) {
+                DrawMinimapOverlay();
+            } else if (ZoneScaleSystemData.overlayAvailable && MinimapOverlayFog.CanDrawOverlays()) {
+                zoneArt.Hide();
+            }
+        }
+
         // Single entrypoint for map overlay building
         internal static void DrawMinimapOverlay() {
-            if (!ValConfig.EnableZoneMapOverlay.Value) { return; }
+            if (!ZonesWanted) { return; }
             // Skip while in the main menu or on a loading screen (no live minimap yet); the overlay is
             // (re)drawn from OnVanillaMapDataLoaded once the map is ready. Also skip on a headless server.
             if (!MinimapOverlayFog.CanDrawOverlays() || ZNet.instance.IsDedicated()) { return; }
@@ -294,7 +342,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         private static IEnumerator BuildZoneMapOverlay() {
-            if (!ValConfig.EnableZoneMapOverlay.Value || ZNet.instance.IsDedicated()) { yield break; }
+            if (!ZonesWanted || ZNet.instance.IsDedicated()) { yield break; }
             if (!ZoneScaleSystemData.zonesBuilt || ZoneScaleSystemData.Zones.Count == 0) { yield break; }
             if (Minimap.instance == null) { yield break; }
 
@@ -338,7 +386,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             // Commit also returns false if Jotunn destroyed the overlay texture on Minimap.OnDestroy
             // while we were yielded. The fog setting is read here, at the moment the outlines are
             // written, rather than at the start of the build.
-            if (!MinimapOverlayFog.CanDrawOverlays()) { yield break; }
+            if (!MinimapOverlayFog.CanDrawOverlays() || !ZonesWanted) { yield break; }
             if (!zoneArt.Commit(ValConfig.ZoneOverlayAboveFog.Value)) { yield break; }
             ZoneScaleSystemData.overlayAvailable = true;
             Logger.LogDebug($"Zone map overlay drawn for {ZoneScaleSystemData.Zones.Count} zones.");

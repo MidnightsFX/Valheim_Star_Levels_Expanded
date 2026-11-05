@@ -125,6 +125,10 @@ namespace StarLevelSystem.common {
         // later edits forever.
         internal Func<T, bool> MigrateInPlace { get; set; }
 
+        // For a file whose Apply changes the value it was given, what to write out in place of it, so a rewrite does not
+        // bake the changes into the file. Null, or returning null, writes the value as it stands.
+        internal Func<T> ValueToWrite { get; set; }
+
         // Never null once the manager has prepared this file: a failed first load falls back to defaults.
         internal T Value { get; private set; }
 
@@ -138,6 +142,8 @@ namespace StarLevelSystem.common {
         }
 
         internal override string SerializeCurrent() {
+            T toWrite = ValueToWrite?.Invoke();
+            if (toWrite != null) { return EffectiveFormat.Serializer.Serialize(toWrite); }
             return Value == null ? SerializeDefaults() : EffectiveFormat.Serializer.Serialize(Value);
         }
 

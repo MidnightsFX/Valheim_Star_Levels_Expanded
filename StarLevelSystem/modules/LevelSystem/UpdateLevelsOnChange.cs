@@ -85,6 +85,7 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         public static void UpdateTreeSizeOnConfigChange(object s, EventArgs e) {
+            CompositeLazyCache.FlushTreeCache();
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
@@ -110,13 +111,17 @@ namespace StarLevelSystem.modules.LevelSystem {
 
         public static IEnumerator UpdateAllTreeSizesOnConfigChangeCoroutine() {
             int updated = 0;
-            IEnumerable<GameObject> trees = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<TreeBase>() != null);
+            // A snapshot of every object in the game, filtered as the walk reaches each one. The walk spans frames, so any of them
+            // can be destroyed before its turn, and GetComponent throws on a destroyed object, which would end the walk for the rest.
+            IEnumerable<GameObject> trees = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj != null && obj.GetComponent<TreeBase>() != null);
             foreach (GameObject tree in trees) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
                     TaskRunner.RequestPhysicsSync();
                     yield return new WaitForEndOfFrame();
                 }
+                // It can also go during that wait.
+                if (tree == null) { continue; }
                 TreeBase treeBase = tree.GetComponent<TreeBase>();
                 if (treeBase == null || treeBase.m_nview == null || treeBase.m_nview.GetZDO() == null) { continue; }
                 string treeName = Utils.GetPrefabName(tree.gameObject);
@@ -156,13 +161,16 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static IEnumerator UpdateAllBirdSizesOnConfigChangeCoroutine() {
             int updated = 0;
             Dictionary<string, Vector3> BirdSizeReferences = new Dictionary<string, Vector3>();
-            IEnumerable<GameObject> birds = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj.GetComponent<RandomFlyingBird>() != null);
+            // Filtered as the walk reaches each object, like the tree walk above, and for the same reason.
+            IEnumerable<GameObject> birds = Resources.FindObjectsOfTypeAll<GameObject>().Where(obj => obj != null && obj.GetComponent<RandomFlyingBird>() != null);
             foreach (GameObject bird in birds) {
                 updated++;
                 if (updated % ValConfig.NumberOfCacheUpdatesPerFrame.Value == 0) {
                     TaskRunner.RequestPhysicsSync();
                     yield return new WaitForEndOfFrame();
                 }
+                // It can also go during that wait.
+                if (bird == null) { continue; }
                 RandomFlyingBird randomBird = bird.GetComponent<RandomFlyingBird>();
                 if (randomBird == null || randomBird.m_nview == null || randomBird.m_nview.GetZDO() == null) { continue; }
                 string birdName = Utils.GetPrefabName(bird.gameObject);

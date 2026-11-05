@@ -143,12 +143,13 @@ namespace StarLevelSystem.modules.LevelSystem {
         }
 
         // Jotunn composes overlays with lerp(below.rgba, overlay.rgba, overlay.a), alpha included, starting from nothing, so what
-        // ends up on the map image has an alpha of a*a and a colour of rgb*a. This writes what comes out as the colour and
-        // opacity asked for, as near as it can: brightness has to give at low opacity, since rgb*a can't exceed a.
+        // ends up on the map image has an alpha of a*a and a colour of rgb*a. So a is what gives the opacity asked for, and the
+        // colour comes out dimmed by it, since rgb*a can't exceed a. All of its channels dim together. Trying to make up the
+        // brightness channel by channel clips them against that limit, and at a low opacity it clipped most of the level colours
+        // into the same few, so a region could go up a level with its fill not changing at all.
         private static Color32 ComposedColor(Color color, float opacity) {
             if (opacity <= 0f) { return default; }
-            float a = Mathf.Sqrt(opacity);
-            return new Color(Mathf.Min(1f, color.r / a), Mathf.Min(1f, color.g / a), Mathf.Min(1f, color.b / a), a);
+            return new Color(color.r, color.g, color.b, Mathf.Sqrt(opacity));
         }
 
         // Returns the row to carry on from. At least one row a frame, so a very slow frame still gets somewhere.

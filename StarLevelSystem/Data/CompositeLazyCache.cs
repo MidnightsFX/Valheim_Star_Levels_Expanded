@@ -48,6 +48,12 @@ namespace StarLevelSystem.Data
             TreeSessionCache.Remove(id);
         }
 
+        // Levels are only worked out on a miss, so without this a loaded tree would keep dropping scaled loot after its scaling
+        // was turned off.
+        internal static void FlushTreeCache() {
+            TreeSessionCache.Clear();
+        }
+
         internal static void FlushCache() {
             Logger.LogDebug("Flushing creature cache...");
             SessionCache.Clear();

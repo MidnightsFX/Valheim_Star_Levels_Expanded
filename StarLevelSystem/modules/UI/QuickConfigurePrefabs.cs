@@ -18,18 +18,42 @@ namespace StarLevelSystem.modules.UI {
     internal static class QuickConfigPrefabs {
         private const string WoodpanelName = "Woodpanel";
 
-        private static readonly Dictionary<string, GameObject> loaded = new Dictionary<string, GameObject>();
+        private static readonly Dictionary<string, GameObject> templates = new Dictionary<string, GameObject>();
+        private static GameObject templateHolder;
 
         internal static GameObject Spawn(string prefab, Transform parent) {
-            if (loaded.TryGetValue(prefab, out GameObject asset) == false || asset == null) {
-                asset = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(prefab + ".prefab");
-                if (asset == null) { throw new ArgumentException($"The asset bundle has no prefab {prefab}"); }
-                loaded[prefab] = asset;
-            }
-            GameObject go = UnityEngine.Object.Instantiate(asset, parent, false);
+            GameObject go = UnityEngine.Object.Instantiate(Template(prefab), parent, false);
             go.name = prefab;
-            Style(go);
+            Localize(go);
             return go;
+        }
+
+        // A styled copy of the prefab for Spawn to clone, so its look is only worked out once however many rows are made of it.
+        // Styling goes through GUIManager's Apply*Style, and with other mods installed a single call can take milliseconds:
+        // Auga patches them and walks the stack on each one, which is what froze a heavily modded game for seconds when this
+        // styled every widget it spawned.
+        //
+        // Kept under an inactive object in the current scene, so none of it wakes up, and so it goes when the scene does:
+        // Jotunn's look differs between the main menu and in game, and the next Spawn styles a new copy for the new scene.
+        private static GameObject Template(string prefab) {
+            if (templates.TryGetValue(prefab, out GameObject template) && template != null) { return template; }
+            GameObject asset = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<GameObject>(prefab + ".prefab");
+            if (asset == null) { throw new ArgumentException($"The asset bundle has no prefab {prefab}"); }
+            if (templateHolder == null) {
+                templateHolder = new GameObject("SLS_QC_Templates");
+                templateHolder.SetActive(false);
+            }
+            template = UnityEngine.Object.Instantiate(asset, templateHolder.transform, false);
+            Style(template);
+            templates[prefab] = template;
+            return template;
+        }
+
+        // Per copy, unlike the look: the player can change language between one panel and the next.
+        private static void Localize(GameObject root) {
+            foreach (Text text in root.GetComponentsInChildren<Text>(true)) {
+                if (text.text.IndexOf('$') >= 0) { text.text = ConfigUI.L(text.text); }
+            }
         }
 
         // --- Valheim's look -------------------------------------------------------------------------------------------
@@ -61,7 +85,6 @@ namespace StarLevelSystem.modules.UI {
             }
             foreach (Text text in root.GetComponentsInChildren<Text>(true)) {
                 text.font = gui.AveriaSerifBold;
-                if (text.text.IndexOf('$') >= 0) { text.text = ConfigUI.L(text.text); }
             }
         }
 

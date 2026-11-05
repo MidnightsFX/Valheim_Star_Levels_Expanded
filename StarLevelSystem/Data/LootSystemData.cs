@@ -161,7 +161,7 @@ namespace StarLevelSystem.Data
                     }
                 }
             },
-            EnableDistanceLootModifier = true,
+            EnableDistanceLootModifier = false,
             DistanceLootModifier = new SortedDictionary<int, DistanceLootModifier>()
             {
                 { 1250, new DistanceLootModifier() {

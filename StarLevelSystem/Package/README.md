@@ -75,7 +75,12 @@ The panel's first page covers most worlds with a handful of settings:
 Each difficulty sets the values below, worked out from Max level so it means the same thing at any cap: the star chances run
 from the first star to the top one, and health and damage are given at the top star and spread evenly across the stars.
 Changing any of these on another page, or in the config files, shows the difficulty as Custom. Picking a difficulty
-replaces them, but conditional scaling's boss tiers and a biome's own level chances stay as they are, and those can roll past Max level.
+replaces them, but a biome's own level chances stay as they are. Conditional scaling works from whatever you pick and stays within Max level.
+
+Custom is also the step after Brutal. It keeps the other settings as your world has them, and replaces the boss chart with a table
+of the chance of a creature reaching each star, which is what `DefaultCreatureLevelUpChance` holds. A chance is the share of all
+creatures that get at least that far, so changing one moves the others where it has to: a higher star cannot be more likely than a
+lower one. Bosses follow the table unless they have a curve of their own on the Level Distribution page.
 
 | | Vanilla | Easy | Normal | Hard | Brutal |
 | --- | --- | --- | --- | --- | --- |
@@ -395,12 +400,14 @@ missing keys or whose values do not go down are also reported when the config lo
 for its default generator directly: pick the `Table` curve style and type the values separated by commas.
 
 #### Boss-Conditional Levelup Chances
-With `EnableConditionalCreatureLevelupChance: true`, each biome's levelup chances change as world bosses are defeated.
-`ConditionalCreatureLevelupChance` maps a boss global key to per-biome generators, and `ConditionalBossKeyOrder` decides which boss
-counts as furthest along: the latest defeated key in that list that has an entry is used. The order of entries in the file does not matter.
+With `EnableConditionalCreatureLevelupChance: true`, older biomes get harder as world bosses are defeated, working from your own
+`MaxLevel` and level chances. The Level Scaling page of the quick configure panel has the switch and the first two settings here.
 
 ```
 EnableConditionalCreatureLevelupChance: true
+ConditionalBiomeDelay: 1            # how many biomes back a boss raises difficulty
+ConditionalDifficultyIncreases: 7   # the most increases a biome can get, at least 1
+ConditionalFullChanceMultiplier: 4  # what level-up chances are multiplied by at full strength
 ConditionalBossKeyOrder:            # earliest to latest; leave out to use this vanilla order
 - defeated_eikthyr
 - defeated_gdking
@@ -410,6 +417,30 @@ ConditionalBossKeyOrder:            # earliest to latest; leave out to use this 
 - defeated_queen
 - defeated_fader
 - defeated_frozenking_p3
+```
+
+A biome earns one difficulty increase per boss from its own on, less `ConditionalBiomeDelay`. At the default of 1, defeating Eikthyr does
+nothing, since the Meadows is the only biome so far. Defeating the Elder raises the Meadows but not the Black Forest, and Bonemass then
+raises both of those but not the Swamp. The Deep North's boss comes last, so at 1 the Deep North never rises. At 0, a boss raises its own biome too.
+
+`ConditionalDifficultyIncreases` is the most a biome can get. At 1, the Meadows goes up once when the Elder falls and Bonemass adds nothing
+more there. At 2 it can go up a second time, and so on.
+
+Every increase is the same size, and one per boss after the first adds up to full strength, so with the vanilla bosses each is a seventh of
+it. An increase multiplies the biome's level chances a step further toward `ConditionalFullChanceMultiplier`, about 1.43 times after the first at
+the default of 4, and moves its star cap a step from `BiomeMaxLevelOverride` toward `MaxLevel`, never past it. A biome with no cap of its own, or
+one already at or above `MaxLevel`, keeps the cap it has. There is no minimum level. So with a `MaxLevel` of 4, the Meadows starts at 1 star and
+reaches 4 once the last boss falls, while newer biomes have fewer bosses left to rise by. A creature entry with its own curve still wins, and
+bosses keep `MaxBossLevel`.
+
+Add keys from modded bosses where they belong in your progression. The latest defeated key in the list is what counts, and the tier changes as
+soon as a boss key is set or removed, for creatures spawned after that. A file that still holds the vanilla list from before the Deep North update
+gets `defeated_frozenking_p3` (set when the Deep North's final boss dies) added on load; a list you changed is left alone.
+
+##### Fixed levels
+`ConditionalCreatureLevelupChance` sets fixed levels for a boss and biome, in place of that biome's increases. Nothing ships in it.
+
+```
 ConditionalCreatureLevelupChance:
   defeated_bonemass:
     Meadows:
@@ -417,17 +448,17 @@ ConditionalCreatureLevelupChance:
       - { MinLevel: 4, MaxLevel: 16, LevelUpChance: 0.25, LevelupCalculationStyle: Exponential }
 ```
 
-Add keys from modded bosses where they belong in your progression. An entry whose key is not in the list only applies while no
-listed boss has been defeated. A file that still holds the vanilla list from before the Deep North update gets
-`defeated_frozenking_p3` (set when the Deep North's final boss dies) and its tier added on load; a list you changed is left alone. The tier changes as soon as a boss key is set or removed, for creatures spawned after that.
-
-The active tier replaces the biome's levelup chances and its minimum level: creatures there roll at least the tier generators'
-`MinLevel`, whatever `BiomeMinLevelOverride` says. The tier's `MaxLevel` can only raise the biome's cap: where it is lower than
-`MaxLevel` (or `BiomeMaxLevelOverride`), that cap stays, so beating a boss never lowers a biome's levels. An `All` entry inside a
-tier is the fallback for biomes the tier does not name. A creature entry with its own curve still wins, and bosses keep `MaxBossLevel`.
+The latest defeated key that has an entry applies, and the order of entries in the file does not matter. A key that is not in
+`ConditionalBossKeyOrder` only applies while no listed boss that has an entry is defeated. An `All` entry inside a tier is the fallback for biomes the
+tier does not name. These replace the biome's levelup chances and its minimum level: creatures there roll at least the generators' `MinLevel`, whatever
+`BiomeMinLevelOverride` says. Their `MaxLevel` can raise the biome's cap, even past `MaxLevel`, and where it is lower than the cap the cap stays, so
+beating a boss never lowers a biome's levels. Tiers used to ship this way. A file still holding those shipped levels has them removed when it
+loads, once, and an entry you changed by hand is left as you wrote it.
 
 ### Nemesis System
-The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
+The Nemesis system is off by default, turn on `EnableNemesisSystem` in the main config to use it.
+
+It is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
 
 It does this by analyzing things the player does and tracking statistics about the players combat performance. Lower combat scores result in reduced challenge,
 high combat scores result in increased challenge.
@@ -563,8 +594,8 @@ There are three core parts to configuring loot drops, but many options to modify
 The Loot page of the quick configure panel (Mod Config button) covers how much loot a level is worth without editing YAML:
 the loot scaling style (`LootDropCalculationType`), loot and drop chance per star (`PerLevelLootScale`,
 `PerLevelLootChanceScale`, `ChanceBaseChancePerLevel`), whether loot that never scales does
-(`ScaleAllLootByLevel`), the per-level scales for trees, rocks, destructibles and birds, and the
-`distanceLootModifier` rings below, which can be added, removed and moved as well as tuned. Beside them it works those numbers through a real drop table - a Troll's own, read
+(`ScaleAllLootByLevel`), whether trees, rocks and birds scale at all (all off by default), the per-level scales for trees, rocks,
+destructibles and birds, and the `distanceLootModifier` rings below (off by default), which can be added, removed and moved as well as tuned. Beside them it works those numbers through a real drop table - a Troll's own, read
 from the loaded world - at no stars, at your Max stars, and inside the furthest ring, so a slider can be judged by the
 loot it produces. Which creatures and objects have a custom table at all still lives in `LootSettings.yaml`.
 
@@ -720,9 +751,9 @@ Below is an example of many of the details that can be configured for a given ra
   Activation:                     #  Mistlands_thunder, Ashlands_ashrain, Ashlands_ashrain_clear, Ashlands_CinderRain, Ashlands_meteorshower, Ashlands_misty, Ashlands_SeaStorm, Ashlands_storm, Caves, CavesHildir
     Chance: 50                    # Chance that this raid is selected when it is a valid option, only one raid can be selected for a given player at a time
     RequiredGlobalKeys:           # The global keys required for this raid to activate
-    - defeated_eikthyr       
-    NotRequiredGlobalKeys:        # The global keys that must be missing for this raid to activate
     - defeated_bonemass
+    NotRequiredGlobalKeys:        # The global keys that must be missing for this raid to activate
+    - defeated_dragon
     RequiredPlayerKeys:           # Player keys that must be set to activate
     - Deathlink
     AnyRequiredPlayerKeys:        # Player must have at least ONE of the listed player keys for the raid to be selected for them

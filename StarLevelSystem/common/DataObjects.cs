@@ -558,9 +558,10 @@ namespace StarLevelSystem.common
             }
         }
 
-        [Description("Per-biome conditional level generator, keyed under a defeated-boss global key.")]
+        [Description("Fixed levels for a biome once a boss is defeated, keyed under that boss's global key.")]
         public class ConditionalLevelupChance {
-            [Description("Level generators whose expanded curve replaces the biome default levelup chances when the owning boss is defeated.")]
+            [Description("Level generators whose curve replaces the biome's level chances and minimum level when the owning boss is defeated, and whose MaxLevel can raise the biome's cap past MaxLevel.")]
+            [DefaultValue(null)]
             public List<LevelGenerator> LevelupGenerators { get; set; }
 
             [Description("Names of generator lists in CreatureLevelSettings.CustomLevelupGenerators to include alongside any inline LevelupGenerators.")]
@@ -617,10 +618,26 @@ namespace StarLevelSystem.common
             [Description("Enables boss-reactive, biome-specific levelup chances based on the world's defeated bosses (global keys).")]
             public bool EnableConditionalCreatureLevelupChance { get; set; } = false;
 
-            [Description("Defeated-boss global key -> biome -> level generator. The latest defeated key in ConditionalBossKeyOrder applies (file order does not matter); its generator replaces the biome default levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
+            [Description("How many biomes back a defeated boss raises difficulty. At 1, a boss raises the biomes before its own but not its own. At 0, a boss raises its own biome too.")]
+            [DefaultValue(1)]
+            public int ConditionalBiomeDelay { get; set; } = 1;
+
+            [Description("How many difficulty increases a biome can get, one per boss, at least 1. Each one moves the biome's star cap an equal step toward MaxLevel and raises its level chances an equal step toward ConditionalFullChanceMultiplier.")]
+            [DefaultValue(7)]
+            public int ConditionalDifficultyIncreases { get; set; } = 7;
+
+            [Description("What level-up chances are multiplied by at full strength, which takes one increase per boss after the first. Each increase adds an equal share: with the vanilla bosses, 4 is about 1.43 times the chances after one increase.")]
+            [DefaultValue(4f)]
+            public float ConditionalFullChanceMultiplier { get; set; } = 4f;
+
+            [Description("Fixed levels in place of a biome's difficulty increases: defeated-boss global key -> biome -> level generator. The latest defeated key in ConditionalBossKeyOrder that has an entry applies (file order does not matter), and its generator replaces the biome's levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
             public Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> ConditionalCreatureLevelupChance { get; set; }
 
-            [Description("Boss global keys from earliest to latest progression. The latest defeated key here that has a ConditionalCreatureLevelupChance entry applies. Keys not listed rank below every listed key. Leave empty to use the vanilla boss order.")]
+            [Description("Do not edit. Which shape of the shipped conditional settings this file has been brought up to.")]
+            [DefaultValue(0)]
+            public int ConditionalTierVersion { get; set; } = 0;
+
+            [Description("Boss global keys from earliest to latest progression. Difficulty increases count bosses along this list, and the latest defeated key here that has a ConditionalCreatureLevelupChance entry applies. Keys not listed rank below every listed key. Leave empty to use the vanilla boss order.")]
             [DefaultValue(null)]
             public List<string> ConditionalBossKeyOrder { get; set; }
 

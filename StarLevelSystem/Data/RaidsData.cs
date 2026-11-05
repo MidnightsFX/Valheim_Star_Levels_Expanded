@@ -102,8 +102,8 @@ namespace StarLevelSystem.Data
                     Activation = new RaidActivation() {
                         NearBaseOnly = true,
                         Chance = 50f,
-                        RequiredGlobalKeys = new List<string>() { "defeated_eikthyr" },
-                        NotRequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
+                        RequiredGlobalKeys = new List<string>() { "defeated_bonemass" },
+                        NotRequiredGlobalKeys = new List<string>() { "defeated_dragon" },
                     },
                     Spawns = new List<RaidSpawnEntry>() {
                         new RaidSpawnEntry() { PrefabName = "Troll", MaxSpawned = 6, SpawnInterval = 40f, SpawnChance = 100f, LevelMin = 1, LevelMax = 3, CreatureAI = AI.HuntPlayer, SpawnGroupSize = 2, 

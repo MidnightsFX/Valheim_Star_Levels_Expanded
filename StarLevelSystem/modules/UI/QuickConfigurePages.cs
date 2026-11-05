@@ -184,6 +184,8 @@ namespace StarLevelSystem.modules.UI {
             staged.showNoMapRegion = DefaultOf(ValConfig.ShowNoMapRegionLevel);
             CreatureLevelSettings shipped = ShippedDefaults(YamlConfigManager.LevelSettings);
             staged.enableConditional = shipped != null && shipped.EnableConditionalCreatureLevelupChance;
+            staged.conditionalDelay = shipped != null ? shipped.ConditionalBiomeDelay : 1;
+            staged.conditionalIncreases = shipped != null ? shipped.ConditionalDifficultyIncreases : 7;
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -492,7 +494,7 @@ namespace StarLevelSystem.modules.UI {
                     notes.Add(ConfigUI.L("$sls_cfg_distribution_caps_below_min"));
                 }
                 if (staged.enableConditional) {
-                    notes.Add(ConfigUI.L("$sls_cfg_distribution_conditional_note"));
+                    notes.Add(ConfigUI.L("$sls_cfg_distribution_conditional_raises_note"));
                 }
                 CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
                 if ((live?.DefaultLevelupGenerators?.Count ?? 0) > 1 || (live?.DefaultLevelupGeneratorRefs?.Count ?? 0) > 0) {

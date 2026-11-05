@@ -84,6 +84,7 @@ namespace StarLevelSystem.modules.UI {
             internal float chanceBase;
             internal bool scaleAllLoot;
             internal bool eggStacks;
+            internal bool treeScaling, rockScaling, birdScaling;
             internal float treeScale, rockScale, destructibleScale, birdScale;
 
             // LootSettings.yaml.
@@ -109,6 +110,9 @@ namespace StarLevelSystem.modules.UI {
                     chanceBase = ValConfig.ChanceBaseChancePerLevel.Value,
                     scaleAllLoot = ValConfig.ScaleAllLootByLevel.Value,
                     eggStacks = ValConfig.LootEggsDropIncreaseStacks.Value,
+                    treeScaling = ValConfig.EnableTreeScaling.Value,
+                    rockScaling = ValConfig.EnableRockLevels.Value,
+                    birdScaling = ValConfig.EnableScalingBirds.Value,
                     treeScale = ValConfig.PerLevelTreeLootScale.Value,
                     rockScale = ValConfig.PerLevelMineRockLootScale.Value,
                     destructibleScale = ValConfig.PerLevelDestructibleLootScale.Value,
@@ -128,6 +132,9 @@ namespace StarLevelSystem.modules.UI {
                 chanceBase = DefaultOf(ValConfig.ChanceBaseChancePerLevel);
                 scaleAllLoot = DefaultOf(ValConfig.ScaleAllLootByLevel);
                 eggStacks = DefaultOf(ValConfig.LootEggsDropIncreaseStacks);
+                treeScaling = DefaultOf(ValConfig.EnableTreeScaling);
+                rockScaling = DefaultOf(ValConfig.EnableRockLevels);
+                birdScaling = DefaultOf(ValConfig.EnableScalingBirds);
                 treeScale = DefaultOf(ValConfig.PerLevelTreeLootScale);
                 rockScale = DefaultOf(ValConfig.PerLevelMineRockLootScale);
                 destructibleScale = DefaultOf(ValConfig.PerLevelDestructibleLootScale);
@@ -168,6 +175,7 @@ namespace StarLevelSystem.modules.UI {
             internal bool Matches(StagedLoot o) {
                 return style == o.style && perLevelScale == o.perLevelScale && perLevelChanceScale == o.perLevelChanceScale
                     && chanceBase == o.chanceBase && scaleAllLoot == o.scaleAllLoot && eggStacks == o.eggStacks
+                    && treeScaling == o.treeScaling && rockScaling == o.rockScaling && birdScaling == o.birdScaling
                     && treeScale == o.treeScale && rockScale == o.rockScale
                     && destructibleScale == o.destructibleScale && birdScale == o.birdScale
                     && YamlMatches(o);
@@ -177,6 +185,15 @@ namespace StarLevelSystem.modules.UI {
         // ------------------------------------------------------------------------------------------------
         //  Page
         // ------------------------------------------------------------------------------------------------
+
+        // Whether this kind of object scales at all. Its loot slider does nothing while that is off, so it goes with the switch.
+        private static void BindObjectScaling(Transform parent, string switchRow, string tip, bool on, Action<bool> onChange, GameObject lootRow) {
+            WithTip(BindToggleRow(parent, switchRow, on, value => {
+                onChange(value);
+                lootRow.SetActive(value);
+            }), tip);
+            lootRow.SetActive(on);
+        }
 
         private static void BuildLootPage(Transform parent) {
             StagedLoot lt = staged.loot;
@@ -209,10 +226,13 @@ namespace StarLevelSystem.modules.UI {
 
             // World objects carry their own per-level scale and their own shape: each is `1 + scale * level` applied to
             // the object's vanilla drop table, not the creature multiplier above.
-            WithTip(BindSliderRow(parent, "TreeScale", lt.treeScale, v => lt.treeScale = v, max: Mathf.Max(MaxObjectLootScale, lt.treeScale)), Tip(ValConfig.PerLevelTreeLootScale));
-            WithTip(BindSliderRow(parent, "RockScale", lt.rockScale, v => lt.rockScale = v, max: Mathf.Max(MaxObjectLootScale, lt.rockScale)), Tip(ValConfig.PerLevelMineRockLootScale));
+            BindObjectScaling(parent, "TreeScaling", Tip(ValConfig.EnableTreeScaling), lt.treeScaling, on => lt.treeScaling = on,
+                WithTip(BindSliderRow(parent, "TreeScale", lt.treeScale, v => lt.treeScale = v, max: Mathf.Max(MaxObjectLootScale, lt.treeScale)), Tip(ValConfig.PerLevelTreeLootScale)));
+            BindObjectScaling(parent, "RockScaling", Tip(ValConfig.EnableRockLevels), lt.rockScaling, on => lt.rockScaling = on,
+                WithTip(BindSliderRow(parent, "RockScale", lt.rockScale, v => lt.rockScale = v, max: Mathf.Max(MaxObjectLootScale, lt.rockScale)), Tip(ValConfig.PerLevelMineRockLootScale)));
             WithTip(BindSliderRow(parent, "DestructibleScale", lt.destructibleScale, v => lt.destructibleScale = v, max: Mathf.Max(MaxObjectLootScale, lt.destructibleScale)), Tip(ValConfig.PerLevelDestructibleLootScale));
-            WithTip(BindSliderRow(parent, "BirdScale", lt.birdScale, v => lt.birdScale = v, max: Mathf.Max(MaxObjectLootScale, lt.birdScale)), Tip(ValConfig.PerLevelBirdLootScale));
+            BindObjectScaling(parent, "BirdScaling", Tip(ValConfig.EnableScalingBirds), lt.birdScaling, on => lt.birdScaling = on,
+                WithTip(BindSliderRow(parent, "BirdScale", lt.birdScale, v => lt.birdScale = v, max: Mathf.Max(MaxObjectLootScale, lt.birdScale)), Tip(ValConfig.PerLevelBirdLootScale)));
 
             WithTip(BindToggleRow(parent, "DistanceBonus", lt.distanceBonus, v => {
                 lt.distanceBonus = v;

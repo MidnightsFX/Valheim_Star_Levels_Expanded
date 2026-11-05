@@ -1,12 +1,20 @@
 **1.33.0**
 ---
  ```
+- Quick config panel now has a simple/advanced view
+	- Simple allows configuring basic features and creature levels
+	- Tree, rock and bird scaling, distance loot and the Nemesis system are now off by default
+	- Troll raids now start after Bonemass (does not change existing configs).
 - New scaling option, Regions!
 	- Regions, Zones and distance scaling are now off by default (does not change existing configs)
 	- The quick config panel has a new Level Scaling page with every distance, zone and region setting
 	- Quick configuration for region, distance and zone scaling now preview how they impact level curves too
 - Lox no longer lose speed with each star on new installs.
 - Improves mounted riding for all creatures and all sizes.
+- Fixes tree and bird resizing sometimes stopping partway after their settings change.
+- Comditional scaling Improvements
+	- Number of adjustment increments can now be configured
+	- Delay between current biome and difficulty increase can be configured (default 1 biome behind)
 ```
 
 **1.32.0**

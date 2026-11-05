@@ -27,11 +27,8 @@ namespace StarLevelSystem.modules.LevelSystem {
         //
         // Bosses are capped by MaxBossLevel wherever they stand. A biome cap or a conditional tier describes that
         // biome's own creatures, the same way a boss curve outranks the biome and conditional curves. Everything
-        // else starts at MaxLevel, which BiomeMaxLevelOverride replaces, which the active conditional tier's range
-        // can only raise. A creature entry's CreatureMaxLevelOverride beats all of them.
-        // A tier steps biomes up as bosses fall, but the newest biomes' first step ends far below a high MaxLevel (the
-        // shipped Fader tier tops the Ashlands and Deep North out at 7 stars). Letting it replace the cap lowered levels
-        // there, and the over-level correction then cut every creature already in those biomes down to the tier's top.
+        // else starts at MaxLevel, which BiomeMaxLevelOverride replaces, which the active conditional tier can
+        // only raise (see ConditionalScaleSystem.RaiseCap). A creature entry's CreatureMaxLevelOverride beats all of them.
         // asBoss measures a creature against the boss cap before it is one (a Nemesis promotion).
         public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings, BiomeSpecificSetting biome_settings, Heightmap.Biome biome, bool? asBoss = null) {
             // A pinned boss phase stays at level 1 whatever the config says; see BossPhases.
@@ -40,7 +37,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             int max_level = (boss ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value) + 1;
             if (boss == false) {
                 if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride + 1; }
-                if (ConditionalScaleSystem.TryGetConditionalLevelRange(biome, creature_settings, out _, out int conditionalMax)) { max_level = Math.Max(max_level, conditionalMax); }
+                max_level = ConditionalScaleSystem.RaiseCap(biome, creature_settings, max_level);
             }
             if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride + 1; }
             return max_level;
@@ -157,8 +154,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 }
 
                 float regionScaleBonus = RegionScaleSystemData.LevelBonusAt(character.transform.position);
+                float conditionalBonus = ConditionalScaleSystem.GetChanceMultiplier(biome, creature_settings, character.IsBoss());
 
-                int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus, zoneScaleBonus, regionScaleBonus);
+                int level = LevelSelection.DetermineLevelRollResult(levelup_roll, max_level, levelup_chances, distance_levelup_bonuses, distance_level_modifier, nightScaleBonus, zoneScaleBonus, regionScaleBonus, conditionalBonus);
                 if (min_level > 0 && level < min_level) { level = min_level; }
                 if (ValConfig.EnableNemesisSystem.Value) {
                     // Call out to make modifications to the level bonus rolls
@@ -303,7 +301,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             return LevelUpWithBonus;
         }
 
-        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f, float regionBonus = 1f) {
+        public static int DetermineLevelRollResult(float roll, int maxLevel, SortedDictionary<int, float> creature_levelup_chance, SortedDictionary<int, float> levelup_bonus, float distance_influence, float nightBonus = 1f, float zoneBonus = 1f, float regionBonus = 1f, float conditionalBonus = 1f) {
             int selected_level = 0;
             // Build new levelup definitions with bonuses applied
             SortedDictionary<int, float> LevelUpWithBonus = ApplyLevelupBonus(creature_levelup_chance, levelup_bonus, distance_influence);
@@ -312,7 +310,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             int index = 0;
             foreach (KeyValuePair<int, float> kvp in LevelUpWithBonus) {
-                float levelup_req = kvp.Value * nightBonus * zoneBonus * regionBonus * worldRate;
+                float levelup_req = kvp.Value * nightBonus * zoneBonus * regionBonus * conditionalBonus * worldRate;
                 index++;
                 // Uncomment to debug level roll selection and values (warning verbose)
                 //if (ValConfig.EnableDebugOutputLevelRolls.Value) {
@@ -331,7 +329,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }
                         float baseval = 0;
                         if (creature_levelup_chance.ContainsKey(kvp.Key)) { baseval = creature_levelup_chance[kvp.Key]; }
-                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) * {zoneBonus}(Zone) * {regionBonus}(Region) * {worldRate}(WorldLevelUpRate) | max-level used: {maxLevel} Selected Level: {selected_level}");
+                        Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + {bonus}(distanceBonus) * {distance_influence}(DistanceInfluence)] * {nightBonus}(Night) * {zoneBonus}(Zone) * {regionBonus}(Region) * {conditionalBonus}(Conditional) * {worldRate}(WorldLevelUpRate) | max-level used: {maxLevel} Selected Level: {selected_level}");
                     }
                     break;
                 }

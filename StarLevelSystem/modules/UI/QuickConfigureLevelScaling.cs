@@ -29,6 +29,7 @@ namespace StarLevelSystem.modules.UI {
         private static readonly string[] DistanceSectionRows = { "DistanceOverlay", "DistanceFog", "DistanceTemple", "DistanceReadout", "DistanceColors", "DistanceStrength", "BiomeStrengthHeader", "BiomeStrengths", "RingsHelp", "RingsHeader", "RingsNone", "AddRingRow" };
         private static readonly string[] ZoneSectionRows = { "ZoneOverlay", "ZoneFog", "ZoneReadout", "ZoneBonus", "ZoneKills", "ZoneDecay", "ZoneClock", "ZoneMaxSize", "ZoneMinSize", "ZoneSizeNote", "ZoneColors", "ZoneOpacity", "ZoneReportInterval" };
         private static readonly string[] RegionSectionRows = { "RegionOverlay", "RegionFog", "RegionReadout", "RegionBonus", "RegionKills", "RegionDecay", "RegionTarget", "RegionMin", "RegionMountain", "RegionSizeNote", "RegionOpacity" };
+        private static readonly string[] ConditionalSectionRows = { "ConditionalDelay", "ConditionalIncreases" };
 
         private static LevelDistributionChart scalingChart;
         private static Text scalingSummaryText;
@@ -58,8 +59,14 @@ namespace StarLevelSystem.modules.UI {
             BuildDistanceSection(content);
             BuildZoneSection(content);
             BuildRegionSection(content);
-            WithTip(BindToggleRow(content, "Conditional", staged.enableConditional, v => staged.enableConditional = v),
-                YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.EnableConditionalCreatureLevelupChance)));
+            WithTip(BindToggleRow(content, "Conditional", staged.enableConditional, on => {
+                staged.enableConditional = on;
+                ShowEnabledSections();
+            }), YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.EnableConditionalCreatureLevelupChance)));
+            WithTip(BindSliderRow(content, "ConditionalDelay", staged.conditionalDelay, v => staged.conditionalDelay = (int)v, max: Mathf.Max(7f, staged.conditionalDelay)),
+                YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.ConditionalBiomeDelay)));
+            WithTip(BindSliderRow(content, "ConditionalIncreases", staged.conditionalIncreases, v => staged.conditionalIncreases = (int)v, max: Mathf.Max(8f, staged.conditionalIncreases)),
+                YamlTip(typeof(CreatureLevelSettings), nameof(CreatureLevelSettings.ConditionalDifficultyIncreases)));
             ShowEnabledSections();
 
             float chartWidth = PageSize(parent).x - ScalingChartX;
@@ -148,6 +155,7 @@ namespace StarLevelSystem.modules.UI {
             SetRowsActive(DistanceSectionRows, staged.enableDistance);
             SetRowsActive(ZoneSectionRows, staged.enableZone);
             SetRowsActive(RegionSectionRows, staged.enableRegion);
+            SetRowsActive(ConditionalSectionRows, staged.enableConditional);
             // A picture of a system for as long as its settings aren't taking the room.
             Find(levelRingContent, "DistanceExample").SetActive(staged.enableDistance == false);
             Find(levelRingContent, "ZoneExample").SetActive(staged.enableZone == false);

@@ -40,8 +40,11 @@ namespace StarLevelSystem.common {
                 Header = LevelSettingsHeader,
                 Defaults = () => LevelSystemData.DefaultConfiguration,
                 Apply = LevelSystemData.ApplyLoaded,
-                // Adds the Deep North's final boss to a file that still holds the old vanilla boss order.
-                MigrateInPlace = LevelSystemData.AddDeepNorthBossKey,
+                // Adds the Deep North's final boss to a file that still holds the old vanilla boss order, and removes tiers
+                // still holding shipped fixed levels, so those biomes work from the world's own settings.
+                MigrateInPlace = LevelSystemData.MigrateLevelSettings,
+                // Generators expand into the chance tables of the live settings. What the file wrote is what goes back to it.
+                ValueToWrite = () => LevelSystemData.AuthoredLevelSettings,
                 AllowAdminEdit = true,
             });
 
@@ -292,19 +295,26 @@ namespace StarLevelSystem.common {
 # generator, and the boss curve's own table.
 #
 # --- Boss-conditional levelup chances ---
-# ConditionalCreatureLevelupChance switches biome curves as world bosses fall:
-# defeated-boss global key -> biome -> generator. 'All' inside an entry is that
-# entry's fallback biome. The order of entries in the file does not matter:
-# ConditionalBossKeyOrder lists boss keys from earliest to latest progression,
-# and the latest defeated key that has an entry applies. Tiers update as soon
-# as a boss key is set or removed; no relog needed.
+# With EnableConditionalCreatureLevelupChance on, older biomes get harder as
+# world bosses fall, working from your own settings. ConditionalBossKeyOrder
+# lists boss keys from earliest to latest progression, and the latest defeated
+# one counts. Changes apply as soon as a boss key is set or removed.
 #
-# The active tier replaces the biome's own curve AND its minimum level:
-# creatures there roll at least the tier generators' MinLevel, whatever
-# BiomeMinLevelOverride says. The tier's MaxLevel can only raise the biome's
-# cap: where it is lower than MaxLevel (or BiomeMaxLevelOverride), that cap
-# stays, so beating a boss never lowers a biome's levels. A creature entry
-# with its own curve still wins, and bosses keep MaxBossLevel.
+# A biome earns one difficulty increase per boss from its own on, less
+# ConditionalBiomeDelay: at 1, the Elder raises the Meadows but not the Black
+# Forest. ConditionalDifficultyIncreases is the most a biome can get. Each one
+# keeps the biome's own level chances, multiplied a step further toward
+# ConditionalFullChanceMultiplier, and moves its star cap a step from
+# BiomeMaxLevelOverride toward MaxLevel, never past it. A cap already at or above
+# MaxLevel stays where it is. A creature entry with its own curve still wins, and
+# bosses keep MaxBossLevel.
+#
+# ConditionalCreatureLevelupChance can set fixed levels for a boss and biome
+# instead: defeated-boss global key -> biome -> generator, with 'All' as that
+# entry's fallback biome. The latest defeated key that has an entry applies, and
+# the order of entries in the file does not matter. Those replace the biome's own
+# curve AND its minimum level, and their MaxLevel can raise the biome's cap, even
+# past MaxLevel.
 #
 #   ConditionalBossKeyOrder:
 #   - defeated_eikthyr

@@ -585,7 +585,7 @@ namespace StarLevelSystem.common {
             EnableRidableCreatureSizeFixes.SettingChanged += SizeModifications.SizeSettingChanged;
             MultipliedNightSpawnsRemovedDuringDay = BindServerConfig("LevelSystem", "MultipliedNightSpawnsRemovedDuringDay", true, "When true, night spawns will be flagged to despawn during the day, which will result in them running away and despawning. This can be disabled if desired.");
 
-            EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", true, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
+            EnableScalingBirds = BindServerConfig("ObjectLevels", "EnableScalingBirds", false, "Enables birds to scale with the level system. This will cause them to become larger and give more drops.");
             EnableScalingBirds.SettingChanged += UpdateLevelsOnChange.UpdateBirdSizeOnConfigChange;
             BirdSizeScalePerLevel = BindServerConfig("ObjectLevels", "BirdSizeScalePerLevel", 0.1f, "The amount of size that birds gain per level. 0.1 = 10% larger per level.", true, 0f, 2f);
             BirdSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateBirdSizeOnConfigChange;
@@ -599,7 +599,7 @@ namespace StarLevelSystem.common {
             DestructibleMaxLevel = BindServerConfig("ObjectLevels", "DestructibleMaxLevel", 1, "Sets the max level that generic destructibles can be leveled to", true, 1, 150);
             FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.", false, 0f);
             FishSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateFishSizeOnConfigChange;
-            EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
+            EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", false, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
             EnableTreeScaling.SettingChanged += UpdateLevelsOnChange.UpdateTreeSizeOnConfigChange;
             UseDeterministicTreeScaling = BindServerConfig("ObjectLevels", "UseDeterministicTreeScaling", true, "Scales the level of trees based on biome and distance from the center/spawn. This does not randomize tree levels, but reduces network usage.");
             TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.", false, 0f);
@@ -671,7 +671,7 @@ namespace StarLevelSystem.common {
             QueenNightSpawns = BindServerConfig("NightSpawns", "QueenNightSpawns", true, BossNightSpawns.SettingDescription("defeated_queen", "The Queen"));
             FaderNightSpawns = BindServerConfig("NightSpawns", "FaderNightSpawns", true, BossNightSpawns.SettingDescription("defeated_fader", "Fader"));
 
-            EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
+            EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", false, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
             EnableNemesisRemoteSpawning = BindServerConfig("Nemesis", "EnableNemesisRemoteSpawning", false, "Enables ambient, server-driven remote spawning of Nemesis minibosses across the world (a second, finer gate lives in NemesisSettings.yaml under RemoteSpawning.Enabled).");
 
             EnableLocationReset = BindServerConfig("LocationReset", "EnableLocationReset", false, "Master switch for the background Location Reset sweep, which restores looted locations, dungeons, ores, pickables and vegetation so they can be gathered again. Per-target opt-in lives in LocationResetSettings.yaml. Back up your world before enabling.");
@@ -706,8 +706,8 @@ namespace StarLevelSystem.common {
             EnableRegionMapOverlay.SettingChanged += RegionScaleSystem.OnOverlaySettingChanged;
             RegionOverlayAboveFog = BindServerConfig("RegionScaling", "RegionOverlayAboveFog", false, "Show the regions over unexplored parts of the map too.");
             RegionOverlayAboveFog.SettingChanged += RegionScaleSystem.OnOverlaySettingChanged;
-            RegionTargetSize = BindServerConfig("RegionScaling", "RegionTargetSize", 1500f, "The size regions try to average, in meters, as the side of a square of the same area. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 500f, 6000f);
-            RegionMinSize = BindServerConfig("RegionScaling", "RegionMinSize", 750f, "Land is not cut into sections smaller than this, in meters, as the side of a square of the same area. Land that can't be divided without going under it stays one larger section. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 200f, 6000f);
+            RegionTargetSize = BindServerConfig("RegionScaling", "RegionTargetSize", 1100f,"The size regions try to average, in meters, as the side of a square of the same area. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 500f, 6000f);
+            RegionMinSize = BindServerConfig("RegionScaling", "RegionMinSize", 500f,"Land is not cut into sections smaller than this, in meters, as the side of a square of the same area. Land that can't be divided without going under it stays one larger section. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 200f, 6000f);
             RegionMountainMinSize = BindServerConfig("RegionScaling", "RegionMountainMinSize", 500f, "Mountains at least this big, in meters, as the side of a square of the same area, become sections of their own. Smaller ones stay part of the land around them. Changes apply when regions are rebuilt (sls-region-rebuild), which resets their levels.", false, 200f, 6000f);
             RegionLevelBonusPerLevel = BindServerConfig("RegionScaling", "RegionLevelBonusPerLevel", 1.0f, "Multiplier added per region level to the chance of each star: 1 + (level - 1) x this. At 1, a level 3 region triples the chances.", false, 0f, 10f);
             RegionKillsPerLevelUp = BindServerConfig("RegionScaling", "RegionKillsPerLevelUp", 100, "Creature kills in a region needed for it to gain a level.", false, 1, 10000);

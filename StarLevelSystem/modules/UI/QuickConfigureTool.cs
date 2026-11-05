@@ -206,9 +206,21 @@ namespace StarLevelSystem.modules.UI {
 
             pages = BuildPageList(tutorialMode);
             pageRoots = new GameObject[pages.Count];
-            for (int i = 0; i < pages.Count; i++) {
-                pageRoots[i] = Spawn(pages[i].Prefab, pageHost);
-                pages[i].Build?.Invoke(pageRoots[i].transform);
+        }
+
+        // A page is built the first time it is shown, since most visits to the panel stop at the first one. Its widgets are
+        // only a view of the staged values, so a page that was never built saves the same as one that was. A prefab that no
+        // longer matches the code throws, and that closes the panel the way a failed open does.
+        private static bool EnsurePageBuilt(int index) {
+            if (pageRoots[index] != null) { return true; }
+            try {
+                pageRoots[index] = Spawn(pages[index].Prefab, pageHost);
+                pages[index].Build?.Invoke(pageRoots[index].transform);
+                return true;
+            } catch (Exception e) {
+                Logger.LogWarning($"QuickConfigureTool failed to build the {pages[index].Title} page: {e}");
+                DestroyPanel();
+                return false;
             }
         }
 
@@ -296,8 +308,9 @@ namespace StarLevelSystem.modules.UI {
             if (pageRoots == null) { return; }
             currentPage = Mathf.Clamp(page, 0, pageRoots.Length - 1);
             RebuildPagesFollowingSimplePage();
+            if (EnsurePageBuilt(currentPage) == false) { return; }
             for (int i = 0; i < pageRoots.Length; i++) {
-                pageRoots[i].SetActive(i == currentPage);
+                if (pageRoots[i] != null) { pageRoots[i].SetActive(i == currentPage); }
             }
             List<int> visible = VisiblePages();
             int position = visible.IndexOf(currentPage);
@@ -313,8 +326,8 @@ namespace StarLevelSystem.modules.UI {
             pages[currentPage].OnShow?.Invoke();
         }
 
-        // The pages navigation goes through, which is all of them only with advanced options on. The rest are still built:
-        // what was edited on them before they were hidden stays staged, and a save still writes it.
+        // The pages navigation goes through, which is all of them only with advanced options on. What was edited on the rest
+        // before they were hidden stays staged, and a save still writes it.
         private static List<int> VisiblePages() {
             List<int> visible = new List<int>();
             for (int i = 0; i < pages.Count; i++) {
@@ -414,7 +427,7 @@ namespace StarLevelSystem.modules.UI {
             pageHost = null;
             tutorialMode = false;
             textFocusedLastFrame = false;
-            simplePageChanged = false;
+            ClearSimpleChoices();
             ClearPageReferences();
         }
 
@@ -640,6 +653,9 @@ namespace StarLevelSystem.modules.UI {
                 ValConfig.ChanceBaseChancePerLevel.Value = staged.loot.chanceBase;
                 ValConfig.ScaleAllLootByLevel.Value = staged.loot.scaleAllLoot;
                 ValConfig.LootEggsDropIncreaseStacks.Value = staged.loot.eggStacks;
+                ValConfig.EnableTreeScaling.Value = staged.loot.treeScaling;
+                ValConfig.EnableRockLevels.Value = staged.loot.rockScaling;
+                ValConfig.EnableScalingBirds.Value = staged.loot.birdScaling;
                 ValConfig.PerLevelTreeLootScale.Value = staged.loot.treeScale;
                 ValConfig.PerLevelMineRockLootScale.Value = staged.loot.rockScale;
                 ValConfig.PerLevelDestructibleLootScale.Value = staged.loot.destructibleScale;
@@ -782,7 +798,7 @@ namespace StarLevelSystem.modules.UI {
             CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
             if (live == null) { return; }
 
-            bool conditionalChanged = staged.enableConditional != baseline.enableConditional;
+            bool conditionalChanged = staged.enableConditional != baseline.enableConditional || staged.conditionalDelay != baseline.conditionalDelay || staged.conditionalIncreases != baseline.conditionalIncreases;
             bool curveChanged = staged.CurveDiffers(baseline);
             bool bossCurveChanged = staged.BossCurveDiffers(baseline);
             List<int> changedSpans = staged.ChangedTableSpans(baseline);
@@ -798,6 +814,8 @@ namespace StarLevelSystem.modules.UI {
             // chance tables, and saving it wrote those expansions over the hand-written tables in the file.
             CreatureLevelSettings settings = CopyForEdit(YamlConfigManager.LevelSettings, LevelSystemData.AuthoredLevelSettings ?? live);
             settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
+            settings.ConditionalBiomeDelay = staged.conditionalDelay;
+            settings.ConditionalDifficultyIncreases = staged.conditionalIncreases;
             if (distanceYamlTurnedOn) { settings.EnableDistanceLevelBonus = true; }
             if (biomeStrengthsChanged) { WriteBiomeStrengths(settings); }
             if (curveChanged && staged.tableCurve != null) {
@@ -1077,6 +1095,7 @@ namespace StarLevelSystem.modules.UI {
             // Client-side readouts: where the ring/zone level is shown when there is no map to draw it on.
             public bool showNoMapRing, showNoMapZone;
             public bool enableConditional;
+            public int conditionalDelay, conditionalIncreases;
 
             // The Level Scaling page's settings past those switches.
             public bool distanceYamlOn;
@@ -1277,6 +1296,8 @@ namespace StarLevelSystem.modules.UI {
 
                 CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
+                s.conditionalDelay = settings != null ? settings.ConditionalBiomeDelay : 1;
+                s.conditionalIncreases = settings != null ? settings.ConditionalDifficultyIncreases : 7;
                 // The roll needs both switches. The page offers one, which reads on only when both are.
                 s.distanceYamlOn = settings == null || settings.EnableDistanceLevelBonus;
                 s.enableDistance = s.enableDistance && s.distanceYamlOn;
@@ -1576,7 +1597,7 @@ namespace StarLevelSystem.modules.UI {
                     enableDistance == o.enableDistance && enableDistanceOverlay == o.enableDistanceOverlay
                     && enableZone == o.enableZone && enableZoneOverlay == o.enableZoneOverlay
                     && showNoMapRing == o.showNoMapRing && showNoMapZone == o.showNoMapZone
-                    && enableConditional == o.enableConditional
+                    && enableConditional == o.enableConditional && conditionalDelay == o.conditionalDelay && conditionalIncreases == o.conditionalIncreases
                     && ringsAboveFog == o.ringsAboveFog && ringsFromTemple == o.ringsFromTemple && ringColors == o.ringColors
                     && zonesAboveFog == o.zonesAboveFog && zoneBonusPerLevel == o.zoneBonusPerLevel && zoneKillsPerLevel == o.zoneKillsPerLevel
                     && zoneDecayPerHour == o.zoneDecayPerHour && zoneDecayClock == o.zoneDecayClock && zoneMaxSize == o.zoneMaxSize

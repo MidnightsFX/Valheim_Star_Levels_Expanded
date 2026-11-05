@@ -1,7 +1,7 @@
-**1.33.0**
----
+**1.32.0**
+ ---
  ```
-- Quick config panel now has a simple/advanced view
+ - Quick config panel now has a simple/advanced view
 	- Simple allows configuring basic features and creature levels
 	- Tree, rock and bird scaling, distance loot and the Nemesis system are now off by default
 	- Troll raids now start after Bonemass (does not change existing configs).
@@ -15,11 +15,6 @@
 - Comditional scaling Improvements
 	- Number of adjustment increments can now be configured
 	- Delay between current biome and difficulty increase can be configured (default 1 biome behind)
-```
-
-**1.32.0**
- ---
- ```
 - Biomes added by other mods can now be used in all of the biome related spots
 	- Adds an optional way for a custom biome to use another biome's settings when it has none of its own.
 	- Creature setup no longer stops when a biome lookup fails inside another mod

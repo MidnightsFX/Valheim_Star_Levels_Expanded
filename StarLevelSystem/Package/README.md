@@ -48,1165 +48,161 @@ Below are a few examples of what you might see, and what the mod can do.
 ![HeaderExample](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true)
 
 ## First-time setup
-The first time you reach the main menu, a short setup opens on the Simple Setup page below. You can save from any page, or click the X to skip it. Either way
-it won't open again, in this or any other mod manager profile: whether you have seen it is kept once per user, in
-`ModQuickConfig/FirstRun.cfg` next to your Valheim saves (`%USERPROFILE%\AppData\LocalLow\IronGate\Valheim` on Windows). Set
-`FirstTimeSetup` to `ShowNextLaunch` in the BepInEx config to see it again, or to `Never` to keep it closed in that profile. The same
-pages (without the welcome page) open from the Mod Config button on the main menu, or on the pause menu for hosts and admins.
-Each page has a Reset page button that puts just that page back to the mod's defaults; like any other edit, nothing is
-written until you Save. If a config file has a mistake that stops it loading, saving from the panel replaces it, but first
-keeps a copy next to it as `<file>.invalid.<date>.bak`, so you can see what was wrong and copy your settings back.
+First time setup is easy, install the mod and its dependencies and start the game. A short walkthrough will let you configure the mod how you want.
 
-Upgrading rather than installing fresh? The setup stays out of your way: a config file that already exists when this
-version first runs means the mod has been configured already, so it is marked done without being shown.
 
-Other mods that share the Mod Config button can have a welcome of their own. They open one at a time, in turn, rather than on top of each other.
-
-### Simple Setup
+### Quick Configuration, Simple or Advanced
 The panel's first page covers most worlds with a handful of settings:
 
-- **Max level** - the most stars a creature or boss can have. Biome star caps step up to it, so the last biomes reach it.
-- **Difficulty** - see below.
-- **Enable monster modifiers** - when off, new creatures and bosses get no modifiers. Those already in the world keep theirs.
-- **Enable progressive scaling** - distance, zone, region and conditional scaling, the systems that push levels up as you play. They ship off. Turning this on starts distance and zones, or brings back what you had on, and turning it off stops them all.
-- **Enable color changes** - creatures change color with their star level.
-- **Enable advanced options** - shows every other page: the star range and its spawn chances, level scaling, loot, creature health and damage, modifiers, raids, boss night spawns, the Nemesis system and Location Reset.
+- **Max level** - the most stars a creature or boss can have.
+- **Difficulty** - Sets star chance and scaling per star.
+- **Monster modifiers** - Adds new modifiers to creatures and bosses.
+- **Enable progressive scaling** - Different ways to increase difficulty as you play.
+- **Enable color changes** - Creatures change color with their star level.
+- **Enable advanced options** - Shows all of the rest of the quick configuration options.
 
-Each difficulty sets the values below, worked out from Max level so it means the same thing at any cap: the star chances run
-from the first star to the top one, and health and damage are given at the top star and spread evenly across the stars.
-Changing any of these on another page, or in the config files, shows the difficulty as Custom. Picking a difficulty
-replaces them, but a biome's own level chances stay as they are. Conditional scaling works from whatever you pick and stays within Max level.
+![Simple Setup page](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/QuickConfigSimple.png?raw=true)
 
-Custom is also the step after Brutal. It keeps the other settings as your world has them, and replaces the boss chart with a table
-of the chance of a creature reaching each star, which is what `DefaultCreatureLevelUpChance` holds. A chance is the share of all
-creatures that get at least that far, so changing one moves the others where it has to: a higher star cannot be more likely than a
-lower one. Bosses follow the table unless they have a curve of their own on the Level Distribution page.
+Advanced options start with the level pages. Level Distribution sets the star range and its spawn chances.
 
-| | Vanilla | Easy | Normal | Hard | Brutal |
-| --- | --- | --- | --- | --- | --- |
-| Chance of 1 or more stars | 10% | 4% | 20% | 35% | 50% |
-| Chance of 2 or more stars | 1% | 0.4% | 10% | 22% | 35% |
-| Chance of the top star | 0.01% | 0.004% | 0.03% | 0.5% | 2% |
-| Boss chance of 1 or more stars | 1% | 0.5% | as creatures | 40% | 80% |
-| Health at the top star | x3 | x2.5 | x11 | x6 | x16 |
-| Damage at the top star | x2 | x1.5 | x2 | x3 | x6 |
-| Boss health at the top star | x3 | x2 | x4 | x6 | x11 |
-| Boss damage at the top star | x1.2 | x1.1 | x1.2 | x2 | x3 |
-| Damage before stars | x1 | x1 | x1 | x1.25 | x1.25 |
-| Spawn rate | x1 | x1 | x1.1 | x1.2 | x1.35 |
-| Night star bonus | x1 | x1 | x1.5 | x1.5 | x1.5 |
-| Distance ring strength | x0.5 | x0.25 | x1.5 | x1.5 | x2 |
+![Level Distribution page](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/QuickConfigLevelDistribution.png?raw=true)
 
-At a Max level of 2, Vanilla is the base game's own numbers. Normal at a Max level of 10 is what a new install starts on.
+Level Scaling chooses what pushes levels up on top of that: distance, zones, regions and defeated bosses.
+
+![Level Scaling page](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/QuickConfigLevelScaling.png?raw=true)
 
 ## Features
+Every setting, with examples, is in the [documentation](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/tree/master/docs). The YAML files it describes are in `BepInEx/config/StarLevelSystem/`.
 
-### Levels, Levels and more Levels (LevelSettings.yaml)
+### Levels
 So you want creatures to have more levels, but you don't want to die instantly to a level 100 boar when you start the game? 
-Well have I got the config file for you.
+Well have I got the configs for you.
 
-Level settings allows configuration of creature levelup chance, creature stats, max level, increased level up chance based on
-distance from the center- and respectively biome based configs for all of that.
-
-Want some help calculating and building a level definition? Check out [this tool](https://sls-levelspreadtool.netlify.app/)
-
-#### Biome Configuration
-Lets take a look at some of the things you can do with this, and what better spot to start out than the default `All` biome
-configuration (which applies to every creature by default).
-
-Here is a section of the default example config, lets walk through what everything does.
-```
- All:
-    distanceScaleModifier: 1.5       # The influence of distance ring based scale increases (1.5 means 150% of the bonus value will be applied)
-    spawnRateModifier: 1.5           # Spawn rate of every creature is 50% higher (1.5), which means every spawn has a 50% chance of being 2 creatures.
-    creatureBaseValueModifiers:      # These values modify the base stats of every creature in this biome (eg, all creatures)
-      BaseHealth: 1                  # The default health of all creatures is 100% (1), numbers below 1 reduce health, above increase is (2) is 200% health for everything
-      BaseDamage: 1                  # Default damage of all creatures is 100% (1)
-      Speed: 1                       # Default movement speed of all creatures is 100% (1)
-      Size: 1                        # Default size of all creatures is 100% (1)
-    creaturePerLevelValueModifiers:  # Per level modifiers are applied per level, eg each star will give this value to the creature
-      HealthPerLevel: 0.4            # Each star provides 40% more health (0.4)
-      DamagePerLevel: 0.1            # Each star provides 10% more damage (0.1)
-      SpeedPerLevel: 0               # Each star does not increase speed (0)
-      SizePerLevel: 0.1              # Each star makes the creature 10% bigger (0.1). Negative values shrink instead (-0.1 is 10% smaller per star)
-    damageRecievedModifiers:         # Damage reduction or increases
-      Poison: 1.5                    # Everything recieves 50% (1.5) more damage from poison (that includes players)
-```
-Note: `creaturePerLevelValueModifiers` do not apply to characters. But, `damageRecievedModifiers` DOES.
-
-Note on sizing: per-level size is applied as `Size + (SizePerLevel * stars)`, so a 0 star creature is
-exactly `Size`. `SizePerLevel` may be negative to make creatures shrink with each star. The final
-multiplier is floored at the `MinimumCreatureScale` config value (default `0.1`), so creatures can never
-reach zero size or turn inside-out no matter how negative the value is. It is also capped at the
-`MaximumCreatureScale` config value (default `5`), which holds base size, size per star and modifiers like Big
-together. Both it and the global size per star (`PerLevelScaleBonus`) are at the bottom of the quick configure
-panel's Level Distribution page. A creature entry can set its own cap with
-`MaxSizeScale`, which replaces the global one for that creature.
-
-Note on mounts: any creature carrying a saddle stays rideable when it is scaled, including creatures added by other
-mods, with nothing to register. It rides at full speed, its saddle reach grows with it, aiming at its upper body offers
-the saddle (the lower body still pets it), and getting off puts you on the ground beside it. Each mount found is named
-once in the log. `EnableRidableCreatureSizeFixes` turns this off for every creature, and `RideableSizeFixes: false` in a
-creature's entry turns it off for that one, which suits a mod that manages its own mount sizing.
-
-Biome specific configurations can be used to override the default `All` configuration, in this case max level for Ashlands is being set
-to 26 and the distance modifier is being reduced by 50%
-```
-  AshLands:
-    biomeMaxLevelOverride: 26
-    distanceScaleModifier: 0.5
-```
-
-#### Custom biomes and larger worlds
-Biomes added by other mods work anywhere a biome does, in every config file. With Expand World Data, use the biome's name
-from `expand_biomes.yaml`, the `biome` field rather than its display name:
-```
-BiomeConfiguration:
-  testgrove:
-    biomeMaxLevelOverride: 12
-```
-Its number works too, but Expand World Data hands numbers out by the order of its file, so reordering that file changes them.
-
-A custom biome with no entry of its own uses the `All` entry and nothing else, so raids and Nemesis rules that list biomes
-skip it, and it has no summons or boss tiers. To have it use another biome's settings in every config file, add to
-`LevelSettings.yaml`:
-```
-BiomeFallbacks:
-  testgrove: BlackForest
-  ashforest: None
-UseTerrainAsBiomeFallback: true
-```
-`BiomeFallbacks` names a biome's source, and `None` keeps a biome on its own settings. `UseTerrainAsBiomeFallback` gives every
-other custom biome the biome its Expand World terrain is built from.
-
-A name that is not a biome in this world does nothing, stays in the file, and is reported once when the world starts. The
-`sls-biomes` console command lists every biome and where its settings come from; `sls-biomes here` also shows the biome at your
-position, both as the game reports it and as the world generated it.
-
-Mods that make a local biome, such as Biome Generator, change what the game reports inside it, and creature levels follow that.
-Turn off `DomeBiomeSetsCreatureLevels` to always use the biome the world generated.
-
-Worlds resized by Expand World Size get zones across all of their land, object levels that reach their maximum at the edge of the
-land, and remote Nemesis bosses placed where their biome really is. Zone kills and levels carry over when a world grows.
-
-Bosses and pins already stored keep the biome number they were created with, so reordering `expand_biomes.yaml` can move those
-to a different biome.
-
-#### Distance, zone and region scaling
-Three systems can raise level chances on top of the base chances, all off until you turn them on. All of them are on the Level
-Scaling page of the quick configure panel, which comes right after Level Distribution. Its chart shows your chances from that page
-in yellow, then a line for each system that is on (distance blue, zone orange, region green) at the ring or level you pick under
-it, and says in words what they come to together. They stack on a spawn:
-
-```
-chance = (base chance + ring bonus x distance scale) x night x zone x region x world combat rate
-```
-
-| | What it adds | Grows from | Map overlay |
-| --- | --- | --- | --- |
-| Distance | Each ring's bonus, added to the chance | Being further from the center or the starter temple | Rings |
-| Zone | A multiplier: `1 + (level - 1) x ZoneLevelBonusPerLevel` | Kills in a square cell of the map, and it decays over time | Cell outlines |
-| Region | A multiplier: `1 + (level - 1) x RegionLevelBonusPerLevel` | Kills in a region, and it decays over time | A low-opacity fill in the level's color, with a line around it |
-
-An overlay and a level readout only show while their system is on. The overlay settings (`EnableMapRingsForDistanceBonus`,
-`EnableZoneMapOverlay`, `EnableRegionMapOverlay`) are on by default, so turning a system on shows it unless you have turned its
-overlay off. Region levels use the zone settings `ZoneOverlayColorOptions` for their colors and `ZoneDecayClock` for their decay.
-
-Regions are built once, on the server, and stored with the world in `SavedData/RegionData.<world>.yaml`. Clients are sent the map when
-they connect. Each landmass is cut up from seeds spaced along its shoreline, growing inward so its regions come out about
-`RegionTargetSize` across. Land that can't be divided without a piece falling under `RegionMinSize` stays one larger region. Mountains of
-at least `RegionMountainMinSize` become regions of their own, and rocks in the sea too small to matter get none.
-
-Sizes are meters, as the side of a square of the same area. A map keeps the sizes it was cut with until it is cut again, since that
-resets its levels: saving a new size on the panel while in a world does it for you, and so do `sls-zone-rebuild` and `sls-region-rebuild`.
-
-#### Creature Configuration
-Creature specific configuration allows you to override what is set in the biome definition for a creature, which allows more
-fine-grained control of how a specific creature should be modified.
-
-Lets take a look at this creature definition
-```
-  Troll:                                # Creature prefab name, must match exactly, you can find this using VNEI, the wiki, or Jotunn prefab documentation
-    customCreatureLevelUpChance:        # Sets the levelup chance for this specific creature, overrides the default values, can still be modified by distance bonuses
-      1: 100                            # Gauranteed level 1
-      2: 50                             # 50% chance to reach level 2
-      3: 5                              # 5% chance to reach level 3
-    creatureMaxLevelOverride: 11        # Overrides the max level for this creature (11 instead of biome default)
-    creatureBaseValueModifiers:         # Overrides the base stat modifiers for this creature, values below 1 reduce stats, above 1 increase stats
-      BaseHealth: 1.05                  # Base health is increased by 5%
-      BaseDamage: 0.95                  # Base damage is reduced by 5%
-      Speed: 1.05                       # Speed is increased by 5%
-      Size: 1.05                        # Size is increased by 5%
-      AttackSpeed: 1.05                 # Attack speed is increased by 5%
-    creaturePerLevelValueModifiers:     # Per level stat modifiers for this creature, these are multiplied by the creatures level and applied to the total stat value
-      HealthPerLevel: 0.3               # Each star provides 30% more health
-      DamagePerLevel: 0.05              # Each star provides 5% more damage
-      SizePerLevel: 0.005               # Each star provides 0.5% more size (use a negative value to shrink per star)
-    requiredModifiers:                  # Modifiers that this creature will always spawn with, regardless of level, chance or modifier limit, but still count towards max modifier count
-      Poison: Major                     # Trolls will always spawn with the Poison major modifier, Modifier names can be found in Modifiers.yaml, along with their categories
-```
-
-Creatures summoned on the players' side, like the nature staff's roots or the Dead Raiser's skeletons, roll stars like any
-other creature by default. Turn on `PlayerSummonsKeepVanillaLevel` under `LevelSystem` in the mod's .cfg to have them keep
-the level the game or their mod gives them. To change just one summon, give it a creature entry instead, for example
-`CreatureMaxLevelOverride: 0` under `staff_greenroots_tentaroot`.
-
-#### Levelup Chance
-This is a definition of the chance that a creature has to level up at each point.
-
-This works hand in hand with the distance scale modifier and `distanceLevelBonus`, distance level bonuses are applied if
-the creature falls into a distance category with bonuses.
-eg: 
-```
-distanceLevelBonus:
-  1250:
-    1: 25
-```
-Will give all creatures a +25% chance to reach the first star level, if they are at least 1250m from the center. This value is then modified based on biome settings.
-In our example biome file we have a `1.5` value for the distance modifier so `1.5 x 25 = 37.5` would be the increase provided to reach level 1.
-
-If the total bonus and base value exceeds `100` that level will be guaranteed, every creature with that condition will be at a minimum that level.
-You can see this in some of the later distance bonuses which slowly drive of the guaranteed spawn level of creatures up
-
-```
-  5000:
-    1: 100      
-    2: 100      # All creatures at least 5000m from center will be level 2+
-    3: 75
-    4: 50
-    5: 25
-    6: 15
-```
-
-You can also use the distanceLevelBonus to add additional levels, make it so that certain distances are required to spawn higher level enemies.
-
-```
-defaultCreatureLevelUpChance:
-  1: 20
-  2: 15
-distanceLevelBonus:
-  1250:
-    1: 25
-    2: 15
-    3: 5
-  5000:
-    1: 100      
-    2: 100
-    3: 75
-    4: 50
-```
-
-With the above configuration the region closest to start up to 1250m will only be able to spawn level 1 and 2 creatures. Between 1250m and 5000m creatures can spawn up to level 3, and beyond 5000m creatures can spawn up to level 4.
-
-The Level Scaling page of the quick configure panel (Mod Config button) edits `distanceLevelBonus` without touching YAML:
-add and remove rings, move them by typing a new distance, and type each ring's bonus as a list (`25, 15, 5` is levels 1, 2
-and 3; a ring that skips a level is shown and typed as `1:25, 3:5`). Its chart shows the star chances past the ring you pick, on the
-curve from the Level Distribution page, weighted by the `All` biome's distance scale, which is on that page too along with each
-biome's own.
-
-
-Now, we've walked through a lot of the bonuses to level up chance but lets take a look at the base values too. 
-Star level systems default config has a relatively large spawn range- which is limited by biome configuration.
-
-`defaultCreatureLevelUpChance` Defines the levelup chance of all creatures, this however can be limited by biome configuration and
-it can be increased by other factors, such as the distance from center bonus.
-```
-defaultCreatureLevelUpChance:
-  1: 20
-  2: 15
-  3: 12
-  4: 10
-  5: 8
-  6: 6.5
-  7: 5
-  8: 3.5
-  9: 1.5
-  10: 1
-  11: 0.5
-  12: 0.25
-```
-
-#### Level Generators
-Writing a long levelup chance table by hand is tedious, so generators build one for you from a level range and a curve style.
-A generator can replace the default table (`DefaultLevelupGenerators`), a biome or creature table (`LevelupGenerators`), and is
-also used by raid spawns, nemesis spawns and boss-conditional chances. Name a list of generators in `CustomLevelupGenerators` to
-reference it from anywhere with `LevelupGeneratorRefs` / `DefaultLevelupGeneratorRefs`.
-
-```
-CustomLevelupGenerators:
-  late_game:
-  - MinLevel: 1
-    MaxLevel: 25
-    LevelUpChance: 0.35             # 0-1 fraction, 0.35 = 35%
-    LevelupCalculationStyle: Gaussian
-    GaussianOffset: 0.25            # Gaussian only: -1 to 1, shifts the most likely level
-    NightMultiplier: 1.5            # scales these chances at night only, 1.5 = level-ups 50% more likely (1 = no change)
-DefaultLevelupGeneratorRefs: [ late_game ]
-```
-
-Curve styles:
-- `Linear` - the chance to level up drops evenly from `LevelUpChance` at `MinLevel` to nothing at `MaxLevel`.
-- `Exponential` - the chance drops quickly at first, so low levels are common and high levels are rare.
-- `Gaussian` - a bell curve that favours levels in the middle of the range (moved with `GaussianOffset`).
-- `Table` - uses a table you write yourself from `LevelupChanceTablesBySpan` instead of a formula.
-
-Bosses roll from the same chances as everything else unless you give them `BossLevelupGenerators`, which fills
-`BossCreatureLevelUpChance` on load and applies to anything the game counts as a boss, modded ones included:
-
-```
-BossLevelupGenerators:
-- MinLevel: 1
-  MaxLevel: 11
-  LevelUpChance: 0.3
-  LevelupCalculationStyle: Gaussian
-```
-
-A boss curve outranks the default, conditional and biome chances wherever that boss stands, while a `CreatureConfiguration`
-entry naming the boss still wins over it. `MaxBossLevel` caps bosses either way. The Level Distribution page of the quick
-configure panel turns this on and off with its **Own curve for bosses** toggle and charts both curves side by side. A boss curve
-in the Table style edits its own table in the **Boss thresholds** box.
-
-##### Table style
-`LevelupChanceTablesBySpan` is keyed by how many levels a generator covers (`MaxLevel - MinLevel + 1`), not by the levels themselves.
-Inside a table, key `1` is the generator's `MinLevel`, key `2` is `MinLevel + 1` and so on, so one table can be reused by many generators
-that cover the same number of levels at different points in the world. Like `DefaultCreatureLevelUpChance`, each value is the % chance
-to roll past that level, so the values must go down. `LevelUpChance` is not used.
-
-```
-LevelupChanceTablesBySpan:
-  4: { 1: 30, 2: 15, 3: 5, 4: 0.01 }
-CustomLevelupGenerators:
-  swamp_tier:
-  - MinLevel: 3                     # levels 3-6 are 4 levels, so this uses table 4:
-    MaxLevel: 6                     # 30% chance to roll past level 3, 15% past 4, 5% past 5
-    LevelupCalculationStyle: Table
-```
-
-`BossLevelupChanceTablesBySpan` is the same thing for boss curves only. A `Table` generator in `BossLevelupGenerators` or
-`BossLevelupGeneratorRefs` looks there first and falls back to `LevelupChanceTablesBySpan` for a span with no entry, so bosses can
-have their own chances at the same length as any other curve:
-
-```
-BossLevelupChanceTablesBySpan:
-  4: { 1: 60, 2: 35, 3: 10, 4: 0.01 }
-BossLevelupGenerators:
-- MinLevel: 1                       # levels 1-4 are 4 levels, so this uses the boss table 4:
-  MaxLevel: 4
-  LevelupCalculationStyle: Table
-```
-
-If there is no table for a generator's span it uses the `Exponential` curve instead, and a warning is logged once. Tables that are
-missing keys or whose values do not go down are also reported when the config loads. The quick configure panel can edit the table
-for its default generator directly: pick the `Table` curve style and type the values separated by commas.
-
-#### Boss-Conditional Levelup Chances
-With `EnableConditionalCreatureLevelupChance: true`, older biomes get harder as world bosses are defeated, working from your own
-`MaxLevel` and level chances. The Level Scaling page of the quick configure panel has the switch and the first two settings here.
-
-```
-EnableConditionalCreatureLevelupChance: true
-ConditionalBiomeDelay: 1            # how many biomes back a boss raises difficulty
-ConditionalDifficultyIncreases: 7   # the most increases a biome can get, at least 1
-ConditionalFullChanceMultiplier: 4  # what level-up chances are multiplied by at full strength
-ConditionalBossKeyOrder:            # earliest to latest; leave out to use this vanilla order
-- defeated_eikthyr
-- defeated_gdking
-- defeated_bonemass
-- defeated_dragon
-- defeated_goblinking
-- defeated_queen
-- defeated_fader
-- defeated_frozenking_p3
-```
-
-A biome earns one difficulty increase per boss from its own on, less `ConditionalBiomeDelay`. At the default of 1, defeating Eikthyr does
-nothing, since the Meadows is the only biome so far. Defeating the Elder raises the Meadows but not the Black Forest, and Bonemass then
-raises both of those but not the Swamp. The Deep North's boss comes last, so at 1 the Deep North never rises. At 0, a boss raises its own biome too.
-
-`ConditionalDifficultyIncreases` is the most a biome can get. At 1, the Meadows goes up once when the Elder falls and Bonemass adds nothing
-more there. At 2 it can go up a second time, and so on.
-
-Every increase is the same size, and one per boss after the first adds up to full strength, so with the vanilla bosses each is a seventh of
-it. An increase multiplies the biome's level chances a step further toward `ConditionalFullChanceMultiplier`, about 1.43 times after the first at
-the default of 4, and moves its star cap a step from `BiomeMaxLevelOverride` toward `MaxLevel`, never past it. A biome with no cap of its own, or
-one already at or above `MaxLevel`, keeps the cap it has. There is no minimum level. So with a `MaxLevel` of 4, the Meadows starts at 1 star and
-reaches 4 once the last boss falls, while newer biomes have fewer bosses left to rise by. A creature entry with its own curve still wins, and
-bosses keep `MaxBossLevel`.
-
-Add keys from modded bosses where they belong in your progression. The latest defeated key in the list is what counts, and the tier changes as
-soon as a boss key is set or removed, for creatures spawned after that. A file that still holds the vanilla list from before the Deep North update
-gets `defeated_frozenking_p3` (set when the Deep North's final boss dies) added on load; a list you changed is left alone.
-
-##### Fixed levels
-`ConditionalCreatureLevelupChance` sets fixed levels for a boss and biome, in place of that biome's increases. Nothing ships in it.
-
-```
-ConditionalCreatureLevelupChance:
-  defeated_bonemass:
-    Meadows:
-      LevelupGenerators:
-      - { MinLevel: 4, MaxLevel: 16, LevelUpChance: 0.25, LevelupCalculationStyle: Exponential }
-```
-
-The latest defeated key that has an entry applies, and the order of entries in the file does not matter. A key that is not in
-`ConditionalBossKeyOrder` only applies while no listed boss that has an entry is defeated. An `All` entry inside a tier is the fallback for biomes the
-tier does not name. These replace the biome's levelup chances and its minimum level: creatures there roll at least the generators' `MinLevel`, whatever
-`BiomeMinLevelOverride` says. Their `MaxLevel` can raise the biome's cap, even past `MaxLevel`, and where it is lower than the cap the cap stays, so
-beating a boss never lowers a biome's levels. Tiers used to ship this way. A file still holding those shipped levels has them removed when it
-loads, once, and an entry you changed by hand is left as you wrote it.
+- [Biomes](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#biome-configuration) - stats, spawn rate and star cap for every creature, or for one biome.
+- [Creatures](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#creature-configuration) - override a biome's settings for one creature, and choose modifiers it always spawns with.
+- [Level chances](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#levelup-chance) - the chance of reaching each star, with bonuses by distance from the center.
+- [Level generators](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#level-generators) - build those chances from a level range and a curve instead of writing a table, with a separate curve for bosses if you want one.
+- [Distance, zone and region scaling](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#distance-zone-and-region-scaling) - raise level chances further from the center, or where the most creatures are killed. All off until you turn them on.
+- [Boss-conditional chances](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#boss-conditional-levelup-chances) - older biomes get harder as world bosses are defeated.
+- [Custom biomes and larger worlds](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#custom-biomes-and-larger-worlds) - biomes added by other mods work in every config file, and worlds resized by Expand World Size scale to their real size.
+- [The Deep North's final boss](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/levels.md#the-deep-norths-final-boss) - the second phase stays as vanilla made it, since it can only be hurt by the explosions of the boss spirits it calls up.
 
 ### Nemesis System
-The Nemesis system is off by default, turn on `EnableNemesisSystem` in the main config to use it.
+The Nemesis system is a configurable dungeon master that modifies the world around you, making things harder, easier or more interesting.
 
-It is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
+[Nemesis configuration](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/nemesis.md)
 
-It does this by analyzing things the player does and tracking statistics about the players combat performance. Lower combat scores result in reduced challenge,
-high combat scores result in increased challenge.
+### Colorization
+Almost all creatures can be colored by their level, defined here.
 
-This is all extremely configurable, and everyone's experience is likely to be very different due to differences in skill or playstyle and that is ok.
-Ideally everyone should feel times of challenge, and that setbacks do not feel overwhelmingly punishing.
-
-Nemesis system also contains the ability to make unique enemies that will attempt to hunt you (or a friend) down in the future (small chance to spawn).
-
-Nemesis configuration.
-```
-NemesisVersion: 1
-CreateMinibossFromPlayerKiller: true   # controls whether or not player deaths can result in a nemesis enemy being created
-CreationRemovesSourceCreature: true    # whether or not the create that turns into a nemesis boss gets removed from its current location
-NemesisBossChance: 0.1                 # chance that a nemesis boss can be created
-NemesisBossMaxLevelBonus: 0.4          # percentage level bonus for the nemesis boss
-NemesisBossMinLevelBonus: 0.2
-NemesisMinionTemplatesByBiome: ...
-ScoreSystem:                           # Nemesis score system determines player score and what actions can happen
-  NeutralScore: 5000                   # score moves back towards this neutral point all of the time
-  MaxScore: 10000                      # max score
-  DeathScoreReduction: 1500            # how much score is reduced when the player dies
-  DecayPerUpdate: 250                  # how much the score moves towards neutral constantly
-  NearbyPlayerRadius: 60               # nearby radius for syncing score with friends
-  MeleeDamageDealtFactor: 0.75         # score contribution of melee damage
-  MagicDamageDealtFactor: 0.5          # score contribution for magic damage
-  RangedDamageDealtFactor: 0.25        # score contribution for ranged damage
-  DamageTakenFactor: 0.5               # score lost per point of damage taken (sign is ignored)
-  BossKillBonus: 500                   # score bonus from killing a boss
-GaurenteedChanges:                     # nemesis changes that always happen
-  FirstBossSetLevel: true              # first world boss of each kind when enabled will use the specified level
-  FirstBossLevel: 1
-```
-
-There are a few additional sections to this config that are worth covering also. Chance changes being the primary one.
-
-```
-ChanceChanges:
-  CreatureOps:                              # Chance changes are random actions the nemesis system can take
-    CharredAttack:                          # name of the action, required unique
-      RequiredGlobalKey: defeated_fader     # if the action requires the server has a certain global key
-      Chance: 0.3                           # chance the action will happen (valid values 1 <-> 0)
-      LevelBonus: 5                         # level bonus applied to spawns from this
-      DeniedBiomes:                         # Biomes this is not allowed to happen in
-      - DeepNorth
-      AllowedBiomes: []                     # Biomes this is allowed to happen in, empty allows all
-      ScoreThreshold: 9000                  # Score threshold, the players score must be at least at this level (if above neutral score) or below this level if threshold is below neutral score
-      Action: Spawn                         # action, valid options: ChangeLevel, AddModifier, RemoveModifier, Spawn, SpawnMiniboss
-      ScoreChange: -2000                    # point change applied to score when this event happens
-      SpawnConfig:                          # Spawns associated with this config
-      - Prefab: Charred_Melee               # spawn creature prefab
-        SpawnGroupSize: 1                   # number of creatures to spawn
-        Faction: Boss                       # faction to assign to the creature
-        RequiredModifiers:                  # modifiers the creature must have
-          Fire: Major
-        ModifierOverrides:                  # this spawn's own values for its modifiers, in place of the ones in Modifiers.yaml
-          Fire:
-            BasePower: 0.5                  # BasePower, PerlevelPower and Config entries, any of them; the rest stay as configured
-      - Prefab: Charred_Archer
-        SpawnGroupSize: 2
-        Faction: Boss
-        RequiredModifiers:
-          Fire: Major
-          ...
-```
-
-The final section in this config is NemesisMinionTemplatesByBiome. This controls the minions which can be added to a nemesis spawn.
-
-```
-NemesisMinionTemplatesByBiome:
-  Meadows:
-  - PrefabName: Neck
-    MinAmount: 6
-    MaxAmount: 9
-    CreatureBaseValueModifiers:
-      BaseHealth: 2
-    CreaturePerLevelValueModifiers:
-      DamagePerLevel: 0.01
-    ModifierOverrides:                 # the minions' own values for modifiers they have or roll, as on a spawn above
-      Fast:
-        BasePower: 0.1
-```
-
-
-### Colorization (Colorization.yaml)
-In vanilla there are few creatures which can be colorized when they level up. Star Level Systems changes that. 
-Most all creatures can be colorized, it should be noted that some creatures (Yagluth eg) do not colorize well and the effect is generally not very noticeable.
-
-There are two different ways to apply colorization values to creatures.
-
-- Creature specific color definitions. 
-  These are split between default definitions (applied to any creature, if it does not have a more specific entry) 
-  and character specific entries. These will be applied at the keyed level to the specified creature.
-	```
-	  Greydwarf:
-		1:
-		  hue: -0.06
-		  saturation: 0.1
-		  value: 0.05
-	```
-- Color Range definitions. These are ranges of color that will be sliced up and generate gradually changing color patterns 
-  based on the ranges between the start and end points.
-  ```
-  DefaultGenerator:
-  - characterSpecific: false
-    startColorDef:
-      hue: 0.07130837
-      saturation: 0.05205864
-      value: 0.01721987
-    endColorDef:
-      hue: -0.07488244
-      saturation: 0.09342755
-      value: -0.1008582
-    rangeStart: 1
-    rangeEnd: 15
-  ```
-  In this example, level ranges for default colors from level 1 to 15 will form a range of colors from hue 0.07130837 -> -0.07488244 etc.
-  If you want to see the output from a generator you can enable the debug flag to dump the generated colorization config to a file. 
-  You can use this to hand-pick color values etc.
+[Colorization configuration](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/colorization.md)
 
 ### Loot Configuration
-Star level systems provides full optional configuration to control in detail all loot drops. Loot configuration can be found in the `LootSettings.yaml` file.
+Fine grained and detailed control of loot drops for creatures, objects, scenery, etc.
 
-You may find it useful to see what existing drops look like within the SLS system. 
-You can do this by dumping a debug configuration of all loot drops (as they are) with the in-game console command `sls-dump-loottables`, this is output to the SLS config folder in the file `LootTablesDump.yaml`.
-
-There are three core parts to configuring loot drops, but many options to modify if you wish to fine tune loot configurations.
-
-- characterSpecificLoot | this governs all character based loot drops
-- nonCharacterSpecificLoot | this controls all non-character based loot drops
-- distanceLootModifier | this allows distance scaling of loot, similar to how distance level scaling works
-
-The Loot page of the quick configure panel (Mod Config button) covers how much loot a level is worth without editing YAML:
-the loot scaling style (`LootDropCalculationType`), loot and drop chance per star (`PerLevelLootScale`,
-`PerLevelLootChanceScale`, `ChanceBaseChancePerLevel`), whether loot that never scales does
-(`ScaleAllLootByLevel`), whether trees, rocks and birds scale at all (all off by default), the per-level scales for trees, rocks,
-destructibles and birds, and the `distanceLootModifier` rings below (off by default), which can be added, removed and moved as well as tuned. Beside them it works those numbers through a real drop table - a Troll's own, read
-from the loaded world - at no stars, at your Max stars, and inside the furthest ring, so a slider can be judged by the
-loot it produces. Which creatures and objects have a custom table at all still lives in `LootSettings.yaml`.
-
-#### Character Specific Loot configuration
-Lets take a look at the character specific loot drop. Here is one of the example configurations, and it is here to address a specific challenge.
-Oozers create blobs when they die, this scales with the level of the creature. However, when you have a very high level oozer you can end up with 20,30 or more blobs.
-Which can be impossible to deal with. This deals with that in a few ways, the final `- drop:` entry is for the Blob, spawning a minimum of 2 and a maximum of 2. But scaling with
-the level of the `BlobElite` (Oozer), however that scaling is capped at a maximum of 6 drops, and only scales `.5` per level. So every other level another blob can be spawned
-up to a maximum of 6.
-
-Another useful entry to look at here is the drop for `TrophyBlob`, this has a `0.1` (10%) chance of happening, but it scales x0.01 per level, so a level five is (0.01 x 5) = 0.05 (5%) higher chance of happening.
-This can be combined with a drop count to scale the drops for the entry, so a level 5 could drop more trophies. But this is disabled by setting the `maxScaledAmount: 1`
-```
-characterSpecificLoot:
-  BlobElite:
-  - drop:
-      prefab: Ooze
-      min: 2
-      max: 3
-      levelMultiplier: true
-    amountScaleFactor: 0.5
-  - drop:
-      prefab: IronScrap
-      chance: 0.33
-      levelMultiplier: true
-    amountScaleFactor: 0.2
-  - drop:
-      prefab: TrophyBlob
-      chance: 0.1
-      levelMultiplier: true
-    chanceScaleFactor: 0.01
-    maxScaledAmount: 1
-  - drop:
-      prefab: Blob
-      min: 2
-      max: 2
-      levelMultiplier: true
-    amountScaleFactor: 0.5
-    maxScaledAmount: 6
-```
-
-#### Non Character specific loot configuration
-
-This is the section which allows you to configure all of the non-creature related loot in detail. It follows a similar structure to character loot configuration.
-You can use this to modify or add loot to any existing objects which have the option to drop loot. For example, falling stalactites. This configuration gives them a chance to drop crystals.
-The chance scales per level (yes inanimate objects can be leveled, tree, rock or destructible based on type). If loot configuration is not defined here then the generic configuration values from
-the main config file apply here `PerLevelDestructibleLootScale`, `PerLevelMineRockLootScale`, and `PerLevelTreeLootScale` along with their max level values.
-Level scaling can be ignored by setting `dontScale: true`
-
-```
-nonCharacterSpecificLoot:
-  caverock_ice_stalagtite_falling:
-  - drop:
-      prefab: crystal
-      chance: 0.3
-      min: 1
-      max: 3
-      dontScale: true
-  EvilHeart_Forest:
-  - drop:
-      prefab: AncientSeed
-      onePerPlayer: true
-      levelMultiplier: true
-    maxScaledAmount: 3
-```
-
-#### Creature remains
-A Gammeltroll turns into a petrified gold vein when it dies, and that vein is its loot. The vein gives more gold for each of the troll's stars:
-`PerLevelRemainsLootScale` in the main config sets how much, where 1 adds the vein's normal gold again for every star and 0 keeps it vanilla. Stone is not scaled.
-A `nonCharacterSpecificLoot` entry for `TrollFrost_Frac` replaces this, and is scaled at the troll's level instead of the rock level.
-The petrified troll and its gold vein are also the size the troll was, so a large starred troll leaves a large vein.
-
-#### Distance Loot Modifier
-This is similar to the character distance modifier in that it applies a bonus to the minimum and maximum drops that an entry can have based on distance.
-Loot rings are not drawn on the map, but behave exactly the same as Character distance rings (if the object is greater than x distance and less than the next once it receives that bonus).
-
-```
-distanceLootModifier:
-  1250:
-    minAmountScaleFactorBonus: 1.02
-    maxAmountScaleFactorBonus: 1.02
-```
+[Loot configuration](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/loot.md)
 
 ### Raids
-SLS supports significantly overhauled and configurable raids. These can be disabled if you wish to revert to vanilla style raids.
+By default raids are per player and several can run at once (in different locations).
 
-By default all raids are per-player, server controlled and concurrent raids are enabled. This means with SLS it is possible that every player on a server gets an appropriate raid
-during an event.
-
-The number of players, frequency, and most all details of each raid is configurable through `RaidSettings.yaml`.
-
-The Raids page of the quick configure panel (Mod Config button) covers the common ones without editing YAML: the global
-raid settings (pausing every raid, multipliers on every raid's activation chance and cooldown, how long a raid waits
-for its creatures to be finished off, and the raid creature density), which raids are enabled, and per creature in a raid how many arrive each wave (`SpawnGroupSize`), how many
-may be alive at once (`MaxSpawned`, where 0 stops that creature spawning) and the seconds between its waves
-(`SpawnInterval`). Open a raid's **Spawns** button to see its creatures.
-
-New raid files ship with every raid's chance halved (`GlobalRaidChanceScalar: 0.5`), its cooldown doubled
-(`GlobalRaidIntervalScalar: 2`) and a lighter creature density (2); an existing `RaidSettings.yaml` keeps its own values.
-The world's vanilla **Raids** modifier applies on top, the way vanilla applies it to its own events: None starts no SLS
-raids, Less and Much less lengthen cooldowns and lower chances, More and Much more do the opposite. The Raids page shows
-the current world's setting.
-
-Raid settings are **server authoritative**. On a dedicated or player hosted server the server's `UseVanillaRaidConfiguration` value and its `RaidSettings.yaml` are synced down to every client on join, so editing either of them on a client has no effect - change them on the server.
-
-`RaidSettings.yaml` carries a `RaidVersion` stamp, like `NemesisVersion`. Do not edit it: when the shipped raids change in a way every install should pick up, the version is bumped and a file at any other version (or with none, as every file from before 1.14.0) is reset to the new defaults on load. When the versions since a file's own only added raids, as version 3 added the Deep North's `army_elakingar` and `army_jotuns`, those raids are added instead, sized to the file's raid creature density, and everything else in it is kept. The previous file is saved next to it first as `RaidSettings.yaml.v<old version>.<date>.bak`, so raids of your own can be copied back in.
-
-#### Raid cooldowns and logging out
-
-Each player's raid cooldown, and the server's own raid check schedule, are saved per world and picked back up exactly where they left off when the world is loaded again. Logging out and back in does not hand anyone a fresh raid.
-
-`RaidCooldownClock` chooses what a cooldown is actually measured against:
-
-- `WorldTime` (default) - the world's own clock. It advances whenever anybody is playing the world, and jumps forward when someone sleeps through a night. On a busy server a player's cooldown keeps burning down while other people play without them.
-- `PlayerTime` - each player's own time in the world. A cooldown only counts down while that player is actually online, so logging out with 20 minutes left brings them back with 20 minutes left however long they were away, and other people's sessions do not shorten it.
-
-Neither clock runs while nobody is playing. Switching between them re-bases everyone's remaining cooldown, so nobody gains or loses raid time by the change.
-
-#### Player keys and boss kills
-
-`RequiredGlobalKeys` and `NotRequiredGlobalKeys` check the world's keys, which are the same for everyone. `RequiredPlayerKeys`, `AnyRequiredPlayerKeys` and `NotRequiredPlayerKeys` check each player's own keys, so players can be at different points. The shipped raids only use global keys.
-
-A kill that sets a key (every boss, plus creatures such as the Troll's `KilledTroll`) sets the world key for everyone, but the player key only for whoever gets credit. In vanilla that is the one player whose game controlled the boss; a key share mod such as ValheimCommunityPatch extends it to the players online and nearby. With `GrantWorldDefeatKeysOnJoin` (main config, on by default) SLS catches everyone else up: each time a player joins or respawns, they are given the player key for every defeat the world has already recorded, including kills made while they were offline and keys set with `setkey`. The key is saved on the character like a real kill, so it goes with that character to other worlds.
-
-#### How a raid ends
-
-A raid spawns creatures for its `Duration`. It then stays active, with its creatures still hunting and its map pin, music and weather in place, so players can finish off what it spawned. Killing every creature it spawned ends it straight away. How long it waits otherwise depends on `RaidActiveTillDefeated`:
-
-- `false` (default) - at most `PauseBeforeCompleted` seconds, set in `RaidSettings.yaml`'s `GlobalSettings` or on the quick configure panel's Raids page (default 30). 0 ends the raid as soon as its `Duration` elapses.
-- `true` - until every creature it spawned is dead, for at most `RaidActiveTillDefeatedMaxSeconds` in the main config (default 300), so a straggler stuck somewhere cannot hold a raid open forever.
-
-Either way the raid then winds down for `RaidWindDownSeconds`: the end message shows, the pin, music and weather go, and the creatures wander off and despawn. Anything still around at the end of the window is deleted when `RaidForceDeleteStragglers` is on.
-
-While you are inside a raid's area the vanilla event banner at the top of the screen shows the raid's start message, just as it does for vanilla events. `sls-raid-clear-pins` removes every SLS raid pin from your map if any are ever left behind.
-
-Raids never stack. Before a raid starts, the server checks for any raid still in the world within `RaidExclusionRange` (main config, default 500m), running or winding down, whoever it belongs to and however it was started, and skips the new one. The first raid in an area is the only raid; other players elsewhere are still considered. `sls-raid-spawn` is refused the same way.
-
-Raids also leave boss fights alone. A player within `RaidBossExclusionRange` (main config, default 100m, the distance the boss health bar shows from) of a living boss is skipped, and considered again on the next raid check. Any creature the game treats as a boss counts, modded bosses and Nemesis minibosses included. `sls-raid-spawn` and the `event` command still start a raid there, with a warning from `sls-raid-spawn`.
-
-#### Where raid creatures come from
-
-A raid's creatures appear at random spots within 80% of its `EventRange`, never in water or lava, and never inside a player's base: the area around a workbench, fire, bed and the like that stops monsters spawning. Mods that enlarge that area, such as AzuWorkbenchTweaks, are respected. When a base leaves no room nearby the raid looks a little further out, and if it still finds none the raid is skipped.
-
-For servers with very large bases, turn on `RaidSpawnSearchGrowsPastBases` (main config, off by default). The search then keeps stepping outward until it finds room just past the base's edge. Creatures only move while they are within roughly 64-128m of a player, so the search stops there; a base that reaches further is raided from the furthest ground still in reach, inside the base. Either way, a raid's map area grows to cover wherever its creatures come from.
-
-Below is an example of many of the details that can be configured for a given raid
-```
-- Name: foresttrolls              # Each raid has its own name, these should be unique or can be incorrectly selected
-  Duration: 180                   # Duration of the raid, in seconds
-  RaidCoolDownMinutes: 240        # The number of minutes between when this raid triggers and the player becomes eligble for a new raid
-  ForceEnvironment: Crypt         # Environment that will be set when the raid starts available options: Clear, Misty, Darklands_dark, DeepForest_Mist, Heath_clear, InfectedMine, GDKing, Rain, LightRain, ThunderStorm, Eikthyr, Fader, 
-                                  #  GoblinKing, nofogts, SwampRain, Bonemass, Snow, SnowStorm, Twilight_Clear, Twilight_Snow, Twilight_SnowStorm, Moder, Crypt, CryptHildir, Ghosts, Queen, SunkenCrypt, Mistlands_clear, Mistlands_rain, 
-  Activation:                     #  Mistlands_thunder, Ashlands_ashrain, Ashlands_ashrain_clear, Ashlands_CinderRain, Ashlands_meteorshower, Ashlands_misty, Ashlands_SeaStorm, Ashlands_storm, Caves, CavesHildir
-    Chance: 50                    # Chance that this raid is selected when it is a valid option, only one raid can be selected for a given player at a time
-    RequiredGlobalKeys:           # The global keys required for this raid to activate
-    - defeated_bonemass
-    NotRequiredGlobalKeys:        # The global keys that must be missing for this raid to activate
-    - defeated_dragon
-    RequiredPlayerKeys:           # Player keys that must be set to activate
-    - Deathlink
-    AnyRequiredPlayerKeys:        # Player must have at least ONE of the listed player keys for the raid to be selected for them
-    - Deathlink Deathbringer
-    - Deathlink Hardcore
-    NotRequiredPlayerKeys:        # Player must not have any of the following player keys for the raid to be selected for them
-    - Deathlink Vanilla
-  Spawns:
-  - PrefabName: Troll             # Prefab name of a creature to spawn in the raid
-    CreatureAI: AgitatedByBuild   # Type of creature AI setting to apply, valid values are: Alert, AgitatedByBuild, HuntPlayer
-    SpawnInterval: 40             # Number of seconds between when another of this monster can spawn
-    Faction: Demon                # Faction this creature will be assigned to Valid options: Players, AnimalsVeg, ForestMonsters, Undead, Demon, MountainMonsters, SeaMonsters, PlainsMonsters, Boss, MistlandsMonsters, Dverger, PlayerSpawned
-    MaxSpawned: 3                 # Maximum number of this creature that can be alive (from this specific spawn group)
-    SpawnGroupSize: 2             # Number of creatures to spawn at once
-    LevelMin: 1                   # Min level, if using RaidLevelSystem: rolled levels are raised to at least this
-    LevelMax: 3                   # Max level, if using RaidLevelSystem. 0 or left out uses MaxLevel from the main config
-    UseRaidLevelSystem: true      # Wether to use the default leveling system or the custom level defintion defined here
-    ModifiersNotAllowed:          # Modifiers the creature can't get
-    - Poison
-    RequiredModifiers:            # Modifiers that the creature must spawn with, this also requires the modifier type (Boss, Major, Minor)
-      Fire: Major
-    ModifierOverrides:            # This spawn's own values for modifiers its creatures have or roll, in place of the ones in Modifiers.yaml
-      Fire:
-        PerlevelPower: 0.05       # BasePower, PerlevelPower and Config entries, any of them; the rest stay as configured
-    CustomCreatureLevelUpChance:  # Custom level chances for this creature
-      1: 50
-      2: 25
-      3: 20
-      4: 15
-      5: 7
-      6: 3
-      7: 1
-  StartMessage: $event_foresttrolls_start # Start of the raid message
-  EndMessage: $event_foresttrolls_end     # End of the raid message
-  ForceMusic: Zblackforest                # Music that starts when the raid happens eg: ZCombatEventL1, ZCombatEventL2, ZCombatEventL3, ZCombatEventL4, Zboss_eikthyr, Zboss_gdking, Zboss_bonemass, Zboss_moder, Zboss_goblinking, Zboss_queen, Zboss_queen_ambience, Zboss_fader, Zboss_frozenking, ZJotunInvasion,
-                                          #   Zblackforest, Zmeadows, Zswamp, Zmountain, Zplains, Zplainstower, Zmistlands, Zashlands, Zdeepnorth
-```
+[Raid configuration](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/raids.md)
 
 ### Boss night spawns
-Defeating a boss lets new creatures roam the world at night: Greydwarfs in the Meadows after Eikthyr, Greydwarf brutes,
-shamans and (in fog) Draugr after the Elder, Skeletons after Bonemass, Fulings after Yagluth, and Seekers, Seeker broods and
-Ticks after the Queen. Each boss has its own switch in the `NightSpawns` section of the main config (`EikthyrNightSpawns`,
-`ElderNightSpawns`, `BonemassNightSpawns`, `ModerNightSpawns`, `YagluthNightSpawns`, `QueenNightSpawns`, `FaderNightSpawns`),
-all on by default. Turning one off stops that boss's night spawns from then on; any already out still leave at dawn, and
-the boss's raids and other unlocks are untouched.
+Defeating a boss lets new creatures roam the world at night. Configure which ones are enabled here.
 
-A night spawn belongs to a boss when its spawn entry only spawns at night and requires that boss's defeat key, so a mod's
-night spawn gated the same way is covered too. Odin's night visit after the Elder is left alone. The Night Spawns page of
-the quick configure panel (Mod Config button) has a checkbox per boss and, in a loaded world, lists what each one brings;
-a boss with no night spawns is greyed out (on the main menu that is judged by vanilla's spawns).
-These are server settings: the server's values are synced to every client, which is where spawning happens.
-
-### The Deep North's final boss
-Kall Fimbulbringer is fought in three phases, each a separate creature. The second phase can only be hurt by the explosions
-of the seven boss spirits it calls up, one each as it dies, and those add up to exactly its health. So SLS leaves that part
-of the fight as vanilla made it:
-
-- The second phase (`FrozenKing_p2`) always stays at 0 stars, with no modifiers and its vanilla health, whatever the config says.
-- The spirits (`Aspect_*`) still roll stars and modifiers, but spawn rates and disabled spawns never clone or remove them,
-  they never roll Splitter, and one that kills a player is never turned into a Nemesis.
-- The last phase comes back with the stars the first phase had.
+[Night spawn settings](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/night-spawns.md)
 
 ### Modifiers
 Maybe you've tried out CLLC's modifiers, or Monster Modifiers? Both really add variety to the game that is much needed.
 Star Levels Systems modifiers are designed to be extremely flexible, both in configuration- but also in effect.
 
-There are however a number of modifiers and it can be a bit unclear what each does. So to start off here is a table of all current modifiers and how they work.
-
 Modifiers are split into three categories. `Boss`, `Major`, and `Minor`. Which allows customization into the random selection process for modifiers, 
 along with separate tuning for modifiers that appear on bosses vs minor creatures.
+
+What each one can be tuned with is in the [modifier configuration](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/modifiers.md).
 
 #### Boss Modifiers
 These modifiers are by default only available on bosses.
 
 ---
-|   Modifier   |                                           Description                                          |                                                    Config Adjustment                                                   | Icon |
-|:------------:|:----------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------:|:----:|
-| BossSummoner |              Summons minion creatures at regular intervals up to a certain limit.              | BasePower = Max number summoned PerlevelPower = Time between summon BiomeObjects = Biome specific minion (prefab name) Config SummonStarLimit = share (0-1) of the summoner's stars its summons may have, rounded down (default 0.5, which on a 4 star summoner allows up to 2 stars; negative = no limit) |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/summoner.png?raw=true" width="64" height="64">    |
-|   SoulEater  | Creature grows in strength and size when other creatures die near it. Creature heals slightly. |                                    PerlevelPower = how much health & damage to gain                                    |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/vortex.png?raw=true" width="64" height="64">    |
-|   LifeLink   |      Creature will redirect a portion of damage it takes to another creature in the area.      |            BasePower = Base damage redirection PerLevelPower = Additional damage redirection based on level            |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/LifeLink2.png?raw=true" width="64" height="64">    |
-| ResistPierce | Reduces damage the creatures takes from all pierce sources (like arrows)                       |        BasePower = Base damage reduction PerLevelPower = Additional damage reduction granted per creature level        |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/pierceResist.png?raw=true" width="64" height="64">    |
-| Brutal       | Increases creature attack speed                                                                |      BasePower = Increases attack speed by base amount PerLevelPower = Increases attack speed by amount per level      |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/brutal.png?raw=true" width="64" height="64">    |
-| Stalward | Takes much less stagger damage, so it is far harder to stagger. | BasePower = share of stagger damage ignored PerLevelPower = added per level Config MaxReduction = the most it can ever ignore |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/stalward.png?raw=true" width="64" height="64">    |
-| Shielded | Carries a shimmering shield that soaks damage before its health does, and refills when left alone. | BasePower = shield size as a share of max health PerLevelPower = added per level Config RegenDelay = seconds without being hit before it refills Config RegenDuration = seconds an empty shield takes to fill |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64">    |
-| EarthCaller | While fighting, calls stone spikes up under every nearby player, within seconds of the fight starting and then at random intervals; a player in the air gets one on the ground below them. The spot rumbles first, then the spike erupts, dealing blunt and pierce damage and throwing the player into the air. | BasePower = spike damage as a multiple of the boss's hit PerLevelPower = added per level Config FirstCastDelay = most seconds into a fight before the first spikes Config MinInterval / MaxInterval = range of the random wait between later spikes Config Delay = seconds of rumbling before a spike Config Radius = metres the spike's hit reaches Config Range = how far from the boss players are targeted Config LaunchSpeed = how hard a spike throws players upward |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/earthcaller.png?raw=true" width="64" height="64">    |
+| Modifier | Description | Icon |
+|:---:|:---:|:---:|
+| BossSummoner | Summons minion creatures at regular intervals up to a certain limit. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/summoner.png?raw=true" width="64" height="64"> |
+| SoulEater | Creature grows in strength and size when other creatures die near it. Creature heals slightly. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/vortex.png?raw=true" width="64" height="64"> |
+| LifeLink | Creature will redirect a portion of damage it takes to another creature in the area. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/LifeLink2.png?raw=true" width="64" height="64"> |
+| ResistPierce | Reduces damage the creatures takes from all pierce sources (like arrows) | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/pierceResist.png?raw=true" width="64" height="64"> |
+| Brutal | Increases creature attack speed | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/brutal.png?raw=true" width="64" height="64"> |
+| Stalward | Takes much less stagger damage, so it is far harder to stagger. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/stalward.png?raw=true" width="64" height="64"> |
+| Shielded | Carries a shimmering shield that soaks damage before its health does, and refills when left alone. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64"> |
+| EarthCaller | While fighting, calls stone spikes up under every nearby player, within seconds of the fight starting and then at random intervals; a player in the air gets one on the ground below them. The spot rumbles first, then the spike erupts, dealing blunt and pierce damage and throwing the player into the air. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/earthcaller.png?raw=true" width="64" height="64"> |
 
 
 #### Major Modifiers
 These modifiers are attainable by most creatures, and are typically the more impactful modifiers.
 
 ---
-|   Modifier       |                Description                |                                                                                                     Config Adjustment                                                                                                     | Icon |
-|:----------------:|:-----------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:----:|
-|    Brutal        |      Increases creature attack speed      |                                                                   BasePower = Increases attack speed PerLevelIncrease = Increases attack speed per level                                                                  |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/brutal.png?raw=true" width="64" height="64">     |
-|     Fire         |              Adds Fire damage             |                                                             BasePower = Percentage of total damage added PerLevelIncrease = Additional damage added per level                                                             |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/flame.png?raw=true" width="64" height="64">     |
-|     Frost        |             Adds Frost Damage             |                                                             BasePower = Percentage of total damage added PerLevelIncrease = Additional damage added per level                                                             |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/snowflake.png?raw=true" width="64" height="64">     |
-|    Poison        |             Adds Poison Damage            |                                                             BasePower = Percentage of total damage added PerLevelIncrease = Additional damage added per level                                                             |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/poison.png?raw=true" width="64" height="64">     |
-|   Lightning      |           Adds Lightning damage           |                                                             BasePower = Percentage of total damage added PerLevelIncrease = Additional damage added per level                                                             |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/lightning.png?raw=true" width="64" height="64">     |
-| Elemental Chaos  | Random typed elemental damage on each hit |                                                             BasePower = Percentage of total damage added PerLevelIncrease = Additional damage added per level                                                             |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/eleChaos.png?raw=true" width="64" height="64">     |
-|   Splitter       | Creature spawns replacements when it dies | Config values are combined and for each whole value, an additional creature is spawned BasePower = Number of creatures to spawn on replacement PerLevelIncrease = Additional value added to give a chance for more spawns |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/Splitting.png?raw=true" width="64" height="64">     |
-| ResistPierce     |      Reduces damage taken from Pierce     |                                                                 BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction                                                                |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/pierceResist.png?raw=true" width="64" height="64">     |
-|  ResistSlash     |      Reduces damage taken from Slash      |                                                                 BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction                                                                |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/slashResist.png?raw=true" width="64" height="64">     |
-|  ResistBlunt     |      Reduces damage taken from Blunt      |                                                                 BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction                                                                |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/bluntResist.png?raw=true" width="64" height="64">     |
-|   Reflection     | Can reflect projectiles back along their arc; shots that glance off its edge deflect elsewhere and can hit other players or creatures | BasePower = chance (0-1) to reflect a projectile PerLevelIncrease = additional chance per level Config ReflectedDamage = fraction of the projectile's damage the reflected shot keeps |   <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/reflecting.png?raw=true" width="64" height="64">   |
-| Vampiric | Heals by a share of the health its hits take. | BasePower = share of the health taken that it heals PerLevelIncrease = added per level |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/vampiric.png?raw=true" width="64" height="64">    |
-| Shielded | Carries a shimmering shield that soaks damage before its health does, and refills when left alone. | BasePower = shield size as a share of max health PerLevelPower = added per level Config RegenDelay = seconds without being hit before it refills Config RegenDuration = seconds an empty shield takes to fill |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64">    |
+| Modifier | Description | Icon |
+|:---:|:---:|:---:|
+| Brutal | Increases creature attack speed | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/brutal.png?raw=true" width="64" height="64"> |
+| Fire | Adds Fire damage | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/flame.png?raw=true" width="64" height="64"> |
+| Frost | Adds Frost Damage | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/snowflake.png?raw=true" width="64" height="64"> |
+| Poison | Adds Poison Damage | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/poison.png?raw=true" width="64" height="64"> |
+| Lightning | Adds Lightning damage | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/lightning.png?raw=true" width="64" height="64"> |
+| Elemental Chaos | Random typed elemental damage on each hit | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/eleChaos.png?raw=true" width="64" height="64"> |
+| Splitter | Creature spawns replacements when it dies | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/Splitting.png?raw=true" width="64" height="64"> |
+| ResistPierce | Reduces damage taken from Pierce | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/pierceResist.png?raw=true" width="64" height="64"> |
+| ResistSlash | Reduces damage taken from Slash | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/slashResist.png?raw=true" width="64" height="64"> |
+| ResistBlunt | Reduces damage taken from Blunt | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/bluntResist.png?raw=true" width="64" height="64"> |
+| Reflection | Can reflect projectiles back along their arc; shots that glance off its edge deflect elsewhere and can hit other players or creatures | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/reflecting.png?raw=true" width="64" height="64"> |
+| Vampiric | Heals by a share of the health its hits take. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/vampiric.png?raw=true" width="64" height="64"> |
+| Shielded | Carries a shimmering shield that soaks damage before its health does, and refills when left alone. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64"> |
 
 
 #### Minor Modifiers
 These modifiers are attainable by most creatures and are typically less directly impactful than others, but can be none the less dangerous.
 
 ---
-|   Modifier   |                                 Description                                 |                                                     Config Adjustment                                                     | Icon |
-|:------------:|:---------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------:|:----:|
-|   FireNova   |                 Explodes when it dies, damaging everything.                 | BasePower = Base damage of the explosion, based on creature damage PerLevelPower = Increase to the damage added per level |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/fireNova.png?raw=true" width="64" height="64">   |
-| PoisonNova   |                 Explodes when it dies, damaging everything.                 | BasePower = Base damage of the explosion, based on creature damage PerLevelPower = Increase to the damage added per level |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/poisonNova.png?raw=true" width="64" height="64">   |
-| FrostNova | Explodes in frost when it dies, damaging everything. | BasePower = Base damage of the explosion, based on creature damage PerLevelPower = Increase to the damage added per level |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/frostnova.png?raw=true" width="64" height="64">    |
-| LightningNova | Explodes in lightning when it dies, damaging everything. | BasePower = Base damage of the explosion, based on creature damage PerLevelPower = Increase to the damage added per level |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/lightningnova.png?raw=true" width="64" height="64">    |
-|   Lootbags   | Doubles creature health and gives 25% more movement speed, drops more loot. |                      BasePower = Increases drops PerLevelPower = Increases drops by amount per level                      |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/lootbag.png?raw=true" width="64" height="64">   |
-|     Alert    |                       Increases creature hearing range                      |                   BasePower = Increase hearing by PerLevelPower = Increase hearing by amount each level                   |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/alert.png?raw=true" width="64" height="64">    |
-|      Big     |                      Increases creature size and health                     |                 BasePower = Increases health and size PerLevelPower = Increases health and size by amount                 |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/big.png?raw=true" width="64" height="64">    |
-|     Small    | Shrinks the creature and weakens its attacks; each one rolls how small it is, and the smaller it is the weaker it hits. Never rolls alongside Big | BasePower = most of its size the creature can lose PerLevelPower = added to that per level Config DamageReduction = damage lost at the full shrink Config MinimumRoll = least share (0-1) of the full effect a creature rolls |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/small.png?raw=true" width="64" height="64">    |
-|     Fast     |                           Increases creature speed                          |                    BasePower = Increases movement speed PerLevelPower = Increases speed based per level                   |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/fast.png?raw=true" width="64" height="64">    |
-|   Evolving   | After X kills the creature gains a level. A yellow bar under its health shows how close it is to the next one, and stays full once it is at the max level (`EnableEvolvingProgressBar` in the UI section turns it off) | BasePower = Base number of kills required PerLevelIncrease = Additional kills required per level                          |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/evolve.png?raw=true" width="64" height="64">     |
-| StaminaDrain |                  Attacks by the creature drain your stamina                 |                        BasePower = Drain amount PerLevelPower = Drain increase by amount per level                        | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/staminaDrain.png?raw=true" width="64" height="64">   |
-|   EitrDrain  |                   Attacks by the creature drain your Eitr                   |                        BasePower = Drain amount PerLevelPower = Drain increase by amount per level                        | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/eitrEater.png?raw=true" width="64" height="64">   |
-|  ResistFire  |      Reduces damage taken from Fire                                         |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/FireRes.png?raw=true" width="64" height="64">     |
-|  ResistFrost |      Reduces damage taken from Frost                                        |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/FrostRes.png?raw=true" width="64" height="64">     |
-|  ResistPoison|      Reduces damage taken from Poison                                       |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/PoisonRes.png?raw=true" width="64" height="64">     |
-|  ResistSpirit|      Reduces damage taken from Spirit                                       |                        BasePower = base damage reduction PerLevelIncrease = per level additional damage reduction         |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/SpiritRes.png?raw=true" width="64" height="64">     |
-| Stalward | Takes much less stagger damage, so it is far harder to stagger. | BasePower = share of stagger damage ignored PerLevelPower = added per level Config MaxReduction = the most it can ever ignore |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/stalward.png?raw=true" width="64" height="64">    |
-| Regenerating | Heals itself once it has gone a few seconds without being hit. | BasePower = share of max health healed per second PerLevelPower = added per level Config OutOfCombatDelay = seconds without being hit before it heals |  <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/regenerating.png?raw=true" width="64" height="64">    |
+| Modifier | Description | Icon |
+|:---:|:---:|:---:|
+| FireNova | Explodes when it dies, damaging everything. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/fireNova.png?raw=true" width="64" height="64"> |
+| PoisonNova | Explodes when it dies, damaging everything. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/poisonNova.png?raw=true" width="64" height="64"> |
+| FrostNova | Explodes in frost when it dies, damaging everything. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/frostnova.png?raw=true" width="64" height="64"> |
+| LightningNova | Explodes in lightning when it dies, damaging everything. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/lightningnova.png?raw=true" width="64" height="64"> |
+| Lootbags | Doubles creature health and gives 25% more movement speed, drops more loot. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/lootbag.png?raw=true" width="64" height="64"> |
+| Alert | Increases creature hearing range | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/alert.png?raw=true" width="64" height="64"> |
+| Big | Increases creature size and health | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/big.png?raw=true" width="64" height="64"> |
+| Small | Shrinks the creature and weakens its attacks; each one rolls how small it is, and the smaller it is the weaker it hits. Never rolls alongside Big | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/small.png?raw=true" width="64" height="64"> |
+| Fast | Increases creature speed | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/fast.png?raw=true" width="64" height="64"> |
+| Evolving | After X kills the creature gains a level. A yellow bar under its health shows how close it is to the next one, and stays full once it is at the max level | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/evolve.png?raw=true" width="64" height="64"> |
+| StaminaDrain | Attacks by the creature drain your stamina | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/staminaDrain.png?raw=true" width="64" height="64"> |
+| EitrDrain | Attacks by the creature drain your Eitr | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/eitrEater.png?raw=true" width="64" height="64"> |
+| ResistFire | Reduces damage taken from Fire | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/FireRes.png?raw=true" width="64" height="64"> |
+| ResistFrost | Reduces damage taken from Frost | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/FrostRes.png?raw=true" width="64" height="64"> |
+| ResistPoison | Reduces damage taken from Poison | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/PoisonRes.png?raw=true" width="64" height="64"> |
+| ResistSpirit | Reduces damage taken from Spirit | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/SpiritRes.png?raw=true" width="64" height="64"> |
+| Stalward | Takes much less stagger damage, so it is far harder to stagger. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/stalward.png?raw=true" width="64" height="64"> |
+| Regenerating | Heals itself once it has gone a few seconds without being hit. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/regenerating.png?raw=true" width="64" height="64"> |
 
-Death novas can show a circle on the ground where they are about to burst, filling in until they do: turn on `ShowNovaIndicator` under `Client config` in the mod's .cfg. It only changes what you see.
+### Location Reset
 
-### Location Reset (LocationResetSettings.yaml)
-> **Back up your world before enabling this.** Location Reset destroys and recreates world objects.
+All locations, can be reset with this mod. Providing refreshed resources and fights.
 
-On a busy server the world is a finite pool of loot. Crypts, camps, ore and pickables get consumed
-once and never come back, so late joiners and less-active players are permanently locked out of
-content the early players already stripped. Location Reset brings that content back on a timer.
-
-**It is disabled by default, and every location and vegetation entry is opt-in.** Turn on
-`EnableLocationReset`, then set `Enabled: true` on the specific things you want to come back.
-
-The Location Reset page of the quick configure panel (Mod Config button) covers the common settings
-without editing YAML: one switch for both master switches, the default timer and terrain reset, the
-safe and protection radii, chest refills, the sweep budget, biome rates, and each reset group's on/off,
-timer and terrain reset. Group members, schedules, distance limits and protection rules stay in the file.
-
-How it works:
-- **Resets happen in the background, away from players.** Ore, pickables and vegetation wait until
-  nobody is within `PlayerSafeRadius` (256m) of their chunk; a location's surface waits until nobody
-  is within `LocationPlayerRadius` (120m) of it. A chunk somebody happened to be standing in is
-  re-tried a couple of times a few minutes later rather than losing its whole cycle.
-- **Locations are restored, not re-rolled.** The original position and rotation are kept, so
-  buildings never rotate, shift or clip into the terrain after a reset.
-- **Ore, pickables and vegetation only come back when something is actually missing**, and never
-  past the amount the chunk had. Placement is replayed using the world's own generation seed, which
-  re-places every node in the chunk: the ones still standing are matched by position and discarded
-  rather than stacked on top of the survivor, and of the rest only as many are kept as went missing.
-  A regrown node lands where world generation would put one, though not always on the exact spot the
-  lost one stood — `sls-loc-audit` will tell you if any duplicates ever slip through.
-- **Dungeon interiors reset with their entrance** — crypts, caves, mines and citadels. Only a player
-  inside a dungeon holds its interior back. If players have built around the entrance, the interior
-  is still rebuilt and the entrance is left exactly as it is; tombstones, dropped items and player
-  builds inside are kept where they lie.
-- **Terrain can be reset** around ore to undo mining craters. Locations also support
-  `Mode: TerrainOnly`, which flattens the ground around one without touching the structure itself.
-- **Your stuff is safe.** Player-built structures, tombstones, wards, portals, beds, player-placed
-  chests, tamed creatures and player bases all block a reset. For ore and vegetation that means
-  anything in or near their chunk; for a location, only what stands within `LocationBuffer` (10m)
-  of the ground it resets, so a build elsewhere in the same chunk no longer holds it back.
-  Protection is configurable per entry, so you can decide (for example) that a stray dropped item
-  is preserved rather than blocking the reset.
-- `StartTemple` can never be reset. Boss altars are covered by the `BossAltars` group, which ships
-  enabled with terrain reset on to undo the crater players dig around a summoning circle — set
-  `Enabled: false` on that group to leave them alone.
-
-Timers are in **real-world hours** (`ResetHours`), which stays predictable on a server that runs
-24/7. Throughput is controlled by `LocationResetSweepBudgetMs` — the milliseconds of server frame
-time the sweep may use per frame. Raise it to restore the world faster; it automatically backs off
-when the server is under load. Use `sls-loc-status` to see the projected time for a full pass.
-
-**An already-explored world baselines itself.** The first time resets are switched on in a world
-with no reset timers of its own, every generated zone is stamped as reset right then, so timers
-start from that moment instead of everything becoming due at once. The same happens if the state
-file is ever lost. Set `StampOnFirstSight: false` to skip it and have the sweep reset an explored
-world instead; `sls-loc-stamp` re-baselines a world by hand at any time.
-
-**Reset groups.** Groups are how this feature is configured. A group configures and **enables** a
-whole set of targets in one block, and stands on its own — a member needs no entry anywhere else in
-the file:
-
-```yaml
-ResetGroups:
-  Ores:
-    Enabled: true
-    ResetHours: 48
-    ResetTerrain: true
-    Members: [rock4_copper, MineRock_Tin, silvervein, rock3_silver, mudpile_beacon]
-```
-
-To turn a whole category off, set its `Enabled: false`; to drop one target, remove it from
-`Members`. If two groups claim the same prefab the shorter interval wins and the other is named in a
-warning, and a member name your game version has nothing for is warned about at load.
-
-A member can also be a category token — `$Mineable` or `$Pickable` — which expands to everything the
-world *places* carrying that component, and so picks up modded ore and pickables automatically.
-Unlike a named member a token stops there: one-off pickups that only exist inside dungeons are not
-swept up by it, so name those explicitly if you want them. Note that berry bushes are *not*
-`Pickable_*` prefabs, which is why the shipped config lists them separately. Prefab names are
-irregular enough that this matters: copper is `rock4_copper` while `rock4_forest` is worthless
-scenery, and silver is both `rock3_silver` and `silvervein`.
-
-A group can be limited to a ring around spawn with `MinDistance` / `MaxDistance` (`MaxDistance: 0`
-means no outer limit). A scoped group applies only inside its range; outside it, its members fall
-back to whatever unscoped group covers them — so `FlintNearSpawn` at 6h within 3000m leaves flint on
-the normal foraging timer everywhere else.
-
-The mod ships working groups (`BossAltars`, `Ores`, `Berries`, `Foraging`, `FlintNearSpawn`,
-`Leviathans`, `QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature
-is usable without editing anything. Nothing resets until `EnableLocationReset` and the YAML
-`Enabled` are both turned on. `sls-loc-status` lists every group with a `matched/total` member
-count — a shortfall means a prefab name no longer exists in your game version.
-
-**Locations and Vegetation are overrides.** Both ship empty and can usually stay that way. Add a key
-only to retune one target or to enable something no group covers; values resolve as
-**entry → group → Defaults**, so a per-prefab setting always beats its group:
-
-```yaml
-Locations:
-  Eikthyrnir:
-    ResetHours: 12        # BossAltars still enables it; this just retimes it
-```
-
-For the full list of names your world can reset — including everything other mods add — run
-`sls-loc-dump`. It writes `SavedData/LocationResetCatalog.yaml` as a reference; that file is a
-dump, not a config, and editing it does nothing.
-
-**Advanced sections are omitted while unused.** `Throughput`, `InPlaceRefresh`, `ProtectedPrefabs`
-and `DistanceBands` are left out of the generated file because their defaults suit almost every
-server. Add a section by hand to use one — anything you leave out keeps its default. The config
-file's own header comment documents each with its default value.
-
-**Scheduling by clock time.** `ResetHours` measures elapsed time since a target last reset, so a
-24h timer drifts a little later every cycle and you cannot say "restock overnight". `ResetSchedule`
-takes a cron expression instead, usable anywhere `ResetHours` is:
-
-```yaml
-ResetGroups:
-  Ores:
-    ResetSchedule: 0 3 * * *        # 03:00 every day
-  Foraging:
-    ResetSchedule: '*/30 * * * *'   # every 30 minutes
-  AshlandsForts:
-    ResetSchedule: 0 4 * * MON      # 04:00 on Mondays
-```
-
-Fields are `minute hour day-of-month month day-of-week`, supporting `*`, `,`, `-` and `*/n`.
-Day-of-week is `0-6` (0 = Sunday) or `SUN`–`SAT`, months are `1-12` or `JAN`–`DEC`, and the macros
-`@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly` and `@yearly` all work. Quote any expression
-starting with `*`, or YAML will read it as an alias.
-
-Times are the **server's local time**, not UTC and not in-game time. Two things to know:
-
-- If **both** day-of-month and day-of-week are restricted, a day matching *either* fires —
-  `0 0 1 * MON` is the 1st of the month **and** every Monday. Surprising, but it is what every cron
-  does.
-- `BiomeRates` and `DistanceBands` do **not** scale a cron schedule; there is no sensible way to
-  halve "every Tuesday at 3am". A rate of `0` still excludes the chunk entirely.
-
-The two fields resolve as one unit, entry → group → Defaults: the first level that sets *either* one
-owns the timing, so a per-prefab `ResetHours` still overrides its group's `ResetSchedule`. An invalid
-expression is logged and that target quietly falls back to `ResetHours` rather than taking the config
-file down.
-
-**Focusing resets where they are needed.** Depletion is not uniform — it concentrates in the
-biomes and near the spawn areas your players actually work. Two multipliers stack on top of each
-entry's own `ResetHours`, so `effective hours = ResetHours × biome rate × band rate`, and both
-default to `1.0`:
-
-```yaml
-BiomeRates:
-  Meadows: 0.5          # everything in the Meadows returns twice as fast
-  Mistlands: 2.0        # ...and half as fast out in the Mistlands
-DistanceBands:
-- Inner: 0              # metres from spawn
-  Outer: 3000
-  Multiplier: 0.5       # the hub recovers twice as fast
-```
-
-A rate of `0` **excludes** that biome or band from resets entirely — it does not mean "instantly" —
-which is also the cheap way to say "only reset near spawn". `Outer: 0` means no outer limit, and a
-chunk matching no band is left at `1.0`, so a partial band list never disables the rest of the
-world. Distance is measured from the same point as the distance level-scaling rings; see
-`DistanceBonusIsFromStarterTemple`.
-
-**Ignoring trivial player clutter.** One abandoned campfire otherwise freezes a chunk's ore and
-vegetation forever: any player-built piece blocks them, and their protection scan covers a chunk
-*and its 8 neighbours*.
-Worse, a campfire sitting on an ore spawn stops that node coming back even when the chunk does
-reset, because vanilla will not place vegetation into a collider. Each protection category can list
-prefabs exempt from it:
-
-```yaml
-Protection:
-  PlayerBuiltPiece:
-    Action: Block
-    Ignored:
-    - fire_pit
-```
-
-> An ignored prefab neither blocks a reset **nor survives one — it is deleted.** `fire_pit` ships
-> ignored for the reasons above; add to the list sparingly. Tombstones can never be ignored, and
-> anything in `ProtectedPrefabs` wins over an ignore. Every deletion is recorded in the chunk log.
-
-**Player bases.** A chunk is also left alone while any part of it lies inside a player's base — the
-area around a workbench and similar pieces that stops monsters spawning in vanilla — and so is a
-location's surface while that area reaches its ground. This is the `PlayerBaseEffect` category,
-and it reaches exactly as far as that area does rather than `ProtectionRadius`. A prefab ignored under `PlayerBuiltPiece` does not count as a base either, so the
-shipped `fire_pit` ignore covers both. A reset group can relax it like any other category:
-
-```yaml
-ResetGroups:
-  Ores:
-    Protection:
-      PlayerBuiltPiece: Ignore   # stray builds no longer hold ore chunks...
-      PlayerBaseEffect: Ignore   # ...and neither does a workbench abandoned on an ore spawn
-```
-
-**Resetting terrain around a location.** Players dig approach ramps and moats just *outside* a
-dungeon's footprint, where the normal terrain reset does not reach. `ExtraTerrainRadius` on a
-location entry adds metres beyond the location's own radius, clamped to `ProtectionRadius` minus
-32m — 16m at the default, 64m at most. The extra ground is checked for player property like the
-rest of the location, plus `LocationBuffer`:
-
-```yaml
-Locations:
-  Crypt2:
-    Enabled: true
-    ResetTerrain: true
-    ExtraTerrainRadius: 16
-```
-
-**Seeing what it did.** Every chunk the system works on gets a record in
-`SavedData/LocationResetLog.log` — its zone coordinates, world position and biome, and what was and
-was not reset inside it, including the reason anything was skipped:
-
-```
-Zone -12,34 @ x=-768 z=2176 (BlackForest) reset: refreshed pickables 14, minerock 3 | location 'Crypt2' rebuilt (cleared 214, spawned 218) | ZDO 402->405, 4 restored
-Zone -11,34 @ x=-704 z=2176 (Meadows) reset: vegetation 6 objects across 1 entries (68 duplicates rejected, 9 not missing) | ZDO 1531->1537, 6 restored
-Zone -12,35 @ x=-768 z=2240 (Meadows) skipped: protected by PlayerBuiltPiece 'wood_floor' at x=-742 z=2251
-Zone -12,36 @ x=-768 z=2304 (Meadows) nothing reset: location 'FireHole' not due, 3 vegetation entries not due
-Zone -9,40 @ x=-576 z=2560 (BlackForest) reset: location 'Crypt3' interior rebuilt, surface left as it was (protected by Portal 'portal_wood' (built by 8FA31C02) at x=-561 z=2577, within 30m) (cleared 188, spawned 190, 12 surface copies dropped)
-```
-
-The `ZDO` figure is the object count of the chunk and its neighbours before and after the reset, and
-`restored` is how much of that was missing content coming back. A reset that grows the count past
-what it restored is warned about in the BepInEx log.
-
-Turn this off with `EnableLocationResetLog`. `EnableDebugLocationResetDetails` additionally copies
-the background sweep's chunk lines into the BepInEx log and expands every record with a per-entry
-breakdown of what was skipped and why. Both are client-side settings, so on a dedicated server they
-are configured on the server itself.
-
-Not compatible with VentureValheim's LocationReset — SLS disables its own Location Reset
-automatically if that mod is present, since both would fight over the same objects.
+[Location Reset configuration](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/location-reset.md)
 
 ### World modifiers
-SLS follows the vanilla world modifiers a world was created with, or changed to later with `setworldmodifier` / `setkey`,
-on top of its own settings:
+SLS applies its changes ontop of existing or added world modifiers. Balance your world how you want to.
 
-- **Combat**: vanilla still applies enemy and player damage after SLS's damage scaling, and SLS's death novas follow the
-  enemy damage setting too. A harder setting's higher enemy level-up rate multiplies every SLS levelup chance (creatures,
-  bosses, raid spawns, fish and birds) the way night and zone bonuses do. Its larger enemies are sized on top of SLS's
-  own sizing, so `MaximumCreatureScale` caps SLS's sizing and the world's size goes on top; creatures in dungeons and
-  other interiors keep their size, as in vanilla.
-- **Resources**: drop tables SLS hands back to vanilla keep vanilla's resource scaling, and SLS's own tables in
-  `LootSettings.yaml` (`CharacterSpecificLoot`, `NonCharacterSpecificLoot`) follow it as well, after their per-level
-  scaling and before `MaxScaledAmount`. Drops marked `DontScale` or `DoesNotScale`, and the item types vanilla never
-  scales, keep their amounts.
-- **Raids**: see [Raids](#raids).
-
-With `EnableDebugOutputLevelRolls` on, each level roll logs the world's rate as `(WorldLevelUpRate)` next to the night and
-zone bonuses. The Level Distribution and Loot pages of the quick configure panel include the current world's modifiers in
-their charts and estimates, and say which ones are active.
+[How each one applies](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/world-modifiers.md)
 
 ### Localization
 Localization is available for everything in the mod. I accept community translations! If you would like to contribute localizations or improve them please reach out on discord.
 
-Otherwise localizations are available at `Bepinex/config/StarLevelSystems/localizations`, new languages can be made using any of [Jotunns language specific names](https://valheim-modding.github.io/Jotunn/data/localization/language-list.html)
+Otherwise localizations are available at `BepInEx/config/StarLevelSystem/localizations`, new languages can be made using any of [Jotunns language specific names](https://valheim-modding.github.io/Jotunn/data/localization/language-list.html)
 
 ### Terminal Commands
-Star Level Systems provides a number of terminal commands for debugging, testing and cleanup. Type
-`sls-help` in the console for the full list, or `sls-help loc` for a single group. Tab-completes each
-argument as you type it, and colours output by severity (turn that off with the `EnableTerminalColors`
-client setting if you prefer plain text).
+Commands for debugging, testing and cleanup. Type `sls-help` in the console for the full list, or `sls-help loc` for a single group.
 
-- `sls-help [area]` - lists the StarLevelSystem commands, optionally just one area
-- `sls-creature-killall [range:500]` - kills creatures within the specified range (default 500m), skips players and tamed creatures
-- `sls-creature-setlevel [level] [range:64]` - sets the closest creature (within the search range) to the given level. Level 1 is no stars, 2 is one star, and so on; clamped to that creature's configured maximum
-- `sls-creature-setstat [group] [stat] [value|reset] [range:64]` - sets one stat on the closest creature, the same value its `LevelSettings.yaml` creature entry would set, and keeps it on that creature through restarts. Groups are `Base` (`BaseHealth`, `BaseDamage`, `AttackSpeed`, `Speed`, `Size`), `PerLevel` (`HealthPerLevel`, `DamagePerLevel`, `SpeedPerLevel`, `AttackSpeedPerLevel`, `SizePerLevel`), `DamageTaken` and `DamageBonus` (one stat per damage type). Modifiers like Big still add on top, size is still held to the size cap, and `reset` puts the configured value back. Leave out the value to see the current ones. eg: `sls-creature-setstat Base Size 2`, `sls-creature-setstat Base BaseHealth 5`, `sls-creature-setstat DamageTaken Fire 0.5`
-- `sls-mod-give [modifier_type:major] [modifier_name:fire]` - gives nearby creatures the specified modifier (must be very close)
-- `sls-loot-dump` - dumps all loot table configurations in the game, in SLS format, to `Bepinex/config/StarLevelSystems/LootTablesDump.yaml`
-- `sls-zone-rebuild` - regenerates the zone map from the world with the current size settings, for everyone. Resets zone kill counts and levels
-- `sls-region-rebuild` - cuts the region map again from the world with the current size settings, and sends it to everyone. Resets region kill counts and levels
-- `sls-nemesis-spawn [biome]` - force-scouts and places one remote Nemesis boss
-- `sls-nemesis-cleanup <all|radius>` - removes Nemesis spawns: remote bosses still waiting to appear, Nemesis bosses with their minions, other Nemesis creatures, and their map pins. `all` clears the whole world; a radius clears around you. Tamed creatures are left alone and nothing drops loot. Server authoritative, admin only
-- `sls-nemesis-score [value]` - sets your local Nemesis score
-- `sls-raid-spawn [raid_name] [x] [z]` - force-starts a raid, ignoring every cooldown and activation requirement (biome, keys, player base), but not a raid already running within `RaidExclusionRange`. Tab-completes the raid names from your `RaidSettings.yaml`. Defaults to your own position; pass an `x` and `z` to start it somewhere else. The raid does not consume the target player's raid cooldown, so it will not delay their next natural raid. Works on raids that are disabled or while `DisableAllRaids` is set, so you can test one before turning it on
-- `sls-raid-clear-pins` - removes every SLS raid map pin (the red event circle and the `!` marker) from your own map. Raids still running near you redraw theirs; pins left behind by a raid that has ended are gone for good. Pins are local to each client, so no admin is needed
-
-Location Reset commands (server authoritative):
-- `sls-loc-status` - reports sweep throughput, how much of the world has been examined, the projected time for a full pass, and cumulative ZDO drift
-- `sls-loc-dump` - writes every location and vegetation entry this world knows about (including ones other mods add) to `SavedData/LocationResetCatalog.yaml`, for use when configuring `LocationResetSettings.yaml`
-- `sls-loc-stamp` - stamps every generated zone as reset right now, restarting every timer from today. A world with no timers at all does this automatically when resets are switched on, so this is for re-baselining one that already has them
-- `sls-loc-reset [range:64]` - immediately resets the chunks around you, ignoring every timer, including the chunks currently loaded around you. Reports each chunk it touched to the console. Player structures are still protected
-- `sls-loc-audit [range:256] [fix]` - scans for duplicate world objects and surplus terrain compilers. Reports only unless `fix` is passed
-
-#### Running the server commands from a client
-
-The Location Reset commands, `sls-zone-rebuild`, `sls-region-rebuild`, `sls-nemesis-spawn`, `sls-nemesis-cleanup` and `sls-raid-spawn` act on world state only the server owns. A
-dedicated server has no console of its own, so an **admin** can now run them from a connected client:
-the request goes to the server, the server runs it, and its output is streamed back into your console
-as well as being written to the server's log. `sls-loc-reset` and `sls-loc-audit` centre on **your**
-position, which is what makes them usable on a headless server at all.
-
-Non-admins are refused. Several of these are flagged as cheat commands, which vanilla only allows once
-`devcommands` is active — on a server that requires
-[Server devcommands](https://github.com/JereKuusela/valheim-dev) on the client. `sls-loc-status` is not
-a cheat command and works without it.
-
-#### Renamed commands
-
-Commands were regrouped as `sls-<area>-<verb>` in 1.5.2. Every old name still works and is accepted
-silently, so existing macros and guides are unaffected; `sls-help` lists the old name alongside each
-command.
-
-| Old name | New name |
-| --- | --- |
-| `SLS-killall` | `sls-creature-killall` |
-| `SLS-give-modifier` | `sls-mod-give` |
-| `SLS-Dump-LootTables` | `sls-loot-dump` |
-| `SLS-rebuild-zones` | `sls-zone-rebuild` |
-| `SLS-spawn-nemesis-remote` | `sls-nemesis-spawn` |
-| `SLS-SetNem-Score` | `sls-nemesis-score` |
-| `SLS-reset-player-modifiers` | `sls-player-reset` |
-| `sls-loc-status` | `sls-loc-status` |
-| `sls-loc-reset` | `sls-loc-reset` |
-| `sls-loc-audit` | `sls-loc-audit` |
-| `sls-loc-dump` | `sls-loc-dump` |
-| `sls-loc-stamp` | `sls-loc-stamp` |
+[Command reference](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/docs/terminal-commands.md)
 
 ### API Usage (WIP)
 Star Level Systems provides a public API for other mods to interact with.
@@ -1246,10 +242,6 @@ Once you are ready to install mods, they must be unzipped first and go into the 
   - Its `[Gathering]` and `[LootDrop]` multipliers apply to everything without an SLS loot table; trees, rocks, objects and creatures with their own SLS loot table drop exactly what that table says
 - Project Auga lays out the enemy health bars and boss bars itself, so with Auga installed SLS only adds its stars, modifier icons, evolve bar and health numbers to Auga's bars. `EnemyHealthbarScalarX`, `EnemyHealthbarScalarY`, `StackMultipleBossHealthbars`, `BossHealthbarSpacing`, `BossHudTopBuffer` and `BossHealthbarWidthPercent` do nothing then
 - Other UI mods can turn off any of SLS's enemy hud changes the same way through the API, and draw SLS's stars and evolve progress themselves (see the API documentation)
-
-Compatibility is being worked on for the following mods:
-- CarryMeMaster
-- PortablePals
 
 ## Contributions
 If you would like to donate, any amount is appreciated!

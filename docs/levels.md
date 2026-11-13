@@ -133,7 +133,7 @@ tree's size        = 1 + TreeSizeScalePerLevel x the biome's size multiplier x t
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `TreeMaxLevel` | 10 | The level trees reach at the edge of the world. |
-| `TreeSizeRandomness` | 0.5 | How much smaller than the largest level for its spot a tree can be. 0 makes every tree at the same distance the same size; 1 lets a tree be anywhere from level 1 up. Trees near the center can only be a little larger, so trees vary more the further out you go. |
+| `TreeSizeRandomness` | 0.75 | How much smaller than the largest level for its spot a tree can be. 0 makes every tree at the same distance the same size; 1 lets a tree be anywhere from level 1 up. Trees near the center can only be a little larger, so trees vary more the further out you go. |
 | `TreeSizePattern` | `Scattered` | `Scattered` rolls each tree on its own, so neighbors can differ a lot. `Groves` gathers larger and smaller trees into patches. |
 | `TreeGroveSize` | 200 | Roughly how wide a patch is, in meters, for `Groves`. |
 | `TreeBiomeMaxLevels` | `Mistlands:6,AshLands:5,DeepNorth:5` | The highest level trees reach in a biome. Biomes not listed use `TreeMaxLevel`. |

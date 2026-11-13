@@ -44,7 +44,7 @@ namespace StarLevelSystem.modules.Loot {
         }
 
         internal static List<LootEntry> ModifyTreeDropsOrDefault(TreeLog treeInstance) {
-            int level = CompositeLazyCache.GetOrAddCachedTreeEntry(treeInstance.m_nview);
+            int level = TreeLevels.LogLevel(treeInstance.m_nview);
             SelectObjectDistanceBonus(treeInstance.transform, out DistanceLootModifier distance_bonus);
             List<LootEntry> drops = ModifyObjectDropsOrDefault(treeInstance.m_dropWhenDestroyed, Utils.GetPrefabName(treeInstance.gameObject), level, distance_bonus, DropType.Tree);
             return drops;

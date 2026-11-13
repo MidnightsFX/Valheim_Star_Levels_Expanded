@@ -25,8 +25,7 @@ namespace StarLevelSystem.Data
         // avoids the static List<long> walk inside ZDOID.GetHashCode.
         private static Dictionary<ZDOID, CharacterCacheEntry> SessionCache = new Dictionary<ZDOID, CharacterCacheEntry>(ZDOIDComparer.Instance);
 
-        // Session tree cache, to avoid recalculating tree levels multiple times
-        private static Dictionary<ZDOID, int> TreeSessionCache = new Dictionary<ZDOID, int>(ZDOIDComparer.Instance);
+        private static Dictionary<ZDOID, TreeLevels.TreeSize> TreeSessionCache = new Dictionary<ZDOID, TreeLevels.TreeSize>(ZDOIDComparer.Instance);
 
         // Memoized SLS_MODSV2 parses: raw ZDO string -> parsed dictionary, per creature.
         // GetCreatureModifiers is called per hit and per death, and the decode only needs to re-run
@@ -34,12 +33,20 @@ namespace StarLevelSystem.Data
         private static Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>> ModifierParseCache = new Dictionary<ZDOID, KeyValuePair<string, Dictionary<string, ModifierType>>>(ZDOIDComparer.Instance);
 
         public static int GetOrAddCachedTreeEntry(ZNetView zgo) {
-            if ( zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return 1; }
+            return GetOrAddTreeSize(zgo).Level;
+        }
+
+        internal static float GetCachedTreeScale(ZNetView zgo) {
+            return GetOrAddTreeSize(zgo).Scale;
+        }
+
+        private static TreeLevels.TreeSize GetOrAddTreeSize(ZNetView zgo) {
+            if (zgo == null || zgo.IsValid() == false || zgo.GetZDO() == null) { return TreeLevels.Unscaled; }
             ZDOID cid = zgo.GetZDO().m_uid;
-            if (TreeSessionCache.TryGetValue(cid, out int cached)) { return cached; }
-            int level = LevelSelection.DeterministicDetermineTreeLevel(zgo.gameObject);
-            TreeSessionCache.Add(cid, level);
-            return level;
+            if (TreeSessionCache.TryGetValue(cid, out TreeLevels.TreeSize cached)) { return cached; }
+            TreeLevels.TreeSize size = TreeLevels.Compute(zgo.transform.position);
+            TreeSessionCache.Add(cid, size);
+            return size;
         }
 
         // Dictionary.Remove already no-ops on a missing key, so a ContainsKey guard only bought a
@@ -48,8 +55,8 @@ namespace StarLevelSystem.Data
             TreeSessionCache.Remove(id);
         }
 
-        // Levels are only worked out on a miss, so without this a loaded tree would keep dropping scaled loot after its scaling
-        // was turned off.
+        // Levels are only worked out on a miss, so without this a loaded tree would keep its old size and loot after a
+        // tree setting changed.
         internal static void FlushTreeCache() {
             TreeSessionCache.Clear();
         }
@@ -59,8 +66,7 @@ namespace StarLevelSystem.Data
             SessionCache.Clear();
             ModifierParseCache.Clear();
             CreatureModifierOverrides.FlushCache();
-            // Tree levels are recomputed deterministically, so flushing here is what lets
-            // TreeMaxLevel/EnableTreeScaling config changes apply without a relog.
+            // A tree's biome settings can come from a custom biome's fallback, which a new biome table or LevelSettings.yaml changes.
             TreeSessionCache.Clear();
         }
 

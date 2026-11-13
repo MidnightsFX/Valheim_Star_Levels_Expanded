@@ -363,13 +363,6 @@ namespace StarLevelSystem.modules.LevelSystem {
             return distribution;
         }
 
-        public static int DeterministicDetermineTreeLevel(GameObject go) {
-            if (ValConfig.EnableTreeScaling.Value == false) { return 1; }
-            Vector3 p = go.transform.position;
-            float distance_from_center = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
-            return LevelForDistance(distance_from_center, ValConfig.TreeMaxLevel.Value);
-        }
-
         public static int DeterministicDetermineRockLevel(Vector3 pos) {
             if (ValConfig.EnableRockLevels.Value == false) { return 1; }
             float distance_from_center = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(DistanceScaleSystem.center.x, DistanceScaleSystem.center.z));
@@ -453,25 +446,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (settings.CreatureConfiguration.TryGetValue(creature_name, out var creatureConfig)) { creature_settings = creatureConfig; }
                 //Logger.LogDebug($"Set character specific configs");
             }
-        }
-
-        public static IEnumerator ModifyTreeWithLevel(TreeBase tree, int level) {
-            yield return new WaitForSeconds(1f);
-            if (tree == null) { yield break; }
-            //Logger.LogDebug($"Tree level set to: {level}");
-            float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * level);
-            tree.m_health += (tree.m_health * 0.1f * level);
-            // Logger.LogDebug($"Setting Tree size {scale}.");
-            tree.transform.localScale *= scale;
-            // Loot is deliberately not touched here. LootStyles.UpdateDropTableByLevel applies
-            // PerLevelTreeLootScale to a clone of the table at fell time (via the
-            // TreeBase.RPC_Damage transpiler in LootPatches), so rewriting m_drops on the live
-            // instance scaled every stack a second time - and, because DropData is a struct,
-            // rebuilding it field by field dropped m_weight and m_dontScale, which collapsed
-            // multi-item tables to whatever sat at index 0.
-            TaskRunner.RequestPhysicsSync();
-
-            yield break;
         }
 
     }

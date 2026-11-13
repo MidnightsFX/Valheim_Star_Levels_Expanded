@@ -1,6 +1,5 @@
 using StarLevelSystem.modules;
 using System;
-using System.Globalization;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
@@ -25,13 +24,11 @@ namespace StarLevelSystem.common {
                 Logger.LogWarning($"line {scalar.Start.Line}: '{scalar.Value}' is not a valid {type.Name}. Using {Heightmap.Biome.None}.");
                 return Heightmap.Biome.None;
             }
-            if (TryParsePlain(raw, out Heightmap.Biome biome)) { return biome; }
-
-            if (raw.IndexOf(',') < 0) { return BiomeRegistry.TokenFor(raw); }
+            if (raw.IndexOf(',') < 0) { return BiomeRegistry.FromConfigName(raw); }
 
             int combined = 0;
             foreach (string part in raw.Split(',')) {
-                if (TryParsePlain(part.Trim(), out Heightmap.Biome single) == false) {
+                if (BiomeRegistry.TryParsePlain(part.Trim(), out Heightmap.Biome single) == false) {
                     // A token is one biome, so this cannot be split into parts and rejoined. Keeping the whole text inert
                     // loses nothing, and the entries can be listed separately.
                     Logger.LogWarning($"line {scalar.Start.Line}: '{raw}' combines biomes that vanilla does not have, which is not supported. List them separately.");
@@ -40,14 +37,6 @@ namespace StarLevelSystem.common {
                 combined |= (int)single;
             }
             return (Heightmap.Biome)combined;
-        }
-
-        private static bool TryParsePlain(string text, out Heightmap.Biome biome) {
-            if (int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int number)) {
-                biome = (Heightmap.Biome)number;
-                return true;
-            }
-            return BiomeRegistry.TryParseVanilla(text, out biome);
         }
 
         public void WriteYaml(IEmitter emitter, object value, Type type, ObjectSerializer serializer) {

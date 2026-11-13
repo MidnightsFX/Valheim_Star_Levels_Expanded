@@ -16,22 +16,26 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static class RandomTreeLevelExtension {
             public static void Postfix(TreeBase __instance) {
                 if (ValConfig.EnableTreeScaling.Value == false) { return; }
+                // No ZDO: a ghost from vegetation pre-generation or location reset's replay, destroyed straight away without
+                // passing ResetZDO, so a cache entry made for it would never be removed.
+                if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) { return; }
+                int level = CompositeLazyCache.GetOrAddCachedTreeEntry(__instance.m_nview);
+                // Now rather than with the size: RPC_Damage falls back on m_health until the first hit saves a value.
+                __instance.m_health += __instance.m_health * 0.1f * level;
+                __instance.StartCoroutine(TreeLevels.SizeAfterWake(__instance));
+            }
+        }
 
-                int storedLevel = 0;
-                if (ValConfig.UseDeterministicTreeScaling.Value) {
-                    storedLevel = CompositeLazyCache.GetOrAddCachedTreeEntry(__instance.m_nview);
-                } else {
-                    if (__instance.m_nview == null || __instance.m_nview.GetZDO() == null) { return; }
-                    storedLevel = __instance.m_nview.GetZDO().GetInt(SLS_TREE, 0);
-                    if (storedLevel == 0) {
-                        LevelSelection.SelectCreatureBiomeSettings(__instance.gameObject, out string creature_name, out DataObjects.CreatureSpecificSetting creature_settings, out BiomeSpecificSetting biome_settings, out Heightmap.Biome biome);
-                        storedLevel = LevelSelection.DetermineLevel(__instance.gameObject, creature_name, creature_settings, biome_settings, ValConfig.TreeMaxLevel.Value);
-                        __instance.m_nview.GetZDO().Set(SLS_TREE, storedLevel);
-                    }
-                }
-                if (storedLevel >= 1) {
-                    __instance.StartCoroutine(LevelSelection.ModifyTreeWithLevel(__instance, storedLevel));
-                }
+        // SpawnLog runs only on the tree's owner, from RPC_Damage.
+        [HarmonyPatch(typeof(TreeBase), nameof(TreeBase.SpawnLog))]
+        public static class CarryTreeLevelToLog {
+            static void Prefix(TreeBase __instance) {
+                if (ValConfig.EnableTreeScaling.Value == false) { return; }
+                TreeLevels.PendingLogLevel = CompositeLazyCache.GetOrAddCachedTreeEntry(__instance.m_nview);
+            }
+
+            static void Finalizer() {
+                TreeLevels.PendingLogLevel = 0;
             }
         }
 
@@ -39,13 +43,10 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static class SetTreeLogPassLevel {
             [HarmonyPatch(nameof(TreeLog.Destroy))]
             [HarmonyPrefix]
-            //[HarmonyPriority(Priority.LowerThanNormal)] // We are skipping the original, give everyone else a chance to run first.
             static bool DropAndSpawnTreeLogs(TreeLog __instance, HitData hitData, bool cheatedTool) {
-                // Modify Tree Drops
                 List<LootEntry> optimizeDrops = LootStyles.ModifyTreeDropsOrDefault(__instance);
                 LootStyles.ApplyDropConversion(optimizeDrops, hitData, DropType.Tree);
 
-                //Logger.LogDebug($"Starting TreeLog Destroy drop sequence tree:{__instance} drops:{dropList}");
                 __instance.m_destroyedEffect.Create(__instance.transform.position, __instance.transform.rotation);
                 // Vanilla rolls every piece's spot along the log's length, up to m_spawnDistance either way. Rolling one
                 // spot for the whole drop piled it all in one place. The 0.3 lift is applied once, not per piece.
@@ -56,7 +57,6 @@ namespace StarLevelSystem.modules.LevelSystem {
                 Vector3 dropPos = __instance.transform.position + Vector3.up * 0.3f;
                 LootPerformanceChanges.DropItemsPreferAsync(dropPos, optimizeDrops, spread: alongLog, cheated: cheatedTool);
 
-                // Spawn logs if we should
                 if (__instance.m_subLogPrefab != null) {
                     foreach (Transform transform in __instance.m_subLogPoints) {
                         // Matches vanilla TreeLog.Destroy: the sub log point's own rotation when the
@@ -66,60 +66,39 @@ namespace StarLevelSystem.modules.LevelSystem {
                         SetupTreeLog(__instance, transform, logRotation);
                     }
                 }
-                if (ValConfig.EnableTreeScaling.Value == true) {
-                    if (__instance.m_nview != null && __instance.m_nview.GetZDO() != null) { CompositeLazyCache.RemoveTreeCacheEntry(__instance.m_nview.GetZDO().m_uid); }
-                }
                 ZNetScene.instance.Destroy(__instance.gameObject);
                 // Skip the original, we entirely rewrite it.
                 return false;
             }
 
-
+            // A prefix so the health is raised before vanilla's Awake saves it as the new log's s_health, which is all
+            // RPC_Damage reads. m_nview is not assigned yet, but ZNetView.Awake has already run.
             [HarmonyPatch(nameof(TreeLog.Awake))]
-            [HarmonyPostfix]
+            [HarmonyPrefix]
             static void SetupAwakeLog(TreeLog __instance) {
                 if (ValConfig.EnableTreeScaling.Value == false) { return; }
-                int level = 1;
-                if (ValConfig.UseDeterministicTreeScaling.Value) {
-                    level = CompositeLazyCache.GetOrAddCachedTreeEntry(__instance.m_nview);
+                ZNetView nview = __instance.GetComponent<ZNetView>();
+                int level;
+                if (TreeLevels.PendingLogLevel > 0) {
+                    level = TreeLevels.PendingLogLevel;
+                    // Impact damage is dealt by whichever peer owns the log, so every peer needs the level.
+                    nview?.GetZDO()?.Set(SLS_TREE, level);
                 } else {
-                    if (__instance.m_nview.GetZDO() != null) {
-                        //Logger.LogDebug("Checking stored Zvalue for tree level");
-                        level = __instance.m_nview.GetZDO().GetInt(SLS_TREE, 1);
-                    }
+                    level = TreeLevels.LogLevel(nview);
                 }
-                __instance.m_health += (__instance.m_health * 0.1f * level);
+                __instance.m_health += __instance.m_health * 0.1f * level;
                 __instance.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
             }
 
             internal static void SetupTreeLog(TreeLog instance, Transform tform, Quaternion qt) {
-                GameObject go = GameObject.Instantiate(instance.m_subLogPrefab, tform.position, qt);
-                ZNetView nview = go.GetComponent<ZNetView>();
-                TreeLog tchild = go.GetComponent<TreeLog>();
-                //Logger.LogDebug($"Setting Treelog scale {nview}");
-                nview.SetLocalScale(instance.transform.localScale);
-                // pass on the level
-                // Logger.LogDebug($"Getting tree level");
-
-                int level = 1;
-                if (ValConfig.EnableTreeScaling.Value == true) {
-                    if (ValConfig.UseDeterministicTreeScaling.Value) {
-                        level = CompositeLazyCache.GetOrAddCachedTreeEntry(instance.m_nview);
-                    } else {
-                        if (instance.m_nview.GetZDO() != null) {
-                            //Logger.LogDebug("Checking stored Zvalue for tree level");
-                            level = instance.m_nview.GetZDO().GetInt(SLS_TREE, 1);
-                        }
-                    }
+                TreeLevels.PendingLogLevel = TreeLevels.LogLevel(instance.m_nview);
+                GameObject go;
+                try {
+                    go = GameObject.Instantiate(instance.m_subLogPrefab, tform.position, qt);
+                } finally {
+                    TreeLevels.PendingLogLevel = 0;
                 }
-
-                //Logger.LogDebug($"Got Tree level {level}");
-                tchild.m_health += (tchild.m_health * 0.1f * level);
-                go.GetComponent<ImpactEffect>()?.m_damages.Modify(1 + (0.1f * level));
-                //Logger.LogDebug($"Setting tree level {level}");
-                if (ValConfig.UseDeterministicTreeScaling.Value == false) {
-                    nview.GetZDO().Set(SLS_TREE, level);
-                }
+                go.GetComponent<ZNetView>().SetLocalScale(instance.transform.localScale);
             }
         }
 

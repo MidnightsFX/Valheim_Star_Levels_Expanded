@@ -8,7 +8,7 @@ The YAML files are in `BepInEx/config/StarLevelSystem/`. Settings these pages ca
 
 | Page | Covers |
 | --- | --- |
-| [Levels](levels.md) | Star caps, level chances, creature stats, level generators, distance, zone and region scaling, boss-conditional chances, custom biomes |
+| [Levels](levels.md) | Star caps, level chances, creature stats, level generators, distance, zone and region scaling, tree sizes, boss-conditional chances, custom biomes |
 | [Nemesis System](nemesis.md) | The score system, what it can change in the world, Nemesis bosses and their minions |
 | [Colorization](colorization.md) | Per-level colors and color range generators |
 | [Loot](loot.md) | Creature and object drops, how they scale with level and distance |

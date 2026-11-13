@@ -76,6 +76,7 @@ namespace StarLevelSystem
             PrefabManager.OnPrefabsRegistered += SizeModifications.PrepareSizeRefCache;
             PrefabManager.OnPrefabsRegistered += NovaBurstFx.Register;
             PrefabManager.OnPrefabsRegistered += ModifierSounds.Apply;
+            PrefabManager.OnPrefabsRegistered += ModifierShaders.Apply;
 
             UIHudControl.LoadAssets();
             ModifierStatusEffects.Register();

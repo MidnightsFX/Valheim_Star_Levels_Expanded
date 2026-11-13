@@ -1052,11 +1052,8 @@ namespace StarLevelSystem.Data {
                         "DN_gammeltrollFrac01", "DN_gammeltrollFrac02",
                     },
                 } },
-                // Berry bushes are NOT Pickable_* prefabs, so $Pickable misses every one of them.
-                { "Berries", new LocationResetGroup() {
-                    ResetHours = 128f,
-                    Members = new List<string>() { "RaspberryBush", "BlueberryBush", "CloudberryBush", "GlowingMushroom" },
-                } },
+                // $Pickable matches by component, so this covers berry bushes too. Naming them in another
+                // unscoped group as well would only warn about the overlap on every load.
                 { "Foraging", new LocationResetGroup() {
                     ResetHours = 12f,
                     Members = new List<string>() { PickableToken },
@@ -1205,6 +1202,27 @@ namespace StarLevelSystem.Data {
                     },
                 } },
             };
+        }
+
+        // One-shot in-place migration for LocationResetSettings.yaml. Builds up to 1.32.0 shipped a Berries group: the
+        // three berry bushes, which Foraging's $Pickable already claims (so every load warned and Foraging won anyway), and
+        // GlowingMushroom, which world generation never places. A group still exactly as shipped is removed, which also
+        // erases what this keys off. One an admin changed stays.
+        private const string RetiredBerriesGroup = "Berries";
+        private static readonly string[] RetiredBerriesMembers = { "RaspberryBush", "BlueberryBush", "CloudberryBush", "GlowingMushroom" };
+
+        internal static bool RemoveRetiredBerriesGroup(LocationResetConfiguration cfg) {
+            if (cfg?.ResetGroups == null || cfg.ResetGroups.TryGetValue(RetiredBerriesGroup, out LocationResetGroup group) == false) { return false; }
+            if (group == null || group.Members == null || group.Members.Count != RetiredBerriesMembers.Length) { return false; }
+            if (new HashSet<string>(group.Members).SetEquals(RetiredBerriesMembers) == false) { return false; }
+            bool asShipped = group.Enabled.GetValueOrDefault(true) && group.ResetHours == 128f
+                && string.IsNullOrEmpty(group.ResetSchedule) && group.ResetTerrain == null && group.TerrainRadius == null
+                && group.ExtraTerrainRadius == null && (group.Protection == null || group.Protection.Count == 0)
+                && group.MinDistance.GetValueOrDefault() == 0f && group.MaxDistance.GetValueOrDefault() == 0f;
+            if (asShipped == false) { return false; }
+            cfg.ResetGroups.Remove(RetiredBerriesGroup);
+            Logger.LogInfo($"Removed the shipped '{RetiredBerriesGroup}' reset group from {ValConfig.LocationResetSettingsFileName}: Foraging already covers berry bushes.");
+            return true;
         }
 
         // How many configured entries a category token covers, for the status report.

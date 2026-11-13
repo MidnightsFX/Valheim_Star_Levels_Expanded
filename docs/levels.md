@@ -120,6 +120,35 @@ at least `RegionMountainMinSize` become regions of their own, and rocks in the s
 Sizes are meters, as the side of a square of the same area. A map keeps the sizes it was cut with until it is cut again, since that
 resets its levels: saving a new size on the panel while in a world does it for you, and so do `sls-zone-rebuild` and `sls-region-rebuild`.
 
+## Tree sizes
+With `EnableTreeScaling` on (main config, `ObjectLevels` section, off by default), each tree gets a level. Every level makes it
+`TreeSizeScalePerLevel` larger, 10% tougher, and worth `PerLevelTreeLootScale` more wood.
+
+```
+largest level here = TreeMaxLevel x distance from the world's center / world radius, at most the biome's cap
+tree's level       = largest level here x (1 - TreeSizeRandomness x the tree's roll), at least 1
+tree's size        = 1 + TreeSizeScalePerLevel x the biome's size multiplier x tree's level
+```
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `TreeMaxLevel` | 10 | The level trees reach at the edge of the world. |
+| `TreeSizeRandomness` | 0.5 | How much smaller than the largest level for its spot a tree can be. 0 makes every tree at the same distance the same size; 1 lets a tree be anywhere from level 1 up. Trees near the center can only be a little larger, so trees vary more the further out you go. |
+| `TreeSizePattern` | `Scattered` | `Scattered` rolls each tree on its own, so neighbors can differ a lot. `Groves` gathers larger and smaller trees into patches. |
+| `TreeGroveSize` | 200 | Roughly how wide a patch is, in meters, for `Groves`. |
+| `TreeBiomeMaxLevels` | `Mistlands:6,AshLands:5,DeepNorth:5` | The highest level trees reach in a biome. Biomes not listed use `TreeMaxLevel`. |
+| `TreeBiomeSizeScale` | `Mistlands:0.5,AshLands:0.5,DeepNorth:0.5` | Multiplies `TreeSizeScalePerLevel` in a biome, so its trees grow less (or more) with each level. Wood and toughness still follow the level. Biomes not listed use 1. |
+
+The biomes at the edge of the world are the furthest from the center, so with distance alone their trees would be the largest by far. The
+two biome lists hold them back: with the defaults the largest Mistlands tree is 1.3x, and the largest Ashlands or Deep North tree 1.25x.
+Elsewhere the largest trees are 1.5x in the Meadows, 1.8x on the Plains, and 2x in Black Forest and on mountains near the edge of the
+world. Both lists take biomes added by other mods by name, and a custom biome with a fallback biome uses that biome's entry.
+
+A tree's roll comes from where it stands and the world's seed, so the same tree is always the same size, every player sees it the same, and
+nothing is saved on standing trees. Distance is measured from the world's center even when `DistanceBonusIsFromStarterTemple` is on,
+because players only learn where the temple is after trees have started loading. A felled log saves its tree's level on itself, so it keeps
+the tree's toughness and wood wherever it rolls to. Changing any of these settings resizes the trees already loaded.
+
 ## Creature Configuration
 Creature specific configuration allows you to override what is set in the biome definition for a creature, which allows more
 fine-grained control of how a specific creature should be modified.

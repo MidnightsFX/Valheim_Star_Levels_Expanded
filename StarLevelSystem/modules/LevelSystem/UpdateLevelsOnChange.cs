@@ -15,6 +15,7 @@ namespace StarLevelSystem.modules.LevelSystem {
     internal static class UpdateLevelsOnChange {
 
         private static Coroutine pendingLevelPass;
+        private static Coroutine pendingTreePass;
 
         public static void ModifyLoadedCreatureLevels(object s, EventArgs e) {
             // Do not run before the area is loaded
@@ -84,12 +85,21 @@ namespace StarLevelSystem.modules.LevelSystem {
             pendingLevelPass = null;
         }
 
+        // Every tree setting lands here. A server sync arrives while connecting, before there is a player, so the settings are
+        // read first. A sync or a save changes several of them at once, so the pass restarts on each and walks the trees once.
         public static void UpdateTreeSizeOnConfigChange(object s, EventArgs e) {
+            TreeLevels.ReadSettings();
             CompositeLazyCache.FlushTreeCache();
-            // Do not run before the area is loaded
-            if (Player.m_localPlayer == null) { return; }
+            if (Player.m_localPlayer == null || ZNetScene.instance == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            TaskRunner.Run().StartCoroutine(UpdateAllTreeSizesOnConfigChangeCoroutine());
+            if (pendingTreePass != null) { TaskRunner.Run().StopCoroutine(pendingTreePass); }
+            pendingTreePass = TaskRunner.Run().StartCoroutine(ResizeTreesOnceSettled());
+        }
+
+        private static IEnumerator ResizeTreesOnceSettled() {
+            yield return new WaitForSecondsRealtime(1f);
+            yield return UpdateAllTreeSizesOnConfigChangeCoroutine();
+            pendingTreePass = null;
         }
 
         public static void UpdateBirdSizeOnConfigChange(object s, EventArgs e) {
@@ -124,35 +134,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (tree == null) { continue; }
                 TreeBase treeBase = tree.GetComponent<TreeBase>();
                 if (treeBase == null || treeBase.m_nview == null || treeBase.m_nview.GetZDO() == null) { continue; }
-                string treeName = Utils.GetPrefabName(tree.gameObject);
-                // Check scalar objects, or fall back to the reference prefab scale
-                Vector3 baseSize = treeBase.m_nview.GetZDO().GetVec3(ZDOVars.s_scaleHash, Vector3.zero);
-                if (baseSize == Vector3.zero) {
-                    float scaler = treeBase.m_nview.GetZDO().GetFloat(ZDOVars.s_scaleScalarHash, 0f);
-                    baseSize = new Vector3(scaler, scaler, scaler);
-                }
-                // Falling back to the reference prefab scale will set tree size to be uniform, which will likely be adjusted when reloaded
-                if (baseSize == Vector3.zero) {
-                    GameObject treePrefab = PrefabLookup.FindOrWarn(treeName, "resizing a tree");
-                    if (treePrefab == null) { continue; }
-                    baseSize = treePrefab.transform.localScale;
-                }
-                if (ValConfig.EnableTreeScaling.Value == false) {
-                    treeBase.transform.localScale = baseSize;
-                    continue;
-                }
-
-                if (ValConfig.UseDeterministicTreeScaling.Value) {
-                    float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * CompositeLazyCache.GetOrAddCachedTreeEntry(treeBase.m_nview));
-                    treeBase.transform.localScale = baseSize * scale;
-                } else {
-                    int storedLevel = treeBase.m_nview.GetZDO().GetInt(SLS_TREE, 0);
-                    if (storedLevel > 1) {
-                        float scale = 1 + (ValConfig.TreeSizeScalePerLevel.Value * storedLevel);
-                        //Logger.LogDebug($"Updating tree size {scale} for {tree.name}.");
-                        treeBase.transform.localScale = baseSize * scale;
-                    }
-                }
+                TreeLevels.ApplyScale(treeBase);
             }
             TaskRunner.RequestPhysicsSync();
             yield break;

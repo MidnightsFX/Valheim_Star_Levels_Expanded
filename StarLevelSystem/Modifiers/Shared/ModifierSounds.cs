@@ -1,7 +1,6 @@
 using StarLevelSystem.Data;
 using UnityEngine;
 using UnityEngine.Audio;
-using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Modifiers.Shared
 {
@@ -30,15 +29,10 @@ namespace StarLevelSystem.Modifiers.Shared
         // skipped where there is no AudioMan: before the first world load, which the world load repeats, and on a server.
         internal static void Apply() {
             AudioMixer mixer = AudioMan.instance != null ? AudioMan.instance.m_masterMixer : null;
-            foreach (CreatureModifierDefinition definition in CreatureModifiersData.ModifierDefinitions.Values) {
-                if (definition == null || definition.FromAPI) { continue; }
-                if (definition.VisualEffect != null && CreatureModifiersData.LoadedModifierEffects.TryGetValue(definition.VisualEffect, out GameObject visual)) { Apply(visual, mixer); }
-                if (definition.SecondaryEffect != null && CreatureModifiersData.LoadedSecondaryEffects.TryGetValue(definition.SecondaryEffect, out GameObject secondary)) { Apply(secondary, mixer); }
-            }
+            foreach (GameObject prefab in CreatureModifiersData.BundledEffectPrefabs()) { Apply(prefab, mixer); }
         }
 
         private static void Apply(GameObject prefab, AudioMixer mixer) {
-            if (prefab == null) { return; }
             foreach (AudioSource source in prefab.GetComponentsInChildren<AudioSource>(true)) {
                 source.spatialBlend = 1f;
                 source.rolloffMode = AudioRolloffMode.Logarithmic;

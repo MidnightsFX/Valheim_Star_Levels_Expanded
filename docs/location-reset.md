@@ -76,17 +76,16 @@ warning, and a member name your game version has nothing for is warned about at 
 A member can also be a category token — `$Mineable` or `$Pickable` — which expands to everything the
 world *places* carrying that component, and so picks up modded ore and pickables automatically.
 Unlike a named member a token stops there: one-off pickups that only exist inside dungeons are not
-swept up by it, so name those explicitly if you want them. Note that berry bushes are *not*
-`Pickable_*` prefabs, which is why the shipped config lists them separately. Prefab names are
-irregular enough that this matters: copper is `rock4_copper` while `rock4_forest` is worthless
-scenery, and silver is both `rock3_silver` and `silvervein`.
+swept up by it, so name those explicitly if you want them. `$Pickable` includes berry bushes. Named
+members need care, because prefab names are irregular: copper is `rock4_copper` while
+`rock4_forest` is worthless scenery, and silver is both `rock3_silver` and `silvervein`.
 
 A group can be limited to a ring around spawn with `MinDistance` / `MaxDistance` (`MaxDistance: 0`
 means no outer limit). A scoped group applies only inside its range; outside it, its members fall
 back to whatever unscoped group covers them — so `FlintNearSpawn` at 6h within 3000m leaves flint on
 the normal foraging timer everywhere else.
 
-The mod ships working groups (`BossAltars`, `Ores`, `Berries`, `Foraging`, `FlintNearSpawn`,
+The mod ships working groups (`BossAltars`, `Ores`, `Foraging`, `FlintNearSpawn`,
 `Leviathans`, `QuestSites`, `CharredSpawners`, `AshlandsForts`) **already enabled**, so the feature
 is usable without editing anything. Nothing resets until `EnableLocationReset` and the YAML
 `Enabled` are both turned on. `sls-loc-status` lists every group with a `matched/total` member

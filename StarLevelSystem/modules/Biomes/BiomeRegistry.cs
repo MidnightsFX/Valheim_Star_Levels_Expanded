@@ -4,6 +4,7 @@ using StarLevelSystem.modules.LevelSystem;
 using StarLevelSystem.modules.LocationReset;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using static StarLevelSystem.common.DataObjects;
@@ -150,8 +151,18 @@ namespace StarLevelSystem.modules {
 
         // ---- Names in config text --------------------------------------------------------------------------------------
 
-        internal static bool TryParseVanilla(string name, out Heightmap.Biome biome) {
-            return VanillaNames.TryGetValue(name, out biome);
+        // A number or a vanilla name.
+        internal static bool TryParsePlain(string text, out Heightmap.Biome biome) {
+            if (int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int number)) {
+                biome = (Heightmap.Biome)number;
+                return true;
+            }
+            return VanillaNames.TryGetValue(text, out biome);
+        }
+
+        // One biome named in config text, with a name vanilla does not have standing as its token.
+        internal static Heightmap.Biome FromConfigName(string name) {
+            return TryParsePlain(name, out Heightmap.Biome biome) ? biome : TokenFor(name);
         }
 
         // The stable value standing in for a name. The same on every machine and in every session, so it survives the

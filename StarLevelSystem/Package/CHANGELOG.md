@@ -1,3 +1,13 @@
+**1.33.0**
+ ---
+ ```
+- Trees now vary in size from tree to tree, more so the further you go from the center
+	- Mistlands, Ashlands and Deep North trees no longer grow far larger than the rest of the world, and admins can limit tree size per biome.
+	- Felled logs now keep their tree's toughness and wood, and scaled trees no longer sometimes end up larger than intended.
+- Fixes fire, frost, poison and lightning effects on creatures showing as large pink squares when other mods add default shaders without the correct platform support.
+- Location resets no longer warn about berry bushes on every load, and existing reset settings are tidied up to match.
+```
+
 **1.32.0**
  ---
  ```

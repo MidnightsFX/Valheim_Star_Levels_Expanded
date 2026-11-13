@@ -30,6 +30,16 @@ namespace StarLevelSystem.Data
         public static Dictionary<string, GameObject> LoadedSecondaryEffects = new Dictionary<string, GameObject>();
         public static Dictionary<string, Sprite> LoadedModifierSprites = new Dictionary<string, Sprite>();
 
+        // The effect prefabs loaded from SLS's own bundle. Those other mods register through the API are theirs and are
+        // left alone. A prefab shared by several modifiers is returned once for each.
+        internal static IEnumerable<GameObject> BundledEffectPrefabs() {
+            foreach (CreatureModifierDefinition definition in ModifierDefinitions.Values) {
+                if (definition == null || definition.FromAPI) { continue; }
+                if (definition.VisualEffect != null && LoadedModifierEffects.TryGetValue(definition.VisualEffect, out GameObject visual) && visual != null) { yield return visual; }
+                if (definition.SecondaryEffect != null && LoadedSecondaryEffects.TryGetValue(definition.SecondaryEffect, out GameObject secondary) && secondary != null) { yield return secondary; }
+            }
+        }
+
         // Drives how creature modifiers are shown on the HUD icon/star row above the health bar.
         // Icons = detailed icons (icons/ folder), Stars = star-shaped icons (icons2/ folder), None = plain default stars.
         public static ModifierDisplayStyle SelectedModifierDisplayStyle = ModifierDisplayStyle.Icons;
@@ -1115,6 +1125,7 @@ namespace StarLevelSystem.Data
             DeathNova.AttachIndicators();
             EarthCaller.AttachVisual();
             ModifierSounds.Apply();
+            ModifierShaders.Apply();
             if (timer != null) {
                 loggedFirstPrefabLoad = true;
                 Logger.LogDebug($"Loaded {LoadedModifierSprites.Count} modifier icons and {LoadedModifierEffects.Count + LoadedSecondaryEffects.Count} effects from the asset bundle in {timer.Elapsed.TotalMilliseconds:0.0} ms.");

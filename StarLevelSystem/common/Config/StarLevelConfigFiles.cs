@@ -119,6 +119,7 @@ namespace StarLevelSystem.common {
                 Header = LocationResetHeader,
                 Defaults = () => LocationResetData.BuildDefaultConfig(),
                 Apply = LocationResetData.ApplyLoaded,
+                MigrateInPlace = LocationResetData.RemoveRetiredBerriesGroup,
                 NeedsPrefabs = true,
                 AllowAdminEdit = true,
             });
@@ -740,8 +741,7 @@ namespace StarLevelSystem.common {
 # A member can also be a category token, $Mineable or $Pickable, which expands to everything this
 # world PLACES carrying that component, and so covers modded content too. Unlike a named member a
 # token stops there: one-off pickups that only exist inside dungeons are not swept up by it, so
-# name those explicitly if you want them. Berry bushes are NOT Pickable_* prefabs, which is why
-# they are listed separately below.
+# name those explicitly if you want them. $Pickable includes berry bushes.
 #
 # MinDistance / MaxDistance limit a group to a ring around spawn (MaxDistance 0 = no outer limit).
 # A scoped group applies only inside its range; outside it, its members fall back to whatever

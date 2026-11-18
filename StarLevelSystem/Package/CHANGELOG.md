@@ -1,3 +1,14 @@
+**1.34.0**
+ ---
+ ```
+- Conditional Scaling now supports adding stars to biomes after a boss defeat
+- The quick config panel's Level Scaling page now previews how each boss defeat will change the level
+- Remote Nemesis bosses
+	- Each biome now spawns bosses up to its own limit
+	- Can appear anywhere in a biome that has no distance range set.
+	- Fixes remote Nemesis boss map pins disappearing after logging out or restarting the server.
+```
+
 **1.33.0**
  ---
  ```

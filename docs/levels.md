@@ -329,14 +329,22 @@ missing keys or whose values do not go down are also reported when the config lo
 for its default generator directly: pick the `Table` curve style and type the values separated by commas.
 
 ## Boss-Conditional Levelup Chances
-With `EnableConditionalCreatureLevelupChance: true`, older biomes get harder as world bosses are defeated, working from your own
-`MaxLevel` and level chances. The Level Scaling page of the quick configure panel has the switch and the first two settings here.
+With `EnableConditionalCreatureLevelupChance: true`, older biomes get harder as world bosses are defeated. Each biome earns
+difficulty increases from boss kills, and every increase gives it the same bonus, `ConditionalIncreaseBonus`, once more. The Level
+Scaling page of the quick configure panel has all of these. It fills `LevelBonus` in for you by spreading one chance increase over
+every star a biome can reach, each star getting half of the star before (3.5 over 3 stars is `{1: 2, 2: 1, 3: 0.5}`), or lets you
+type a box per star. Its chart has a boss kills line that redraws as you type: pick a biome and step through the bosses to see
+that biome's chances after each one.
 
 ```
 EnableConditionalCreatureLevelupChance: true
 ConditionalBiomeDelay: 1            # how many biomes back a boss raises difficulty
 ConditionalDifficultyIncreases: 7   # the most increases a biome can get, at least 1
-ConditionalFullChanceMultiplier: 4  # what level-up chances are multiplied by at full strength
+ConditionalIncreaseBonus:           # what each increase gives the biome
+  ExtraStars: -1                    # stars added to its star cap; -1 = equal steps toward MaxLevel
+  ChanceIncrease: 0.43              # added to the multiplier on its level chances
+  LevelBonus:                       # % added to the chance to roll past each level
+    1: 2
 ConditionalBossKeyOrder:            # earliest to latest; leave out to use this vanilla order
 - defeated_eikthyr
 - defeated_gdking
@@ -348,23 +356,63 @@ ConditionalBossKeyOrder:            # earliest to latest; leave out to use this 
 - defeated_frozenking_p3
 ```
 
+### Which biomes go up
 A biome earns one difficulty increase per boss from its own on, less `ConditionalBiomeDelay`. At the default of 1, defeating Eikthyr does
 nothing, since the Meadows is the only biome so far. Defeating the Elder raises the Meadows but not the Black Forest, and Bonemass then
-raises both of those but not the Swamp. The Deep North's boss comes last, so at 1 the Deep North never rises. At 0, a boss raises its own biome too.
+raises both of those but not the Swamp. The Deep North's boss comes last, so at 1 the Deep North never rises. At 0, a boss raises its own
+biome too.
 
-`ConditionalDifficultyIncreases` is the most a biome can get. At 1, the Meadows goes up once when the Elder falls and Bonemass adds nothing
-more there. At 2 it can go up a second time, and so on.
+`ConditionalDifficultyIncreases` is the most a biome can get. At 1, the Meadows goes up once and later bosses add nothing more there. At the
+number of bosses, every boss raises its own biome and all the biomes before it.
 
-Every increase is the same size, and one per boss after the first adds up to full strength, so with the vanilla bosses each is a seventh of
-it. An increase multiplies the biome's level chances a step further toward `ConditionalFullChanceMultiplier`, about 1.43 times after the first at
-the default of 4, and moves its star cap a step from `BiomeMaxLevelOverride` toward `MaxLevel`, never past it. A biome with no cap of its own, or
-one already at or above `MaxLevel`, keeps the cap it has. There is no minimum level. So with a `MaxLevel` of 4, the Meadows starts at 1 star and
-reaches 4 once the last boss falls, while newer biomes have fewer bosses left to rise by. A creature entry with its own curve still wins, and
-bosses keep `MaxBossLevel`.
+### What an increase gives
+- `ExtraStars` adds that many stars to the biome's star cap (its `BiomeMaxLevelOverride`) per increase, never past `MaxLevel`. 0 leaves the
+  cap alone. -1, which ships, moves the cap an equal step from `BiomeMaxLevelOverride` toward `MaxLevel` per boss after the first, so the
+  Meadows reaches `MaxLevel` with the last boss whatever `MaxLevel` is.
+- `ChanceIncrease` is added to a multiplier on the biome's level chances per increase: 0.1 is 1.1 times the chances after one increase and
+  1.2 times after two. The shipped 0.43 comes to about 4 times with the last of the eight vanilla bosses.
+- `LevelBonus` adds to the chance to roll past each level, per increase, the way a `DistanceLevelBonus` ring does. Level 1 is the chance of
+  at least 1 star. Use it to make a star possible that the curve gives next to no chance, since a multiplier on a tiny chance stays tiny.
 
-Add keys from modded bosses where they belong in your progression. The latest defeated key in the list is what counts, and the tier changes as
-soon as a boss key is set or removed, for creatures spawned after that. A file that still holds the vanilla list from before the Deep North update
-gets `defeated_frozenking_p3` (set when the Deep North's final boss dies) added on load; a list you changed is left alone.
+A biome with no cap of its own, or one already at or above `MaxLevel`, keeps the cap it has. There is no minimum level. A creature entry
+with its own curve still wins, and bosses keep `MaxBossLevel`. A file written before `ConditionalIncreaseBonus` existed works as it did:
+equal steps for the cap, and its `ConditionalFullChanceMultiplier` (4 if it never set one) spread over the bosses.
+
+### Two common setups
+Vanilla stars until a biome's boss falls, then a little more and a third star there, once:
+
+```
+# main .cfg: MaxLevel = 3
+DefaultCreatureLevelUpChance: { 1: 10, 2: 1, 3: 0 }
+BiomeConfiguration:
+  Meadows:
+    BiomeMaxLevelOverride: 2        # and the same for every other biome
+EnableConditionalCreatureLevelupChance: true
+ConditionalBiomeDelay: 0
+ConditionalDifficultyIncreases: 1
+ConditionalIncreaseBonus:
+  ExtraStars: 1
+  ChanceIncrease: 0
+  LevelBonus: { 1: 2, 2: 1, 3: 0.5 }
+```
+
+Before Eikthyr falls, a Meadows creature has a 10% chance of at least one star and 1% of two, and stops at 2 stars. Once he is defeated
+that is 12% for at least one, 2% for at least two and 0.5% for three, and later bosses add nothing more there. On the quick configure panel, set Max stars to 3 and turn off auto-tuned
+caps to type 2 for each biome. Auto-tuning gives the early biomes 1 star at that Max stars.
+
+A rising tide, where each boss raises its own biome and every biome before it a little further:
+
+```
+ConditionalBiomeDelay: 0
+ConditionalDifficultyIncreases: 8
+ConditionalIncreaseBonus:
+  ExtraStars: 1
+  ChanceIncrease: 0.15
+```
+
+Add keys from modded bosses where they belong in your progression. The latest defeated key in the list is what counts, and the change
+applies as soon as a boss key is set or removed, for creatures spawned after that. `sls-boss-scaling` in the console lists each biome's
+increases, star cap and chance multiplier in the current world, or with a boss key, as if that boss were the latest defeated.
 
 ### Fixed levels
 `ConditionalCreatureLevelupChance` sets fixed levels for a boss and biome, in place of that biome's increases. Nothing ships in it.
@@ -377,12 +425,12 @@ ConditionalCreatureLevelupChance:
       - { MinLevel: 4, MaxLevel: 16, LevelUpChance: 0.25, LevelupCalculationStyle: Exponential }
 ```
 
-The latest defeated key that has an entry applies, and the order of entries in the file does not matter. A key that is not in
-`ConditionalBossKeyOrder` only applies while no listed boss that has an entry is defeated. An `All` entry inside a tier is the fallback for biomes the
-tier does not name. These replace the biome's levelup chances and its minimum level: creatures there roll at least the generators' `MinLevel`, whatever
-`BiomeMinLevelOverride` says. Their `MaxLevel` can raise the biome's cap, even past `MaxLevel`, and where it is lower than the cap the cap stays, so
-beating a boss never lowers a biome's levels. Tiers used to ship this way. A file still holding those shipped levels has them removed when it
-loads, once, and an entry you changed by hand is left as you wrote it.
+The latest defeated key that has an entry applies, and the order of entries in the file does not matter, so a biome has to be named again
+under every later boss that has an entry. A key that is not in `ConditionalBossKeyOrder` only applies while no listed boss that has an entry
+is defeated. An `All` entry inside a tier is the fallback for biomes the tier does not name. These replace the biome's levelup chances and
+its minimum level: creatures there roll at least the generators' `MinLevel`, whatever `BiomeMinLevelOverride` says. Their `MaxLevel` can
+raise the biome's cap, even past `MaxLevel`, and where it is lower than the cap the cap stays, so beating a boss never lowers a biome's
+levels.
 
 ## The Deep North's final boss
 Kall Fimbulbringer is fought in three phases, each a separate creature. The second phase can only be hurt by the explosions

@@ -798,7 +798,9 @@ namespace StarLevelSystem.modules.UI {
             CreatureLevelSettings live = LevelSystemData.SLE_Level_Settings;
             if (live == null) { return; }
 
-            bool conditionalChanged = staged.enableConditional != baseline.enableConditional || staged.conditionalDelay != baseline.conditionalDelay || staged.conditionalIncreases != baseline.conditionalIncreases;
+            staged.KeepBonusSpread();
+            bool conditionalChanged = staged.enableConditional != baseline.enableConditional || staged.conditionalDelay != baseline.conditionalDelay || staged.conditionalIncreases != baseline.conditionalIncreases
+                || staged.IncreaseBonusMatches(baseline) == false;
             bool curveChanged = staged.CurveDiffers(baseline);
             bool bossCurveChanged = staged.BossCurveDiffers(baseline);
             List<int> changedSpans = staged.ChangedTableSpans(baseline);
@@ -816,6 +818,7 @@ namespace StarLevelSystem.modules.UI {
             settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
             settings.ConditionalBiomeDelay = staged.conditionalDelay;
             settings.ConditionalDifficultyIncreases = staged.conditionalIncreases;
+            settings.ConditionalIncreaseBonus = staged.IncreaseBonus();
             if (distanceYamlTurnedOn) { settings.EnableDistanceLevelBonus = true; }
             if (biomeStrengthsChanged) { WriteBiomeStrengths(settings); }
             if (curveChanged && staged.tableCurve != null) {
@@ -1096,6 +1099,16 @@ namespace StarLevelSystem.modules.UI {
             public bool showNoMapRing, showNoMapZone;
             public bool enableConditional;
             public int conditionalDelay, conditionalIncreases;
+            // ConditionalIncreaseBonus. Extra stars below 0 is even steps toward Max stars.
+            public int conditionalExtraStars;
+            public float conditionalChanceIncrease;
+            public SortedDictionary<int, float> conditionalLevelBonus;
+            // One chance increase spread over every star in place of typing the level bonus a star at a time. The panel's
+            // alone: the file keeps the table it comes to, and a table that is such a spread opens with it on again.
+            public bool conditionalBonusSpreadOn;
+            public float conditionalBonusSpread;
+            // The stars the staged spread is over, so it is worked out again only when they change.
+            public int conditionalBonusSpreadStars;
 
             // The Level Scaling page's settings past those switches.
             public bool distanceYamlOn;
@@ -1298,6 +1311,7 @@ namespace StarLevelSystem.modules.UI {
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
                 s.conditionalDelay = settings != null ? settings.ConditionalBiomeDelay : 1;
                 s.conditionalIncreases = settings != null ? settings.ConditionalDifficultyIncreases : 7;
+                s.StageIncreaseBonus(settings?.ConditionalIncreaseBonus);
                 // The roll needs both switches. The page offers one, which reads on only when both are.
                 s.distanceYamlOn = settings == null || settings.EnableDistanceLevelBonus;
                 s.enableDistance = s.enableDistance && s.distanceYamlOn;
@@ -1317,6 +1331,7 @@ namespace StarLevelSystem.modules.UI {
                 }
                 s.AddUncappedCustomBiomes(settings);
                 s.biomeCapManual = new Dictionary<Heightmap.Biome, int>(s.biomeCapOriginals);
+                s.DetectBonusSpread();
                 BiomeSpecificSetting allBiome = null;
                 settings?.BiomeConfiguration?.TryGetValue(Heightmap.Biome.All, out allBiome);
                 s.allSpawnRate = allBiome?.SpawnRateModifier ?? 1f;
@@ -1463,6 +1478,54 @@ namespace StarLevelSystem.modules.UI {
                 return mine == null || theirs == null ? mine != theirs : mine.SequenceEqual(theirs) == false;
             }
 
+            // A file without the block is filled in on load, so null only comes from settings that never loaded.
+            public void StageIncreaseBonus(ConditionalIncreaseBonus bonus) {
+                bonus = bonus ?? LevelSystemData.DefaultConfiguration.ConditionalIncreaseBonus;
+                conditionalExtraStars = bonus.ExtraStars;
+                conditionalChanceIncrease = bonus.ChanceIncrease;
+                conditionalLevelBonus = bonus.LevelBonus != null ? new SortedDictionary<int, float>(bonus.LevelBonus) : new SortedDictionary<int, float>();
+            }
+
+            public ConditionalIncreaseBonus IncreaseBonus() {
+                return new ConditionalIncreaseBonus() {
+                    ExtraStars = conditionalExtraStars,
+                    ChanceIncrease = conditionalChanceIncrease,
+                    // Left out of the file when empty, rather than written as {}.
+                    LevelBonus = conditionalLevelBonus.Count > 0 ? new SortedDictionary<int, float>(conditionalLevelBonus) : null,
+                };
+            }
+
+            public bool IncreaseBonusMatches(StagedConfig o) {
+                return conditionalExtraStars == o.conditionalExtraStars && Mathf.Approximately(conditionalChanceIncrease, o.conditionalChanceIncrease)
+                    && ChanceTablesEqual(conditionalLevelBonus, o.conditionalLevelBonus);
+            }
+
+            // The highest star a biome's creatures can roll: Max stars, or a biome's own cap where that is higher.
+            public int HighestCapStars() {
+                int highest = Math.Max(maxStars, biomeCapForUnset);
+                foreach (Heightmap.Biome biome in biomeCapOriginals.Keys) { highest = Math.Max(highest, CapFor(biome)); }
+                return highest;
+            }
+
+            // Spread is on for a table that is a spread, and for no table at all. It needs the caps, so it comes after them.
+            public void DetectBonusSpread() {
+                conditionalBonusSpreadStars = HighestCapStars();
+                conditionalBonusSpread = Mathf.Max(0f, conditionalLevelBonus.Values.Sum());
+                SortedDictionary<int, float> spread = SpreadLevelBonus(conditionalBonusSpread, conditionalBonusSpreadStars);
+                conditionalBonusSpreadOn = spread.Count == conditionalLevelBonus.Count && spread.All(entry =>
+                    conditionalLevelBonus.TryGetValue(entry.Key, out float staged) && Mathf.Abs(staged - entry.Value) < 0.001f);
+            }
+
+            // A spread follows the stars it is over, so a Max stars or cap changed on another page moves it too.
+            public void KeepBonusSpread() {
+                if (conditionalBonusSpreadOn && conditionalBonusSpreadStars != HighestCapStars()) { SpreadBonus(); }
+            }
+
+            public void SpreadBonus() {
+                conditionalBonusSpreadStars = HighestCapStars();
+                conditionalLevelBonus = SpreadLevelBonus(conditionalBonusSpread, conditionalBonusSpreadStars);
+            }
+
             // A biome's star cap: scaled in proportion to the staged Max stars while auto-tuning is on, the typed value
             // when it is off, and 0 for a biome that has no cap at all.
             public int CapFor(Heightmap.Biome biome) {
@@ -1598,6 +1661,7 @@ namespace StarLevelSystem.modules.UI {
                     && enableZone == o.enableZone && enableZoneOverlay == o.enableZoneOverlay
                     && showNoMapRing == o.showNoMapRing && showNoMapZone == o.showNoMapZone
                     && enableConditional == o.enableConditional && conditionalDelay == o.conditionalDelay && conditionalIncreases == o.conditionalIncreases
+                    && IncreaseBonusMatches(o)
                     && ringsAboveFog == o.ringsAboveFog && ringsFromTemple == o.ringsFromTemple && ringColors == o.ringColors
                     && zonesAboveFog == o.zonesAboveFog && zoneBonusPerLevel == o.zoneBonusPerLevel && zoneKillsPerLevel == o.zoneKillsPerLevel
                     && zoneDecayPerHour == o.zoneDecayPerHour && zoneDecayClock == o.zoneDecayClock && zoneMaxSize == o.zoneMaxSize

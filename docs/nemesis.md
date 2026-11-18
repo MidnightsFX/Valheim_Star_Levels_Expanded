@@ -71,7 +71,7 @@ ChanceChanges:
           ...
 ```
 
-The final section in this config is NemesisMinionTemplatesByBiome. This controls the minions which can be added to a nemesis spawn.
+NemesisMinionTemplatesByBiome controls the minions which can be added to a nemesis spawn.
 
 ```
 NemesisMinionTemplatesByBiome:
@@ -87,3 +87,25 @@ NemesisMinionTemplatesByBiome:
       Fast:
         BasePower: 0.1
 ```
+
+## Remote Nemesis bosses
+
+With `EnableNemesisRemoteSpawning` on in the main config, the server places Nemesis bosses around the world, each marked with a map pin, and places new ones as they are killed.
+
+```
+RemoteSpawning:
+  CheckIntervalMinutes: 30             # how often the server places new bosses
+  MaxSpawnsPerInterval: 3              # most new bosses placed in one check
+  MaxConcurrentTotal: 10               # most live bosses across every biome
+  MaxConcurrentPerBiome:               # each listed biome is filled up to its number, a biome left out gets none
+    Meadows: 3
+    Plains: 4
+    DeepNorth: 4
+  BiomeRadiusRanges:                   # distance from the world center a biome's bosses are placed within
+    Meadows:
+      Min: 100
+      Max: 3000                        # 0 is the world edge
+```
+
+A biome without a `BiomeRadiusRanges` entry can have its bosses anywhere in the world it is found. Ranges are ignored in a world resized by Expand World Size, where their distances no longer mean the same thing.
+Bosses come from the player-made Nemesis bosses first, then from `BossCandidatesByBiome`; a biome with neither gets none.

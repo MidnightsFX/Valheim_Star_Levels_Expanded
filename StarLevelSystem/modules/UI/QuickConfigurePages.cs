@@ -186,6 +186,8 @@ namespace StarLevelSystem.modules.UI {
             staged.enableConditional = shipped != null && shipped.EnableConditionalCreatureLevelupChance;
             staged.conditionalDelay = shipped != null ? shipped.ConditionalBiomeDelay : 1;
             staged.conditionalIncreases = shipped != null ? shipped.ConditionalDifficultyIncreases : 7;
+            staged.StageIncreaseBonus(shipped?.ConditionalIncreaseBonus);
+            staged.DetectBonusSpread();
         }
 
         // ------------------------------------------------------------------------------------------------

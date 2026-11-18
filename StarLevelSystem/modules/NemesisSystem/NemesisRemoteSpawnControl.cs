@@ -249,7 +249,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
         internal static IEnumerator ScoutBiomeLocation(Heightmap.Biome biome, Action<bool, Vector3> onComplete) {
             if (ZoneSystem.instance == null) { onComplete?.Invoke(false, Vector3.zero); yield break; }
 
-            Tuple<float, float> range = GetBiomeRadiusRange(biome);
+            ScoutRange(biome, out float minDistance, out float maxDistance);
             int tries = 0;
 
             while (tries < MaxScoutTries) {
@@ -258,8 +258,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 // Yield periodically to avoid stalling the main thread while we force-load zones.
                 if (tries % 5 == 0) { yield return new WaitForSeconds(0.1f); }
 
-                if (TrySelectGridPoint(biome, range, out Vector3 candidate) == false) {
-                    candidate = SelectWorldPoint(range, tries, biome);
+                if (TrySelectGridPoint(biome, minDistance, maxDistance, out Vector3 candidate) == false) {
+                    candidate = SelectWorldPoint(minDistance, maxDistance);
                 }
 
                 // Force the target zone to generate so ground data is available server-side.
@@ -282,64 +282,51 @@ namespace StarLevelSystem.modules.NemesisSystem {
             onComplete?.Invoke(false, Vector3.zero);
         }
 
-        private static Tuple<float, float> GetBiomeRadiusRange(Heightmap.Biome biome) {
-            var ranges = NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.BiomeRadiusRanges;
-            if (BiomeRegistry.TryGetEntry(ranges, biome, out BiomeSpawnRadius r)) {
-                return new Tuple<float, float>(r.Min, r.Max);
-            }
-            return new Tuple<float, float>(500f, WorldSize.TotalRadius);
+        // A biome without a configured band can be used anywhere in the world it is found. A band is metres from the
+        // center, so it is dropped in a resized world, where those metres no longer mean what they were written for.
+        private static void ScoutRange(Heightmap.Biome biome, out float min, out float max) {
+            min = 0f;
+            max = WorldSize.TotalRadius;
+            if (WorldSize.IsResized) { return; }
+            if (BiomeRegistry.TryGetEntry(NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.BiomeRadiusRanges, biome, out BiomeSpawnRadius range) == false || range == null) { return; }
+            min = Mathf.Max(0f, range.Min);
+            if (range.Max > 0f) { max = range.Max; }
         }
 
         // Through a delegate: Expand World Size patches this to its own grid, and a method this small can be inlined into
         // its caller, past the patch.
         private static readonly Func<float, float> MapToWorld = AltBiomeWorldData.MapSpaceToWorldSpace;
 
-        // How many grid points to try against a configured radius range before leaving it to the ring.
+        // How many grid points to try against the distance band before leaving it to the ring.
         private const int GridPointAttempts = 16;
 
-        // A custom biome can be anywhere, and the default bands in metres mean nothing in a larger world, so a random point
-        // on the ring usually misses and each miss force-loads a far zone. World generation already recorded where each
-        // biome is, so this picks from that. TryGetValue because vanilla only lists biomes it knew when the world was made,
-        // and an empty or missing list has to fall through to the ring rather than stop the scout.
-        private static bool TrySelectGridPoint(Heightmap.Biome biome, Tuple<float, float> range, out Vector3 point) {
+        // World generation records where every biome is (vanilla builds the grid on every world load), so the scout picks
+        // from that rather than from the ring, where most points are another biome and each miss force-loads a far zone.
+        // TryGetValue because vanilla only lists biomes it knew when the world was made, and an empty or missing list has
+        // to fall through to the ring rather than stop the scout.
+        private static bool TrySelectGridPoint(Heightmap.Biome biome, float min, float max, out Vector3 point) {
             point = Vector3.zero;
-            if (BiomeRegistry.IsCustom(biome) == false && WorldSize.IsResized == false) { return false; }
             AltBiomeWorldData grid = WorldGenerator.instance?.m_world?.m_biomeData;
             if (grid == null || grid.IsReady == false || grid.Biomes.TryGetValue(biome, out BiomeTypeInfo info) == false) { return false; }
             List<BiomePointCoordinate> points = BiomeRegistry.TerrainOf(biome) != Heightmap.Biome.Ocean && info.AllPointsAboveSeaLevel.Count > 0 ? info.AllPointsAboveSeaLevel : info.AllPoints;
             if (points.Count == 0) { return false; }
 
-            // An admin's range is honoured where its metres still mean what they were written for.
-            bool useRange = WorldSize.IsResized == false && BiomeRegistry.TryGetEntry(NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning.BiomeRadiusRanges, biome, out _);
             for (int attempt = 0; attempt < GridPointAttempts; attempt++) {
                 BiomePointCoordinate picked = points[UnityEngine.Random.Range(0, points.Count)];
                 Vector3 candidate = new Vector3(MapToWorld(picked.x), 0f, MapToWorld(picked.y));
                 float distance = new Vector2(candidate.x, candidate.z).magnitude;
-                if (useRange && (distance < range.Item1 || distance > range.Item2)) { continue; }
+                if (distance < min || distance > max) { continue; }
                 point = candidate;
                 return true;
             }
             return false;
         }
 
-        // Mirrors EpicLoot BountyLocationEarlyCache.SelectWorldPoint: Ashlands/DeepNorth are banded to the
-        // far south/north, everything else is scattered across the ring.
-        private static Vector3 SelectWorldPoint(Tuple<float, float> range, int intervalRange, Heightmap.Biome biome) {
-            float min = range.Item1;
-            float max = range.Item2;
-
-            if (biome == Heightmap.Biome.AshLands || biome == Heightmap.Biome.DeepNorth) {
-                float direction = biome == Heightmap.Biome.AshLands ? -1f : 1f;
-                float naturalY = UnityEngine.Random.Range(min + (intervalRange * 90), min + (intervalRange * 90) + 100f);
-                float yDirection = naturalY * direction;
-                float xDirection = UnityEngine.Random.Range(-1f * (min / 2f), (min / 2f));
-                return new Vector3(xDirection, 0, yDirection);
-            }
-
-            Vector2 randomPoint = UnityEngine.Random.insideUnitCircle;
-            float magnitude = Mathf.Lerp(min, max, randomPoint.magnitude);
-            randomPoint = randomPoint * magnitude;
-            return new Vector3(randomPoint.x, 0, randomPoint.y);
+        // A point spread evenly over the area between the two distances.
+        private static Vector3 SelectWorldPoint(float min, float max) {
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float distance = Mathf.Sqrt(UnityEngine.Random.Range(min * min, max * max));
+            return new Vector3(Mathf.Cos(angle) * distance, 0f, Mathf.Sin(angle) * distance);
         }
 
         // Combines EpicLoot's biome/water/base/ward checks with SLS's FindFloor object-overlap and lava checks.

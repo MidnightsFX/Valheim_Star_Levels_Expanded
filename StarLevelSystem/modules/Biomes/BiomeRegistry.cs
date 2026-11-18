@@ -194,11 +194,6 @@ namespace StarLevelSystem.modules {
             return ((uint)biome & ~VanillaBits) == 0;
         }
 
-        // A value that is not vanilla's and not a name standing in for one. Includes a bare number nothing has named.
-        internal static bool IsCustom(Heightmap.Biome biome) {
-            return IsVanilla(biome) == false && tokenNames.ContainsKey(biome) == false;
-        }
-
         // A configured biome as the value the game uses. False for a name that is not a biome in this world.
         internal static bool Resolve(Heightmap.Biome configured, out Heightmap.Biome real) {
             if (tokenNames.TryGetValue(configured, out string name)) {

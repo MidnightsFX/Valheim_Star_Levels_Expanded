@@ -40,9 +40,6 @@ namespace StarLevelSystem.common {
                 Header = LevelSettingsHeader,
                 Defaults = () => LevelSystemData.DefaultConfiguration,
                 Apply = LevelSystemData.ApplyLoaded,
-                // Adds the Deep North's final boss to a file that still holds the old vanilla boss order, and removes tiers
-                // still holding shipped fixed levels, so those biomes work from the world's own settings.
-                MigrateInPlace = LevelSystemData.MigrateLevelSettings,
                 // Generators expand into the chance tables of the live settings. What the file wrote is what goes back to it.
                 ValueToWrite = () => LevelSystemData.AuthoredLevelSettings,
                 AllowAdminEdit = true,
@@ -303,12 +300,26 @@ namespace StarLevelSystem.common {
 #
 # A biome earns one difficulty increase per boss from its own on, less
 # ConditionalBiomeDelay: at 1, the Elder raises the Meadows but not the Black
-# Forest. ConditionalDifficultyIncreases is the most a biome can get. Each one
-# keeps the biome's own level chances, multiplied a step further toward
-# ConditionalFullChanceMultiplier, and moves its star cap a step from
-# BiomeMaxLevelOverride toward MaxLevel, never past it. A cap already at or above
-# MaxLevel stays where it is. A creature entry with its own curve still wins, and
-# bosses keep MaxBossLevel.
+# Forest; at 0, Eikthyr raises the Meadows. ConditionalDifficultyIncreases is
+# the most a biome can get. Every increase gives the biome ConditionalIncreaseBonus
+# once more:
+#
+#   ConditionalIncreaseBonus:
+#     ExtraStars: 1          # stars added to the biome's cap, never past MaxLevel;
+#                            # -1 = equal steps reaching MaxLevel with the last boss
+#     ChanceIncrease: 0.1    # level chances x1.1 after one increase, x1.2 after two
+#     LevelBonus:            # % added to the chance to roll past each level,
+#       1: 2                 # like a DistanceLevelBonus ring
+#       2: 1
+#       3: 0.5
+#
+# One raise per biome when its own boss falls: ConditionalBiomeDelay: 0 and
+# ConditionalDifficultyIncreases: 1. A rising tide, where every boss raises its
+# own biome and all those before it: ConditionalBiomeDelay: 0 and
+# ConditionalDifficultyIncreases: 8. A biome with no cap of its own, or one already
+# at or above MaxLevel, keeps its cap. A creature entry with its own curve still
+# wins, and bosses keep MaxBossLevel. 'sls-boss-scaling' in the console shows what
+# each biome has, and the quick configure panel's Level Scaling page previews it.
 #
 # ConditionalCreatureLevelupChance can set fixed levels for a boss and biome
 # instead: defeated-boss global key -> biome -> generator, with 'All' as that
@@ -692,9 +703,14 @@ namespace StarLevelSystem.common {
 #     Enabled: true
 #     CheckIntervalMinutes: 30       # placement cycle
 #     MaxSpawnsPerInterval: 3
-#     MaxConcurrentTotal: 10
-#     TargetPerBiome: { Meadows: 1, Plains: 2 }    # custom biome names work, see LevelSettings.yaml
-#     MaxConcurrentPerBiome: { Meadows: 2 }
+#     MaxConcurrentTotal: 10         # live bosses across every biome
+#     MaxConcurrentPerBiome:         # each listed biome is filled up to its number;
+#       Meadows: 3                   # a biome left out gets no remote bosses.
+#       Plains: 4                    # Custom biome names work, see LevelSettings.yaml
+#     BiomeRadiusRanges:             # metres from the world center a biome's bosses
+#       Meadows: { Min: 100, Max: 3000 }   # are placed within (Max 0 = world edge).
+#                                    # A biome without one can have them anywhere it is.
+#                                    # Ignored in a resized world.
 #     BossCandidatesByBiome:         # archetypes used when the pool is empty
 #       Plains:
 #       - Prefab: GoblinBrute

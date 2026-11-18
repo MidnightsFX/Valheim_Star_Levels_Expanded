@@ -2,6 +2,7 @@ using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
@@ -13,26 +14,31 @@ namespace StarLevelSystem.modules.NemesisSystem {
         private bool forceRun = false;
         private double nextCheckTime = 0;
 
-        // Slots reserved by scouts currently in flight this cycle, so we don't over-commit past MaxConcurrentTotal
-        // before those scouts finish and register their bosses.
-        private int pendingScouts = 0;
+        // Scouts still in flight, by biome. Their bosses count against the caps before they are registered, so a
+        // scout that outlasts a short check interval cannot let the next cycle put its biome over the cap.
+        private readonly Dictionary<Heightmap.Biome, int> pendingScouts = new Dictionary<Heightmap.Biome, int>();
 
         public void Awake() {
             InvokeRepeating("CheckRemoteSpawns", 60, 60);
         }
 
         public void Setup() {
-            // The registry and the ZDO reconcile are server-only state; a pure client never reads
-            // either, and previously paid a full-world ZDO scan at world load for nothing.
-            if (ZNet.instance != null && ZNet.instance.IsServer()) {
+            StartCoroutine(SetupOnceWorldIsKnown());
+        }
+
+        // Setup runs from RandEventSystem.Awake, before ZNet.Awake, so whether this is the server and which world's saved
+        // bosses to load are not known yet. Checking there skipped the load on every world start: the bosses' pins never
+        // came back after a logout or restart, and the empty registry let the caps be filled again on top of them.
+        private IEnumerator SetupOnceWorldIsKnown() {
+            while (ZNet.instance == null || ZNet.instance.GetWorld() == null) { yield return null; }
+            // The registry and the ZDO reconcile are server-only state; a pure client never reads either.
+            if (ZNet.instance.IsServer()) {
                 NemesisRemoteSpawnControl.LoadState();
                 NemesisRemoteSpawnControl.ShowActiveBossPinsLocally();
                 StartCoroutine(NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs());
             }
             // Give players a couple of minutes after load before the first placement wave.
-            if (ZNet.instance != null) {
-                nextCheckTime = ZNet.instance.GetTimeSeconds() + 120;
-            }
+            nextCheckTime = ZNet.instance.GetTimeSeconds() + 120;
             setup = true;
         }
 
@@ -66,19 +72,15 @@ namespace StarLevelSystem.modules.NemesisSystem {
             // on it so the cap counts below are accurate.
             yield return NemesisRemoteSpawnControl.ReconcileFromSpawnerZDOs();
 
-            if (NemesisRemoteSpawnControl.CountActiveTotal() + pendingScouts >= settings.MaxConcurrentTotal) { yield break; }
-            if (settings.TargetPerBiome == null || settings.TargetPerBiome.Count == 0) { yield break; }
+            if (CountWithPending() >= settings.MaxConcurrentTotal) { yield break; }
+            if (settings.MaxConcurrentPerBiome == null || settings.MaxConcurrentPerBiome.Count == 0) { yield break; }
 
-            // Collect biomes that are below their target and cap.
             List<Heightmap.Biome> needy = new List<Heightmap.Biome>();
-            foreach (KeyValuePair<Heightmap.Biome, int> kv in settings.TargetPerBiome) {
+            foreach (KeyValuePair<Heightmap.Biome, int> kv in settings.MaxConcurrentPerBiome) {
                 // A name that is not a biome in this world has nowhere to scout. Left in, it would spend this interval's
                 // budget and force-load far zones to find that out.
                 if (BiomeRegistry.Resolve(kv.Key, out Heightmap.Biome target) == false) { continue; }
-                int active = NemesisRemoteSpawnControl.CountActivePerBiome(target);
-                int cap = int.MaxValue;
-                if (BiomeRegistry.TryGetEntry(settings.MaxConcurrentPerBiome, target, out int c)) { cap = c; }
-                if (active < kv.Value && active < cap) { needy.Add(target); }
+                if (CountWithPending(target) < kv.Value) { needy.Add(target); }
             }
             if (needy.Count == 0) { yield break; }
             needy = needy.ShuffleList();
@@ -86,7 +88,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
             int budget = settings.MaxSpawnsPerInterval;
             foreach (Heightmap.Biome biome in needy) {
                 if (budget <= 0) { break; }
-                if (NemesisRemoteSpawnControl.CountActiveTotal() + pendingScouts >= settings.MaxConcurrentTotal) { break; }
+                if (CountWithPending() >= settings.MaxConcurrentTotal) { break; }
 
                 NemesisMiniboss boss = SelectOrGenerateBoss(biome);
                 if (boss == null) {
@@ -94,9 +96,21 @@ namespace StarLevelSystem.modules.NemesisSystem {
                     continue;
                 }
                 budget--;
-                pendingScouts++;
-                StartCoroutine(ScoutAndPlace(biome, boss));
+                pendingScouts[biome] = PendingIn(biome) + 1;
+                StartCoroutine(ScoutAndPlace(biome, boss, reserved: true));
             }
+        }
+
+        private int PendingIn(Heightmap.Biome biome) {
+            return pendingScouts.TryGetValue(biome, out int n) ? n : 0;
+        }
+
+        private int CountWithPending() {
+            return NemesisRemoteSpawnControl.CountActiveTotal() + pendingScouts.Values.Sum();
+        }
+
+        private int CountWithPending(Heightmap.Biome biome) {
+            return NemesisRemoteSpawnControl.CountActivePerBiome(biome) + PendingIn(biome);
         }
 
         // Draw from the shared player-generated pool first (and consume it authoritatively), otherwise fabricate one.
@@ -111,11 +125,11 @@ namespace StarLevelSystem.modules.NemesisSystem {
             return NemesisMiniBossManager.GenerateMinibossForBiome(biome);
         }
 
-        private IEnumerator ScoutAndPlace(Heightmap.Biome biome, NemesisMiniboss boss) {
+        private IEnumerator ScoutAndPlace(Heightmap.Biome biome, NemesisMiniboss boss, bool reserved) {
             bool success = false;
             Vector3 point = Vector3.zero;
             yield return NemesisRemoteSpawnControl.ScoutBiomeLocation(biome, (ok, p) => { success = ok; point = p; });
-            pendingScouts = Mathf.Max(0, pendingScouts - 1);
+            if (reserved) { pendingScouts[biome] = Mathf.Max(0, PendingIn(biome) - 1); }
 
             if (success) {
                 NemesisRemoteSpawnControl.PlaceSpawner(boss, point, biome);
@@ -134,7 +148,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 return;
             }
             Logger.LogInfo($"[NemesisRemote] DebugSpawnForBiome {biome}: selected boss '{boss.BossSpawn?.Prefab}' (level {boss.BossSpawn?.ForcedLevel}); scouting a location...");
-            StartCoroutine(ScoutAndPlace(biome, boss));
+            StartCoroutine(ScoutAndPlace(biome, boss, reserved: false));
         }
 
         public void ForceRun() { forceRun = true; }

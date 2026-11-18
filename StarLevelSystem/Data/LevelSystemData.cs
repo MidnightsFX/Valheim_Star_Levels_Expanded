@@ -45,14 +45,6 @@ namespace StarLevelSystem.Data
             { Heightmap.Biome.DeepNorth, "defeated_frozenking_p3" },
         };
 
-        // Bumped when what the shipped files hold for conditional scaling changes. Files below it go through RemoveShippedTiers.
-        private const int CurrentConditionalTierVersion = 2;
-
-        // The MinLevel and MaxLevel of every generator a shipped tier has held, in any release.
-        private static readonly HashSet<(int, int)> ShippedTierLevels = new HashSet<(int, int)>() {
-            (1, 8), (2, 8), (2, 12), (3, 12), (3, 16), (4, 16), (4, 20), (5, 20), (5, 24), (6, 24), (6, 30), (7, 30), (8, 36), (9, 42),
-        };
-
         // Assigned in the static constructor, which runs after every field initializer. An initializer here ran before
         // DefaultConfiguration's (initializers run in textual order), so this was null until the first config load.
         public static DataObjects.CreatureLevelSettings SLE_Level_Settings;
@@ -348,82 +340,22 @@ namespace StarLevelSystem.Data
             },
             EnableConditionalCreatureLevelupChance = false,
             ConditionalBossKeyOrder = new List<string>(VanillaBossKeyOrder),
-            // Empty: biomes work out their increases from the world's own settings, so they follow any max level and curve. This
-            // holds fixed levels someone writes for a boss and biome.
+            // Even steps toward MaxLevel follow any max level, and 0.43 per increase reaches about 4 times the chances with the
+            // last of the eight vanilla bosses.
+            ConditionalIncreaseBonus = new ConditionalIncreaseBonus() {
+                ExtraStars = ConditionalScaleSystem.EvenStepsToMaxLevel,
+                ChanceIncrease = 0.43f,
+            },
             ConditionalCreatureLevelupChance = new Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>>(),
-            ConditionalTierVersion = CurrentConditionalTierVersion,
         };
-
-        // ConditionalBossKeyOrder as every LevelSettings.yaml written before the Deep North update holds it.
-        private static readonly List<string> PreDeepNorthBossKeyOrder = new List<string>() {
-            "defeated_eikthyr", "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader",
-        };
-
-        // One-shot in-place migration for LevelSettings.yaml. A file still holding the old vanilla boss order gains the
-        // Deep North's final boss key. Appending the key is also what stops this firing again, and a file whose order was
-        // changed by hand is left alone.
-        internal static bool AddDeepNorthBossKey(CreatureLevelSettings settings) {
-            List<string> order = settings?.ConditionalBossKeyOrder;
-            if (order == null || order.Count != PreDeepNorthBossKeyOrder.Count) { return false; }
-            for (int i = 0; i < order.Count; i++) {
-                if (string.Equals(order[i], PreDeepNorthBossKeyOrder[i], StringComparison.OrdinalIgnoreCase) == false) { return false; }
-            }
-            order.Add("defeated_frozenking_p3");
-            return true;
-        }
-
-        // One-shot in-place migration for LevelSettings.yaml. Shipped tiers used to be written as fixed levels, which every
-        // file then held, and those rolled far past a low MaxLevel and replaced the world's own curve. An entry still holding
-        // what shipped goes, so the biome uses its difficulty increases, and so does an entry with nothing in it. Anything else
-        // was written by hand, so it stays. The version stamp is what stops this firing again, so writing those numbers back
-        // afterwards sticks.
-        internal static bool RemoveShippedTiers(CreatureLevelSettings settings) {
-            if (settings == null || settings.ConditionalTierVersion >= CurrentConditionalTierVersion) { return false; }
-            settings.ConditionalTierVersion = CurrentConditionalTierVersion;
-            Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> tiers = settings.ConditionalCreatureLevelupChance;
-            if (tiers == null) { return true; }
-            foreach (string key in tiers.Keys.ToList()) {
-                Dictionary<Heightmap.Biome, ConditionalLevelupChance> tier = tiers[key];
-                if (tier == null) { continue; }
-                foreach (Heightmap.Biome biome in tier.Keys.ToList()) {
-                    ConditionalLevelupChance entry = tier[biome];
-                    bool empty = entry == null || ((entry.LevelupGenerators == null || entry.LevelupGenerators.Count == 0) && (entry.LevelupGeneratorRefs == null || entry.LevelupGeneratorRefs.Count == 0));
-                    if (empty || (ShippedInTier(key, biome) && HoldsShippedLevels(entry))) { tier.Remove(biome); }
-                }
-                if (tier.Count == 0) { tiers.Remove(key); }
-            }
-            return true;
-        }
-
-        // Shipped tiers named a biome from its own boss on, and the Deep North from the Fader on, alongside the Ashlands.
-        private static bool ShippedInTier(string key, Heightmap.Biome biome) {
-            if (OwnBossOfBiome.TryGetValue(biome, out string own) == false) { return false; }
-            if (biome == Heightmap.Biome.DeepNorth) { own = "defeated_fader"; }
-            int tier = VanillaBossKeyOrder.IndexOf(key);
-            return tier >= 0 && tier >= VanillaBossKeyOrder.IndexOf(own);
-        }
-
-        private static bool HoldsShippedLevels(ConditionalLevelupChance entry) {
-            if (entry.LevelupGeneratorRefs != null && entry.LevelupGeneratorRefs.Count > 0) { return false; }
-            if (entry.LevelupGenerators == null || entry.LevelupGenerators.Count != 1) { return false; }
-            LevelGenerator generator = entry.LevelupGenerators[0];
-            return generator != null && ShippedTierLevels.Contains((generator.MinLevel, generator.MaxLevel))
-                && Mathf.Approximately(generator.LevelUpChance, 0.25f) && generator.LevelupCalculationStyle == LevelupCalculationStyle.Exponential
-                && Mathf.Approximately(generator.NightMultiplier, 1f) && Mathf.Approximately(generator.GaussianOffset, 0f);
-        }
-
-        // Everything LevelSettings.yaml needs brought up to date when it loads. Both run, so neither can hide the other.
-        internal static bool MigrateLevelSettings(CreatureLevelSettings settings) {
-            bool addedBoss = AddDeepNorthBossKey(settings);
-            bool removedTiers = RemoveShippedTiers(settings);
-            return addedBoss || removedTiers;
-        }
 
 
         // Everything that has to happen once new level settings exist, whatever produced them -- a hand
         // edit, a server broadcast, or the in-game editor. Registered as the Apply hook for
         // LevelSettings.yaml, so all three routes run identically.
         internal static void ApplyLoaded(DataObjects.CreatureLevelSettings parsed) {
+            // Before the authored copy, so the panel saves the block the world is playing by.
+            ConditionalScaleSystem.FillIncreaseBonus(parsed);
             SLE_Level_Settings = parsed;
             AuthoredLevelSettings = CopyOf(parsed);
             // Before ApplyLevelupGenerators, so its Table fallback warnings are reported for this load.

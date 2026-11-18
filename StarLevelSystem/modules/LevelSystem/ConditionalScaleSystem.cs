@@ -3,17 +3,19 @@ using StarLevelSystem.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using static Heightmap;
+using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class ConditionalScaleSystem {
 
+        // The ExtraStars value (any negative one) that moves a biome's cap an equal step toward MaxLevel per boss.
+        internal const int EvenStepsToMaxLevel = -1;
+
         internal static Dictionary<Heightmap.Biome, SortedDictionary<int, float>>  CurrentGlobalKeyConditionalLevelup = new Dictionary<Heightmap.Biome, SortedDictionary<int, float>>();
         private static readonly Dictionary<Heightmap.Biome, List<LevelGenerator>> resolvedByBiome = new Dictionary<Heightmap.Biome, List<LevelGenerator>>();
-        // How far each biome's difficulty increases have taken it, from above 0 to 1. Biomes with none yet are left out.
-        private static readonly Dictionary<Heightmap.Biome, float> progressByBiome = new Dictionary<Heightmap.Biome, float>();
-        // The current global key used to select Level Generators and levelup chances
+        // Biomes with no increases yet are left out.
+        private static readonly Dictionary<Heightmap.Biome, int> increasesByBiome = new Dictionary<Heightmap.Biome, int>();
         private static string CurrentGlobalKey = null;
         private static bool cacheValid = false;
 
@@ -31,34 +33,31 @@ namespace StarLevelSystem.modules.LevelSystem {
             return null;
         }
 
-        private static bool TryGetProgress(Heightmap.Biome biome, out float progress) {
-            progress = 0f;
-            if (TiersEnabled() == false) { return false; }
-            // Fixed levels take the place of the biome's increases.
-            if (GetConditionalLevelupChance(biome) != null) { return false; }
-            return BiomeRegistry.TryGetKey(progressByBiome, biome, out Heightmap.Biome key) && progressByBiome.TryGetValue(key, out progress);
+        // The difficulty increases boss kills have given this biome so far. Fixed levels take their place.
+        private static int IncreasesIn(Heightmap.Biome biome) {
+            if (TiersEnabled() == false) { return 0; }
+            if (GetConditionalLevelupChance(biome) != null) { return 0; }
+            return BiomeRegistry.TryGetKey(increasesByBiome, biome, out Heightmap.Biome key) && increasesByBiome.TryGetValue(key, out int increases) ? increases : 0;
         }
 
-        // What the active tier multiplies level-up chances by in this biome. Whose curve it multiplies follows
-        // DetermineLevelupChance: a creature entry's curve or a boss curve outranks the tier, so those stay as written.
-        internal static float GetChanceMultiplier(Heightmap.Biome biome, CreatureSpecificSetting creature_settings, bool isBoss) {
-            if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) { return 1f; }
+        // The increases a creature's roll gets. Follows DetermineLevelupChance: a creature entry's curve or a boss curve outranks
+        // the biome's, so those stay as written.
+        internal static int GetIncreases(Heightmap.Biome biome, CreatureSpecificSetting creature_settings, bool isBoss) {
+            if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) { return 0; }
             SortedDictionary<int, float> bossChances = LevelSystemData.SLE_Level_Settings?.BossCreatureLevelUpChance;
-            if (isBoss && bossChances != null && bossChances.Count > 0) { return 1f; }
-            if (TryGetProgress(biome, out float progress) == false) { return 1f; }
-            float full = UnityEngine.Mathf.Max(1f, LevelSystemData.SLE_Level_Settings.ConditionalFullChanceMultiplier);
-            return 1f + progress * (full - 1f);
+            if (isBoss && bossChances != null && bossChances.Count > 0) { return 0; }
+            return IncreasesIn(biome);
         }
+
+        internal static ConditionalIncreaseBonus Bonus => LevelSystemData.SLE_Level_Settings?.ConditionalIncreaseBonus;
 
         // The level cap (stars + 1) a creature in this biome has after the bosses beaten so far, given the cap it would have
-        // without them. Difficulty increases move the cap toward MaxLevel and stop there. A biome already at or above MaxLevel
-        // keeps its cap, so beating a boss never lowers a biome's levels. Generators are fixed levels someone wrote, so their
-        // top can pass it.
+        // without them. Fixed levels are levels someone wrote, so their top can pass MaxLevel.
         internal static int RaiseCap(Heightmap.Biome biome, CreatureSpecificSetting creature_settings, int cap) {
             if (creature_settings != null && creature_settings.CustomCreatureLevelUpChance != null) { return cap; }
-            if (TryGetProgress(biome, out float progress)) {
-                int top = ValConfig.MaxLevel.Value + 1;
-                return cap >= top ? cap : UnityEngine.Mathf.RoundToInt(cap + (top - cap) * progress);
+            int increases = IncreasesIn(biome);
+            if (increases > 0) {
+                return RaisedCap(cap, ValConfig.MaxLevel.Value + 1, increases, Bonus, BossKeyOrder(LevelSystemData.SLE_Level_Settings).Count);
             }
             return TryGetConditionalLevelRange(biome, creature_settings, out _, out int tierMax) ? Math.Max(cap, tierMax) : cap;
         }
@@ -85,6 +84,66 @@ namespace StarLevelSystem.modules.LevelSystem {
             return true;
         }
 
+        // --- the math, shared by the roll, the panel's preview and sls-boss-scaling ---------------------------------------
+
+        // One increase per boss from the biome's own on, less the delay, up to the most it may have. latest is the index in
+        // order of the latest defeated boss, -1 with none.
+        internal static int IncreasesEarned(List<string> order, string ownBossKey, int latest, int delay, int most) {
+            if (latest < 0 || order == null) { return 0; }
+            int own = order.FindIndex(key => string.Equals(key, ownBossKey, StringComparison.OrdinalIgnoreCase));
+            if (own < 0) { return 0; }
+            return Mathf.Clamp(latest - own + 1 - Math.Max(0, delay), 0, Math.Max(1, most));
+        }
+
+        // The cap (stars + 1) after this many increases, never past top (MaxLevel + 1). A cap already at or above top stays,
+        // so beating a boss never lowers a biome's levels. Even steps are one per boss after the first, so the oldest biome
+        // reaches top with the last boss.
+        internal static int RaisedCap(int cap, int top, int increases, ConditionalIncreaseBonus bonus, int bossCount) {
+            if (increases <= 0 || bonus == null || cap >= top) { return cap; }
+            if (bonus.ExtraStars < 0) {
+                float progress = Mathf.Clamp01(increases / (float)Math.Max(1, bossCount - 1));
+                return Mathf.RoundToInt(cap + (top - cap) * progress);
+            }
+            return Math.Min(top, cap + increases * bonus.ExtraStars);
+        }
+
+        internal static float ChanceMultiplier(ConditionalIncreaseBonus bonus, int increases) {
+            if (increases <= 0 || bonus == null) { return 1f; }
+            return Mathf.Max(0f, 1f + increases * bonus.ChanceIncrease);
+        }
+
+        // The curve with each increase's LevelBonus added. A curve that stops below the cap with chance left to roll past its
+        // last level gets a level after it, or the roll would stop on that last level and a raised cap could never be reached.
+        internal static SortedDictionary<int, float> ApplyIncreases(SortedDictionary<int, float> curve, ConditionalIncreaseBonus bonus, int increases, int cap) {
+            if (increases <= 0 || bonus == null || curve == null) { return curve; }
+            SortedDictionary<int, float> raised = LevelSelection.ApplyLevelupBonus(curve, bonus.LevelBonus, increases);
+            if (raised.Count > 0) {
+                int last = raised.Keys.Last();
+                if (last < cap && raised[last] > 0f) { raised[last + 1] = 0f; }
+            }
+            return raised;
+        }
+
+        // Index in order of the latest boss this world has defeated, -1 with none or outside a world.
+        internal static int LatestDefeated(List<string> order) {
+            if (ZoneSystem.instance == null || order == null) { return -1; }
+            return order.FindLastIndex(key => key != null && ZoneSystem.instance.GetGlobalKey(key));
+        }
+
+        // Files written before ConditionalIncreaseBonus get the block their settings came to: even steps for the cap, and
+        // ConditionalFullChanceMultiplier (4 unless written) spread over one increase per boss after the first.
+        internal static void FillIncreaseBonus(CreatureLevelSettings settings) {
+            if (settings == null || settings.ConditionalIncreaseBonus != null) { return; }
+            float full = Mathf.Max(1f, settings.LegacyFullChanceMultiplier ?? 4f);
+            int steps = Math.Max(1, BossKeyOrder(settings).Count - 1);
+            settings.ConditionalIncreaseBonus = new ConditionalIncreaseBonus() {
+                ExtraStars = EvenStepsToMaxLevel,
+                ChanceIncrease = Mathf.Round((full - 1f) / steps * 10000f) / 10000f,
+            };
+        }
+
+        // --- the cache ------------------------------------------------------------------------------------------------
+
         // The biome's own entry within the active tier, else that tier's 'All' entry as its fallback.
         private static Heightmap.Biome EntryBiome(Heightmap.Biome biome) {
             return BiomeRegistry.TryGetKey(CurrentGlobalKeyConditionalLevelup, biome, out Heightmap.Biome key) ? key : Heightmap.Biome.All;
@@ -94,7 +153,7 @@ namespace StarLevelSystem.modules.LevelSystem {
             CurrentGlobalKey = null;
             CurrentGlobalKeyConditionalLevelup.Clear();
             resolvedByBiome.Clear();
-            progressByBiome.Clear();
+            increasesByBiome.Clear();
         }
 
         private static void RebuildCache() {
@@ -104,14 +163,16 @@ namespace StarLevelSystem.modules.LevelSystem {
             if (settings == null || ZoneSystem.instance == null) { return; }
 
             List<string> order = BossKeyOrder(settings);
-            WorkOutDifficultyIncreases(settings, order);
+            int latest = LatestDefeated(order);
+            foreach (KeyValuePair<Heightmap.Biome, string> biome in LevelSystemData.OwnBossOfBiome) {
+                int increases = IncreasesEarned(order, biome.Value, latest, settings.ConditionalBiomeDelay, settings.ConditionalDifficultyIncreases);
+                if (increases > 0) { increasesByBiome[biome.Key] = increases; }
+            }
 
             Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> conditional = settings.ConditionalCreatureLevelupChance;
             if (conditional == null) { return; }
-            // Rebuild the cache of which global key is currently targeted for generators
             CurrentGlobalKey = SelectGlobalKey(conditional, order);
-
-            // Rebuild the list of generators; nothing resolved means cache the empty result so we don't rebuild every call
+            // Nothing resolved still leaves the cache valid, so an empty result is not rebuilt on every call.
             if (CurrentGlobalKey == null || !conditional.TryGetValue(CurrentGlobalKey, out Dictionary<Heightmap.Biome, ConditionalLevelupChance> biomeMap) || biomeMap == null) {
                 return;
             }
@@ -126,24 +187,7 @@ namespace StarLevelSystem.modules.LevelSystem {
                 }
                 CurrentGlobalKeyConditionalLevelup[kvp.Key] = levelupChance;
             }
-            Logger.LogDebug($"BossScaleSystem: resolved conditional levelup generators for '{CurrentGlobalKey}' across {resolvedByBiome.Count} biome(s).");
-        }
-
-        // A biome earns one increase per boss from its own on, less the delay, up to the most it may have. All are the same size,
-        // and one per boss after the first adds up to full strength, so the oldest biome gets there with the last boss when
-        // nothing is holding it back. A lower limit stops a biome partway rather than making each increase larger.
-        private static void WorkOutDifficultyIncreases(CreatureLevelSettings settings, List<string> order) {
-            int latest = order.FindLastIndex(key => key != null && ZoneSystem.instance.GetGlobalKey(key));
-            if (latest < 0) { return; }
-            int delay = Math.Max(0, settings.ConditionalBiomeDelay);
-            int most = Math.Max(1, settings.ConditionalDifficultyIncreases);
-            float eachIncrease = 1f / Math.Max(1, order.Count - 1);
-            foreach (KeyValuePair<Heightmap.Biome, string> biome in LevelSystemData.OwnBossOfBiome) {
-                int own = order.FindIndex(key => string.Equals(key, biome.Value, StringComparison.OrdinalIgnoreCase));
-                if (own < 0) { continue; }
-                int earned = latest - own + 1 - delay;
-                if (earned > 0) { progressByBiome[biome.Key] = UnityEngine.Mathf.Clamp01(Math.Min(earned, most) * eachIncrease); }
-            }
+            Logger.LogDebug($"ConditionalScaleSystem: resolved conditional levelup generators for '{CurrentGlobalKey}' across {resolvedByBiome.Count} biome(s).");
         }
 
         // The boss keys conditional entries are ranked by, earliest progression first. Files written before

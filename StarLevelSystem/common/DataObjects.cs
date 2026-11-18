@@ -569,6 +569,20 @@ namespace StarLevelSystem.common
             public List<string> LevelupGeneratorRefs { get; set; }
         }
 
+        [Description("What a biome gets for each boss-kill difficulty increase it has earned. A biome with three increases gets it three times.")]
+        public class ConditionalIncreaseBonus {
+            // No initializers: OmitDefaults leaves out a member at default(T), and an initializer would bring back its own
+            // value in place of the 0 an admin wrote.
+            [Description("Stars each increase adds to the biome's star cap, never past MaxLevel. 0 leaves the cap alone. -1 moves the cap an equal step toward MaxLevel per boss instead, reaching it with the last boss.")]
+            public int ExtraStars { get; set; }
+
+            [Description("Added to the multiplier on the biome's level-up chances per increase. 0.1 is 1.1 times the chances after one increase and 1.2 times after two.")]
+            public float ChanceIncrease { get; set; }
+
+            [Description("Level -> percent added to the chance to roll past that level, per increase, the way a DistanceLevelBonus ring adds it. Level 1 is the chance of at least 1 star, level 3 of at least 3.")]
+            public SortedDictionary<int, float> LevelBonus { get; set; }
+        }
+
         [Description("Controls overhaul creature levels")]
         public class CreatureLevelSettings {
             [Description("Keyed lists of level generators that can be referenced elsewhere")]
@@ -622,20 +636,31 @@ namespace StarLevelSystem.common
             [DefaultValue(1)]
             public int ConditionalBiomeDelay { get; set; } = 1;
 
-            [Description("How many difficulty increases a biome can get, one per boss, at least 1. Each one moves the biome's star cap an equal step toward MaxLevel and raises its level chances an equal step toward ConditionalFullChanceMultiplier.")]
+            [Description("How many difficulty increases a biome can get, one per boss, at least 1. Each one gives the biome ConditionalIncreaseBonus once more. At 1 a biome goes up once; at the number of bosses every boss raises its own biome and all the biomes before it.")]
             [DefaultValue(7)]
             public int ConditionalDifficultyIncreases { get; set; } = 7;
 
-            [Description("What level-up chances are multiplied by at full strength, which takes one increase per boss after the first. Each increase adds an equal share: with the vanilla bosses, 4 is about 1.43 times the chances after one increase.")]
-            [DefaultValue(4f)]
-            public float ConditionalFullChanceMultiplier { get; set; } = 4f;
+            [Description("What a biome gets for each difficulty increase it has earned: extra stars on its cap, a higher multiplier on its level chances, and chance added per level. Left out, the cap moves in equal steps toward MaxLevel and the chances reach 4 times with the last boss.")]
+            [DefaultValue(null)]
+            public ConditionalIncreaseBonus ConditionalIncreaseBonus { get; set; }
+
+            // Files written before ConditionalIncreaseBonus. Read only while the file has no such block, and never written back.
+            [YamlMember(Alias = "ConditionalFullChanceMultiplier")]
+            public float? ConditionalFullChanceMultiplier_Legacy {
+                get => null;
+                set => LegacyFullChanceMultiplier = value;
+            }
+            internal float? LegacyFullChanceMultiplier;
+
+            // Files written while LevelSettings.yaml was migrated on load still hold this. Read so they load without a warning.
+            [YamlMember(Alias = "ConditionalTierVersion")]
+            public int? ConditionalTierVersion_Legacy {
+                get => null;
+                set { }
+            }
 
             [Description("Fixed levels in place of a biome's difficulty increases: defeated-boss global key -> biome -> level generator. The latest defeated key in ConditionalBossKeyOrder that has an entry applies (file order does not matter), and its generator replaces the biome's levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
             public Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> ConditionalCreatureLevelupChance { get; set; }
-
-            [Description("Do not edit. Which shape of the shipped conditional settings this file has been brought up to.")]
-            [DefaultValue(0)]
-            public int ConditionalTierVersion { get; set; } = 0;
 
             [Description("Boss global keys from earliest to latest progression. Difficulty increases count bosses along this list, and the latest defeated key here that has a ConditionalCreatureLevelupChance entry applies. Keys not listed rank below every listed key. Leave empty to use the vanilla boss order.")]
             [DefaultValue(null)]
@@ -1716,13 +1741,18 @@ namespace StarLevelSystem.common
             [DefaultValue(10)]
             public int MaxConcurrentTotal { get; set; } = 10;
 
-            [Description("Desired number of live remote bosses to maintain per biome.")]
-            public Dictionary<Heightmap.Biome, int> TargetPerBiome { get; set; }
-
-            [Description("Maximum number of live remote bosses allowed per biome.")]
+            [Description("How many live remote bosses each biome keeps: the spawner places more until a biome reaches its number. A biome left out gets none.")]
             public Dictionary<Heightmap.Biome, int> MaxConcurrentPerBiome { get; set; }
 
-            [Description("World-distance band (from world center) used when scouting a spawn point for each biome.")]
+            // Retired: MaxConcurrentPerBiome is now the number each biome is filled to. Still accepted because the
+            // deserializer rejects unknown keys, and used only by a file that has no MaxConcurrentPerBiome, which
+            // would otherwise get no remote bosses at all. The getter returns null so OmitDefaults never writes it back.
+            public Dictionary<Heightmap.Biome, int> TargetPerBiome {
+                get => null;
+                set { if (MaxConcurrentPerBiome == null) { MaxConcurrentPerBiome = value; } }
+            }
+
+            [Description("Distance band from the world center (Min, Max in metres; Max 0 is the world edge) that a biome's remote bosses are placed in. A biome without an entry can have them anywhere it is found.")]
             public Dictionary<Heightmap.Biome, BiomeSpawnRadius> BiomeRadiusRanges { get; set; }
 
             [Description("NemesisSpawn boss archetypes generated per biome when the AvailableMiniBosses pool has no biome-appropriate entry. Weighted by SelectionWeight; level comes from ForcedLevel/LevelupGenerators.")]

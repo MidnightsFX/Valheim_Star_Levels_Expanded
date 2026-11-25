@@ -165,6 +165,24 @@ namespace StarLevelSystem.modules.Modifiers {
             }
         }
 
+        // Dropping a modifier's name from the ZDO neither stops what its Setup left running (BossSummoner's repeating
+        // invoke) nor takes its visual effect off. API-added and unknown names reach here too, hence TryGetValue.
+        internal static void TearDownModifier(Character character, string modifier, Dictionary<string, ModifierType> remaining) {
+            if (character == null || CreatureModifiersData.ModifierDefinitions.TryGetValue(modifier, out CreatureModifierDefinition removed) == false) { return; }
+            removed.TeardownMethodCall(character);
+
+            if (removed.VisualEffect == null) { return; }
+            if (CreatureModifiersData.LoadedModifierEffects.TryGetValue(removed.VisualEffect, out GameObject effectPrefab) == false || effectPrefab == null) { return; }
+            // Lightning and ElementalChaos show the same effect, and a creature has only one copy of it.
+            if (remaining != null) {
+                foreach (string other in remaining.Keys) {
+                    if (CreatureModifiersData.ModifierDefinitions.TryGetValue(other, out CreatureModifierDefinition otherDef) && otherDef.VisualEffect == removed.VisualEffect) { return; }
+                }
+            }
+            Transform vfx = character.transform.Find($"{Visible_Toggle.SLSVISUALS}/{effectPrefab.name}(Clone)");
+            if (vfx != null) { GameObject.Destroy(vfx.gameObject); }
+        }
+
         internal static GameObject ApplySecondaryVFX(string effectName, Vector3 position, Quaternion rotation) {
             if (CreatureModifiersData.LoadedSecondaryEffects.ContainsKey(effectName)) {
                 GameObject go = CreatureModifiersData.LoadedSecondaryEffects[effectName];
@@ -474,12 +492,7 @@ namespace StarLevelSystem.modules.Modifiers {
             // Rolled, with nothing left: the same as a creature that rolled no modifiers.
             if (characterMods.Count == 0) { characterMods.Add(NoMods, ModifierType.Minor); }
             CompositeLazyCache.SetCreatureModifiers(character, characterMods);
-            // Some modifiers leave something running behind their Setup - BossSummoner attaches a
-            // component with a repeating invoke - and dropping the name from the ZDO does not stop it.
-            // TryGetValue because API-added and unknown modifier names both reach this path.
-            if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modifier, out CreatureModifierDefinition removedDef)) {
-                removedDef.TeardownMethodCall(character);
-            }
+            TearDownModifier(character, modifier, characterMods);
             UIHudControl.InvalidateCacheEntry(character);
             return true;
         }

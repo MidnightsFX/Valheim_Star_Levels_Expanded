@@ -431,8 +431,6 @@ namespace StarLevelSystem.Data
                         NameSuffix = "$Shielded_suffix1",
                         NamingConvention = NameSelectionStyle.RandomBoth,
                         StarVisual = "shielded",
-                        VisualEffect = Shielded.ShimmerEffect,
-                        VisualEffectStyle = VisualEffectStyle.objectCenter,
                         SetupEvent = Shielded.Setup,
                         TeardownEvent = Shielded.Teardown,
                     }

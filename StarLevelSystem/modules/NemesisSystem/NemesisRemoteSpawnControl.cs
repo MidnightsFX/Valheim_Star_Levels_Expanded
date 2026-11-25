@@ -329,6 +329,9 @@ namespace StarLevelSystem.modules.NemesisSystem {
             return new Vector3(Mathf.Cos(angle) * distance, 0f, Mathf.Sin(angle) * distance);
         }
 
+        // Vanilla serpents only need 5 m of water. A boss group asks for more, so it is not put in the shallows by a shore.
+        private const float MinOceanDepth = 10f;
+
         // Combines EpicLoot's biome/water/base/ward checks with SLS's FindFloor object-overlap and lava checks.
         private static bool IsSpawnLocationValid(Vector3 location, Heightmap.Biome targetBiome, out Vector3 groundPoint) {
             groundPoint = location;
@@ -345,10 +348,14 @@ namespace StarLevelSystem.modules.NemesisSystem {
             if (terrainDiff > 1f) { return false; }
             if (terrainDiff > 0f) { location.y = solidHeight; }
 
-            // Below/near water level (allow shallow ocean spawns only for the Ocean biome).
             float waterLevel = ZoneSystem.instance.m_waterLevel;
-            if (BiomeRegistry.TerrainOf(foundBiome) != Heightmap.Biome.Ocean && waterLevel > location.y + 2f) { return false; }
-            if (location.y < 27f) { return false; }
+            if (BiomeRegistry.TerrainOf(foundBiome) == Heightmap.Biome.Ocean) {
+                // Ocean bosses are sea creatures. Like the game's own serpents they start on the sea floor and swim up.
+                if (waterLevel - location.y < MinOceanDepth) { return false; }
+            } else {
+                if (waterLevel > location.y + 2f) { return false; }
+                if (location.y < 27f) { return false; }
+            }
 
             // Avoid lava in the Ashlands.
             if (BiomeRegistry.HasLava(foundBiome) && hmap.IsLava(location)) { return false; }

@@ -533,8 +533,8 @@ namespace StarLevelSystem.common {
 #   ModifierGlobalSettings:
 #     GlobalIgnorePrefabList: [ piece_TrainingDummy ]   # never roll modifiers
 #
-# The console command sls-mod-give applies a modifier to nearby creatures for
-# testing.
+# The console commands sls-mod-give and sls-mod-remove add a modifier to, or
+# take one off, nearby creatures for testing.
 #################################################";
 
         private const string RaidSettingsHeader = @"#################################################
@@ -711,7 +711,9 @@ namespace StarLevelSystem.common {
 #       Meadows: { Min: 100, Max: 3000 }   # are placed within (Max 0 = world edge).
 #                                    # A biome without one can have them anywhere it is.
 #                                    # Ignored in a resized world.
-#     BossCandidatesByBiome:         # archetypes used when the pool is empty
+#     BossCandidatesByBiome:         # archetypes used when the pool is empty.
+#                                    # Ocean bosses and their minions are only
+#                                    # creatures that live in water (Serpent).
 #       Plains:
 #       - Prefab: GoblinBrute
 #         ForcedLevel: 12

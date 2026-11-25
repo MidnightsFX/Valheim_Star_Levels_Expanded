@@ -125,7 +125,7 @@ namespace StarLevelSystem.modules.LocationReset {
         internal static bool ShouldTag(ZoneSystem.ZoneLocation location) {
             if (location == null) { return false; }
             int hash;
-            // ZoneLocation.Hash resolves m_prefab.Name, which throws for the unassigned soft references
+            // ZoneLocation.Hash resolves m_prefab.name, which throws for the unassigned soft references
             // vanilla's disabled placeholder entries carry -- the same guard SpawnerChildrenFor needs.
             try { hash = location.Hash; }
             catch (System.Exception) { return false; }

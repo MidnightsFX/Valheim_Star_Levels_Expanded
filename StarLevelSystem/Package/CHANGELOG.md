@@ -1,3 +1,14 @@
+**1.35.0**
+ ---
+ ```
+- Updated for Valheim 1.0.30
+	- Fixes location resets not working on dedicated servers after the 1.0.30 update
+- Improve shielded vfx
+- Added Nemesis support for water spawns, only allows water creatures to spawn in the ocean
+- New installs get Nemesis bosses, minions and loot for the Deep North, and serpent escorts for ocean bosses.
+- Admins can now remove modifiers from nearby creatures with (sls-mod-remove)
+```
+
 **1.34.0**
  ---
  ```

@@ -400,11 +400,11 @@ namespace StarLevelSystem.modules.LocationReset {
             }
         }
 
-        // SoftReference.Name throws for an unassigned reference; see LocationResetData.SafePrefabName.
+        // SoftReference.name throws for an unassigned reference; see LocationResetData.SafePrefabName.
         private static string SafeName(SoftReference<GameObject> prefab) {
             try {
                 if (prefab.IsValid) {
-                    string name = prefab.Name;
+                    string name = prefab.name;
                     if (string.IsNullOrEmpty(name) == false) { return name; }
                 }
             } catch (System.Exception e) {

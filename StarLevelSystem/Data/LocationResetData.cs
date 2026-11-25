@@ -1449,10 +1449,10 @@ namespace StarLevelSystem.Data {
             if (ZoneSystem.instance.m_locations != null) {
                 foreach (ZoneSystem.ZoneLocation location in ZoneSystem.instance.m_locations) {
                     if (location == null) { continue; }
-                    // ZoneLocation.Hash is GetStableHashCode(m_prefab.Name), and that is what
+                    // ZoneLocation.Hash is GetStableHashCode(m_prefab.name), and that is what
                     // LocationProxy stores in ZDOVars.s_location. Key off the same name so the
                     // config hash and the in-world hash always agree. m_prefabName is only
-                    // populated for enabled locations at SetupLocations time, so prefer m_prefab.Name.
+                    // populated for enabled locations at SetupLocations time, so prefer m_prefab.name.
                     string name = SafePrefabName(location);
                     if (string.IsNullOrEmpty(name)) { continue; }
                     if (HardBlockedLocations.Contains(name)) { continue; }
@@ -1476,15 +1476,15 @@ namespace StarLevelSystem.Data {
             return cfg;
         }
 
-        // SoftReference<GameObject>.Name resolves the asset id against the soft-reference asset table,
+        // SoftReference<GameObject>.name resolves the asset id against the soft-reference asset table,
         // and that lookup throws KeyNotFoundException for an unassigned reference (the all-zero
         // AssetID '00000000000000000000000000000000'). The vanilla location lists carry disabled
-        // placeholder entries in exactly that state, so every vanilla read of .Name is guarded by
+        // placeholder entries in exactly that state, so every vanilla read of .name is guarded by
         // IsValid - do the same and fall back to the serialized m_prefabName.
         private static string SafePrefabName(ZoneSystem.ZoneLocation location) {
             try {
                 if (location.m_prefab.IsValid) {
-                    string name = location.m_prefab.Name;
+                    string name = location.m_prefab.name;
                     if (string.IsNullOrEmpty(name) == false) { return name; }
                 }
             }

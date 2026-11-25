@@ -109,3 +109,4 @@ RemoteSpawning:
 
 A biome without a `BiomeRadiusRanges` entry can have its bosses anywhere in the world it is found. Ranges are ignored in a world resized by Expand World Size, where their distances no longer mean the same thing.
 Bosses come from the player-made Nemesis bosses first, then from `BossCandidatesByBiome`; a biome with neither gets none.
+Ocean bosses are placed out on deep water, so only creatures that live in the water, such as the serpents, can be one. Their minions are held to the same rule, and a player-made boss that does not live in water stays in the pool for the Nemesis events near players.

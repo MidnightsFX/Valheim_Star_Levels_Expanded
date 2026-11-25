@@ -3,6 +3,7 @@ using HarmonyLib;
 using Jotunn.Extensions;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
+using StarLevelSystem.Modifiers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -163,6 +164,8 @@ namespace StarLevelSystem.modules
             try {
                 foreach (var smr in cgo.gameObject.GetComponentsInChildren<SkinnedMeshRenderer>())
                 {
+                    // A Shielded creature's shell copies its body renderers; tinting it would give it a material of its own.
+                    if (SLSShield.IsShell(smr)) { continue; }
                     Material[] sharedMaterials2 = smr.sharedMaterials;
                     if (sharedMaterials2.Length == 0) { continue; }
                     Material target = sharedMaterials2[0];

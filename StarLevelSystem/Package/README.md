@@ -133,7 +133,7 @@ These modifiers are by default only available on bosses.
 | ResistPierce | Reduces damage the creatures takes from all pierce sources (like arrows) | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/pierceResist.png?raw=true" width="64" height="64"> |
 | Brutal | Increases creature attack speed | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/brutal.png?raw=true" width="64" height="64"> |
 | Stalward | Takes much less stagger damage, so it is far harder to stagger. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/stalward.png?raw=true" width="64" height="64"> |
-| Shielded | Carries a shimmering shield that soaks damage before its health does, and refills when left alone. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64"> |
+| Shielded | Wears a see-through shield over its body that soaks damage before its health does, fades as it drains, and refills when left alone. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64"> |
 | EarthCaller | While fighting, calls stone spikes up under every nearby player, within seconds of the fight starting and then at random intervals; a player in the air gets one on the ground below them. The spot rumbles first, then the spike erupts, dealing blunt and pierce damage and throwing the player into the air. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/earthcaller.png?raw=true" width="64" height="64"> |
 
 
@@ -155,7 +155,7 @@ These modifiers are attainable by most creatures, and are typically the more imp
 | ResistBlunt | Reduces damage taken from Blunt | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/bluntResist.png?raw=true" width="64" height="64"> |
 | Reflection | Can reflect projectiles back along their arc; shots that glance off its edge deflect elsewhere and can hit other players or creatures | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/reflecting.png?raw=true" width="64" height="64"> |
 | Vampiric | Heals by a share of the health its hits take. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/vampiric.png?raw=true" width="64" height="64"> |
-| Shielded | Carries a shimmering shield that soaks damage before its health does, and refills when left alone. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64"> |
+| Shielded | Wears a see-through shield over its body that soaks damage before its health does, fades as it drains, and refills when left alone. | <img src="https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/StarLevelUnity/Assets/Custom/StarLevels/Icons2/shielded.png?raw=true" width="64" height="64"> |
 
 
 #### Minor Modifiers
@@ -256,6 +256,12 @@ Planned Features
 - Refinement to the existing modifiers
 - New modifiers!
 - Generic and biome specific loot multipliers
+
+<!--
+AI_Assisted_Creation: This assembly was partially or fully created with the assistance of generative AI (Claude Code, using Anthropic's Claude models).
+AI_Model_Vendor: Anthropic
+AI_Generated_Assets: Some of the modifier icons were generated with OpenAI's image generator.
+-->
 
 ---
 

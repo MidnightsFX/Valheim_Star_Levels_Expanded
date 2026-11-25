@@ -160,7 +160,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // back to the zone answer, uncached, when the prefab cannot be read.
         internal static bool HasInterior(Vector2s zone, ZoneSystem.ZoneLocation location) {
             int hash;
-            // ZoneLocation.Hash resolves m_prefab.Name, which throws for an unassigned soft reference.
+            // ZoneLocation.Hash resolves m_prefab.name, which throws for an unassigned soft reference.
             try { hash = location.Hash; }
             catch (System.Exception) { return ResetTargets.HasSkyInterior(zone); }
 

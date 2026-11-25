@@ -52,13 +52,22 @@ namespace StarLevelSystem.modules.NemesisSystem {
             return RandomlySelectAppropriateMiniboss(targetBiome);
         }
 
-        public static DataObjects.NemesisMiniboss RandomlySelectAppropriateMiniboss(Heightmap.Biome targetBiome) {
+        public static DataObjects.NemesisMiniboss RandomlySelectAppropriateMiniboss(Heightmap.Biome targetBiome, bool waterOnly = false) {
             foreach(DataObjects.NemesisMiniboss miniboss in SLSExtensions.ShuffleList(NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses)) {
                 if (BiomeRegistry.Matches(miniboss.Biome, targetBiome) == false) { continue; }
+                if (waterOnly && LivesInWater(miniboss.BossSpawn?.Prefab) == false) { continue; }
 
                 return miniboss;
             }
             return null;
+        }
+
+        // MonsterAI.m_avoidLand is the game's own mark of a creature that lives in water (Serpent, Bonemaw, Leech): out of
+        // the water it does nothing but head back to it.
+        internal static bool LivesInWater(string prefab) {
+            GameObject go = PrefabLookup.Find(prefab);
+            MonsterAI ai = go != null ? go.GetComponent<MonsterAI>() : null;
+            return ai != null && ai.m_avoidLand;
         }
 
         // Build a set of biome-appropriate minions from the configured NemesisMinionTemplatesByBiome.
@@ -92,7 +101,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         // Fabricate a fresh miniboss for a biome from the RemoteSpawning.BossCandidatesByBiome templates.
         // Used by the remote spawn system when the AvailableMiniBosses pool has no biome-appropriate entry.
-        public static NemesisMiniboss GenerateMinibossForBiome(Heightmap.Biome biome) {
+        public static NemesisMiniboss GenerateMinibossForBiome(Heightmap.Biome biome, bool waterOnly = false) {
             RemoteNemesisSpawnSettings settings = NemesisSystemData.SLE_Nemesis_Settings.RemoteSpawning;
             if (settings == null
                 || BiomeRegistry.TryGetEntry(settings.BossCandidatesByBiome, biome, out List<NemesisSpawn> candidates) == false
@@ -100,7 +109,7 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 return null;
             }
 
-            NemesisSpawn selected = WeightedSelectCandidate(candidates);
+            NemesisSpawn selected = WeightedSelectCandidate(candidates, waterOnly);
             if (selected == null) {
                 Logger.LogNemesis($"No valid remote boss candidate for biome {biome} (missing prefabs?).");
                 return null;
@@ -123,9 +132,10 @@ namespace StarLevelSystem.modules.NemesisSystem {
         }
 
         // Weighted pick among the biome's boss archetypes, considering only those whose prefab is loaded.
-        private static NemesisSpawn WeightedSelectCandidate(List<NemesisSpawn> candidates) {
+        private static NemesisSpawn WeightedSelectCandidate(List<NemesisSpawn> candidates, bool waterOnly) {
             List<NemesisSpawn> valid = candidates
                 .Where(c => c != null && string.IsNullOrEmpty(c.Prefab) == false && PrefabLookup.FindOrWarn(c.Prefab, "a Nemesis boss candidate") != null)
+                .Where(c => waterOnly == false || LivesInWater(c.Prefab))
                 .ToList();
             if (valid.Count == 0) { return null; }
 

@@ -1,22 +1,24 @@
 using HarmonyLib;
 using JetBrains.Annotations;
+using Jotunn.Managers;
 using StarLevelSystem.common;
+using StarLevelSystem.modules.Modifiers;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using static StarLevelSystem.common.DataObjects;
 
 namespace StarLevelSystem.Modifiers
 {
     // Carries a shield over its health: power x its maximum health worth of damage is soaked up before any reaches it.
     // Once it has gone RegenDelay seconds without being hit, the shield refills from empty to full over RegenDuration
-    // seconds, and any hit pauses the refill. While any shield is left a faint shimmer surrounds the creature.
+    // seconds, and any hit pauses the refill. While any shield is left a see-through shell covers the creature's body,
+    // fainter the less shield it has.
     internal static class Shielded
     {
         // Overridable via RegenDuration and RegenDelay in the CreatureModConfig.Config dict in Modifiers.yaml.
         private const float DefaultRegenDuration = 15f;
         private const float DefaultRegenDelay = 4f;
-
-        // The modifier's VisualEffect, which CreatureModifiers.SetupCreatureVFX puts under the creature's visuals holder.
-        internal const string ShimmerEffect = "creatureShield";
 
         [UsedImplicitly]
         public static void Setup(Character creature, CreatureModConfig config, CharacterCacheEntry ccache) {
@@ -51,7 +53,7 @@ namespace StarLevelSystem.Modifiers
     }
 
     // One per Shielded creature, on every peer. The shield's value lives in the ZDO (SLS_SHIELD) so it survives an
-    // ownership change and every peer can show the shimmer from it; only the owner absorbs and refills. -1 means not set
+    // ownership change and every peer can show the shell from it; only the owner absorbs and refills. -1 means not set
     // up yet, which the owner fills to the maximum on its first tick.
     internal class SLSShield : MonoBehaviour
     {
@@ -65,15 +67,19 @@ namespace StarLevelSystem.Modifiers
         private static GameObject hitEffectPrefab;
         private static GameObject breakEffectPrefab;
 
-        // Share of the shimmer bubble's own alpha it is drawn with (see Dim).
-        private const float ShimmerAlpha = 0.5f;
-        // How much bigger than the creature's body box the bubble is: a share of each side, then metres all round.
-        private const float BodyPadding = 1.2f;
-        private const float BodyMargin = 0.3f;
-        private static readonly int ColorId = Shader.PropertyToID("_Color");
-        private static readonly int TintColorId = Shader.PropertyToID("_TintColor");
-        // The vanilla material each dimmed copy was made from, so every bubble shares one copy per source.
-        private static readonly System.Collections.Generic.Dictionary<Material, Material> DimmedCopies = new System.Collections.Generic.Dictionary<Material, Material>();
+        // The shell's strength with almost no shield left; a full shield draws it at 1.
+        private const float MinStrength = 0.3f;
+        // How far the shell stands off the body, in metres: a share of the creature's height, kept to a few centimetres.
+        private const float OffsetPerHeight = 0.012f;
+        private const float MinOffset = 0.015f;
+        private const float MaxOffset = 0.08f;
+
+        internal const string ShellName = "SLS_ShieldShell";
+        private static readonly int ExtrudeId = Shader.PropertyToID("_Extrude");
+        private static readonly int StrengthId = Shader.PropertyToID("_Strength");
+        private static Material shellMaterial;
+        private static bool shellMaterialLoaded;
+        private static MaterialPropertyBlock shellProperties;
 
         private Character creature;
         private float power;
@@ -83,16 +89,26 @@ namespace StarLevelSystem.Modifiers
         private float lastHit = -1000f;
         private float nextTick;
         private float nextHitEffect;
-        private Transform shimmer;
-        private Vector3 shimmerScale;
-        private float shown;
-        private bool shielded = true;
+
+        // Each body renderer and the shell drawn over it, index for index.
+        private readonly List<Renderer> sources = new List<Renderer>();
+        private readonly List<Renderer> shells = new List<Renderer>();
+        private bool built;
+        private float offset;
+        private float strength;
+        private float targetStrength = 1f;
+        private bool shellsDirty;
+
+        internal static bool IsShell(Component component) => component != null && component.gameObject.name == ShellName;
 
         internal void Configure(Character owner, float shieldPower, float duration, float delay) {
             creature = owner;
             power = Mathf.Max(0f, shieldPower);
             regenDuration = Mathf.Max(0.1f, duration);
             regenDelay = Mathf.Max(0f, delay);
+            // GetHeight is the collider's own height, so the creature's scale (size modifiers, per-level size) is added here.
+            offset = Mathf.Clamp(creature.GetHeight() * creature.transform.lossyScale.y * OffsetPerHeight, MinOffset, MaxOffset);
+            shellsDirty = true;
         }
 
         // Read live: max health is set later in the setup pass than Setup runs, and moves with level-ups.
@@ -103,7 +119,12 @@ namespace StarLevelSystem.Modifiers
         private void Update() {
             if (creature == null) { return; }
             if (Time.time >= nextTick) { Tick(); }
-            Fade();
+            if (built == false) { return; }
+            if (strength != targetStrength) {
+                strength = Mathf.MoveTowards(strength, targetStrength, Time.deltaTime / FadeSeconds);
+                shellsDirty = true;
+            }
+            if (shellsDirty) { UpdateShells(); }
         }
 
         private void Tick() {
@@ -124,9 +145,21 @@ namespace StarLevelSystem.Modifiers
                     value = next;
                 }
             }
-            // Not set up yet counts as shielded: the owner is about to fill it.
-            shielded = value < 0f || value > 0.01f;
-            if (shimmer == null) { FindShimmer(); }
+            SetTargetStrength(value);
+            if (built == false) { built = BuildShells(); }
+            // Picks up a body renderer another script switched on or off since the last tick.
+            shellsDirty = true;
+        }
+
+        // Not set up yet (-1) counts as full: the owner is about to fill it.
+        private void SetTargetStrength(float value) {
+            if (value >= 0f && value <= 0.01f) {
+                targetStrength = 0f;
+                return;
+            }
+            float max = Maximum;
+            float share = value < 0f || max <= 0f ? 1f : Mathf.Clamp01(value / max);
+            targetStrength = Mathf.Lerp(MinStrength, 1f, share);
         }
 
         internal void Absorb(HitData hit) {
@@ -147,10 +180,10 @@ namespace StarLevelSystem.Modifiers
             hit.ApplyModifier((expected - absorbed) / expected);
             value -= absorbed;
             zdo.Set(SLS_SHIELD, value);
-            shielded = value > 0.01f;
+            SetTargetStrength(value);
 
             if (DamageText.instance != null) { DamageText.instance.ShowText(DamageText.TextType.Blocked, hit.m_point, absorbed); }
-            PlayEffect(shielded == false);
+            PlayEffect(value <= 0.01f);
         }
 
         // Owner-side and networked: both effects carry a ZNetView, so spawning them here shows them to everyone.
@@ -164,118 +197,155 @@ namespace StarLevelSystem.Modifiers
             if (prefab != null) { Instantiate(prefab, creature.GetCenterPoint(), Quaternion.identity); }
         }
 
-        private void FindShimmer() {
-            Transform found = creature.transform.Find($"SLS_Visuals(Clone)/{Shielded.ShimmerEffect}(Clone)");
-            if (found == null) { return; }
-            shimmer = found;
-            Fit(found);
-            shimmerScale = found.localScale;
-            shown = found.gameObject.activeSelf ? 1f : 0f;
-            Dim(found);
+        private static Material ShellMaterial() {
+            if (shellMaterialLoaded) { return shellMaterial; }
+            shellMaterialLoaded = true;
+            if (GUIManager.IsHeadless() || StarLevelSystem.EmbeddedResourceBundle == null) { return null; }
+            Material material = StarLevelSystem.EmbeddedResourceBundle.LoadAsset<Material>(ShellName);
+            if (material == null) {
+                Logger.LogWarning($"The asset bundle has no {ShellName} material; Shielded creatures will show no shield.");
+                return null;
+            }
+            // The shader is compiled for Direct3D, Vulkan and OpenGL only, which leaves out Metal on macOS.
+            if (material.shader == null || material.shader.isSupported == false) {
+                Logger.LogWarning($"The Shielded shell shader cannot run on this graphics API ({SystemInfo.graphicsDeviceType}); Shielded creatures will show no shield, though it still soaks damage.");
+                return null;
+            }
+            shellMaterial = material;
+            return shellMaterial;
         }
 
-        // The generic effect placement (CreatureModifiers.SetupCreatureVFX) scales by height and radius and sits at half
-        // the collider height, which misses a body that is wide or floats, like the gjall. Sizes and centres the bubble
-        // on the creature's own meshes instead, in the creature's space so it turns with it and follows its scale.
-        private void Fit(Transform bubbleRoot) {
-            if (TryBodyBounds(out Bounds body) == false) { return; }
-            Transform bubble = bubbleRoot.Find("bubble");
-            if (bubble == null || bubbleRoot.parent == null) { return; }
-            // The prefab's children carry a base scale over a unit sphere; work back from it to the size wanted.
-            Vector3 baseScale = bubble.localScale;
-            Vector3 wanted = Vector3.Scale(body.size * BodyPadding + Vector3.one * BodyMargin, creature.transform.lossyScale);
-            Vector3 parent = bubbleRoot.parent.lossyScale;
-            bubbleRoot.localScale = new Vector3(
-                wanted.x / Mathf.Max(0.001f, parent.x * baseScale.x),
-                wanted.y / Mathf.Max(0.001f, parent.y * baseScale.y),
-                wanted.z / Mathf.Max(0.001f, parent.z * baseScale.z));
-            bubbleRoot.position = creature.transform.TransformPoint(body.center);
-            bubbleRoot.rotation = creature.transform.rotation;
-        }
-
-        // The creature's body as a box in its own local space: the meshes under its visual root, or failing that its
-        // collider. Effects, particles and SLS's own visuals are left out.
-        private bool TryBodyBounds(out Bounds body) {
-            body = default;
-            bool any = false;
+        // A copy of each body renderer that reuses its mesh (and bones, for a skinned one) with the shell material, as a
+        // child of that renderer so it follows it, shares whether it is active, and goes when it goes, as swapped
+        // equipment does. Returns false while the creature has no renderers yet, so the next tick tries again.
+        private bool BuildShells() {
+            Material material = ShellMaterial();
+            if (material == null) { return true; }
             Transform root = creature.m_visual != null ? creature.m_visual.transform : creature.transform;
             // Only matters without a visual root, when the search starts at the creature and would find the effects too.
-            Transform ours = creature.transform.Find("SLS_Visuals(Clone)");
-            Matrix4x4 toCreature = creature.transform.worldToLocalMatrix;
-            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(false)) {
-                if (renderer.enabled == false) { continue; }
-                if (ours != null && renderer.transform.IsChildOf(ours)) { continue; }
-                Bounds local;
-                Matrix4x4 toWorld;
-                if (renderer is SkinnedMeshRenderer skinned) {
-                    local = skinned.localBounds;
-                    toWorld = (skinned.rootBone != null ? skinned.rootBone : skinned.transform).localToWorldMatrix;
-                } else if (renderer is MeshRenderer) {
-                    MeshFilter filter = renderer.GetComponent<MeshFilter>();
-                    if (filter == null || filter.sharedMesh == null) { continue; }
-                    local = filter.sharedMesh.bounds;
-                    toWorld = renderer.transform.localToWorldMatrix;
-                } else {
-                    continue;
+            Transform effects = creature.transform.Find(Visible_Toggle.SLSVISUALS);
+            foreach (Renderer source in root.GetComponentsInChildren<Renderer>(true)) {
+                if (IsShell(source) || (effects != null && source.transform.IsChildOf(effects))) { continue; }
+                Renderer shell = null;
+                if (source is SkinnedMeshRenderer skinned) {
+                    shell = SkinnedShell(skinned, material);
+                } else if (source is MeshRenderer) {
+                    shell = StaticShell(source, material);
                 }
-                Matrix4x4 m = toCreature * toWorld;
-                Vector3 c = local.center, e = local.extents;
-                for (int i = 0; i < 8; i++) {
-                    Vector3 corner = m.MultiplyPoint3x4(c + new Vector3((i & 1) == 0 ? -e.x : e.x, (i & 2) == 0 ? -e.y : e.y, (i & 4) == 0 ? -e.z : e.z));
-                    if (any) { body.Encapsulate(corner); } else { body = new Bounds(corner, Vector3.zero); any = true; }
-                }
+                if (shell == null) { continue; }
+                sources.Add(source);
+                shells.Add(shell);
             }
-            if (any && body.size.y > 0.05f) { return true; }
-
-            CapsuleCollider collider = creature.m_collider;
-            if (collider == null) { return false; }
-            float r = collider.radius;
-            Vector3 size = new Vector3(r * 2f, r * 2f, r * 2f);
-            size[collider.direction] = Mathf.Max(collider.height, r * 2f);
-            body = new Bounds(creature.transform.InverseTransformPoint(collider.transform.TransformPoint(collider.center)), size);
+            if (shells.Count == 0) { return false; }
+            AddShellsToLodGroups();
+            shellsDirty = true;
             return true;
         }
 
-        // The bubble wears vanilla's Fuling shaman shield material, which is far too bright stretched over a whole
-        // creature. That material is the game's own, shared with every shaman, and Jotunn swaps it in at load, so the
-        // bubble is given a copy of it with less alpha instead. One copy serves every Shielded creature.
-        private static void Dim(Transform shimmer) {
-            foreach (MeshRenderer renderer in shimmer.GetComponentsInChildren<MeshRenderer>(true)) {
-                Material dimmed = DimmedCopyOf(renderer.sharedMaterial);
-                if (dimmed != null) { renderer.sharedMaterial = dimmed; }
+        // Shares the body's bones, as vanilla's VisEquipment does to put armour on a player.
+        private static Renderer SkinnedShell(SkinnedMeshRenderer source, Material material) {
+            if (source.sharedMesh == null) { return null; }
+            SkinnedMeshRenderer shell = NewShellObject(source).AddComponent<SkinnedMeshRenderer>();
+            shell.sharedMesh = source.sharedMesh;
+            shell.bones = source.bones;
+            shell.rootBone = source.rootBone;
+            shell.localBounds = source.localBounds;
+            shell.quality = source.quality;
+            shell.updateWhenOffscreen = source.updateWhenOffscreen;
+            return Dress(shell, material, source.sharedMesh.subMeshCount);
+        }
+
+        private static Renderer StaticShell(Renderer source, Material material) {
+            MeshFilter filter = source.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null) { return null; }
+            GameObject shell = NewShellObject(source);
+            shell.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
+            return Dress(shell.AddComponent<MeshRenderer>(), material, filter.sharedMesh.subMeshCount);
+        }
+
+        private static GameObject NewShellObject(Renderer source) {
+            GameObject shell = new GameObject(ShellName) { layer = source.gameObject.layer };
+            shell.transform.SetParent(source.transform, false);
+            return shell;
+        }
+
+        // One material slot per submesh: with fewer, Unity would leave the rest of a multi-material body uncovered.
+        private static Renderer Dress(Renderer shell, Material material, int submeshes) {
+            Material[] materials = new Material[Mathf.Max(1, submeshes)];
+            for (int i = 0; i < materials.Length; i++) { materials[i] = material; }
+            shell.sharedMaterials = materials;
+            shell.shadowCastingMode = ShadowCastingMode.Off;
+            shell.receiveShadows = false;
+            shell.lightProbeUsage = LightProbeUsage.Off;
+            shell.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            shell.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+            shell.enabled = false;
+            return shell;
+        }
+
+        // Each shell joins the LOD level that holds its body renderer, so it switches detail with the body and hides with
+        // it: vanilla's Character.SetVisible hides a creature by moving its LOD group's reference point far away. Searched
+        // from the creature itself, since some keep the group above their visual root (Yagluth).
+        private void AddShellsToLodGroups() {
+            foreach (LODGroup group in creature.GetComponentsInChildren<LODGroup>(true)) {
+                LOD[] lods = group.GetLODs();
+                bool changed = false;
+                for (int i = 0; i < lods.Length; i++) {
+                    List<Renderer> renderers = null;
+                    foreach (Renderer renderer in lods[i].renderers) {
+                        int index = renderer == null ? -1 : sources.IndexOf(renderer);
+                        if (index < 0) { continue; }
+                        if (renderers == null) { renderers = new List<Renderer>(lods[i].renderers); }
+                        renderers.Add(shells[index]);
+                    }
+                    if (renderers == null) { continue; }
+                    lods[i].renderers = renderers.ToArray();
+                    changed = true;
+                }
+                if (changed) { group.SetLODs(lods); }
             }
         }
 
-        private static Material DimmedCopyOf(Material source) {
-            if (source == null) { return null; }
-            if (DimmedCopies.ContainsValue(source)) { return source; }
-            if (DimmedCopies.TryGetValue(source, out Material copy) && copy != null) { return copy; }
-            int id = source.HasProperty(ColorId) ? ColorId : (source.HasProperty(TintColorId) ? TintColorId : 0);
-            if (id == 0) { return null; }
-            copy = new Material(source) { name = source.name + "_SLS_Shielded" };
-            Color color = copy.GetColor(id);
-            color.a *= ShimmerAlpha;
-            copy.SetColor(id, color);
-            DimmedCopies[source] = copy;
-            return copy;
+        private void RemoveShellsFromLodGroups() {
+            foreach (LODGroup group in creature.GetComponentsInChildren<LODGroup>(true)) {
+                LOD[] lods = group.GetLODs();
+                bool changed = false;
+                for (int i = 0; i < lods.Length; i++) {
+                    List<Renderer> renderers = new List<Renderer>(lods[i].renderers);
+                    if (renderers.RemoveAll(renderer => shells.Contains(renderer)) == 0) { continue; }
+                    lods[i].renderers = renderers.ToArray();
+                    changed = true;
+                }
+                if (changed) { group.SetLODs(lods); }
+            }
         }
 
-        // Scaled in and out rather than faded through its material, so it works whatever the effect is built from.
-        private void Fade() {
-            if (shimmer == null) { return; }
-            float target = shielded ? 1f : 0f;
-            if (shown == target) { return; }
-            shown = Mathf.MoveTowards(shown, target, Time.deltaTime / FadeSeconds);
-            shimmer.localScale = shimmerScale * shown;
-            bool active = shown > 0f;
-            if (shimmer.gameObject.activeSelf != active) { shimmer.gameObject.SetActive(active); }
+        // Off at zero strength, which also spares the extra skinning.
+        private void UpdateShells() {
+            shellsDirty = false;
+            if (shells.Count == 0) { return; }
+            if (shellProperties == null) { shellProperties = new MaterialPropertyBlock(); }
+            shellProperties.SetFloat(ExtrudeId, offset);
+            shellProperties.SetFloat(StrengthId, strength);
+            for (int i = 0; i < shells.Count; i++) {
+                Renderer shell = shells[i];
+                if (shell == null) { continue; }
+                bool show = strength > 0f && sources[i] != null && sources[i].enabled;
+                if (shell.enabled != show) { shell.enabled = show; }
+                if (show) { shell.SetPropertyBlock(shellProperties); }
+            }
         }
 
         internal void Remove() {
             ZDO zdo = Zdo;
             if (zdo != null && creature.m_nview.IsOwner()) { zdo.Set(SLS_SHIELD, -1f); }
-            // SetupCreatureVFX never takes a modifier's effect away on its own.
-            if (shimmer != null) { Destroy(shimmer.gameObject); }
+            // Out of the LOD groups before they are destroyed, while they can still be told apart.
+            if (shells.Count > 0 && creature != null) { RemoveShellsFromLodGroups(); }
+            foreach (Renderer shell in shells) {
+                if (shell != null) { Destroy(shell.gameObject); }
+            }
+            shells.Clear();
+            sources.Clear();
             Destroy(this);
         }
     }

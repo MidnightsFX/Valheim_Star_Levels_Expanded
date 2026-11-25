@@ -60,8 +60,8 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 mb.BossCreatedFromKillingPlayer = true;
                 mb.Biome = BiomeLookup.AtPosition(killer.transform.position);
 
-                // Only a subset of biomes has minion templates seeded. Dying in an unseeded biome
-                // (DeepNorth/Ocean/None) yields no minions rather than throwing.
+                // Dying in a biome without minion templates (None, or one the config leaves out) yields no minions
+                // rather than throwing.
                 mb.Minions = NemesisMiniBossManager.GenerateMinionsForBiome(mb.Biome);
 
                 string mbYaml = DataObjects.yamlSerializer.Serialize(mb);

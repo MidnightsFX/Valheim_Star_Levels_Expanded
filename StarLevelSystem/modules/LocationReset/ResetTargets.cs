@@ -1202,12 +1202,13 @@ namespace StarLevelSystem.modules.LocationReset {
         // The rotation the location was placed at, for the clear, the stray-spawner match and the rebuild.
         //
         // Vanilla places every location at a yaw on a 22.5-degree step (ZoneSystem.PlaceLocations rolls
-        // 0-15 steps, or rounds the slope direction to one). The proxy does not keep it exactly: ZDO.Save
-        // writes rotation through ZPackage.WriteSmallRotation, which truncates to half a degree, so after a
-        // world save and reload a 225-degree location can read 224.5. Used as read, the rebuild turned the
-        // whole location by that half degree, and a child 30 m out moved 0.26 m -- past the 0.25 m that
-        // CollectStraySpawners matches spawners on, so stray spawners survived. Snapped back to the step
-        // only when it is that close to one, so a location a mod placed at some other angle keeps it.
+        // 0-15 steps, or rounds the slope direction to one). ZDO.Save writes rotation through
+        // ZPackage.WriteSmallRotation, which before 1.0.30 truncated to half a degree, so a 225-degree
+        // location saved by an older game reads 224.5, and keeps reading it: 1.0.30 rounds, but 224.5 is
+        // already on the half-degree grid. Used as read, the rebuild turned the whole location by that
+        // half degree, and a child 30 m out moved 0.26 m -- past the 0.25 m that CollectStraySpawners
+        // matches spawners on, so stray spawners survived. Snapped back to the step only when it is that
+        // close to one, so a location a mod placed at some other angle keeps it.
         private const float LocationYawStep = 22.5f;
 
         private static Quaternion LocationRotation(ZDO proxy) {
@@ -1308,7 +1309,7 @@ namespace StarLevelSystem.modules.LocationReset {
 
         private static List<SpawnerChild> SpawnerChildrenFor(ZoneSystem.ZoneLocation location) {
             int hash;
-            // ZoneLocation.Hash resolves m_prefab.Name, which throws for an unassigned soft reference.
+            // ZoneLocation.Hash resolves m_prefab.name, which throws for an unassigned soft reference.
             try { hash = location.Hash; }
             catch (System.Exception) { return null; }
 

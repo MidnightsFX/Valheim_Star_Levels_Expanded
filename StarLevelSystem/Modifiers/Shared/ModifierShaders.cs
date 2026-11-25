@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace StarLevelSystem.Modifiers.Shared
 {
-    // Keeps the bundled modifier effects (fire, frost, poison, lightning, Lifelink, Earth Caller's spikes, the shield shimmer)
+    // Keeps the bundled modifier effects (fire, frost, poison, lightning, Lifelink, Earth Caller's spikes)
     // from drawing as solid magenta squares when another mod loads a copy of their shader that this graphics card cannot run
     // (issue #34). They use Jotunn's mock of "Legacy Shaders/Particles/Alpha Blended", which Jotunn resolves by name to the
     // last loaded shader of that name it finds, without checking that it runs here. ChebsNecromancy's bundle carries copies of

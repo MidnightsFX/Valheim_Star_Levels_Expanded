@@ -13,8 +13,8 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.Modifiers {
 
     // Brings every peer's view of a creature up to date once its owner has changed its modifiers after setup: given it one
-    // or taken one away through the API (sls-mod-give and other mods, replayed on the owner by APIOwnerRelay), given it
-    // its own values for one (CreatureModifierOverrides), or rolled one on an Evolve level-up.
+    // or taken one away through the API (sls-mod-give, sls-mod-remove and other mods, replayed on the owner by
+    // APIOwnerRelay), given it its own values for one (CreatureModifierOverrides), or rolled one on an Evolve level-up.
     //
     // Only the owner stores the modifier list. Every other peer with the creature loaded keeps the cache entry it built
     // when it set the creature up, and that entry is where a modifier's stat changes live: size is a transform scale each
@@ -28,7 +28,7 @@ namespace StarLevelSystem.modules.Modifiers {
     // (CreatureStatOverrides). Everyone, the owner included, then shows what a reload would, which is also where
     // LimitCreatureModifiersToCreatureStarLevel leaves out a modifier past the creature's star budget. A modifier the
     // rebuilt entry no longer has is torn down, so one that left something running (BossSummoner's summoning, Shielded's
-    // shield) stops on every peer and not only where it was removed.
+    // shield) stops, and its visual effect goes, on every peer and not only where it was removed.
     //
     // A level the owner gives a creature after setup (an Evolve level-up) has the same problem with no modifier involved.
     // Another peer's live level, m_level, which vanilla reads from s_level only in Character.Awake, follows the ZDO only
@@ -136,9 +136,7 @@ namespace StarLevelSystem.modules.Modifiers {
             if (previous == null || previous.CreatureModifiers == null) { return; }
             foreach (string modifier in previous.CreatureModifiers.Keys) {
                 if (rebuilt.CreatureModifiers != null && rebuilt.CreatureModifiers.ContainsKey(modifier)) { continue; }
-                if (CreatureModifiersData.ModifierDefinitions.TryGetValue(modifier, out CreatureModifierDefinition definition)) {
-                    definition.TeardownMethodCall(chara);
-                }
+                CreatureModifiers.TearDownModifier(chara, modifier, rebuilt.CreatureModifiers);
             }
         }
     }

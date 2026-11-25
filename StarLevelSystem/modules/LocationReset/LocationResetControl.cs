@@ -494,7 +494,7 @@ namespace StarLevelSystem.modules.LocationReset {
         // Zones within `radius` of `center` holding a location of this name, nearest first.
         //
         // Deliberately NOT ZoneSystem.FindClosestLocation or FindLocations. Both walk every location
-        // instance in the world with no early-out, and both read m_location.m_prefab.Name with no
+        // instance in the world with no early-out, and both read m_location.m_prefab.name with no
         // null guard on m_location and no IsValid guard on the soft reference -- the same unguarded
         // read LocationResetData.SafePrefabName exists to work around, because vanilla's disabled
         // placeholder entries carry an all-zero AssetID whose lookup throws. Walking the chunk square

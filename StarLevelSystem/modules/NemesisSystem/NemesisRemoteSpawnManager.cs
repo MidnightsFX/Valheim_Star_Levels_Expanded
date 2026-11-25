@@ -115,14 +115,21 @@ namespace StarLevelSystem.modules.NemesisSystem {
 
         // Draw from the shared player-generated pool first (and consume it authoritatively), otherwise fabricate one.
         private NemesisMiniboss SelectOrGenerateBoss(Heightmap.Biome biome) {
-            NemesisMiniboss pooled = NemesisMiniBossManager.RandomlySelectAppropriateMiniboss(biome);
-            if (pooled != null) {
-                string yaml = DataObjects.yamlSerializer.Serialize(pooled);
+            // An ocean boss is placed out on open water, so only creatures that live in it can be one or escort it. A
+            // player-made boss that cannot stays in the pool for the Nemesis events near players.
+            bool waterOnly = BiomeRegistry.TerrainOf(biome) == Heightmap.Biome.Ocean;
+            NemesisMiniboss boss = NemesisMiniBossManager.RandomlySelectAppropriateMiniboss(biome, waterOnly);
+            if (boss != null) {
+                string yaml = DataObjects.yamlSerializer.Serialize(boss);
                 // Server is authoritative: remove from the shared pool and broadcast to peers (exclude nobody).
                 ValConfig.ApplyNemesisBossRemove(yaml, ZNet.GetUID());
-                return pooled;
+            } else {
+                boss = NemesisMiniBossManager.GenerateMinibossForBiome(biome, waterOnly);
             }
-            return NemesisMiniBossManager.GenerateMinibossForBiome(biome);
+            if (boss != null && waterOnly && boss.Minions != null) {
+                boss.Minions = boss.Minions.Where(m => NemesisMiniBossManager.LivesInWater(m?.Prefab)).ToList();
+            }
+            return boss;
         }
 
         private IEnumerator ScoutAndPlace(Heightmap.Biome biome, NemesisMiniboss boss, bool reserved) {
